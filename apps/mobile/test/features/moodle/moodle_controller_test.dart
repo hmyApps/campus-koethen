@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/moodle/application/moodle_account_controller.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_controller.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
@@ -96,6 +98,60 @@ void main() {
       expect(tokens.token, isNull);
       expect(cache.clears, greaterThanOrEqualTo(1));
       expect(c.read(moodleAccountControllerProvider).value, isNull);
+    });
+
+    test(
+      'failed token deletion still attempts the cache wipe and stays connected',
+      () async {
+        final tokens = InMemoryMoodleTokenStore()
+          ..token = _token
+          ..clearError = const MoodleFailure(
+            MoodleFailureKind.secureStorageUnavailable,
+          );
+        final cache = InMemoryMoodleCacheStore()
+          ..courses = <MoodleCourse>[course(1)];
+        final c = _container(
+          api: FakeMoodleApiClient(),
+          tokens: tokens,
+          cache: cache,
+          clock: MutableClock(t0),
+        );
+        await c.read(moodleAccountControllerProvider.future);
+
+        await expectLater(
+          c.read(moodleAccountControllerProvider.notifier).disconnect(),
+          throwsA(
+            const MoodleFailure(MoodleFailureKind.secureStorageUnavailable),
+          ),
+        );
+
+        expect(cache.clears, 1);
+        expect(cache.courses, isNull);
+        expect(c.read(moodleAccountControllerProvider).value, isNotNull);
+      },
+    );
+
+    test('failed cache wipe keeps the connected UI state', () async {
+      final tokens = InMemoryMoodleTokenStore()..token = _token;
+      final cache = InMemoryMoodleCacheStore()
+        ..courses = <MoodleCourse>[course(1)]
+        ..clearError = const MoodleFailure(MoodleFailureKind.cacheUnavailable);
+      final c = _container(
+        api: FakeMoodleApiClient(),
+        tokens: tokens,
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+      await c.read(moodleAccountControllerProvider.future);
+
+      await expectLater(
+        c.read(moodleAccountControllerProvider.notifier).disconnect(),
+        throwsA(const MoodleFailure(MoodleFailureKind.cacheUnavailable)),
+      );
+
+      expect(tokens.clears, 1);
+      expect(cache.courses, isNotNull);
+      expect(c.read(moodleAccountControllerProvider).value, isNotNull);
     });
   });
 
@@ -210,6 +266,45 @@ void main() {
       await c.read(moodleControllerProvider.notifier).refresh();
 
       expect(api.courseCalls, 1);
+    });
+
+    test('logout waits for and discards a delayed sync response', () async {
+      final Completer<List<MoodleCourse>> response =
+          Completer<List<MoodleCourse>>();
+      final api = FakeMoodleApiClient()..pendingCourses = response;
+      final cache = InMemoryMoodleCacheStore();
+      final c = await connected(
+        api: api,
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+
+      final Future<void> refresh = c
+          .read(moodleControllerProvider.notifier)
+          .refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(api.courseCalls, 1);
+
+      bool logoutCompleted = false;
+      final Future<void> logout = c
+          .read(moodleAccountControllerProvider.notifier)
+          .disconnect()
+          .whenComplete(() => logoutCompleted = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        logoutCompleted,
+        isFalse,
+        reason: 'the wipe must follow the last in-flight cache write',
+      );
+
+      response.complete(<MoodleCourse>[course(99)]);
+      await Future.wait(<Future<void>>[refresh, logout]);
+
+      expect(cache.courses, isNull);
+      expect(cache.deadlines, isNull);
+      expect(cache.marks, const MoodleSyncMarks());
+      expect(c.read(moodleAccountControllerProvider).value, isNull);
+      expect(c.read(moodleControllerProvider).value?.courses, isEmpty);
     });
 
     test('a failed sync keeps the old cache and surfaces the error', () async {

@@ -64,16 +64,24 @@ class MoodleController extends AsyncNotifier<MoodleOverviewState> {
 
   @override
   Future<MoodleOverviewState> build() async {
+    final int generation = ref.watch(moodleSessionGenerationProvider);
     final MoodleAccount? account = ref
         .watch(moodleAccountControllerProvider)
         .value;
     if (account == null) return const MoodleOverviewState();
+    final _MoodleSessionSnapshot session = (
+      generation: generation,
+      userId: account.userId,
+    );
 
     final List<MoodleCourse> courses =
         await _repo.cachedCourses() ?? const <MoodleCourse>[];
+    if (!_isCurrent(session)) return const MoodleOverviewState();
     final List<MoodleDeadline> deadlines =
         await _repo.cachedDeadlines() ?? const <MoodleDeadline>[];
+    if (!_isCurrent(session)) return const MoodleOverviewState();
     final marks = await _repo.syncMarks();
+    if (!_isCurrent(session)) return const MoodleOverviewState();
     return MoodleOverviewState(
       courses: courses,
       deadlines: deadlines,
@@ -104,24 +112,33 @@ class MoodleController extends AsyncNotifier<MoodleOverviewState> {
   Future<void> _sync() {
     final Future<void>? existing = _inFlight;
     if (existing != null) return existing;
-    final Future<void> run = _doSync();
+    final MoodleAccount? account = ref
+        .read(moodleAccountControllerProvider)
+        .value;
+    if (account == null) return Future<void>.value();
+    final _MoodleSessionSnapshot session = (
+      generation: ref.read(moodleSessionGenerationProvider),
+      userId: account.userId,
+    );
+    final Future<void> run = _doSync(session);
     _inFlight = run;
     return run.whenComplete(() => _inFlight = null);
   }
 
-  Future<void> _doSync() async {
-    if (ref.read(moodleAccountControllerProvider).value == null) return;
+  Future<void> _doSync(_MoodleSessionSnapshot session) async {
+    if (!_isCurrent(session)) return;
     final MoodleOverviewState current =
         state.value ?? const MoodleOverviewState();
     state = AsyncData(current.copyWith(isSyncing: true, clearError: true));
 
-    // Record the attempt up front so a failed automatic sync is not retried on
-    // every rebuild within the one-hour window.
-    final DateTime now = ref.read(moodleClockProvider).now();
-    await _repo.recordAttempt(now);
-
     try {
+      // Record the attempt up front so a failed automatic sync is not retried
+      // on every rebuild within the one-hour window.
+      final DateTime now = ref.read(moodleClockProvider).now();
+      await _repo.recordAttempt(now);
+      if (!_isCurrent(session)) return;
       final MoodleOverview overview = await _repo.refreshOverview();
+      if (!_isCurrent(session)) return;
       state = AsyncData(
         MoodleOverviewState(
           courses: overview.courses,
@@ -134,13 +151,24 @@ class MoodleController extends AsyncNotifier<MoodleOverviewState> {
       final MoodleFailure failure = error is MoodleFailure
           ? error
           : const MoodleFailure(MoodleFailureKind.unknown);
+      if (!_isCurrent(session)) return;
       // Keep the last good cache; just surface the error alongside it.
       state = AsyncData(
         (state.value ?? current).copyWith(isSyncing: false, error: failure),
       );
     }
   }
+
+  bool _isCurrent(_MoodleSessionSnapshot session) {
+    final MoodleAccount? account = ref
+        .read(moodleAccountControllerProvider)
+        .value;
+    return ref.read(moodleSessionGenerationProvider) == session.generation &&
+        account?.userId == session.userId;
+  }
 }
+
+typedef _MoodleSessionSnapshot = ({int generation, int userId});
 
 final AsyncNotifierProvider<MoodleController, MoodleOverviewState>
 moodleControllerProvider =

@@ -8,6 +8,7 @@ import '../domain/moodle_cache.dart';
 import '../domain/moodle_content.dart';
 import '../domain/moodle_course.dart';
 import '../domain/moodle_deadline.dart';
+import '../domain/moodle_failure.dart';
 import 'moodle_codec.dart';
 
 /// [MoodleCacheStore] backed by the shared [EncryptedBox] (encrypted at rest
@@ -110,5 +111,10 @@ class EncryptedMoodleCache implements MoodleCacheStore {
       _box.write(_marksKey, encodeMarks(marks));
 
   @override
-  Future<void> clear() => _box.wipe();
+  Future<void> clear() async {
+    final EncryptedBoxWipeResult result = await _box.wipeChecked();
+    if (!result.isComplete) {
+      throw const MoodleFailure(MoodleFailureKind.cacheUnavailable);
+    }
+  }
 }

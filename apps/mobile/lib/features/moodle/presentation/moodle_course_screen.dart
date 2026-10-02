@@ -22,6 +22,7 @@ import '../domain/moodle_downloader.dart';
 import '../domain/moodle_course.dart';
 import '../domain/moodle_repository.dart';
 import 'moodle_messages.dart';
+import 'moodle_course_refresh_controller.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 
 /// A course detail page with three tabs: contents (sections/modules/files),
@@ -36,8 +37,26 @@ class MoodleCourseScreen extends ConsumerStatefulWidget {
 }
 
 class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
-  bool _refreshing = false;
-  Object? _refreshError;
+  late final MoodleCourseRefreshController _refreshState;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshState = MoodleCourseRefreshController()
+      ..addListener(_onRefreshChanged);
+  }
+
+  @override
+  void dispose() {
+    _refreshState
+      ..removeListener(_onRefreshChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onRefreshChanged() {
+    if (mounted) setState(() {});
+  }
 
   /// Runs a manual refresh and actually reports what happened.
   ///
@@ -46,18 +65,9 @@ class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
   /// left the screen showing the same stale bundle with an unhandled async
   /// error behind it. Nothing on screen moved at all.
   Future<void> _refresh() async {
-    if (_refreshing) return;
-    setState(() {
-      _refreshing = true;
-      _refreshError = null;
-    });
-    try {
-      await refreshMoodleCourseDetail(ref, widget.courseId);
-    } catch (error) {
-      if (mounted) setState(() => _refreshError = error);
-    } finally {
-      if (mounted) setState(() => _refreshing = false);
-    }
+    await _refreshState.run(
+      () => refreshMoodleCourseDetail(ref, widget.courseId),
+    );
   }
 
   @override
@@ -79,8 +89,8 @@ class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
         actions: <Widget>[
           IconButton(
             tooltip: l10n.moodleRefresh,
-            onPressed: _refreshing ? null : _refresh,
-            icon: _refreshing
+            onPressed: _refreshState.refreshing ? null : _refresh,
+            icon: _refreshState.refreshing
                 ? Semantics(
                     liveRegion: true,
                     label: l10n.moodleRefreshing,
@@ -114,7 +124,7 @@ class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
             icon: AppIcons.error_outline,
             message: moodleFailureMessage(l10n, error),
             action: FilledButton.icon(
-              onPressed: _refreshing ? null : _refresh,
+              onPressed: _refreshState.refreshing ? null : _refresh,
               icon: const Icon(AppIcons.refresh),
               label: Text(l10n.moodleRefresh),
             ),
@@ -145,7 +155,7 @@ class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
               // A failed refresh over a bundle that is still good must be
               // visible: submission states here carry deadlines, and content
               // weeks old looks exactly like content from a minute ago.
-              if (_refreshError != null)
+              if (_refreshState.error != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
@@ -157,9 +167,9 @@ class _MoodleCourseScreenState extends ConsumerState<MoodleCourseScreen> {
                     tone: StatusTone.warning,
                     icon: AppIcons.sync_problem,
                     title: l10n.moodleRefreshFailed,
-                    message: moodleFailureMessage(l10n, _refreshError),
+                    message: moodleFailureMessage(l10n, _refreshState.error),
                     action: TextButton(
-                      onPressed: _refreshing ? null : _refresh,
+                      onPressed: _refreshState.refreshing ? null : _refresh,
                       child: Text(l10n.moodleRefresh),
                     ),
                   ),

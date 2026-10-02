@@ -80,8 +80,17 @@ class _MoodleOverviewScreenState extends ConsumerState<MoodleOverviewScreen> {
         ],
       ),
     );
-    if (confirmed ?? false) {
+    if (!(confirmed ?? false) || !mounted) return;
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
       await ref.read(moodleAccountControllerProvider.notifier).disconnect();
+    } catch (_) {
+      // The controller deliberately stays connected when any credential,
+      // cache content or encryption key could not be confirmed absent. Keep
+      // the retry action visible and report the incomplete local deletion.
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.moodleDisconnectIncomplete)),
+      );
     }
   }
 

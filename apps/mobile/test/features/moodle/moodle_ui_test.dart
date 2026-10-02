@@ -7,6 +7,9 @@ import 'package:campus_koethen/features/moodle/domain/moodle_cache.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
 import 'package:campus_koethen/features/moodle/presentation/moodle_course_screen.dart';
 import 'package:campus_koethen/features/moodle/presentation/moodle_screen.dart';
+import 'package:campus_koethen/features/moodle/presentation/moodle_setup_screen.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity_store.dart';
 import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_icons.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +18,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_moodle.dart';
 import '../../support/pump_app.dart';
+
+class _MemoryIdentityStore implements UniversityIdentityStore {
+  UniversityIdentity? value;
+  int writes = 0;
+
+  @override
+  Future<UniversityIdentity?> read() async => value;
+
+  @override
+  Future<void> write(UniversityIdentity identity) async {
+    writes++;
+    value = identity;
+  }
+
+  @override
+  Future<void> clear() async => value = null;
+}
 
 List<Override> _overrides({
   required FakeMoodleApiClient api,
@@ -32,6 +52,72 @@ void main() {
   final DateTime t0 = DateTime.utc(2026, 7, 26, 12);
 
   group('course tabs', _courseTabTests);
+
+  group('university identity reuse', () {
+    testWidgets(
+      'ticking "also use for other services" retains the identity centrally',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(1200, 2400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        final identityStore = _MemoryIdentityStore();
+        await pumpScreen(
+          tester,
+          const MoodleSetupScreen(),
+          overrides: _overrides(
+            api: FakeMoodleApiClient(),
+            tokens: InMemoryMoodleTokenStore(),
+            cache: InMemoryMoodleCacheStore(),
+            clock: MutableClock(t0),
+          ),
+          universityIdentityStore: identityStore,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextFormField).at(0), 'student42');
+        await tester.enterText(find.byType(TextFormField).at(1), 'pw');
+        await tester.tap(find.byType(Checkbox));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Verbinden'));
+        await tester.pumpAndSettle();
+
+        expect(identityStore.writes, 1);
+        expect(identityStore.value?.identifier, 'student42');
+        expect(identityStore.value?.password, 'pw');
+      },
+    );
+
+    testWidgets('hides the reuse offer once a central identity is stored', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await pumpScreen(
+        tester,
+        const MoodleSetupScreen(),
+        overrides: _overrides(
+          api: FakeMoodleApiClient(),
+          tokens: InMemoryMoodleTokenStore(),
+          cache: InMemoryMoodleCacheStore(),
+          clock: MutableClock(t0),
+        ),
+        universityIdentityStore: _MemoryIdentityStore()
+          ..value = const UniversityIdentity(
+            identifier: 'stud',
+            password: 'pw',
+          ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Diese Zugangsdaten auch für Mail, Moodle und Noten automatisch verwenden.',
+        ),
+        findsNothing,
+      );
+    });
+  });
 
   testWidgets('shows the connect screen when disconnected', (
     WidgetTester tester,
@@ -112,6 +198,49 @@ void main() {
       find.byIcon(AppIcons.book_outlined),
     );
     expect(courseIcon.color, AppColors.light.primary);
+  });
+
+  testWidgets('a failed disconnect stays connected and explains retry', (
+    WidgetTester tester,
+  ) async {
+    final tokens = InMemoryMoodleTokenStore()
+      ..token = const MoodleToken(value: 'tok', userId: 7, username: 'demo');
+    final cache = InMemoryMoodleCacheStore()
+      ..courses = <MoodleCourse>[
+        const MoodleCourse(id: 1, fullName: 'Rechnernetze'),
+      ]
+      ..marks = MoodleSyncMarks(lastAttempt: t0)
+      ..clearError = StateError('cache remains');
+
+    await pumpScreen(
+      tester,
+      const MoodleScreen(),
+      overrides: _overrides(
+        api: FakeMoodleApiClient(),
+        tokens: tokens,
+        cache: cache,
+        clock: MutableClock(t0),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Moodle-Verbindung und lokale Daten löschen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Löschen'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Moodle-Verbindung und lokale Daten konnten nicht vollständig '
+        'gelöscht werden. Bitte versuche es erneut.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Rechnernetze'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('course tiles omit Moodle completion progress', (
@@ -337,6 +466,23 @@ void _courseTabTests() {
 
     expect(find.text('Ankündigungen'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('course screen layout matrix has no clipped primary action', (
+    WidgetTester tester,
+  ) async {
+    for (final (Size size, TextScaler scaler) in <(Size, TextScaler)>[
+      (const Size(320, 640), TextScaler.noScaling),
+      (const Size(360, 800), const TextScaler.linear(1.3)),
+      (const Size(800, 360), TextScaler.noScaling),
+      (const Size(320, 900), const TextScaler.linear(2)),
+    ]) {
+      await pumpCourse(tester, surface: size, textScaler: scaler);
+
+      expect(find.byTooltip('Aktualisieren'), findsOneWidget);
+      expect(find.text('Inhalte'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: '$size at $scaler');
+    }
   });
 
   testWidgets('the bar scrolls rather than shrinking the labels', (

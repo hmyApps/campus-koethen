@@ -47,25 +47,66 @@ class SecureMoodleTokenStore implements MoodleTokenStore {
     try {
       await _storage.write(key: _tokenKey, value: token.value);
       await _storage.write(key: _userIdKey, value: '${token.userId}');
-      if (token.username != null) {
-        await _storage.write(key: _usernameKey, value: token.username);
-      }
-      if (token.siteName != null) {
-        await _storage.write(key: _siteNameKey, value: token.siteName);
+      await _writeOptional(_usernameKey, token.username);
+      await _writeOptional(_siteNameKey, token.siteName);
+
+      final Map<String, String?> expected = <String, String?>{
+        _tokenKey: token.value,
+        _userIdKey: '${token.userId}',
+        _usernameKey: token.username,
+        _siteNameKey: token.siteName,
+      };
+      for (final MapEntry<String, String?> entry in expected.entries) {
+        if (await _storage.read(key: entry.key) != entry.value) {
+          throw StateError('secure storage write was not retained');
+        }
       }
     } catch (_) {
-      try {
-        await clear();
-      } catch (_) {}
+      await _deleteUnchecked();
       throw const MoodleFailure(MoodleFailureKind.secureStorageUnavailable);
     }
   }
 
   @override
   Future<void> clear() async {
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _userIdKey);
-    await _storage.delete(key: _usernameKey);
-    await _storage.delete(key: _siteNameKey);
+    Object? failure;
+    for (final String key in _keys) {
+      try {
+        await _storage.delete(key: key);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    for (final String key in _keys) {
+      try {
+        if (await _storage.read(key: key) != null) {
+          failure ??= StateError('secure storage value survived deletion');
+        }
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (failure != null) {
+      throw const MoodleFailure(MoodleFailureKind.secureStorageUnavailable);
+    }
+  }
+
+  static const List<String> _keys = <String>[
+    _tokenKey,
+    _userIdKey,
+    _usernameKey,
+    _siteNameKey,
+  ];
+
+  Future<void> _writeOptional(String key, String? value) => value == null
+      ? _storage.delete(key: key)
+      : _storage.write(key: key, value: value);
+
+  Future<void> _deleteUnchecked() async {
+    for (final String key in _keys) {
+      try {
+        await _storage.delete(key: key);
+      } catch (_) {}
+    }
   }
 }

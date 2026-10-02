@@ -3,6 +3,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/security/session_guard.dart';
 import '../../../core/time/clock.dart';
 import '../data/encrypted_moodle_cache.dart';
 import '../data/moodle_file_downloader.dart';
@@ -47,6 +48,10 @@ final Provider<Clock> moodleClockProvider = Provider<Clock>(
   (Ref ref) => const SystemClock(),
 );
 
+/// Coordinates personal Moodle operations with token/cache removal.
+final Provider<SessionGuard<int>> moodleSessionGuardProvider =
+    Provider<SessionGuard<int>>((Ref ref) => SessionGuard<int>());
+
 /// The single Moodle facade. Owns the token and the cache.
 final Provider<MoodleRepository> moodleRepositoryProvider =
     Provider<MoodleRepository>(
@@ -56,6 +61,7 @@ final Provider<MoodleRepository> moodleRepositoryProvider =
         cacheStore: ref.watch(moodleCacheStoreProvider),
         fileDownloader: ref.watch(moodleFileDownloaderProvider),
         clock: ref.watch(moodleClockProvider),
+        sessionGuard: ref.watch(moodleSessionGuardProvider),
       ),
     );
 

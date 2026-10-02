@@ -11,6 +11,8 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../../notifications/presentation/pre_permission_sheet.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/presentation/university_identity_auto_connect.dart';
 import '../application/moodle_account_controller.dart';
 import '../domain/moodle_account.dart';
 import 'moodle_messages.dart';
@@ -76,7 +78,11 @@ class MoodleScreen extends ConsumerWidget {
         ),
       ),
       data: (MoodleAccount? state) => state == null
-          ? const MoodleSetupScreen()
+          ? UniversityIdentityAutoConnect(
+              service: DirectService.moodle,
+              builder: (BuildContext context, Object? autoConnectError) =>
+                  MoodleSetupScreen(autoConnectError: autoConnectError),
+            )
           : const MoodleOverviewScreen(),
     );
   }
