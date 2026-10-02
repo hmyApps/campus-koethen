@@ -173,6 +173,11 @@ DailySummaryDay _summariseDay({
       case CalendarSource.postEvent:
       case CalendarSource.savedEvents:
         events.add(entry);
+      // Deliberately not summarised: `daily_summary_providers.dart` never
+      // feeds this source into the day index in the first place — a
+      // favourited dish being on the board is not "something happening
+      // today" in the sense P5 (no reminder of its own) was written for.
+      case CalendarSource.canteenFavourite:
     }
   }
 

@@ -16,6 +16,7 @@ import '../../campusmap/domain/map_catalog.dart';
 import '../../campusmap/domain/room.dart';
 import '../../campusmap/domain/room_mention.dart';
 import '../../campusmap/presentation/room_link.dart';
+import '../application/timetable_lesson_info_filter.dart';
 import '../data/timetable_models.dart';
 
 /// Localised label of an entry status. Foreign content is never translated —
@@ -55,13 +56,18 @@ String timetableTypeLabel(AppLocalizations l10n, TimetableEntryType type) =>
 ///
 /// Tapping opens the same detail sheet the calendar uses — one slot has one
 /// detail view, whichever screen it was tapped on.
-class TimetableEntryCard extends StatelessWidget {
+///
+/// A course the reader is not personally affected by (a cross-listed
+/// elective, say) can be hidden from here — the same choice then also
+/// removes every occurrence of that course from the merged calendar, since
+/// both read the one shared [timetableLessonInfoFilterProvider].
+class TimetableEntryCard extends ConsumerWidget {
   const TimetableEntryCard({required this.entry, super.key});
 
   final TimetableEntry entry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
     final AppColors colors = context.colors;
     final TextTheme text = Theme.of(context).textTheme;
@@ -92,11 +98,22 @@ class TimetableEntryCard extends StatelessWidget {
         '${l10n.timetableLessonInfoLabel}: ${entry.lessonInfo}',
     ].join(', ');
 
+    final String? courseTitle = entry.displayTitle;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          if (courseTitle != null)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: l10n.timetableHideCourse(courseTitle),
+                icon: const Icon(AppIcons.visibility_off_outlined),
+                onPressed: () => _hideCourse(context, ref, courseTitle),
+              ),
+            ),
           Semantics(
             container: true,
             label:
@@ -173,6 +190,22 @@ class TimetableEntryCard extends StatelessWidget {
           ),
           if (entry.rooms.isNotEmpty) _TimetableRoomRow(rooms: entry.rooms),
         ],
+      ),
+    );
+  }
+
+  void _hideCourse(BuildContext context, WidgetRef ref, String title) {
+    final AppLocalizations l10n = context.l10n;
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(timetableLessonInfoFilterProvider.notifier);
+    controller.setCourseHidden(title, hidden: true);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.timetableCourseHidden(title)),
+        action: SnackBarAction(
+          label: l10n.actionUndo,
+          onPressed: () => controller.setCourseHidden(title, hidden: false),
+        ),
       ),
     );
   }

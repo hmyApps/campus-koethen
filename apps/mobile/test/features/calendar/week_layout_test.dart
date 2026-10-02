@@ -308,6 +308,46 @@ void main() {
       );
     });
 
+    test('a short visual entry receives an independent 48 dp hit region', () {
+      final PlacedEntry only = WeekLayout.placeDay(<CalendarEntry>[
+        _e('quick', fromH: 10, toH: 10, toM: 5),
+      ]).single;
+
+      final GridHitBounds bounds = WeekLayout.hitBoundsFor(
+        only,
+        gridStartMinute: 0,
+        pixelsPerMinute: 56 / 60,
+        minimumExtent: 48,
+        gridExtent: 56 * 24 + 28,
+      );
+
+      expect(bounds.height, 48);
+      expect(bounds.visualTop, greaterThanOrEqualTo(bounds.top));
+      expect(bounds.visualBottom, lessThanOrEqualTo(bounds.bottom));
+    });
+
+    test('a hit region stays inside the grid at both day edges', () {
+      final List<PlacedEntry> placed = WeekLayout.placeDay(<CalendarEntry>[
+        _e('early', fromH: 0, toH: 0, toM: 5),
+        _e('late', fromH: 23, fromM: 55, toH: 23, toM: 59),
+      ]);
+
+      final List<GridHitBounds> bounds = placed
+          .map(
+            (PlacedEntry entry) => WeekLayout.hitBoundsFor(
+              entry,
+              gridStartMinute: 0,
+              pixelsPerMinute: 56 / 60,
+              minimumExtent: 48,
+              gridExtent: 56 * 24 + 28,
+            ),
+          )
+          .toList(growable: false);
+
+      expect(bounds.first.top, 0);
+      expect(bounds.last.bottom, lessThanOrEqualTo(56 * 24 + 28));
+    });
+
     test('all-day entries are not placed on the grid', () {
       // They belong in the header band, not in a time slot.
       expect(

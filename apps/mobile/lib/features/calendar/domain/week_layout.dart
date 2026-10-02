@@ -42,6 +42,31 @@ class GridRange {
   int get hourCount => endHour - startHour;
 }
 
+/// The independently actionable area around one visual grid entry.
+///
+/// A short appointment must keep its truthful duration on the time axis, but
+/// that visual rectangle is often smaller than a finger. This model separates
+/// the two rectangles: [visualTop] and [visualBottom] locate the card, while
+/// [top] and [bottom] locate the (possibly larger) semantic and pointer target.
+@immutable
+class GridHitBounds {
+  const GridHitBounds({
+    required this.top,
+    required this.height,
+    required this.visualTop,
+    required this.visualHeight,
+  });
+
+  final double top;
+  final double height;
+  final double visualTop;
+  final double visualHeight;
+
+  double get bottom => top + height;
+  double get visualBottom => visualTop + visualHeight;
+  double get visualOffset => visualTop - top;
+}
+
 /// Turns a day's entries into positioned boxes.
 ///
 /// Everything here is arithmetic on minutes, deliberately kept out of the
@@ -71,6 +96,38 @@ abstract final class WeekLayout {
   /// outside the range entirely. A day is 00:00 to 24:00 wherever you look at
   /// it, so the grid draws all of it and lets the reader scroll.
   static const GridRange fullDay = GridRange(startHour: 0, endHour: 24);
+
+  /// Calculates a minimum-size target around an entry without stretching the
+  /// card that communicates its actual duration.
+  ///
+  /// The target is centred on the visual card where possible and clamped to
+  /// the grid at midnight. Neighbouring targets may overlap in a dense lane;
+  /// they remain distinct focus/semantics nodes, while the calendar's day and
+  /// list views provide the equivalent non-spatial interaction.
+  static GridHitBounds hitBoundsFor(
+    PlacedEntry entry, {
+    required int gridStartMinute,
+    required double pixelsPerMinute,
+    required double minimumExtent,
+    required double gridExtent,
+  }) {
+    final double visualTop =
+        (entry.startMinute - gridStartMinute) * pixelsPerMinute;
+    final double visualHeight = entry.durationMinutes * pixelsPerMinute;
+    final double height = visualHeight
+        .clamp(minimumExtent, gridExtent)
+        .toDouble();
+    final double desiredTop = visualTop - (height - visualHeight) / 2;
+    final double top = desiredTop
+        .clamp(0.0, (gridExtent - height).clamp(0.0, gridExtent))
+        .toDouble();
+    return GridHitBounds(
+      top: top,
+      height: height,
+      visualTop: visualTop,
+      visualHeight: visualHeight,
+    );
+  }
 
   /// The hours worth showing *first*, derived from the entries.
   ///

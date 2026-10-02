@@ -413,6 +413,57 @@ void main() {
     });
   });
 
+  group('course hiding', () {
+    testWidgets(
+      'hiding a course from its card removes it from the agenda and offers '
+      'undo',
+      (WidgetTester tester) async {
+        await pumpTimetable(tester);
+        expect(find.text('Mathematik 2'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Mathematik 2 ausblenden'));
+        await tester.pump();
+
+        expect(find.text('Mathematik 2'), findsNothing);
+        expect(find.text('„Mathematik 2“ ausgeblendet'), findsOneWidget);
+        expect(
+          find.text('Technische Mechanik'),
+          findsOneWidget,
+          reason: 'only the hidden course is affected',
+        );
+
+        // The snackbar's enter animation must finish before its action sits
+        // at the position a tap targets.
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.text('Rückgängig'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Mathematik 2'), findsOneWidget);
+      },
+    );
+
+    testWidgets('a hidden course can be restored from the filter sheet', (
+      WidgetTester tester,
+    ) async {
+      await pumpTimetable(tester);
+      await tester.tap(find.byTooltip('Mathematik 2 ausblenden'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.byTooltip('Stunden nach Information filtern'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ausgeblendete Kurse'), findsOneWidget);
+      expect(find.text('Mathematik 2'), findsOneWidget);
+
+      await tester.tap(find.text('Mathematik 2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Schließen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mathematik 2'), findsOneWidget);
+    });
+  });
+
   group('states', () {
     testWidgets('shows an error with a retry when nothing can be served', (
       WidgetTester tester,

@@ -22,7 +22,12 @@ enum CalendarSource {
   postEvent('post-event'),
 
   /// A locally saved entry from the offline saved-events list.
-  savedEvents('saved-events');
+  savedEvents('saved-events'),
+
+  /// A favourited dish on the preferred canteen's menu for that day — see
+  /// `features/calendar/application/calendar_providers.dart`'s
+  /// `calendarShowFavouriteMealsProvider`.
+  canteenFavourite('canteen-favourite');
 
   const CalendarSource(this.storageValue);
 
@@ -45,6 +50,8 @@ enum CalendarSource {
 /// feature's own aggregation (event overview + saved list), which has its
 /// own, separate source-filter preference — see
 /// `features/events/application/event_source_filter.dart`.
+/// [CalendarSource.canteenFavourite] is excluded for the same reason: it has
+/// its own off-by-default switch, `calendarShowFavouriteMealsProvider`.
 const List<CalendarSource> kMergeableCalendarSources = <CalendarSource>[
   CalendarSource.timetable,
   CalendarSource.moodle,

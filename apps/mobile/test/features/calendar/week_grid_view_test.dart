@@ -94,6 +94,22 @@ double _neededHeight(WidgetTester tester, String title) {
 }
 
 void main() {
+  testWidgets('layout matrix keeps the week grid stable', (
+    WidgetTester tester,
+  ) async {
+    for (final (Size size, TextScaler scaler) in <(Size, TextScaler)>[
+      (const Size(320, 800), TextScaler.noScaling),
+      (const Size(360, 800), const TextScaler.linear(1.3)),
+      (const Size(800, 360), TextScaler.noScaling),
+      (const Size(320, 1000), const TextScaler.linear(2)),
+    ]) {
+      await pumpGrid(tester, <CalendarEntry>[], size: size, textScaler: scaler);
+
+      expect(_headers(tester), hasLength(5));
+      expect(tester.takeException(), isNull, reason: '$size at $scaler');
+    }
+  });
+
   group('calendar colours', () {
     testWidgets('a timed event uses its calendar colour', (
       WidgetTester tester,
@@ -273,6 +289,22 @@ void main() {
     });
   });
 
+  testWidgets('every day header is at least one touch target tall', (
+    WidgetTester tester,
+  ) async {
+    await pumpGrid(tester, <CalendarEntry>[]);
+
+    final Finder headerTarget = find.ancestor(
+      of: find.textContaining('11'),
+      matching: find.byType(InkWell),
+    );
+    expect(headerTarget, findsOneWidget);
+    expect(
+      tester.getSize(headerTarget).height,
+      greaterThanOrEqualTo(AppSizes.minTouchTarget),
+    );
+  });
+
   testWidgets('the hour lines follow the reader text size', (
     WidgetTester tester,
   ) async {
@@ -356,6 +388,32 @@ void main() {
       find.descendant(of: find.byType(Card), matching: find.byType(Icon)),
       findsOneWidget,
     );
+  });
+
+  testWidgets('a short entry has a 48 dp target without stretching its card', (
+    WidgetTester tester,
+  ) async {
+    await pumpGrid(tester, <CalendarEntry>[
+      _entry(
+        title: 'Kurzbesprechung',
+        dayOffset: 2,
+        fromH: 17,
+        toH: 17,
+        toM: 15,
+      ),
+    ]);
+
+    final Finder target = find.bySemanticsLabel(RegExp('Kurzbesprechung'));
+    final Finder card = find.ancestor(
+      of: find.text('Kurzbesprechung'),
+      matching: find.byType(Card),
+    );
+    expect(target, findsOneWidget);
+    expect(
+      tester.getSize(target).height,
+      greaterThanOrEqualTo(AppSizes.minTouchTarget),
+    );
+    expect(tester.getSize(card).height, lessThan(AppSizes.minTouchTarget));
   });
 
   testWidgets('a long entry shows its title in full too', (

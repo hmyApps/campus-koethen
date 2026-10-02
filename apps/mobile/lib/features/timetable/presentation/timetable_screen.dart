@@ -94,7 +94,8 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
             onPressed: () => showTimetableLessonInfoFilterSheet(context),
             isSelected:
                 lessonInfoFilter.disabledValues.isNotEmpty ||
-                lessonInfoFilter.hideWithoutInfo,
+                lessonInfoFilter.hideWithoutInfo ||
+                lessonInfoFilter.hiddenCourses.isNotEmpty,
             icon: const Icon(AppIcons.tune),
           ),
         IconButton(
@@ -544,7 +545,7 @@ class _DayAgenda extends StatelessWidget {
     final List<TimetableEntry> allEntries =
         day?.entries ?? const <TimetableEntry>[];
     final List<TimetableEntry> entries = allEntries
-        .where((TimetableEntry entry) => filter.accepts(entry.lessonInfo))
+        .where((TimetableEntry entry) => filter.acceptsEntry(entry))
         .toList(growable: false);
 
     return Column(

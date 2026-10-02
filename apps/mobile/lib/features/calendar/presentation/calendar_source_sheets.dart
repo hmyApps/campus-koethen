@@ -87,7 +87,8 @@ class _SourcesSheet extends ConsumerWidget {
             },
           ),
         const Divider(),
-        const _SavedEventsSwitch(),
+        const SavedEventsCalendarSwitch(),
+        const CanteenFavouriteMealsSwitch(),
       ],
     );
   }
@@ -113,7 +114,8 @@ Future<void> showCalendarSourceSheet(
       CalendarSource.moodle => const _MoodleSourceSheet(),
       CalendarSource.publicCalendar => const _EventsSourceSheet(),
       CalendarSource.postEvent ||
-      CalendarSource.savedEvents => throw UnsupportedError(
+      CalendarSource.savedEvents ||
+      CalendarSource.canteenFavourite => throw UnsupportedError(
         '$source is not a toggleable calendar source sheet',
       ),
     },
@@ -168,10 +170,15 @@ class _SourceSheet extends StatelessWidget {
 }
 
 /// "Show this source in the calendar" — the one control every sheet has.
-class _VisibilitySwitch extends ConsumerWidget {
-  const _VisibilitySwitch({required this.source});
+class CalendarSourceVisibilitySwitch extends ConsumerWidget {
+  const CalendarSourceVisibilitySwitch({
+    required this.source,
+    this.sourceAsTitle = false,
+    super.key,
+  });
 
   final CalendarSource source;
+  final bool sourceAsTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -184,7 +191,11 @@ class _VisibilitySwitch extends ConsumerWidget {
       value: visible,
       // The state is spelled out underneath, so the switch position is never
       // the only thing carrying it.
-      title: Text(l10n.calendarSourceShowInCalendar),
+      title: Text(
+        sourceAsTitle
+            ? calendarSourceLabel(l10n, source)
+            : l10n.calendarSourceShowInCalendar,
+      ),
       subtitle: Text(
         visible ? l10n.calendarSourceVisible : l10n.calendarSourceHidden,
       ),
@@ -199,8 +210,8 @@ class _VisibilitySwitch extends ConsumerWidget {
 /// default and entirely separate from the three mergeable sources above: it
 /// needs no configuration of its own, so it lives directly in this sheet
 /// instead of opening a further one.
-class _SavedEventsSwitch extends ConsumerWidget {
-  const _SavedEventsSwitch();
+class SavedEventsCalendarSwitch extends ConsumerWidget {
+  const SavedEventsCalendarSwitch({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -216,6 +227,31 @@ class _SavedEventsSwitch extends ConsumerWidget {
       secondary: Icon(enabled ? AppIcons.bookmark : AppIcons.bookmark_outlined),
       onChanged: (bool _) =>
           ref.read(calendarSavedEventsEnabledProvider.notifier).toggle(),
+    );
+  }
+}
+
+/// "Lieblingsspeisen im Kalender" — the same off-by-default, standalone
+/// switch as [SavedEventsCalendarSwitch], and the exact same provider the canteen
+/// favourites screen's own toggle reads (public for that reason), so there
+/// is one setting, reachable from two places, never two that could disagree.
+class CanteenFavouriteMealsSwitch extends ConsumerWidget {
+  const CanteenFavouriteMealsSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final bool enabled = ref.watch(calendarShowFavouriteMealsProvider);
+
+    return SwitchListTile.adaptive(
+      value: enabled,
+      title: Text(l10n.calendarSourceCanteenFavourite),
+      subtitle: Text(
+        enabled ? l10n.calendarSourceVisible : l10n.calendarSourceHidden,
+      ),
+      secondary: const Icon(AppIcons.soup),
+      onChanged: (bool _) =>
+          ref.read(calendarShowFavouriteMealsProvider.notifier).toggle(),
     );
   }
 }
@@ -246,7 +282,7 @@ class _TimetableSourceSheet extends ConsumerWidget {
           ),
           subtitle: Text(l10n.calendarTimetableGroupLabel),
         ),
-        const _VisibilitySwitch(source: CalendarSource.timetable),
+        const CalendarSourceVisibilitySwitch(source: CalendarSource.timetable),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: OutlinedButton.icon(
@@ -327,7 +363,7 @@ class _MoodleSourceSheet extends ConsumerWidget {
               ),
             ),
           ),
-          const _VisibilitySwitch(source: CalendarSource.moodle),
+          const CalendarSourceVisibilitySwitch(source: CalendarSource.moodle),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: OutlinedButton.icon(
@@ -364,8 +400,11 @@ String calendarSourceLabel(AppLocalizations l10n, CalendarSource source) =>
       CalendarSource.timetable => l10n.calendarSourceTimetable,
       CalendarSource.moodle => l10n.calendarSourceMoodle,
       CalendarSource.publicCalendar => l10n.calendarSourceEvents,
-      CalendarSource.postEvent || CalendarSource.savedEvents =>
-        throw UnsupportedError('$source has no calendar-source label'),
+      CalendarSource.postEvent ||
+      CalendarSource.savedEvents ||
+      CalendarSource.canteenFavourite => throw UnsupportedError(
+        '$source has no calendar-source label',
+      ),
     };
 
 /// Whether [source] is loaded from a [Loaded] response at all — kept next to
@@ -374,6 +413,9 @@ IconData calendarSourceIcon(CalendarSource source) => switch (source) {
   CalendarSource.timetable => AppIcons.schedule_outlined,
   CalendarSource.moodle => AppIcons.cast_for_education_outlined,
   CalendarSource.publicCalendar => AppIcons.public_outlined,
-  CalendarSource.postEvent || CalendarSource.savedEvents =>
-    throw UnsupportedError('$source has no calendar-source icon'),
+  CalendarSource.postEvent ||
+  CalendarSource.savedEvents ||
+  CalendarSource.canteenFavourite => throw UnsupportedError(
+    '$source has no calendar-source icon',
+  ),
 };

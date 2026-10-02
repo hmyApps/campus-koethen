@@ -8,6 +8,10 @@ import '../../../core/network/loaded.dart';
 import '../../../core/prefs/preference_keys.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../../../core/time/clock.dart';
+import '../../canteen/application/canteen_filter_controller.dart';
+import '../../canteen/application/canteen_providers.dart';
+import '../../canteen/data/canteen_models.dart';
+import '../../canteen/domain/canteen_filter.dart';
 import '../../events/application/saved_events_controller.dart';
 import '../../events/domain/saved_event_snapshot.dart';
 import '../../moodle/application/moodle_account_controller.dart';
@@ -203,9 +207,49 @@ calendarSavedEventsEnabledProvider =
       CalendarSavedEventsEnabledController.new,
     );
 
+/// Whether the preferred canteen's favourited dishes appear on the calendar —
+/// off by default, same reasoning as [CalendarSavedEventsEnabledController]:
+/// an opt-in overlay, not part of the classic merge every install starts with.
+/// Reachable from both the calendar's own sources sheet and the canteen
+/// screen, so there is exactly one switch, never two independent ones that
+/// could drift apart.
+class CalendarShowFavouriteMealsController extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref
+          .watch(keyValueStoreProvider)
+          .getInt(PreferenceKeys.calendarShowFavouriteMeals) ==
+      1;
+
+  Future<void> set(bool value) async {
+    state = value;
+    await ref
+        .read(keyValueStoreProvider)
+        .setInt(PreferenceKeys.calendarShowFavouriteMeals, value ? 1 : 0);
+  }
+
+  Future<void> toggle() => set(!state);
+}
+
+final NotifierProvider<CalendarShowFavouriteMealsController, bool>
+calendarShowFavouriteMealsProvider =
+    NotifierProvider<CalendarShowFavouriteMealsController, bool>(
+      CalendarShowFavouriteMealsController.new,
+    );
+
 /// The merged calendar plus per-source status. Every source is isolated: a
 /// timetable error never removes Moodle deadlines, and a Moodle error never
 /// hides the timetable.
+enum CalendarTimetableState {
+  hidden,
+  loading,
+  disabled,
+  needsGroup,
+  pending,
+  ready,
+  unavailable,
+}
+
 @immutable
 class CalendarData {
   CalendarData({
@@ -219,12 +263,28 @@ class CalendarData {
     this.moodleLoading = false,
     this.publicCalendarsLoading = false,
     this.hasPublicCalendarError = false,
-  });
+    CalendarTimetableState? timetableState,
+  }) : timetableState =
+           timetableState ??
+           (!enabledSources.contains(CalendarSource.timetable)
+               ? CalendarTimetableState.hidden
+               : hasTimetableError
+               ? CalendarTimetableState.unavailable
+               : needsGroup
+               ? CalendarTimetableState.needsGroup
+               : timetableLoading
+               ? CalendarTimetableState.loading
+               : CalendarTimetableState.ready);
 
   final List<CalendarEntry> entries;
   final Set<CalendarSource> enabledSources;
   final bool timetableLoading;
   final bool hasTimetableError;
+
+  /// One explicit state for the timetable calendar source. Keeping this in
+  /// the merged view model prevents the UI from inferring configuration,
+  /// selection and sync state from an empty list.
+  final CalendarTimetableState timetableState;
 
   /// No timetable group chosen yet.
   final bool needsGroup;
@@ -435,11 +495,57 @@ CalendarData _buildCalendarData(
   bool timetableLoading = timetableMetadataLoading;
   bool timetableError = false;
   bool needsGroup = false;
+  CalendarTimetableState timetableState = CalendarTimetableState.hidden;
   if (enabled.contains(CalendarSource.timetable)) {
+    timetableState = CalendarTimetableState.loading;
     final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
     if (groupId == null) {
-      needsGroup = true;
+      // Without a selected group there is no entries request whose metadata
+      // could reveal whether the backend is enabled. The shared group
+      // catalogue supplies that status without introducing a second store.
+      final AsyncValue<Loaded<List<TimetableGroup>>> groups = ref.watch(
+        timetableGroupsProvider,
+      );
+      final Loaded<List<TimetableGroup>>? groupCatalog = groups.value;
+      if (groupCatalog == null) {
+        if (groups.hasError) {
+          timetableError = true;
+          timetableState = CalendarTimetableState.unavailable;
+        } else {
+          timetableLoading = true;
+        }
+      } else if (groupCatalog.meta.featureEnabled == false) {
+        timetableLoading = false;
+        timetableState = CalendarTimetableState.disabled;
+      } else {
+        timetableLoading = false;
+        needsGroup = true;
+        timetableState = CalendarTimetableState.needsGroup;
+      }
     } else {
+      timetableLoading = false;
+      timetableState = CalendarTimetableState.ready;
+      void takeLoaded(Loaded<Timetable> loaded) {
+        timetableEntries.addAll(
+          timetableToCalendarEntries(
+            loaded.value,
+            include: lessonInfoFilter.acceptsEntry,
+          ),
+        );
+        final CalendarTimetableState loadedState =
+            loaded.meta.featureEnabled == false
+            ? CalendarTimetableState.disabled
+            : switch (TimetableDataState.fromWire(loaded.meta.dataState)) {
+                TimetableDataState.ready => CalendarTimetableState.ready,
+                TimetableDataState.pending => CalendarTimetableState.pending,
+                TimetableDataState.unavailable =>
+                  CalendarTimetableState.unavailable,
+                TimetableDataState.unknown =>
+                  CalendarTimetableState.unavailable,
+              };
+        timetableState = _mergeTimetableState(timetableState, loadedState);
+      }
+
       if (timetableRanges != null) {
         for (final CalendarDateWindow range in timetableRanges) {
           final AsyncValue<Loaded<Timetable>> result = ref.watch(
@@ -452,15 +558,21 @@ CalendarData _buildCalendarData(
             ),
           );
           result.when(
-            data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
-              timetableToCalendarEntries(
-                loaded.value,
-                include: (TimetableEntry entry) =>
-                    lessonInfoFilter.accepts(entry.lessonInfo),
-              ),
-            ),
-            loading: () => timetableLoading = true,
-            error: (_, _) => timetableError = true,
+            data: takeLoaded,
+            loading: () {
+              timetableLoading = true;
+              timetableState = _mergeTimetableState(
+                timetableState,
+                CalendarTimetableState.loading,
+              );
+            },
+            error: (_, _) {
+              timetableError = true;
+              timetableState = _mergeTimetableState(
+                timetableState,
+                CalendarTimetableState.unavailable,
+              );
+            },
           );
         }
       } else {
@@ -471,15 +583,21 @@ CalendarData _buildCalendarData(
             ),
           );
           week.when(
-            data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
-              timetableToCalendarEntries(
-                loaded.value,
-                include: (TimetableEntry entry) =>
-                    lessonInfoFilter.accepts(entry.lessonInfo),
-              ),
-            ),
-            loading: () => timetableLoading = true,
-            error: (_, _) => timetableError = true,
+            data: takeLoaded,
+            loading: () {
+              timetableLoading = true;
+              timetableState = _mergeTimetableState(
+                timetableState,
+                CalendarTimetableState.loading,
+              );
+            },
+            error: (_, _) {
+              timetableError = true;
+              timetableState = _mergeTimetableState(
+                timetableState,
+                CalendarTimetableState.unavailable,
+              );
+            },
           );
         }
       }
@@ -542,11 +660,34 @@ CalendarData _buildCalendarData(
     );
   }
 
+  // --- Source 5 (optional, opt-in): favourited dishes on the preferred
+  // canteen's own menu. Independent of every other source — a canteen error
+  // never removes the timetable, and vice versa.
+  final List<CalendarEntry> canteenFavouriteEntries = <CalendarEntry>[];
+  if (ref.watch(calendarShowFavouriteMealsProvider)) {
+    final Set<String> favourites = ref.watch(
+      canteenFilterProvider.select((CanteenFilter f) => f.favourites),
+    );
+    final String? canteenSlug = ref.watch(selectedCanteenSlugProvider);
+    if (favourites.isNotEmpty && canteenSlug != null) {
+      final CanteenMenu? menu = ref
+          .watch(canteenMenuProvider(canteenSlug))
+          .value
+          ?.value;
+      if (menu != null) {
+        canteenFavouriteEntries.addAll(
+          canteenFavouriteMealsToCalendarEntries(menu, favourites),
+        );
+      }
+    }
+  }
+
   final List<CalendarEntry> merged = mergeCalendarEntries(<CalendarEntry>[
     ...timetableEntries,
     ...moodleEntries,
     ...publicEntries,
     ...savedEventEntries,
+    ...canteenFavouriteEntries,
   ]);
   return CalendarData(
     entries: windowFrom == null
@@ -557,11 +698,28 @@ CalendarData _buildCalendarData(
     moodleLoading: moodleLoading,
     hasTimetableError: timetableError,
     needsGroup: needsGroup,
+    timetableState: timetableState,
     moodleConnected: moodleConnected,
     hasMoodleError: moodleError,
     publicCalendarsLoading: publicLoading,
     hasPublicCalendarError: publicError,
   );
+}
+
+CalendarTimetableState _mergeTimetableState(
+  CalendarTimetableState current,
+  CalendarTimetableState next,
+) {
+  int priority(CalendarTimetableState state) => switch (state) {
+    CalendarTimetableState.ready => 0,
+    CalendarTimetableState.hidden => 1,
+    CalendarTimetableState.needsGroup => 2,
+    CalendarTimetableState.loading => 3,
+    CalendarTimetableState.pending => 4,
+    CalendarTimetableState.unavailable => 5,
+    CalendarTimetableState.disabled => 6,
+  };
+  return priority(next) > priority(current) ? next : current;
 }
 
 /// The aggregated calendar for the day the calendar screen is focused on.

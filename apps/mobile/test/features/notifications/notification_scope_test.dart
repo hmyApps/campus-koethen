@@ -24,6 +24,10 @@ List<File> _dartFiles(String path) => Directory(path)
 
 String _sourceOf(String path) => File(path).readAsStringSync();
 
+/// Forward-slash form of [File.path] — on Windows, `Directory.listSync`
+/// yields backslash paths, which never equal a hardcoded `lib/...` literal.
+String _posixPath(File file) => file.path.replaceAll('\\', '/');
+
 /// The manifest without its comments — a rule that explains why a permission
 /// is absent must not itself count as asking for it.
 String _manifestDeclarations() => _sourceOf(
@@ -91,7 +95,7 @@ void main() {
           if (file.readAsStringSync().contains(
             "package:flutter_local_notifications/",
           ))
-            file.path,
+            _posixPath(file),
       ];
 
       expect(importers, <String>[

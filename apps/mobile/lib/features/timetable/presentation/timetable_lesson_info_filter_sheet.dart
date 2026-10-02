@@ -68,33 +68,43 @@ class _TimetableLessonInfoFilterSheet extends ConsumerWidget {
               const SizedBox(height: AppSpacing.sm),
               Flexible(
                 child: SingleChildScrollView(
-                  child: switch (options) {
-                    AsyncData<Loaded<TimetableLessonInfoOptions>>(
-                      :final value,
-                    ) =>
-                      _Choices(options: value.value, filter: filter),
-                    AsyncError<Loaded<TimetableLessonInfoOptions>>() => Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        children: <Widget>[
-                          Text(l10n.timetableLessonInfoLoadError),
-                          if (groupId != null)
-                            TextButton(
-                              onPressed: () => ref.invalidate(
-                                timetableLessonInfoOptionsProvider(groupId),
-                              ),
-                              child: Text(l10n.actionRetry),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      switch (options) {
+                        AsyncData<Loaded<TimetableLessonInfoOptions>>(
+                          :final value,
+                        ) =>
+                          _Choices(options: value.value, filter: filter),
+                        AsyncError<Loaded<TimetableLessonInfoOptions>>() =>
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            child: Column(
+                              children: <Widget>[
+                                Text(l10n.timetableLessonInfoLoadError),
+                                if (groupId != null)
+                                  TextButton(
+                                    onPressed: () => ref.invalidate(
+                                      timetableLessonInfoOptionsProvider(
+                                        groupId,
+                                      ),
+                                    ),
+                                    child: Text(l10n.actionRetry),
+                                  ),
+                              ],
                             ),
-                        ],
-                      ),
-                    ),
-                    _ => const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(AppSpacing.lg),
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  },
+                          ),
+                        _ => const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(AppSpacing.lg),
+                            child: CircularProgressIndicator(),
+                          ),
+                        ),
+                      },
+                      if (filter.hiddenCourses.isNotEmpty)
+                        _HiddenCourses(filter: filter),
+                    ],
+                  ),
                 ),
               ),
               Padding(
@@ -173,6 +183,54 @@ class _Choices extends ConsumerWidget {
                   .setWithoutInfoSelected(selected ?? false),
             ),
         ],
+      ],
+    );
+  }
+}
+
+/// Courses hidden from a card's own "hide" action (`TimetableEntryCard`) —
+/// the only place they can be restored from again, since they no longer
+/// appear anywhere to offer their own un-hide control.
+class _HiddenCourses extends ConsumerWidget {
+  const _HiddenCourses({required this.filter});
+
+  final TimetableLessonInfoFilter filter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final List<String> titles = filter.hiddenCourses.toList()..sort();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            0,
+          ),
+          child: Text(
+            l10n.timetableHiddenCoursesTitle,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Text(l10n.timetableHiddenCoursesHint),
+        ),
+        for (final String title in titles)
+          CheckboxListTile(
+            value: false,
+            title: Text(title),
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (bool? selected) => ref
+                .read(timetableLessonInfoFilterProvider.notifier)
+                .setCourseHidden(title, hidden: !(selected ?? true)),
+          ),
       ],
     );
   }

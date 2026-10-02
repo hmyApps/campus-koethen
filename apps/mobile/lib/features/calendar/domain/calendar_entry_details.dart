@@ -131,6 +131,22 @@ class PublicCalendarDetails extends CalendarEntryDetails {
   int get hashCode => Object.hash(calendarName, location, description);
 }
 
+/// A favourited dish on the preferred canteen's menu for one day.
+@immutable
+class CanteenFavouriteMealCalendarDetails extends CalendarEntryDetails {
+  const CanteenFavouriteMealCalendarDetails({required this.canteenName});
+
+  final String canteenName;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CanteenFavouriteMealCalendarDetails &&
+      other.canteenName == canteenName;
+
+  @override
+  int get hashCode => canteenName.hashCode;
+}
+
 bool _sameList(List<String> a, List<String> b) {
   if (a.length != b.length) return false;
   for (int i = 0; i < a.length; i++) {

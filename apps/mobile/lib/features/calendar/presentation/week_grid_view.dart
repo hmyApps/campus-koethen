@@ -13,6 +13,7 @@ import '../../timetable/application/timetable_week.dart';
 import '../domain/calendar_entry.dart';
 import '../domain/week_layout.dart';
 import 'calendar_entry_sheet.dart';
+import 'week_grid_event.dart';
 
 /// A week as a time grid: one column per drawn day over an hour axis.
 ///
@@ -71,7 +72,7 @@ class WeekGridView extends StatefulWidget {
   static const double hourHeight = 56;
 
   /// Height of the day-header row at the default text size.
-  static const double headerHeight = 32;
+  static const double headerHeight = AppSizes.minTouchTarget;
 
   /// Width of the fixed hour gutter at the default text size.
   static const double gutterWidth = 44;
@@ -452,6 +453,7 @@ class _DayColumn extends StatelessWidget {
   static IconData _iconFor(CalendarSource source) => switch (source) {
     CalendarSource.timetable => AppIcons.school_outlined,
     CalendarSource.moodle => AppIcons.assignment_outlined,
+    CalendarSource.canteenFavourite => AppIcons.soup,
     CalendarSource.publicCalendar ||
     CalendarSource.postEvent ||
     CalendarSource.savedEvents => AppIcons.public,
@@ -464,6 +466,7 @@ class _DayColumn extends StatelessWidget {
     final double pxPerMinute = hourHeight / 60;
     final int gridStart = range.startHour * 60;
     final TextStyle? titleStyle = Theme.of(context).textTheme.labelSmall;
+    final double gridExtent = range.hourCount * hourHeight + hourHeight / 2;
 
     // Measured once per column rather than per entry: how tall one line of the
     // title actually is at the reader's text size decides how many lines fit
@@ -505,11 +508,25 @@ class _DayColumn extends StatelessWidget {
                 ),
               ),
             for (final PlacedEntry item in placed)
-              Positioned(
-                top: (item.startMinute - gridStart) * pxPerMinute,
-                height: item.durationMinutes * pxPerMinute,
+              WeekGridEventPosition(
+                item: item,
+                semanticLabel: <String>[
+                  l10n.calendarWeekSemantic(
+                    item.entry.title,
+                    AppDateFormats.time(item.entry.start, locale),
+                    AppDateFormats.time(
+                      item.entry.end ?? item.entry.start,
+                      locale,
+                    ),
+                  ),
+                  if (item.entry.isCancelled) l10n.timetableStatusCancelled,
+                ].join(', '),
+                gridStartMinute: gridStart,
+                pixelsPerMinute: pxPerMinute,
+                gridExtent: gridExtent,
                 left: (width / item.laneCount) * item.lane + 1,
                 width: width / item.laneCount - 2,
+                onPressed: () => showCalendarEntrySheet(context, item.entry),
                 child: Semantics(
                   label: <String>[
                     l10n.calendarWeekSemantic(

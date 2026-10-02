@@ -120,6 +120,8 @@ class CalendarEntrySheet extends ConsumerWidget {
     final String sourceLabel = switch (entry.source) {
       CalendarSource.moodle => l10n.calendarSourceMoodle,
       CalendarSource.timetable => l10n.calendarSourceTimetable,
+      CalendarSource.canteenFavourite =>
+        entry.sourceLabel ?? l10n.calendarSourceCanteenFavourite,
       CalendarSource.publicCalendar ||
       CalendarSource.postEvent ||
       CalendarSource.savedEvents =>
@@ -128,6 +130,7 @@ class CalendarEntrySheet extends ConsumerWidget {
     final IconData sourceIcon = switch (entry.source) {
       CalendarSource.moodle => AppIcons.assignment_outlined,
       CalendarSource.timetable => AppIcons.schedule_outlined,
+      CalendarSource.canteenFavourite => AppIcons.soup,
       CalendarSource.publicCalendar ||
       CalendarSource.postEvent ||
       CalendarSource.savedEvents => AppIcons.public_outlined,
@@ -318,6 +321,9 @@ class CalendarEntrySheet extends ConsumerWidget {
           ),
         ],
       ],
+      // Nothing beyond the flattened fields: the top "Quelle" row above
+      // already names the canteen via `entry.sourceLabel`.
+      CanteenFavouriteMealCalendarDetails() => const <Widget>[],
       PublicCalendarDetails(
         :final String? location,
         :final String? description,
