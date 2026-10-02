@@ -26,7 +26,9 @@ import '../../notifications/presentation/pre_permission_sheet.dart';
 import '../application/canteen_filter_controller.dart';
 import '../application/canteen_providers.dart';
 import '../domain/canteen_filter.dart';
+import '../domain/canteen_balance_reader.dart';
 import '../domain/meal_highlight.dart';
+import 'canteen_balance_sheet.dart';
 import 'canteen_filter_sheet.dart';
 import '../application/canteen_refresh_scheduler.dart';
 import '../data/canteen_models.dart';
@@ -35,10 +37,12 @@ import 'meal_card.dart';
 
 /// The canteen screen: what is on offer today, as a menu card.
 ///
-/// The masthead identifies the selected canteen above the section title
-/// "Mensa". The picker and filter remain actions in that masthead.
+/// The stable Campus eyebrow locates the module; the selected canteen is the
+/// page title. The picker and filter remain actions in that masthead.
 class CanteenScreen extends ConsumerStatefulWidget {
-  const CanteenScreen({super.key});
+  const CanteenScreen({this.externalBalanceLaunchToken, super.key});
+
+  final String? externalBalanceLaunchToken;
 
   @override
   ConsumerState<CanteenScreen> createState() => _CanteenScreenState();
@@ -47,6 +51,7 @@ class CanteenScreen extends ConsumerStatefulWidget {
 class _CanteenScreenState extends ConsumerState<CanteenScreen>
     with WidgetsBindingObserver {
   late final CanteenRefreshScheduler _scheduler;
+  String? _handledBalanceLaunchToken;
 
   @override
   void initState() {
@@ -54,6 +59,29 @@ class _CanteenScreenState extends ConsumerState<CanteenScreen>
     _scheduler = CanteenRefreshScheduler(onRefresh: _refresh);
     WidgetsBinding.instance.addObserver(this);
     _scheduler.start();
+    _scheduleExternalBalanceRead();
+  }
+
+  @override
+  void didUpdateWidget(CanteenScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.externalBalanceLaunchToken !=
+        oldWidget.externalBalanceLaunchToken) {
+      _scheduleExternalBalanceRead();
+    }
+  }
+
+  void _scheduleExternalBalanceRead() {
+    final String? token = widget.externalBalanceLaunchToken;
+    if (token == null || token == _handledBalanceLaunchToken) return;
+    _handledBalanceLaunchToken = token;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showCanteenBalanceSheet(
+        context,
+        origin: CanteenBalanceReadOrigin.externalTag,
+      );
+    });
   }
 
   @override
@@ -94,12 +122,14 @@ class _CanteenScreenState extends ConsumerState<CanteenScreen>
         ?.displayName;
 
     return ScreenScaffold(
-      eyebrow:
-          menu?.displayName ??
-          selectedCanteenName ??
-          ModuleCategory.campus.label(l10n),
-      title: l10n.navCanteen,
+      eyebrow: ModuleCategory.campus.label(l10n),
+      title: menu?.displayName ?? selectedCanteenName ?? l10n.navCanteen,
       actions: <Widget>[
+        IconButton(
+          tooltip: l10n.canteenBalanceAction,
+          onPressed: () => showCanteenBalanceSheet(context),
+          icon: const Icon(AppIcons.currency_euro),
+        ),
         // Always reachable, even before a canteen has loaded: favourites are
         // not scoped to one canteen and outlive the picker's own state.
         IconButton(

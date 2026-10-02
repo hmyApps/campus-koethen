@@ -12,6 +12,8 @@ import '../../../core/widgets/panel.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
+import '../../calendar/presentation/calendar_source_sheets.dart'
+    show CanteenFavouriteMealsSwitch;
 import '../application/canteen_filter_controller.dart';
 import '../application/canteen_providers.dart';
 import '../data/canteen_models.dart';
@@ -61,48 +63,57 @@ class CanteenFavouritesScreen extends ConsumerWidget {
     return ScreenScaffold(
       eyebrow: ModuleCategory.campus.label(l10n),
       title: l10n.canteenFavouritesTitle,
-      body: names.isEmpty
-          ? EmptyView(
-              icon: AppIcons.star_border,
-              title: l10n.canteenFavouritesEmptyTitle,
-              message: l10n.canteenFavouritesEmptyMessage,
-            )
-          // A favourite list can run well past one screen, so each card is
-          // built as it scrolls into view rather than all of them up front.
-          : ListView.builder(
-              padding: EdgeInsets.fromLTRB(
-                metrics.screenPadding,
-                AppSpacing.md,
-                metrics.screenPadding,
-                AppSpacing.xxl,
-              ),
-              itemCount: names.length,
-              itemBuilder: (BuildContext context, int index) {
-                final String name = names[index];
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    if (index > 0) const SizedBox(height: AppSpacing.md),
-                    switch (mealNamed(name)) {
-                      final Meal meal => MealCard(
-                        meal: meal,
-                        priceGroup: filter.priceGroup,
-                        isFavourite: true,
-                        onToggleFavourite: () => ref
-                            .read(canteenFilterProvider.notifier)
-                            .toggleFavourite(meal),
-                      ),
-                      null => _UnavailableFavourite(
-                        name: name,
-                        onRemove: () => ref
-                            .read(canteenFilterProvider.notifier)
-                            .removeFavouriteNamed(name),
-                      ),
+      body: Column(
+        children: <Widget>[
+          const CanteenFavouriteMealsSwitch(),
+          const Divider(height: 1),
+          Expanded(
+            child: names.isEmpty
+                ? EmptyView(
+                    icon: AppIcons.star_border,
+                    title: l10n.canteenFavouritesEmptyTitle,
+                    message: l10n.canteenFavouritesEmptyMessage,
+                  )
+                // A favourite list can run well past one screen, so each
+                // card is built as it scrolls into view rather than all of
+                // them up front.
+                : ListView.builder(
+                    padding: EdgeInsets.fromLTRB(
+                      metrics.screenPadding,
+                      AppSpacing.md,
+                      metrics.screenPadding,
+                      AppSpacing.xxl,
+                    ),
+                    itemCount: names.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final String name = names[index];
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          if (index > 0) const SizedBox(height: AppSpacing.md),
+                          switch (mealNamed(name)) {
+                            final Meal meal => MealCard(
+                              meal: meal,
+                              priceGroup: filter.priceGroup,
+                              isFavourite: true,
+                              onToggleFavourite: () => ref
+                                  .read(canteenFilterProvider.notifier)
+                                  .toggleFavourite(meal),
+                            ),
+                            null => _UnavailableFavourite(
+                              name: name,
+                              onRemove: () => ref
+                                  .read(canteenFilterProvider.notifier)
+                                  .removeFavouriteNamed(name),
+                            ),
+                          },
+                        ],
+                      );
                     },
-                  ],
-                );
-              },
-            ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

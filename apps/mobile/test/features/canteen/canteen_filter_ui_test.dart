@@ -157,14 +157,14 @@ void main() {
     await pumpCanteen(tester);
 
     expect(find.byType(AppBar), findsNothing);
-    // The canteen name sits above the section title; picker and filter stay
-    // available as header actions.
-    expect(find.text('MENSA KÖTHEN'), findsOneWidget);
+    // The selected canteen is the page title. The stable Campus eyebrow keeps
+    // the hierarchy clear without repeating "Mensa" twice.
+    expect(find.text('Mensa Köthen'), findsOneWidget);
     final ScreenHeader header = tester.widget<ScreenHeader>(
       find.byType(ScreenHeader),
     );
-    expect(header.eyebrow, 'Mensa Köthen');
-    expect(header.title, 'Mensa');
+    expect(header.eyebrow, 'Campus');
+    expect(header.title, 'Mensa Köthen');
     expect(find.byTooltip('Filter'), findsOneWidget);
     expect(find.byTooltip('Mensa wählen'), findsOneWidget);
     expect(find.text('Gemüsepfanne'), findsOneWidget);

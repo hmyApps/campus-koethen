@@ -1,0 +1,2 @@
+/* Campus Köthen App · AGPL-3.0-only */
+"NFCReaderUsageDescription" = "Campus Köthen reads the current canteen-card balance once after you explicitly start a scan. The card identifier and balance are not stored.";
