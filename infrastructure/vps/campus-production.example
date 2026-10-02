@@ -132,7 +132,9 @@ CANTEEN_SYNC_DAYS_AHEAD=14
 # --- WebUntis --------------------------------------------------------------
 # Anonymous Hochschule Anhalt public-view API. The backend appends `/app/data`,
 # `/timetable/filter` and `/timetable/entries` and sends `anonymous-school: hsa`.
-WEBUNTIS_ENABLED=true
+# Release gate: enable only after the organisational approval documented in
+# docs/product/mvp.md. The committed production template stays safe by default.
+WEBUNTIS_ENABLED=false
 WEBUNTIS_BASE_URL=https://hsa.webuntis.com/WebUntis/api/rest/view/v1
 WEBUNTIS_ANONYMOUS_SCHOOL=hsa
 WEBUNTIS_HTTP_TIMEOUT_MS=20000

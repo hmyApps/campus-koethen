@@ -135,7 +135,9 @@ CANTEEN_SYNC_DAYS_AHEAD=14
 # `/timetable/filter` and `/timetable/entries` and sends `anonymous-school: hsa`.
 # The worker performs an initial synchronization whenever it starts and then
 # follows the cron jobs.
-WEBUNTIS_ENABLED=true
+# Synthetic timetable data remains available through USER_TEST_DATA_ENABLED;
+# real WebUntis requests still require the organisational release gate.
+WEBUNTIS_ENABLED=false
 WEBUNTIS_BASE_URL=https://hsa.webuntis.com/WebUntis/api/rest/view/v1
 WEBUNTIS_ANONYMOUS_SCHOOL=hsa
 WEBUNTIS_HTTP_TIMEOUT_MS=20000

@@ -50,11 +50,12 @@ Every committed environment file is a non-secret template. Copy exactly one to
 | `campus-test-api.example`   | User-test deployment on the two `erikspace.eu` test domains  |
 | `campus-production.example` | Production on the two `sturahsa.de` domains                  |
 
-The test template enables every server-side product feature and additionally
-enables the guarded synthetic user-test dataset. The production template also
-enables canteen synchronization, WebUntis, public calendars and API
-documentation, but keeps `USER_TEST_DATA_ENABLED=false`. Its public addresses
-are `https://campus-koethen-api.sturahsa.de` for the backend and
+The test template enables the guarded synthetic user-test dataset. The
+production template enables canteen synchronization, public calendars and API
+documentation, but keeps `USER_TEST_DATA_ENABLED=false`. Both templates keep
+real WebUntis requests disabled until the documented organisational release
+gate has been cleared. The production addresses are
+`https://campus-koethen-api.sturahsa.de` for the backend and
 `https://koethen-cms.sturahsa.de` for Strapi.
 
 News, contacts and rooms are always served from Strapi and have no separate
@@ -77,7 +78,12 @@ worker:
 
 `WEBUNTIS_ENABLED=true` performs real automated requests to the public-view
 interface. Its use must be organizationally cleared for the selected
-deployment.
+deployment. A template is not proof of the effective value on a host: before a
+release, operators must check the deployed environment and verify
+`GET /v1/timetable/status`. Until approval, that response must report
+`featureEnabled: false` in production. The synthetic test profile may still
+report the feature as available because `USER_TEST_DATA_ENABLED=true`, without
+contacting WebUntis.
 
 ## Download the test profile without cloning the repository
 
