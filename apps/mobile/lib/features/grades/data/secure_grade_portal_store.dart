@@ -4,6 +4,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/security/app_secure_storage.dart';
+import '../domain/grade_failure.dart';
 import '../domain/grade_portal.dart';
 import '../domain/grade_portal_store.dart';
 
@@ -35,13 +36,23 @@ class SecureGradePortalStore implements GradePortalStore {
   Future<void> write(GradePortal portal) async {
     try {
       await _storage.write(key: _portalKey, value: portal.name);
-    } catch (_) {}
+      if (await _storage.read(key: _portalKey) != portal.name) {
+        throw StateError('secure storage write was not retained');
+      }
+    } catch (_) {
+      throw const GradeFailure(GradeFailureKind.secureStorageUnavailable);
+    }
   }
 
   @override
   Future<void> clear() async {
     try {
       await _storage.delete(key: _portalKey);
-    } catch (_) {}
+      if (await _storage.read(key: _portalKey) != null) {
+        throw StateError('secure storage value survived deletion');
+      }
+    } catch (_) {
+      throw const GradeFailure(GradeFailureKind.secureStorageUnavailable);
+    }
   }
 }

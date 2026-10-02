@@ -4,7 +4,7 @@
 import 'grade_portal.dart';
 
 /// Persists WHICH exam portal an account was set up on, in the same secure
-/// storage as the credentials — so "Zugangsdaten und lokale Noten löschen"
+/// storage as the credentials — so "Noten-Verbindung und lokale Noten löschen"
 /// removes the portal choice too, in the same step.
 abstract interface class GradePortalStore {
   Future<GradePortal?> read();

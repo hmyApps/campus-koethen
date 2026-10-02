@@ -3,9 +3,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/security/session_guard.dart';
 import '../domain/grade.dart';
 import '../domain/grade_cache_store.dart';
 import '../domain/grade_failure.dart';
+import '../domain/grade_portal.dart';
 import 'grade_account_controller.dart';
 import 'grades_providers.dart';
 
@@ -60,6 +62,8 @@ class GradesController extends AsyncNotifier<GradesViewState> {
   Future<void>? _inFlight;
 
   GradeCacheStore get _cache => ref.read(gradeCacheStoreProvider);
+  SessionGuard<({String username, GradePortal portal})> get _sessions =>
+      ref.read(gradeSessionGuardProvider);
 
   @override
   Future<GradesViewState> build() async {
@@ -101,33 +105,51 @@ class GradesController extends AsyncNotifier<GradesViewState> {
   Future<void> _sync() {
     final Future<void>? existing = _inFlight;
     if (existing != null) return existing;
-    final Future<void> run = _doSync();
+    final GradeAccountState? account = ref
+        .read(gradeAccountControllerProvider)
+        .value;
+    final String? username = account?.username;
+    final GradePortal? portal = account?.activePortal;
+    if (username == null || portal == null) return Future<void>.value();
+    final SessionLease<({String username, GradePortal portal})>? lease =
+        _sessions.capture((username: username, portal: portal));
+    if (lease == null) return Future<void>.value();
+
+    final Future<void> run = _sessions.track<void>(lease, () => _doSync(lease));
     _inFlight = run;
     return run.whenComplete(() => _inFlight = null);
   }
 
-  Future<void> _doSync() async {
+  Future<void> _doSync(
+    SessionLease<({String username, GradePortal portal})> lease,
+  ) async {
+    if (!_sessions.isCurrent(lease)) return;
     final GradesViewState current = state.value ?? const GradesViewState();
     state = AsyncData(current.copyWith(isSyncing: true, clearError: true));
 
-    final DateTime now = ref.read(gradeClockProvider).now();
-    // Record the attempt up front, so a failed automatic sync is not retried on
-    // every rebuild within the 24-hour window.
-    await _cache.writeLastAttemptedSync(now);
-
     try {
+      final DateTime now = ref.read(gradeClockProvider).now();
+      // Record the attempt up front, so a failed automatic sync is not retried
+      // on every rebuild within the 24-hour window.
+      if (!_sessions.isCurrent(lease)) return;
+      await _cache.writeLastAttemptedSync(now);
+      if (!_sessions.isCurrent(lease)) return;
+
       final credentials = await ref
           .read(gradeAccountControllerProvider.notifier)
           .requireCredentials();
+      if (!_sessions.isCurrent(lease)) return;
       final GradeReport report = await ref
           .read(gradesGatewayProvider)
           .fetchGrades(credentials);
+      if (!_sessions.isCurrent(lease)) return;
       // An empty answer NEVER replaces grades we already have. The portal
       // returning nothing where it returned 75 entries yesterday means the
       // account moved, the session was silently dropped or the page changed —
       // never that the results are gone. Keep the cache and surface it.
       final GradeReport? cached = current.report;
       if (report.isEmpty && cached != null && !cached.isEmpty) {
+        if (!_sessions.isCurrent(lease)) return;
         state = AsyncData(
           current.copyWith(
             isSyncing: false,
@@ -137,8 +159,11 @@ class GradesController extends AsyncNotifier<GradesViewState> {
         return;
       }
       // Only a success replaces the cache and moves lastSuccessfulSync.
+      if (!_sessions.isCurrent(lease)) return;
       await _cache.writeReport(report);
+      if (!_sessions.isCurrent(lease)) return;
       await _cache.writeLastSuccessfulSync(now);
+      if (!_sessions.isCurrent(lease)) return;
       state = AsyncData(
         GradesViewState(
           report: report,
@@ -150,6 +175,7 @@ class GradesController extends AsyncNotifier<GradesViewState> {
       final GradeFailure failure = error is GradeFailure
           ? error
           : const GradeFailure(GradeFailureKind.unknown);
+      if (!_sessions.isCurrent(lease)) return;
       // Keep the last good cache and lastSuccessfulSync; just surface the error.
       state = AsyncData(
         (state.value ?? current).copyWith(isSyncing: false, error: failure),

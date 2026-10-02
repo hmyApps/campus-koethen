@@ -6,13 +6,33 @@ import 'package:campus_koethen/features/grades/application/grades_providers.dart
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
 import 'package:campus_koethen/features/grades/presentation/grade_tile.dart';
 import 'package:campus_koethen/features/grades/presentation/grades_screen.dart';
+import 'package:campus_koethen/features/grades/presentation/grade_setup_screen.dart';
 import 'package:campus_koethen/features/more/presentation/more_screen.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_grades.dart';
 import '../../support/pump_app.dart';
+
+class _MemoryIdentityStore implements UniversityIdentityStore {
+  UniversityIdentity? value;
+  int writes = 0;
+
+  @override
+  Future<UniversityIdentity?> read() async => value;
+
+  @override
+  Future<void> write(UniversityIdentity identity) async {
+    writes++;
+    value = identity;
+  }
+
+  @override
+  Future<void> clear() async => value = null;
+}
 
 const GradeCredentials _creds = GradeCredentials(
   username: 'testuser',
@@ -161,7 +181,7 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'testuser');
     await tester.enterText(find.byType(TextFormField).at(1), 'test-pw');
-    await tester.tap(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Anmelden und Noten laden'));
     await tester.pumpAndSettle();
@@ -216,7 +236,7 @@ void main() {
 
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Zugangsdaten und lokale Noten löschen'));
+    await tester.tap(find.text('Noten-Verbindung und lokale Noten löschen'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Löschen'));
     await tester.pumpAndSettle();
@@ -224,6 +244,69 @@ void main() {
     expect(store.clears, greaterThanOrEqualTo(1));
     expect(cache.clears, greaterThanOrEqualTo(1));
     expect(find.text('Anmelden und Noten laden'), findsOneWidget);
+  });
+
+  group('university identity reuse', () {
+    testWidgets(
+      'ticking "also use for other services" retains the identity centrally',
+      (WidgetTester tester) async {
+        _tall(tester);
+        final identityStore = _MemoryIdentityStore();
+        await pumpScreen(
+          tester,
+          const GradeSetupScreen(),
+          overrides: _grades(
+            gateway: FakeGradesGateway(report: sampleReport()),
+            store: InMemoryGradeCredentialStore(),
+            cache: InMemoryGradeCacheStore(),
+          ),
+          universityIdentityStore: identityStore,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextFormField).at(0), 'testuser');
+        await tester.enterText(find.byType(TextFormField).at(1), 'test-pw');
+        // Checkbox 0 is the grades-only storage consent, 1 is the new "also
+        // use for other services" offer.
+        await tester.tap(find.byType(Checkbox).at(0));
+        await tester.tap(find.byType(Checkbox).at(1));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Anmelden und Noten laden'));
+        await tester.pumpAndSettle();
+
+        expect(identityStore.writes, 1);
+        expect(identityStore.value?.identifier, 'testuser');
+        expect(identityStore.value?.password, 'test-pw');
+      },
+    );
+
+    testWidgets('hides the reuse offer once a central identity is stored', (
+      WidgetTester tester,
+    ) async {
+      _tall(tester);
+      await pumpScreen(
+        tester,
+        const GradeSetupScreen(),
+        overrides: _grades(
+          gateway: FakeGradesGateway(),
+          store: InMemoryGradeCredentialStore(),
+          cache: InMemoryGradeCacheStore(),
+        ),
+        universityIdentityStore: _MemoryIdentityStore()
+          ..value = const UniversityIdentity(
+            identifier: 'stud',
+            password: 'pw',
+          ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Diese Zugangsdaten auch für Mail, Moodle und Noten automatisch verwenden.',
+        ),
+        findsNothing,
+      );
+    });
   });
 
   testWidgets('a long report builds only the rows that are on screen', (

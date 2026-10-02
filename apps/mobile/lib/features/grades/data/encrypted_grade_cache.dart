@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../../../core/cache/encrypted_box.dart';
 import '../domain/grade.dart';
 import '../domain/grade_cache_store.dart';
+import '../domain/grade_failure.dart';
 import 'grade_cache_codec.dart';
 
 /// [GradeCacheStore] backed by the shared [EncryptedBox] (encrypted at rest with
@@ -72,5 +73,10 @@ class EncryptedGradeCache implements GradeCacheStore {
       _box.write(key, at.toUtc().toIso8601String());
 
   @override
-  Future<void> clear() => _box.wipe();
+  Future<void> clear() async {
+    final EncryptedBoxWipeResult result = await _box.wipeChecked();
+    if (!result.isComplete) {
+      throw const GradeFailure(GradeFailureKind.cacheUnavailable);
+    }
+  }
 }

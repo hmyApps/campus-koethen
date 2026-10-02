@@ -3,6 +3,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/security/session_guard.dart';
 import '../data/encrypted_grade_cache.dart';
 import '../data/his_in_one_grades_gateway.dart';
 import '../data/legacy_qis_gateway.dart';
@@ -17,6 +18,20 @@ import '../domain/grades_gateway.dart';
 import '../domain/his_in_one_profile.dart';
 import '../domain/legacy_qis_profile.dart';
 import 'grade_account_controller.dart';
+
+/// One personal-data store whose lifetime is tied to the grades account.
+///
+/// The callback must first invalidate and drain its own in-flight writers and
+/// only then perform a verified wipe. Runtime wiring registers the HISinOne
+/// student-service cache; the empty default keeps the grades feature reusable
+/// and makes the dependency explicit in tests.
+typedef GradeLinkedPersonalDataWiper = Future<void> Function();
+
+final Provider<List<GradeLinkedPersonalDataWiper>>
+gradeLinkedPersonalDataWipersProvider =
+    Provider<List<GradeLinkedPersonalDataWiper>>(
+      (Ref ref) => const <GradeLinkedPersonalDataWiper>[],
+    );
 
 /// The pinned legacy HIS-QIS endpoints (host allowlist).
 final Provider<LegacyQisProfile> legacyQisProfileProvider =
@@ -69,3 +84,10 @@ final Provider<GradeCacheStore> gradeCacheStoreProvider =
 final Provider<Clock> gradeClockProvider = Provider<Clock>(
   (Ref ref) => const SystemClock(),
 );
+
+/// Coordinates portal work with account removal/replacement.
+final Provider<SessionGuard<({String username, GradePortal portal})>>
+gradeSessionGuardProvider =
+    Provider<SessionGuard<({String username, GradePortal portal})>>(
+      (Ref ref) => SessionGuard<({String username, GradePortal portal})>(),
+    );

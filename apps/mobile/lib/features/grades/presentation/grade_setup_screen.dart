@@ -10,6 +10,11 @@ import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/application/university_account_controller.dart';
+import '../../university_account/domain/university_identity.dart';
+import '../../university_account/presentation/university_account_setup_sheet.dart'
+    show universityAccountErrorMessage;
 import '../application/grade_account_controller.dart';
 import '../application/grades_providers.dart';
 import '../domain/grade_credentials.dart';
@@ -23,8 +28,14 @@ import '../../../app/app_modules.dart';
 /// encrypted to the official portal, that the campus servers never receive the
 /// credentials or grades, and that the credentials are kept only in the device's
 /// secure keystore — and requires explicit consent to that local storage.
+///
+/// Reached only once `UniversityIdentityAutoConnect` has already tried (and,
+/// if [autoConnectError] is set, failed) the central identity on its own —
+/// this form is never the FIRST thing shown to someone who already stored one.
 class GradeSetupScreen extends ConsumerStatefulWidget {
-  const GradeSetupScreen({super.key});
+  const GradeSetupScreen({this.autoConnectError, super.key});
+
+  final Object? autoConnectError;
 
   @override
   ConsumerState<GradeSetupScreen> createState() => _GradeSetupScreenState();
@@ -40,6 +51,17 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
   bool _consent = false;
   bool _consentMissing = false;
   bool _busy = false;
+  bool _reuseForOtherServices = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final String? identifier = ref
+        .read(universityAccountControllerProvider)
+        .value
+        ?.identifier;
+    if (identifier != null) _usernameController.text = identifier;
+  }
 
   @override
   void dispose() {
@@ -87,6 +109,26 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
       // Only after success: offering to save a rejected password is worse
       // than not offering at all.
       TextInput.finishAutofillContext();
+      if (_reuseForOtherServices) {
+        try {
+          await ref
+              .read(universityAccountControllerProvider.notifier)
+              .retainVerified(
+                UniversityIdentity(
+                  identifier: _usernameController.text,
+                  password: _passwordController.text,
+                ),
+              );
+        } catch (_) {
+          // Grades itself already connected; a failure to also retain the
+          // shared identity must not be reported as if grades had failed.
+          if (mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.universityAccountSecureStorageError)),
+            );
+          }
+        }
+      }
       // On success the gate rebuilds into the overview.
     } catch (error) {
       messenger.showSnackBar(
@@ -114,6 +156,9 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final TextTheme text = Theme.of(context).textTheme;
+    final bool hasCentralIdentity =
+        ref.watch(universityAccountControllerProvider).value?.hasIdentity ??
+        false;
 
     return ScreenScaffold(
       eyebrow: ModuleCategory.study.label(l10n),
@@ -129,6 +174,17 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
               children: <Widget>[
                 Text(l10n.gradeSetupHeadline, style: text.titleLarge),
                 const SizedBox(height: AppSpacing.md),
+                if (widget.autoConnectError != null) ...<Widget>[
+                  _InfoCard(
+                    icon: AppIcons.error_outline,
+                    text: universityAccountErrorMessage(
+                      l10n,
+                      DirectService.grades,
+                      widget.autoConnectError!,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 _InfoCard(
                   icon: AppIcons.lock_outline,
                   text: l10n.gradeSetupIntro,
@@ -221,6 +277,18 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
                       ),
                     ),
                   ),
+                if (!hasCentralIdentity) ...<Widget>[
+                  const SizedBox(height: AppSpacing.sm),
+                  CheckboxListTile(
+                    value: _reuseForOtherServices,
+                    enabled: !_busy,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.universityAccountReuseConsent),
+                    onChanged: (bool? value) =>
+                        setState(() => _reuseForOtherServices = value ?? false),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 FilledButton(
                   onPressed: _busy ? null : _submit,

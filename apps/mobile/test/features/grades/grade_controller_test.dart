@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/grades/application/grade_account_controller.dart';
 import 'package:campus_koethen/features/grades/application/grades_controller.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
@@ -62,6 +64,44 @@ void main() {
       );
       expect(s.isSignedIn, isFalse);
     });
+
+    test(
+      'a failing linked-data wiper never breaks the signed-out read itself — '
+      'every screen that watches this provider (including the HISinOne '
+      'student-service gate) must still see a plain signed-out state, not an '
+      'error, when the defensive wipe this runs on every build stumbles',
+      () async {
+        final c = ProviderContainer(
+          overrides: <Override>[
+            legacyQisGatewayProvider.overrideWithValue(FakeGradesGateway()),
+            hisInOneGatewayProvider.overrideWithValue(FakeGradesGateway()),
+            gradesGatewayProvider.overrideWithValue(FakeGradesGateway()),
+            gradeCredentialStoreProvider.overrideWithValue(
+              InMemoryGradeCredentialStore(),
+            ),
+            gradePortalStoreProvider.overrideWithValue(
+              InMemoryGradePortalStore(),
+            ),
+            gradeCacheStoreProvider.overrideWithValue(
+              InMemoryGradeCacheStore(),
+            ),
+            gradeClockProvider.overrideWithValue(MutableClock(t0)),
+            gradeLinkedPersonalDataWipersProvider.overrideWith(
+              (Ref ref) => <GradeLinkedPersonalDataWiper>[
+                () async =>
+                    throw const GradeFailure(GradeFailureKind.cacheUnavailable),
+              ],
+            ),
+          ],
+        );
+        addTearDown(c.dispose);
+
+        final GradeAccountState s = await c.read(
+          gradeAccountControllerProvider.future,
+        );
+        expect(s.isSignedIn, isFalse);
+      },
+    );
 
     test('restores a stored account (username only, no password)', () async {
       final store = InMemoryGradeCredentialStore()..write(_creds);
@@ -299,6 +339,45 @@ void main() {
       expect(gateway.fetchCalls, 1);
     });
 
+    test('logout waits for and discards a delayed sync response', () async {
+      final Completer<GradeReport> response = Completer<GradeReport>();
+      final gateway = FakeGradesGateway()..pendingReport = response;
+      final cache = InMemoryGradeCacheStore();
+      final c = await signedIn(
+        gateway: gateway,
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+
+      final Future<void> refresh = c
+          .read(gradesControllerProvider.notifier)
+          .refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(gateway.fetchCalls, 1);
+
+      bool logoutCompleted = false;
+      final Future<void> logout = c
+          .read(gradeAccountControllerProvider.notifier)
+          .deleteEverything()
+          .whenComplete(() => logoutCompleted = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        logoutCompleted,
+        isFalse,
+        reason: 'the wipe must follow the last in-flight cache write',
+      );
+
+      response.complete(sampleReport('Verspätete Antwort'));
+      await Future.wait(<Future<void>>[refresh, logout]);
+
+      expect(cache.isEmpty, isTrue);
+      expect(
+        c.read(gradeAccountControllerProvider).requireValue.isSignedIn,
+        isFalse,
+      );
+      expect(c.read(gradesControllerProvider).value?.report, isNull);
+    });
+
     test('a failed sync keeps the old cache and lastSuccessfulSync', () async {
       final gateway = FakeGradesGateway(
         error: const GradeFailure(GradeFailureKind.timeout),
@@ -437,6 +516,43 @@ void main() {
   });
 
   group('local wipe is reported honestly', () {
+    test(
+      'credential deletion failure still attempts portal and cache wipes',
+      () async {
+        final store = InMemoryGradeCredentialStore()..write(_creds);
+        final cache = InMemoryGradeCacheStore();
+        await cache.writeReport(sampleReport());
+        final portalStore = InMemoryGradePortalStore()
+          ..write(GradePortal.hisInOne);
+        final c = _container(
+          gateway: FakeGradesGateway(),
+          store: store,
+          cache: cache,
+          clock: MutableClock(t0),
+          portalStore: portalStore,
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        store.clearError = const GradeFailure(
+          GradeFailureKind.secureStorageUnavailable,
+        );
+
+        await expectLater(
+          c.read(gradeAccountControllerProvider.notifier).deleteEverything(),
+          throwsA(
+            const GradeFailure(GradeFailureKind.secureStorageUnavailable),
+          ),
+        );
+
+        expect(portalStore.clears, 1);
+        expect(cache.clears, 1);
+        expect(cache.isEmpty, isTrue);
+        expect(
+          c.read(gradeAccountControllerProvider).value?.isSignedIn ?? false,
+          isTrue,
+        );
+      },
+    );
+
     test(
       'deleteEverything throws and stays signed in when the cache survives',
       () async {
