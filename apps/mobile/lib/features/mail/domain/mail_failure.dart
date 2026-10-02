@@ -28,6 +28,9 @@ enum MailFailureKind {
   /// (e.g. it was deleted, moved, or revoked access in between). Never
   /// carries the path or the raw I/O error.
   attachmentUnreadable,
+
+  /// The configured per-file, count or aggregate compose budget was exceeded.
+  attachmentLimitExceeded,
 }
 
 /// A gateway/controller error carrying only a classification.

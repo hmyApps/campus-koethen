@@ -11,6 +11,11 @@ import '../../../core/prefs/settings_controller.dart';
 import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/application/university_account_controller.dart';
+import '../../university_account/domain/university_identity.dart';
+import '../../university_account/presentation/university_account_setup_sheet.dart'
+    show universityAccountErrorMessage;
 import '../application/mail_account_controller.dart';
 import '../application/mail_providers.dart';
 import '../domain/hsa_mail_profile.dart';
@@ -26,8 +31,14 @@ import '../../../app/app_modules.dart';
 /// is typed, that the connection is direct and encrypted, that campus servers
 /// never receive the credentials or any mail, and that the credentials are kept
 /// only in the device's secure keystore.
+///
+/// Reached only once `UniversityIdentityAutoConnect` has already tried (and,
+/// if [autoConnectError] is set, failed) the central identity on its own —
+/// this form is never the FIRST thing shown to someone who already stored one.
 class MailSetupScreen extends ConsumerStatefulWidget {
-  const MailSetupScreen({super.key});
+  const MailSetupScreen({this.autoConnectError, super.key});
+
+  final Object? autoConnectError;
 
   @override
   ConsumerState<MailSetupScreen> createState() => _MailSetupScreenState();
@@ -42,6 +53,22 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
   final FocusNode _passwordFocus = FocusNode();
   bool _obscurePassword = true;
   bool _busy = false;
+  bool _reuseForOtherServices = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final String? identifier = ref
+        .read(universityAccountControllerProvider)
+        .value
+        ?.identifier;
+    if (identifier != null) {
+      final String trimmed = identifier.trim();
+      _emailController.text = trimmed.contains('@')
+          ? trimmed
+          : '$trimmed@hs-anhalt.de';
+    }
+  }
 
   @override
   void dispose() {
@@ -90,6 +117,26 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
       // after a successful sign-in: offering to save a password that turned
       // out to be wrong is worse than not offering at all.
       TextInput.finishAutofillContext();
+      if (_reuseForOtherServices) {
+        try {
+          await ref
+              .read(universityAccountControllerProvider.notifier)
+              .retainVerified(
+                UniversityIdentity(
+                  identifier: _emailController.text,
+                  password: _passwordController.text,
+                ),
+              );
+        } catch (_) {
+          // The mail sign-in already succeeded; a failure to also retain the
+          // shared identity must not be reported as if mail itself failed.
+          if (mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.universityAccountSecureStorageError)),
+            );
+          }
+        }
+      }
       // On success the gate rebuilds into the inbox; nothing else to do here.
     } catch (error) {
       // If the user already left this screen (back/cancel), a late failure
@@ -120,6 +167,9 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
     final AppLocalizations l10n = context.l10n;
     final TextTheme text = Theme.of(context).textTheme;
     final AppSettings settings = ref.watch(settingsProvider);
+    final bool hasCentralIdentity =
+        ref.watch(universityAccountControllerProvider).value?.hasIdentity ??
+        false;
 
     return ScreenScaffold(
       eyebrow: ModuleCategory.study.label(l10n),
@@ -136,6 +186,19 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
               children: <Widget>[
                 Text(l10n.mailSetupHeadline, style: text.titleLarge),
                 const SizedBox(height: AppSpacing.md),
+                if (widget.autoConnectError != null) ...<Widget>[
+                  _InfoCard(
+                    icon: AppIcons.error_outline,
+                    child: Text(
+                      universityAccountErrorMessage(
+                        l10n,
+                        DirectService.mail,
+                        widget.autoConnectError!,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 _InfoCard(
                   icon: AppIcons.lock_outline,
                   child: Text(l10n.mailSetupIntro),
@@ -221,6 +284,18 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
                       ? l10n.mailSetupPasswordRequired
                       : null,
                 ),
+                if (!hasCentralIdentity) ...<Widget>[
+                  const SizedBox(height: AppSpacing.sm),
+                  CheckboxListTile(
+                    value: _reuseForOtherServices,
+                    enabled: !_busy,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.universityAccountReuseConsent),
+                    onChanged: (bool? value) =>
+                        setState(() => _reuseForOtherServices = value ?? false),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

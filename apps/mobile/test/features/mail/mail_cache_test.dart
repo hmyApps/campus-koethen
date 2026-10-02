@@ -454,6 +454,74 @@ void main() {
 
       expect(box.writtenKeys, isEmpty);
     });
+
+    test(
+      'search reads the compact index without decrypting message bodies',
+      () async {
+        final _CountingBox box = openBox();
+        expect((await box.openChecked()).isOpen, isTrue);
+        final EncryptedMailCache cache = EncryptedMailCache(box);
+        await cache.saveMessage(message('1', 'a@example.test'));
+        box.readKeys.clear();
+
+        expect(await cache.searchHeaders('body 1'), hasLength(1));
+
+        expect(
+          box.readKeys.where((String key) => key.startsWith('msg.')),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'body count and bytes stay inside the configured retention budget',
+      () async {
+        final _CountingBox box = openBox();
+        expect((await box.openChecked()).isOpen, isTrue);
+        final EncryptedMailCache cache = EncryptedMailCache(
+          box,
+          policy: const MailCachePolicy(
+            maxBodies: 2,
+            maxBodyBytes: 1024 * 1024,
+          ),
+        );
+
+        await cache.saveMessages(<MailMessageDetail>[
+          message('1', 'a@example.test'),
+          message('2', 'b@example.test'),
+          message('3', 'c@example.test'),
+        ]);
+
+        expect(await cache.cachedMessageIds(), <String>{'2', '3'});
+        expect((await cache.stats()).bodyCount, 2);
+      },
+    );
+
+    test(
+      'clearing offline bodies retains the lightweight header list',
+      () async {
+        final _CountingBox box = openBox();
+        expect((await box.openChecked()).isOpen, isTrue);
+        final EncryptedMailCache cache = EncryptedMailCache(box);
+        final MailMessageDetail cached = message('1', 'a@example.test');
+        await cache.saveHeaders(<MailMessageHeader>[
+          MailMessageHeader(
+            id: cached.id,
+            subject: cached.subject,
+            from: cached.from,
+            date: cached.date,
+            isSeen: false,
+            hasAttachments: false,
+          ),
+        ]);
+        await cache.saveMessage(cached);
+
+        await cache.clearCachedBodies();
+
+        expect(await cache.cachedMessageIds(), isEmpty);
+        expect(await cache.readHeaders(), hasLength(1));
+      },
+    );
   });
 }
 
@@ -468,7 +536,14 @@ class _CountingBox extends EncryptedBox {
   });
 
   final List<String> writtenKeys = <String>[];
+  final List<String> readKeys = <String>[];
   int batchWriteCalls = 0;
+
+  @override
+  Future<String?> read(String key) {
+    readKeys.add(key);
+    return super.read(key);
+  }
 
   @override
   Future<void> write(String key, String value) {

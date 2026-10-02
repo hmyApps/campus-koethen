@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../domain/mail_message.dart';
+import '../domain/mail_search_match.dart';
 
 /// JSON mappers for the offline mail cache.
 ///
@@ -101,6 +102,26 @@ abstract final class MailCacheCodec {
       yield address['email'] as String?;
     }
   }
+
+  /// Compact, attachment-free search document stored separately from bodies.
+  static Map<String, dynamic> searchDocument(MailMessageDetail detail) =>
+      <String, dynamic>{
+        'text': mailDetailSearchFields(detail)
+            .whereType<String>()
+            .map(normalizeMailSearchTerm)
+            .where((String value) => value.isNotEmpty)
+            .join('\u0000'),
+        'header': header(
+          MailMessageHeader(
+            id: detail.id,
+            subject: detail.subject,
+            from: detail.from,
+            date: detail.date,
+            isSeen: true,
+            hasAttachments: detail.hasAttachments,
+          ),
+        ),
+      };
 
   /// A header for a cached message that is missing from the header index.
   ///

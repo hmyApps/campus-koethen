@@ -25,6 +25,8 @@ String mailFailureMessage(AppLocalizations l10n, Object? error) {
       MailFailureKind.sessionClosed => l10n.mailErrorSessionClosed,
       MailFailureKind.attachmentUnreadable =>
         l10n.mailComposeAttachmentUnreadable,
+      MailFailureKind.attachmentLimitExceeded =>
+        l10n.mailComposeAttachmentLimitExceeded,
     };
   }
   return l10n.mailErrorGeneric;

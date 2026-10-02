@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/documents/app_document.dart';
+import '../domain/mail_message.dart';
 
 /// One file picked for a compose draft, not yet turned into a domain
 /// `OutgoingAttachment`.
@@ -29,7 +30,9 @@ abstract interface class PickedMailFile {
   /// Reads the file's current content. May throw if the file is gone or
   /// otherwise unreadable; the caller must convert that into a typed
   /// `MailFailure` rather than let the raw error escape.
-  Future<Uint8List> readBytes();
+  Future<Uint8List> readBytes({
+    int maxBytes = MailAttachmentLimits.maxFileBytes,
+  });
 }
 
 class _XFilePickedMailFile implements PickedMailFile {
@@ -53,7 +56,22 @@ class _XFilePickedMailFile implements PickedMailFile {
   }
 
   @override
-  Future<Uint8List> readBytes() => _file.readAsBytes();
+  Future<Uint8List> readBytes({
+    int maxBytes = MailAttachmentLimits.maxFileBytes,
+  }) async {
+    final BytesBuilder result = BytesBuilder(copy: false);
+    int total = 0;
+    await for (final Uint8List chunk in _file.openRead()) {
+      total += chunk.length;
+      if (total > maxBytes) {
+        throw const MailAttachmentLimitException(
+          MailAttachmentBudgetIssue.fileTooLarge,
+        );
+      }
+      result.add(chunk);
+    }
+    return result.takeBytes();
+  }
 }
 
 /// What a pick attempt ended in.

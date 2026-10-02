@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/mail_gateway.dart';
+import '../domain/mail_failure.dart';
 import '../domain/mail_message.dart';
 import 'mail_account_controller.dart';
 import 'mail_providers.dart';
@@ -28,6 +29,9 @@ class MailComposeController extends Notifier<bool> {
   /// if the submission fails — the caller must not treat that as sent.
   Future<bool> send(OutgoingMessage message) async {
     if (state) return false; // already sending — ignore the second trigger
+    if (mailAttachmentBudgetIssue(message.attachments) != null) {
+      throw const MailFailure(MailFailureKind.attachmentLimitExceeded);
+    }
     state = true;
     try {
       final credentials = await ref

@@ -669,6 +669,33 @@ void main() {
       await container.read(mailSyncControllerProvider.notifier).syncNow();
       expect(gateway.lastIncludeAttachmentBytes, isTrue);
     });
+
+    test('prefetches only the newest bounded set of message bodies', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache();
+      final List<MailMessageHeader> headers = <MailMessageHeader>[
+        for (int id = 30; id >= 1; id--) _hdr('$id'),
+      ];
+      final FakeMailGateway gateway = FakeMailGateway(
+        inbox: headers,
+        detailsById: <String, MailMessageDetail>{
+          for (int id = 1; id <= 30; id++) '$id': _dtl('$id'),
+        },
+      );
+      final ProviderContainer container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+      expect(gateway.lastFetchMessageIds, hasLength(kMailBodyPrefetchLimit));
+      expect(gateway.lastFetchMessageIds.first, '30');
+      expect(gateway.lastFetchMessageIds.last, '11');
+      expect(await cache.cachedMessageIds(), hasLength(kMailBodyPrefetchLimit));
+    });
   });
 
   group('local search', () {
@@ -1204,6 +1231,40 @@ void main() {
       expect(gateway.sent.single.attachments, hasLength(1));
       expect(gateway.sent.single.attachments.single.filename, 'a.png');
       expect(gateway.sent.single.attachments.single.bytes, same(bytes));
+    });
+
+    test('rejects an oversized attachment before contacting SMTP', () async {
+      final FakeMailGateway gateway = FakeMailGateway();
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final ProviderContainer container = _container(
+        gateway: gateway,
+        store: store,
+      );
+      final MailComposeController c = await composer(container);
+      final OutgoingMessage oversized = OutgoingMessage(
+        to: const <String>['target@example.test'],
+        subject: 'Budget',
+        text: 'Text',
+        attachments: <OutgoingAttachment>[
+          OutgoingAttachment(
+            filename: 'large.bin',
+            mediaType: 'application/octet-stream',
+            bytes: Uint8List(MailAttachmentLimits.maxFileBytes + 1),
+          ),
+        ],
+      );
+
+      await expectLater(
+        c.send(oversized),
+        throwsA(
+          isA<MailFailure>().having(
+            (MailFailure failure) => failure.kind,
+            'kind',
+            MailFailureKind.attachmentLimitExceeded,
+          ),
+        ),
+      );
+      expect(gateway.sendCalls, 0);
     });
 
     test('the Sent copy carries the same attachments as the send', () async {

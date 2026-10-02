@@ -68,4 +68,32 @@ void main() {
     expect(decoded.hasAttachments, isTrue);
     expect(decoded.date, DateTime.utc(2026, 1, 2, 3, 4));
   });
+
+  test('search document is normalized and never contains attachment bytes', () {
+    final MailMessageDetail message = MailMessageDetail(
+      id: '8',
+      subject: 'PRÜFUNGSANMELDUNG',
+      from: const MailAddress(email: 'amt@example.test'),
+      to: const <MailAddress>[MailAddress(email: 'stud@example.test')],
+      date: DateTime.utc(2026, 10, 1),
+      body: 'Bitte Frist beachten.',
+      attachments: <MailAttachment>[
+        MailAttachment(
+          filename: 'secret.bin',
+          mediaType: 'application/octet-stream',
+          bytes: Uint8List.fromList(utf8.encode('attachment-secret')),
+        ),
+      ],
+    );
+
+    final String encoded = jsonEncode(MailCacheCodec.searchDocument(message));
+
+    expect(encoded, contains('prüfungsanmeldung'));
+    expect(encoded, contains('frist'));
+    expect(encoded, isNot(contains('attachment-secret')));
+    expect(
+      encoded,
+      isNot(contains(base64Encode(message.attachments.single.bytes!))),
+    );
+  });
 }

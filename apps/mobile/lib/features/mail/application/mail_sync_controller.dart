@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/prefs/settings_controller.dart';
 import '../domain/mail_folder.dart';
+import '../domain/mail_cache_store.dart';
 import '../domain/mail_message.dart';
 import 'mail_account_controller.dart';
 import 'mail_inbox_controller.dart';
@@ -12,6 +13,7 @@ import 'mail_providers.dart';
 
 /// How often the inbox is refreshed while the app is in the foreground.
 const Duration kMailSyncInterval = Duration(minutes: 10);
+const int kMailBodyPrefetchLimit = MailCachePolicy.defaultPrefetchBodies;
 
 /// Merges the freshly fetched [latest] headers into the [cached] ones.
 ///
@@ -136,9 +138,10 @@ class MailSyncController extends Notifier<MailSyncStatus> {
 
       // 2) Prefetch full bodies for messages not yet cached.
       final Set<String> cachedIds = await cache.cachedMessageIds();
-      final List<String> missing = merged
+      final List<String> missing = latest
           .map((MailMessageHeader h) => h.id)
           .where((String id) => !cachedIds.contains(id))
+          .take(kMailBodyPrefetchLimit)
           .toList();
       if (missing.isNotEmpty) {
         final List<MailMessageDetail> details = await gateway.fetchMessages(

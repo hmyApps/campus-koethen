@@ -6,7 +6,11 @@ import 'dart:typed_data';
 import 'package:campus_koethen/features/mail/data/mail_mime_builder.dart';
 import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
 import 'package:campus_koethen/features/mail/domain/mail_message.dart'
-    show OutgoingAttachment, OutgoingMessage;
+    show
+        MailAttachmentLimitException,
+        MailAttachmentLimits,
+        OutgoingAttachment,
+        OutgoingMessage;
 import 'package:enough_mail/enough_mail.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -155,6 +159,26 @@ void main() {
         expect(firstBytes, bytes);
         expect(secondBytes, bytes);
       },
+    );
+  });
+
+  test('refuses a message outside the attachment budget', () {
+    final OutgoingMessage message = OutgoingMessage(
+      to: const <String>['target@example.test'],
+      subject: 'Budget',
+      text: 'Text',
+      attachments: <OutgoingAttachment>[
+        OutgoingAttachment(
+          filename: 'large.bin',
+          mediaType: 'application/octet-stream',
+          bytes: Uint8List(MailAttachmentLimits.maxFileBytes + 1),
+        ),
+      ],
+    );
+
+    expect(
+      () => buildOutgoingMime(_creds, message),
+      throwsA(isA<MailAttachmentLimitException>()),
     );
   });
 }

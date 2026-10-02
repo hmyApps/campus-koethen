@@ -104,10 +104,25 @@ class _MailComposeScreenState extends ConsumerState<MailComposeScreen> {
     if (result is! MailFilesPicked) return;
 
     final List<_DraftAttachment> picked = <_DraftAttachment>[];
+    int total = _attachmentTotalBytes;
+    if (_attachments.length + result.files.length >
+        MailAttachmentLimits.maxCount) {
+      _showAttachmentError(MailFailureKind.attachmentLimitExceeded);
+      return;
+    }
     for (final PickedMailFile file in result.files) {
-      picked.add(
-        _DraftAttachment(file: file, sizeBytes: await file.sizeBytes()),
-      );
+      final int? size = await file.sizeBytes();
+      if (size == null) {
+        _showAttachmentError(MailFailureKind.attachmentUnreadable);
+        return;
+      }
+      total += size;
+      if (size > MailAttachmentLimits.maxFileBytes ||
+          total > MailAttachmentLimits.maxTotalBytes) {
+        _showAttachmentError(MailFailureKind.attachmentLimitExceeded);
+        return;
+      }
+      picked.add(_DraftAttachment(file: file, sizeBytes: size));
     }
     if (!mounted) return;
     setState(() => _attachments.addAll(picked));
@@ -117,14 +132,55 @@ class _MailComposeScreenState extends ConsumerState<MailComposeScreen> {
     setState(() => _attachments.removeAt(index));
   }
 
+  int get _attachmentTotalBytes => _attachments.fold<int>(
+    0,
+    (int total, _DraftAttachment attachment) =>
+        total + (attachment.sizeBytes ?? 0),
+  );
+
+  void _showAttachmentError(MailFailureKind kind) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mailFailureMessage(context.l10n, MailFailure(kind))),
+      ),
+    );
+  }
+
   /// Reads every picked file's CURRENT bytes — deliberately not the bytes
   /// captured at pick time — so a file that became unreadable in between
   /// (deleted, moved, permission revoked) is caught here rather than sent
   /// silently stale or not at all.
   Future<List<OutgoingAttachment>> _readAttachments() async {
+    if (_attachments.length > MailAttachmentLimits.maxCount) {
+      throw const MailFailure(MailFailureKind.attachmentLimitExceeded);
+    }
     final List<OutgoingAttachment> result = <OutgoingAttachment>[];
+    int total = 0;
     for (final _DraftAttachment attachment in _attachments) {
-      final Uint8List bytes = await attachment.file.readBytes();
+      final int? currentSize = await attachment.file.sizeBytes();
+      if (currentSize == null) {
+        throw const MailFailure(MailFailureKind.attachmentUnreadable);
+      }
+      if (currentSize > MailAttachmentLimits.maxFileBytes ||
+          total + currentSize > MailAttachmentLimits.maxTotalBytes) {
+        throw const MailFailure(MailFailureKind.attachmentLimitExceeded);
+      }
+      final int remaining = MailAttachmentLimits.maxTotalBytes - total;
+      final int readLimit = remaining < MailAttachmentLimits.maxFileBytes
+          ? remaining
+          : MailAttachmentLimits.maxFileBytes;
+      final Uint8List bytes;
+      try {
+        bytes = await attachment.file.readBytes(maxBytes: readLimit);
+      } on MailAttachmentLimitException {
+        throw const MailFailure(MailFailureKind.attachmentLimitExceeded);
+      }
+      total += bytes.length;
+      if (bytes.length > MailAttachmentLimits.maxFileBytes ||
+          total > MailAttachmentLimits.maxTotalBytes) {
+        throw const MailFailure(MailFailureKind.attachmentLimitExceeded);
+      }
       result.add(
         OutgoingAttachment(
           filename: attachment.file.filename,
@@ -155,6 +211,11 @@ class _MailComposeScreenState extends ConsumerState<MailComposeScreen> {
     final List<OutgoingAttachment> attachments;
     try {
       attachments = await _readAttachments();
+    } on MailFailure catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(mailFailureMessage(l10n, error))),
+      );
+      return;
     } catch (_) {
       // Never let the raw I/O error (which could carry a local path) reach
       // the UI. The draft — recipients, subject, body, attachment list —
@@ -370,6 +431,22 @@ class _MailComposeScreenState extends ConsumerState<MailComposeScreen> {
                   for (int index = 0; index < _attachments.length; index++)
                     _AttachmentTile(
                       attachment: _attachments[index],
+                      totalLabel: index == 0
+                          ? l10n.mailComposeAttachmentTotal(
+                              humanFileSize(
+                                _attachmentTotalBytes,
+                                locale: Localizations.localeOf(
+                                  context,
+                                ).languageCode,
+                              ),
+                              humanFileSize(
+                                MailAttachmentLimits.maxTotalBytes,
+                                locale: Localizations.localeOf(
+                                  context,
+                                ).languageCode,
+                              ),
+                            )
+                          : null,
                       enabled: !sending,
                       onRemove: () => _removeAttachment(index),
                     ),
@@ -388,11 +465,13 @@ class _MailComposeScreenState extends ConsumerState<MailComposeScreen> {
 class _AttachmentTile extends StatelessWidget {
   const _AttachmentTile({
     required this.attachment,
+    required this.totalLabel,
     required this.enabled,
     required this.onRemove,
   });
 
   final _DraftAttachment attachment;
+  final String? totalLabel;
   final bool enabled;
   final VoidCallback onRemove;
 
@@ -420,7 +499,12 @@ class _AttachmentTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          subtitle: sizeLabel.isEmpty ? null : Text(sizeLabel),
+          subtitle: Text(
+            <String>[
+              sizeLabel,
+              ?totalLabel,
+            ].where((String part) => part.isNotEmpty).join(' · '),
+          ),
           trailing: IconButton(
             onPressed: enabled ? onRemove : null,
             tooltip: l10n.mailComposeAttachmentRemove,

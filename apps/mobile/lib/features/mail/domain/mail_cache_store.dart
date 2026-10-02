@@ -4,6 +4,38 @@
 import 'mail_message.dart';
 import 'mail_search_match.dart';
 
+class MailCachePolicy {
+  static const int defaultPrefetchBodies = 20;
+
+  const MailCachePolicy({
+    this.maxHeaders = 500,
+    this.maxBodies = 200,
+    this.maxBodyBytes = 100 * 1024 * 1024,
+    this.headerRetention = const Duration(days: 365),
+    this.bodyRetention = const Duration(days: 180),
+    this.prefetchBodies = defaultPrefetchBodies,
+  });
+
+  final int maxHeaders;
+  final int maxBodies;
+  final int maxBodyBytes;
+  final Duration headerRetention;
+  final Duration bodyRetention;
+  final int prefetchBodies;
+}
+
+class MailCacheStats {
+  const MailCacheStats({
+    required this.headerCount,
+    required this.bodyCount,
+    required this.byteCount,
+  });
+
+  final int headerCount;
+  final int bodyCount;
+  final int byteCount;
+}
+
 /// Offline store for the INBOX: headers, full message bodies and (optionally)
 /// attachment bytes are kept on the device so messages open instantly and work
 /// without a connection.
@@ -53,6 +85,14 @@ abstract interface class MailCacheStore {
 
   /// Every address seen across cached messages (From/To/Cc), for suggestions.
   Future<List<MailAddressEntry>> knownAddresses();
+
+  Future<MailCacheStats> stats();
+
+  /// Removes offline bodies, attachment bytes and derived indexes while
+  /// retaining the lightweight header list.
+  Future<void> clearCachedBodies();
+
+  Future<void> prune();
 
   /// Wipes everything. Called when the account is removed.
   Future<void> clear();

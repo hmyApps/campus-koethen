@@ -24,6 +24,11 @@ MimeMessage buildOutgoingMime(
   domain.MailCredentials credentials,
   model.OutgoingMessage message,
 ) {
+  final model.MailAttachmentBudgetIssue? budgetIssue = model
+      .mailAttachmentBudgetIssue(message.attachments);
+  if (budgetIssue != null) {
+    throw model.MailAttachmentLimitException(budgetIssue);
+  }
   final MessageBuilder builder = MessageBuilder()
     ..from = <MailAddress>[
       MailAddress(credentials.displayName ?? '', credentials.emailAddress),

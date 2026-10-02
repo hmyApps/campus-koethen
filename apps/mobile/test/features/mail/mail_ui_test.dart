@@ -24,6 +24,8 @@ import 'package:campus_koethen/features/mail/presentation/mail_screen.dart';
 import 'package:campus_koethen/features/mail/presentation/mail_search_screen.dart';
 import 'package:campus_koethen/features/mail/presentation/mail_setup_screen.dart';
 import 'package:campus_koethen/features/more/presentation/more_screen.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity.dart';
+import 'package:campus_koethen/features/university_account/domain/university_identity_store.dart';
 import 'package:campus_koethen/core/widgets/screen_scaffold.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -139,6 +141,23 @@ const List<int> _pngBytes = <int>[
   0x60,
   0x82,
 ];
+
+class _MemoryIdentityStore implements UniversityIdentityStore {
+  UniversityIdentity? value;
+  int writes = 0;
+
+  @override
+  Future<UniversityIdentity?> read() async => value;
+
+  @override
+  Future<void> write(UniversityIdentity identity) async {
+    writes++;
+    value = identity;
+  }
+
+  @override
+  Future<void> clear() async => value = null;
+}
 
 class _FakeLauncher implements SafeLinkLauncher {
   final List<String> opened = <String>[];
@@ -488,6 +507,88 @@ void main() {
     );
   });
 
+  group('university identity reuse', () {
+    testWidgets(
+      'ticking "also use for other services" retains the identity centrally',
+      (WidgetTester tester) async {
+        _tallSurface(tester);
+        final store = InMemoryMailCredentialStore();
+        final gateway = FakeMailGateway();
+        final identityStore = _MemoryIdentityStore();
+        await pumpScreen(
+          tester,
+          const MailSetupScreen(),
+          overrides: _mail(gateway, store),
+          universityIdentityStore: identityStore,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byType(TextFormField).at(1),
+          'stud@hs-anhalt.de',
+        );
+        await tester.enterText(find.byType(TextFormField).at(2), 'pw');
+        await tester.tap(find.byType(Checkbox));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Verbindung prüfen und anmelden'));
+        await tester.pumpAndSettle();
+
+        expect(identityStore.writes, 1);
+        expect(identityStore.value?.identifier, 'stud@hs-anhalt.de');
+        expect(identityStore.value?.password, 'pw');
+      },
+    );
+
+    testWidgets(
+      'does not retain centrally when the reuse box is left unticked',
+      (WidgetTester tester) async {
+        _tallSurface(tester);
+        final identityStore = _MemoryIdentityStore();
+        await pumpScreen(
+          tester,
+          const MailSetupScreen(),
+          overrides: _mail(FakeMailGateway(), InMemoryMailCredentialStore()),
+          universityIdentityStore: identityStore,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byType(TextFormField).at(1),
+          'stud@hs-anhalt.de',
+        );
+        await tester.enterText(find.byType(TextFormField).at(2), 'pw');
+        await tester.tap(find.text('Verbindung prüfen und anmelden'));
+        await tester.pumpAndSettle();
+
+        expect(identityStore.writes, 0);
+      },
+    );
+
+    testWidgets('hides the reuse offer once a central identity is stored', (
+      WidgetTester tester,
+    ) async {
+      _tallSurface(tester);
+      await pumpScreen(
+        tester,
+        const MailSetupScreen(),
+        overrides: _mail(FakeMailGateway(), InMemoryMailCredentialStore()),
+        universityIdentityStore: _MemoryIdentityStore()
+          ..value = const UniversityIdentity(
+            identifier: 'stud',
+            password: 'pw',
+          ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Diese Zugangsdaten auch für Mail, Moodle und Noten automatisch verwenden.',
+        ),
+        findsNothing,
+      );
+    });
+  });
+
   group('inbox actions', () {
     testWidgets('removing the account returns to the sign-in screen', (
       WidgetTester tester,
@@ -506,7 +607,7 @@ void main() {
 
       await tester.tap(find.byType(PopupMenuButton<String>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Account entfernen'));
+      await tester.tap(find.text('E-Mail-Verbindung und lokale Daten löschen'));
       await tester.pumpAndSettle();
       // Confirm in the dialog.
       await tester.tap(find.text('Entfernen'));
@@ -1182,6 +1283,39 @@ void main() {
 
       expect(find.text('foto.png'), findsOneWidget);
       expect(picker.calls, 1);
+    });
+
+    testWidgets('rejects an oversized file before reading it', (
+      WidgetTester tester,
+    ) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final FakePickedMailFile file = FakePickedMailFile(
+        filename: 'too-large.bin',
+        mediaType: 'application/octet-stream',
+        bytes: Uint8List(1),
+        reportedSizeBytes: MailAttachmentLimits.maxFileBytes + 1,
+      );
+      final picker = FakeMailAttachmentPicker(
+        results: <MailFilePickResult>[
+          MailFilesPicked(<PickedMailFile>[file]),
+        ],
+      );
+      await pumpScreen(
+        tester,
+        const MailComposeScreen(),
+        overrides: <Override>[
+          ..._mail(FakeMailGateway(), store),
+          mailAttachmentPickerProvider.overrideWithValue(picker),
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(AppIcons.attach_file));
+      await tester.pumpAndSettle();
+
+      expect(find.text('too-large.bin'), findsNothing);
+      expect(find.textContaining('20 MB'), findsOneWidget);
+      expect(file.readCalls, 0);
     });
 
     testWidgets('removes a picked attachment before sending', (
