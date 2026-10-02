@@ -363,6 +363,14 @@ test('drift check passes for the committed generated assets', () => {
   assert.deepEqual(drift, [], `generated assets are stale:\n${drift.join('\n')}`);
 });
 
+test('drift check ignores checkout-only CRLF conversion', () => {
+  const { files } = outputs();
+  const drift = generatedFileDrift({
+    readFile: (path) => files.get(path)?.replaceAll('\n', '\r\n'),
+  });
+  assert.deepEqual(drift, []);
+});
+
 test('drift check reports a tampered generated asset', () => {
   const drift = generatedFileDrift({
     readFile: (path) => (path.endsWith('.svg') ? '<svg/>' : undefined),

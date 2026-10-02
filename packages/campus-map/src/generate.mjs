@@ -343,6 +343,11 @@ export function writeGenerated({ repoRoot = REPO_ROOT, packageRoot = PACKAGE_ROO
   return written.sort();
 }
 
+/** Normalises checkout-only EOL differences before generated-content comparison. */
+function normaliseLineEndings(value) {
+  return value.replace(/\r\n?/g, '\n');
+}
+
 /**
  * Compares the committed generated assets with a fresh build.
  * Returns a list of drifted paths; empty means the assets are current.
@@ -368,7 +373,7 @@ export function generatedFileDrift({
     const actual = read(relativePath);
     if (actual === undefined) {
       drift.push(`${relativePath}: missing — run 'pnpm --filter @campus/map generate'`);
-    } else if (actual !== expected) {
+    } else if (normaliseLineEndings(actual) !== normaliseLineEndings(expected)) {
       drift.push(`${relativePath}: out of date — run 'pnpm --filter @campus/map generate'`);
     }
   }
