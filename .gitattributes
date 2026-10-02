@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+# Binary assets must never be normalised as text.
+*.gif binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.png binary
+*.ttf binary
+*.webp binary
+*.zip binary
+

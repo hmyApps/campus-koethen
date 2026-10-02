@@ -10,11 +10,13 @@
     "url": "git+https://github.com/Leviora-Studio/campus-koethen.git"
   },
   "engines": {
-    "node": ">=22.0.0 <23.0.0",
+    "node": ">=24.0.0 <25.0.0",
     "pnpm": ">=10.0.0"
   },
   "packageManager": "pnpm@11.15.1",
   "scripts": {
+    "preinstall": "node scripts/check-node-version.mjs",
+    "node:check": "node scripts/check-node-version.mjs",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
