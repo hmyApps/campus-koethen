@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
@@ -17,6 +18,7 @@ import '../../../l10n/l10n.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../notifications/application/notification_settings_controller.dart';
 import '../../notifications/domain/notification_permission.dart';
+import '../../university_account/domain/university_identity.dart';
 import 'onboarding_steps.dart';
 
 /// First-run setup.
@@ -40,14 +42,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pages = PageController();
   int _index = 0;
   bool _notificationsEnabled = true;
+  String _universityIdentifier = '';
+  String _universityPassword = '';
+  bool _universityStorageConsent = false;
 
   static const List<OnboardingStep> _steps = <OnboardingStep>[
     OnboardingStep.language,
     OnboardingStep.welcome,
     OnboardingStep.campus,
     OnboardingStep.content,
+    OnboardingStep.calendar,
+    OnboardingStep.universityAccess,
+    OnboardingStep.universityServices,
     OnboardingStep.notifications,
   ];
+
+  UniversityIdentity? get _pendingUniversityIdentity {
+    if (!_universityStorageConsent) return null;
+    final UniversityIdentity identity = UniversityIdentity(
+      identifier: _universityIdentifier,
+      password: _universityPassword,
+    ).normalized;
+    return identity.isValid ? identity : null;
+  }
 
   @override
   void dispose() {
@@ -59,6 +76,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (applyNotificationChoice) {
       await _applyNotificationChoice();
     }
+    TextInput.finishAutofillContext();
+    _universityPassword = '';
     await ref.read(settingsProvider.notifier).setOnboardingCompleted(true);
     if (!mounted) return;
     GoRouter.of(context).go(AppRoutes.news);
@@ -166,8 +185,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   child: OnboardingStepView(
                     step: _steps[index],
                     notificationsEnabled: _notificationsEnabled,
+                    universityIdentifier: _universityIdentifier,
+                    universityPassword: _universityPassword,
+                    universityStorageConsent: _universityStorageConsent,
+                    pendingUniversityIdentity: _pendingUniversityIdentity,
                     onNotificationsEnabledChanged: (bool value) {
                       setState(() => _notificationsEnabled = value);
+                    },
+                    onUniversityIdentifierChanged: (String value) {
+                      setState(() => _universityIdentifier = value);
+                    },
+                    onUniversityPasswordChanged: (String value) {
+                      setState(() => _universityPassword = value);
+                    },
+                    onUniversityStorageConsentChanged: (bool value) {
+                      setState(() => _universityStorageConsent = value);
                     },
                   ),
                 ),

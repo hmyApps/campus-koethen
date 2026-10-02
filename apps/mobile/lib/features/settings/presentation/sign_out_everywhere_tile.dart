@@ -9,6 +9,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 import '../application/sign_out_everywhere_controller.dart';
 import '../domain/direct_service.dart';
+import '../../university_account/application/university_account_controller.dart';
 
 extension on DirectService {
   /// Reuses each feature's own screen title so the name never drifts out of
@@ -20,9 +21,8 @@ extension on DirectService {
   };
 }
 
-/// "Überall abmelden" — signs out of every currently connected direct service
-/// (mail, Moodle, grades) through its own canonical logout path, after a
-/// confirmation that names exactly which services are affected.
+/// Completely removes the central identity after every connected direct
+/// service has completed its own canonical logout/wipe.
 class SignOutEverywhereTile extends ConsumerStatefulWidget {
   const SignOutEverywhereTile({super.key});
 
@@ -45,7 +45,13 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
     final List<DirectService> connected = ref.watch(
       connectedDirectServicesProvider,
     );
-    final bool hasConnected = connected.isNotEmpty;
+    final bool hasIdentity = ref.watch(
+      universityAccountControllerProvider.select(
+        (AsyncValue<UniversityAccountState> value) =>
+            value.value?.hasIdentity ?? false,
+      ),
+    );
+    final bool canDelete = connected.isNotEmpty || hasIdentity;
     final ColorScheme colors = Theme.of(context).colorScheme;
 
     return ListTile(
@@ -58,14 +64,21 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          : Icon(AppIcons.logout, color: hasConnected ? colors.error : null),
+          : Icon(
+              AppIcons.delete_outline,
+              color: canDelete ? colors.error : null,
+            ),
       title: Text(
         l10n.settingsSignOutEverywhere,
-        style: hasConnected && !_busy ? TextStyle(color: colors.error) : null,
+        style: canDelete && !_busy ? TextStyle(color: colors.error) : null,
       ),
-      subtitle: Text(l10n.settingsSignOutEverywhereSubtitle(connected.length)),
-      enabled: hasConnected && !_busy,
-      onTap: hasConnected && !_busy
+      subtitle: Text(
+        hasIdentity
+            ? l10n.universityAccountDeleteSubtitle
+            : l10n.settingsSignOutEverywhereSubtitle(connected.length),
+      ),
+      enabled: canDelete && !_busy,
+      onTap: canDelete && !_busy
           ? () => _confirmAndSignOut(context, ref, connected)
           : null,
     );
@@ -86,12 +99,14 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
           context: context,
           builder: (BuildContext dialogContext) => AlertDialog(
             icon: Icon(
-              AppIcons.logout,
+              AppIcons.delete_outline,
               color: Theme.of(dialogContext).colorScheme.error,
             ),
             title: Text(l10n.settingsSignOutEverywhereConfirmTitle),
             content: Text(
-              l10n.settingsSignOutEverywhereConfirmMessage(serviceNames),
+              connected.isEmpty
+                  ? l10n.universityAccountDeleteConfirmNoServices
+                  : l10n.settingsSignOutEverywhereConfirmMessage(serviceNames),
             ),
             actions: <Widget>[
               TextButton(
@@ -106,7 +121,7 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
                   foregroundColor: Theme.of(dialogContext).colorScheme.onError,
                 ),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(l10n.settingsSignOutEverywhereConfirmAction),
+                child: Text(l10n.universityAccountDeleteConfirmAction),
               ),
             ],
           ),
@@ -134,6 +149,29 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
     if (result.isFullSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.settingsSignOutEverywhereSuccess)),
+      );
+      return;
+    }
+
+    if (result.failedServices.isEmpty && !result.identityDeleted) {
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          icon: Icon(
+            AppIcons.error_outline,
+            color: Theme.of(dialogContext).colorScheme.error,
+          ),
+          title: Text(l10n.universityAccountDeleteIncompleteTitle),
+          content: Text(l10n.universityAccountDeleteIncompleteMessage),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                MaterialLocalizations.of(dialogContext).okButtonLabel,
+              ),
+            ),
+          ],
+        ),
       );
       return;
     }

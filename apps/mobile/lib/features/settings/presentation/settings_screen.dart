@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_routes.dart';
+import '../../../core/documents/app_document.dart';
 import '../../../core/locale/locale_mode.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../../../app/app_modules.dart';
@@ -16,12 +17,14 @@ import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../l10n/l10n.dart';
 import 'personalisation_tiles.dart';
-import 'sign_out_everywhere_tile.dart';
+import '../../university_account/presentation/university_account_card.dart';
 import '../../canteen/application/canteen_providers.dart';
 import '../../requests/application/requests_local_data_wiper.dart';
 import '../../canteen/data/canteen_models.dart';
 import '../../canteen/presentation/canteen_picker_sheet.dart';
 import '../../news/application/channel_subscriptions.dart';
+import '../../mail/application/mail_providers.dart';
+import '../../mail/domain/mail_cache_store.dart';
 import '../../timetable/application/timetable_providers.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
@@ -72,7 +75,8 @@ class SettingsScreen extends ConsumerWidget {
           // sections used to be the same hairline.
           SectionHeader(label: l10n.settingsSectionAppearance),
           _LanguageTile(settings: settings),
-          _ThemeTile(settings: settings),
+          const BrightnessPreferenceTile(),
+          const AccentSchemeTile(),
           const ReducedMotionTile(),
           SectionHeader(label: l10n.settingsSectionPersonalisation),
           ListTile(
@@ -121,8 +125,9 @@ class SettingsScreen extends ConsumerWidget {
                 .read(settingsProvider.notifier)
                 .setMailDownloadAttachments(value),
           ),
+          const _MailCacheTile(),
           SectionHeader(label: l10n.settingsSectionAccounts),
-          const SignOutEverywhereTile(),
+          const UniversityAccountCard(),
           SectionHeader(label: l10n.settingsSectionData),
           ListTile(
             leading: const Icon(AppIcons.restart_alt_outlined),
@@ -160,6 +165,72 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MailCacheTile extends ConsumerStatefulWidget {
+  const _MailCacheTile();
+
+  @override
+  ConsumerState<_MailCacheTile> createState() => _MailCacheTileState();
+}
+
+class _MailCacheTileState extends ConsumerState<_MailCacheTile> {
+  late Future<MailCacheStats> _stats;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    _stats = ref.read(mailCacheStoreProvider).stats();
+  }
+
+  Future<void> _clear() async {
+    if (_clearing) return;
+    setState(() => _clearing = true);
+    await ref.read(mailCacheStoreProvider).clearCachedBodies();
+    if (!mounted) return;
+    setState(() {
+      _clearing = false;
+      _reload();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.settingsMailCacheCleared)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    return FutureBuilder<MailCacheStats>(
+      future: _stats,
+      builder: (BuildContext context, AsyncSnapshot<MailCacheStats> snapshot) {
+        final MailCacheStats? stats = snapshot.data;
+        final String size = humanFileSize(
+          stats?.byteCount ?? 0,
+          locale: Localizations.localeOf(context).languageCode,
+        );
+        return ListTile(
+          leading: const Icon(AppIcons.download_outlined),
+          title: Text(l10n.settingsMailCache),
+          subtitle: Text(
+            stats == null
+                ? l10n.commonLoading
+                : l10n.settingsMailCacheSubtitle(stats.bodyCount, size),
+          ),
+          trailing: TextButton(
+            onPressed: _clearing || (stats?.bodyCount ?? 0) == 0
+                ? null
+                : _clear,
+            child: Text(l10n.settingsMailCacheClear),
+          ),
+        );
+      },
     );
   }
 }
@@ -207,58 +278,6 @@ class _LanguageTile extends ConsumerWidget {
             children: <Widget>[
               for (final LocaleMode mode in LocaleMode.values)
                 RadioListTile<LocaleMode>.adaptive(
-                  value: mode,
-                  title: Text(label(mode)),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ThemeTile extends ConsumerWidget {
-  const _ThemeTile({required this.settings});
-
-  final AppSettings settings;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppLocalizations l10n = context.l10n;
-    String label(ThemeMode mode) => switch (mode) {
-      // Legacy persisted values are migrated to light mode. The enum case is
-      // kept exhaustive but is not offered in the UI.
-      ThemeMode.system => l10n.settingsThemeLight,
-      ThemeMode.light => l10n.settingsThemeLight,
-      ThemeMode.dark => l10n.settingsThemeDark,
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: context.metrics.screenPadding,
-          ),
-          child: Text(
-            l10n.settingsTheme,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-        ),
-        RadioGroup<ThemeMode>(
-          groupValue: settings.themeMode,
-          onChanged: (ThemeMode? value) {
-            if (value == null) return;
-            ref.read(settingsProvider.notifier).setThemeMode(value);
-          },
-          child: Column(
-            children: <Widget>[
-              for (final ThemeMode mode in const <ThemeMode>[
-                ThemeMode.light,
-                ThemeMode.dark,
-              ])
-                RadioListTile<ThemeMode>.adaptive(
                   value: mode,
                   title: Text(label(mode)),
                 ),

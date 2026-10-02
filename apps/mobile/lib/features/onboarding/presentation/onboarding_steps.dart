@@ -14,6 +14,8 @@ import '../../../core/widgets/brand_mark.dart';
 import '../../../core/widgets/panel.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../l10n/l10n.dart';
+import '../../calendar/domain/calendar_entry.dart';
+import '../../calendar/presentation/calendar_source_sheets.dart';
 import '../../calendar/presentation/public_calendar_list.dart';
 import '../../campusmap/application/campus_map_providers.dart';
 import '../../campusmap/domain/map_catalog.dart';
@@ -22,6 +24,8 @@ import '../../canteen/data/canteen_models.dart';
 import '../../news/presentation/channel_picker_sheet.dart';
 import '../../notifications/presentation/daily_summary_time_tile.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
+import '../../university_account/domain/university_identity.dart';
+import 'onboarding_university_steps.dart';
 
 /// The steps of the first-run setup, in order.
 ///
@@ -31,20 +35,43 @@ import '../../timetable/presentation/timetable_group_picker_sheet.dart';
 /// twice as long as what it actually had to establish. They live in the
 /// settings, where they always did. Language is the deliberate exception: it
 /// comes first so every explanation after it is immediately understandable.
-enum OnboardingStep { language, welcome, campus, content, notifications }
+enum OnboardingStep {
+  language,
+  welcome,
+  campus,
+  content,
+  calendar,
+  universityAccess,
+  universityServices,
+  notifications,
+}
 
 /// Renders one step.
 class OnboardingStepView extends StatelessWidget {
   const OnboardingStepView({
     required this.step,
     required this.notificationsEnabled,
+    required this.universityIdentifier,
+    required this.universityPassword,
+    required this.universityStorageConsent,
+    required this.pendingUniversityIdentity,
     required this.onNotificationsEnabledChanged,
+    required this.onUniversityIdentifierChanged,
+    required this.onUniversityPasswordChanged,
+    required this.onUniversityStorageConsentChanged,
     super.key,
   });
 
   final OnboardingStep step;
   final bool notificationsEnabled;
+  final String universityIdentifier;
+  final String universityPassword;
+  final bool universityStorageConsent;
+  final UniversityIdentity? pendingUniversityIdentity;
   final ValueChanged<bool> onNotificationsEnabledChanged;
+  final ValueChanged<String> onUniversityIdentifierChanged;
+  final ValueChanged<String> onUniversityPasswordChanged;
+  final ValueChanged<bool> onUniversityStorageConsentChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +115,35 @@ class OnboardingStepView extends StatelessWidget {
         body: l10n.onboardingContentBody,
         icon: AppIcons.rss_feed_outlined,
         children: const <Widget>[_ContentPickers()],
+      ),
+      OnboardingStep.calendar => _StepScaffold(
+        title: l10n.onboardingCalendarTitle,
+        body: l10n.onboardingCalendarBody,
+        icon: AppIcons.calendar_month_outlined,
+        children: const <Widget>[_CalendarStep()],
+      ),
+      OnboardingStep.universityAccess => _StepScaffold(
+        title: l10n.onboardingUniversityTitle,
+        body: l10n.onboardingUniversityBody,
+        icon: AppIcons.account_circle_outlined,
+        children: <Widget>[
+          OnboardingUniversityAccessStep(
+            identifier: universityIdentifier,
+            password: universityPassword,
+            consent: universityStorageConsent,
+            onIdentifierChanged: onUniversityIdentifierChanged,
+            onPasswordChanged: onUniversityPasswordChanged,
+            onConsentChanged: onUniversityStorageConsentChanged,
+          ),
+        ],
+      ),
+      OnboardingStep.universityServices => _StepScaffold(
+        title: l10n.onboardingServicesTitle,
+        body: l10n.onboardingServicesBody,
+        icon: AppIcons.link,
+        children: <Widget>[
+          OnboardingUniversityServicesStep(identity: pendingUniversityIdentity),
+        ],
       ),
       OnboardingStep.notifications => _StepScaffold(
         title: l10n.onboardingNotificationsTitle,
@@ -314,7 +370,7 @@ class _TimetableGroupStep extends StatelessWidget {
   }
 }
 
-/// News channels and public calendars, picked **inside** the setup.
+/// News channels picked **inside** the setup.
 ///
 /// These used to be rows that pushed the settings screens. That could not
 /// work: while the setup is unfinished the router sends every other route
@@ -335,6 +391,32 @@ class _ContentPickers extends StatelessWidget {
       children: <Widget>[
         _StepLabel(l10n.onboardingOpenChannels),
         const ChannelPickerList(),
+      ],
+    );
+  }
+}
+
+/// Chooses every local source that contributes entries to the merged calendar.
+class _CalendarStep extends StatelessWidget {
+  const _CalendarStep();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _StepLabel(l10n.calendarSourcesLabel),
+        const CalendarSourceVisibilitySwitch(
+          source: CalendarSource.timetable,
+          sourceAsTitle: true,
+        ),
+        const CalendarSourceVisibilitySwitch(
+          source: CalendarSource.moodle,
+          sourceAsTitle: true,
+        ),
+        const SavedEventsCalendarSwitch(),
+        const CanteenFavouriteMealsSwitch(),
         const SizedBox(height: AppSpacing.lg),
         _StepLabel(l10n.onboardingOpenCalendars),
         const PublicCalendarList(shrinkWrap: true),

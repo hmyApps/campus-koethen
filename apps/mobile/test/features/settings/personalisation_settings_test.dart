@@ -6,8 +6,10 @@ import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
+import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_motion.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
+import 'package:campus_koethen/core/theme/appearance_preferences.dart';
 import 'package:campus_koethen/features/settings/presentation/navigation_settings_screen.dart';
 import 'package:campus_koethen/features/settings/presentation/personalisation_tiles.dart';
 import 'package:campus_koethen/l10n/l10n.dart';
@@ -52,6 +54,7 @@ Future<ProviderContainer> pumpThemed(
             supportedLocales: AppLocales.supported,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             theme: AppTheme.light(
+              accentScheme: settings.accentScheme,
               motion: AppMotion.resolve(
                 systemDisablesAnimations: false,
                 userPrefersReducedMotion: settings.reducedMotion,
@@ -68,6 +71,93 @@ Future<ProviderContainer> pumpThemed(
 }
 
 void main() {
+  group('appearance', () {
+    testWidgets('offers system, light and dark as real preferences', (
+      WidgetTester tester,
+    ) async {
+      // System is now the fresh-install default, so start from dark instead
+      // — tapping "Systemeinstellung" below is then a real selection change
+      // the test can observe, not a tap on an already-selected option.
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      await store.setString(
+        PreferenceKeys.brightnessPreference,
+        BrightnessPreference.dark.storageValue,
+      );
+      final ProviderContainer container = await pumpThemed(
+        tester,
+        const Scaffold(body: BrightnessPreferenceTile()),
+        store: store,
+      );
+
+      expect(find.text('Systemeinstellung'), findsOneWidget);
+      expect(find.text('Hell'), findsOneWidget);
+      expect(find.text('Dunkel'), findsOneWidget);
+
+      await tester.tap(find.text('Systemeinstellung'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(settingsProvider).brightnessPreference,
+        BrightnessPreference.system,
+      );
+      expect(container.read(settingsProvider).themeMode, ThemeMode.system);
+      expect(
+        store.getString(PreferenceKeys.brightnessPreference),
+        BrightnessPreference.system.storageValue,
+      );
+    });
+
+    testWidgets('all accents have text, a swatch and a radio marker', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      final ProviderContainer container = await pumpThemed(
+        tester,
+        const Scaffold(body: AccentSchemeTile()),
+        store: store,
+      );
+
+      for (final String label in <String>[
+        'Rosa',
+        'Grün',
+        'Blau',
+        'Violett',
+        'Bernstein',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(find.byType(RadioListTile<AccentScheme>), findsNWidgets(5));
+      expect(find.byType(DecoratedBox), findsAtLeastNWidgets(5));
+      expect(
+        tester.getSemantics(
+          find.widgetWithText(RadioListTile<AccentScheme>, 'Rosa'),
+        ),
+        isSemantics(isChecked: true, isInMutuallyExclusiveGroup: true),
+      );
+
+      await tester.tap(find.text('Grün'));
+      await tester.pumpAndSettle();
+
+      expect(container.read(settingsProvider).accentScheme, AccentScheme.green);
+      expect(
+        tester.getSemantics(
+          find.widgetWithText(RadioListTile<AccentScheme>, 'Grün'),
+        ),
+        isSemantics(isChecked: true, isInMutuallyExclusiveGroup: true),
+      );
+      expect(
+        Theme.of(
+          tester.element(find.byType(AccentSchemeTile)),
+        ).extension<AppColors>()!.primary,
+        AppColors.greenLight.primary,
+      );
+      expect(
+        store.getString(PreferenceKeys.accentScheme),
+        AccentScheme.green.storageValue,
+      );
+    });
+  });
+
   group('reduced motion', () {
     testWidgets('the switch reaches the theme', (WidgetTester tester) async {
       final ProviderContainer container = await pumpThemed(
@@ -164,6 +254,70 @@ void main() {
       expect(stored, hasLength(4));
       expect(stored, isNot(contains(AppModule.news.storageValue)));
       expect(stored!.toSet(), hasLength(4));
+    });
+
+    testWidgets('the timetable can be added with plus and removed with minus', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      await pumpThemed(
+        tester,
+        const NavigationSettingsScreen(),
+        store: store,
+        surface: const Size(390, 3200),
+      );
+
+      await tester.tap(
+        find.widgetWithIcon(IconButton, AppIcons.remove_circle_outline).first,
+      );
+      await tester.pumpAndSettle();
+
+      final Finder timetableRow = find.ancestor(
+        of: find.text('Stundenplan'),
+        matching: find.byType(ListTile),
+      );
+      await tester.tap(
+        find.descendant(
+          of: timetableRow,
+          matching: find.byIcon(AppIcons.add_circle_outline),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        store.getStringList(PreferenceKeys.navigationTabs),
+        contains(AppModule.timetable.storageValue),
+      );
+
+      final Finder activeTimetableRow = find.ancestor(
+        of: find.text('Stundenplan'),
+        matching: find.byType(ListTile),
+      );
+      await tester.tap(
+        find.descendant(
+          of: activeTimetableRow,
+          matching: find.byIcon(AppIcons.remove_circle_outline),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder newsRow = find.ancestor(
+        of: find.text('News'),
+        matching: find.byType(ListTile),
+      );
+      await tester.tap(
+        find.descendant(
+          of: newsRow,
+          matching: find.byIcon(AppIcons.add_circle_outline),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        store.getStringList(PreferenceKeys.navigationTabs),
+        isNot(contains(AppModule.timetable.storageValue)),
+      );
+      expect(find.text('Stundenplan'), findsOneWidget);
     });
   });
 }

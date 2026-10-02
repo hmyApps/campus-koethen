@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../grades/application/grade_account_controller.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
+import '../../university_account/application/university_account_controller.dart';
+import '../../university_account/application/university_service_connector.dart';
 import '../domain/direct_service.dart';
 
 /// The direct services that are currently signed in, in a fixed display order.
@@ -41,6 +43,18 @@ class SignOutEverywhereService {
   final Ref _ref;
 
   Future<SignOutEverywhereResult> signOutAll() async {
+    final UniversityServiceOperationGate gate = _ref.read(
+      universityServiceOperationGateProvider,
+    );
+    await gate.beginCompleteDeletion();
+    try {
+      return await _signOutAllAfterPendingOperations();
+    } finally {
+      gate.finishCompleteDeletion();
+    }
+  }
+
+  Future<SignOutEverywhereResult> _signOutAllAfterPendingOperations() async {
     final List<DirectServiceSignOutOutcome> outcomes =
         <DirectServiceSignOutOutcome>[];
     for (final DirectService service in _ref.read(
@@ -51,7 +65,34 @@ class SignOutEverywhereService {
         DirectServiceSignOutOutcome(service: service, success: success),
       );
     }
-    return SignOutEverywhereResult(outcomes);
+    if (outcomes.any(
+      (DirectServiceSignOutOutcome outcome) => !outcome.success,
+    )) {
+      // The central identity is deliberately last. Keeping it makes the failed
+      // services retryable and prevents a partial wipe from stranding the user.
+      return SignOutEverywhereResult(
+        outcomes,
+        identityDeleted: false,
+        identityDeletionAttempted: false,
+      );
+    }
+
+    try {
+      await _ref
+          .read(universityAccountControllerProvider.notifier)
+          .deleteIdentity();
+      return SignOutEverywhereResult(
+        outcomes,
+        identityDeleted: true,
+        identityDeletionAttempted: true,
+      );
+    } catch (_) {
+      return SignOutEverywhereResult(
+        outcomes,
+        identityDeleted: false,
+        identityDeletionAttempted: true,
+      );
+    }
   }
 
   Future<bool> _signOut(DirectService service) async {

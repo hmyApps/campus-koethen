@@ -1,0 +1,273 @@
+// Campus Köthen App · AGPL-3.0-only
+// Copyright © 2026 Leviora Studio and Jona Loreen Sommer
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/app_dimensions.dart';
+import '../../../core/theme/app_icons.dart';
+import '../../../l10n/l10n.dart';
+import '../../settings/application/sign_out_everywhere_controller.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../settings/presentation/sign_out_everywhere_tile.dart';
+import '../application/university_account_controller.dart';
+import '../application/university_service_connector.dart';
+import 'university_account_setup_sheet.dart';
+
+/// Settings card for the optional locally retained university identity and its
+/// three deliberately separate service connections.
+class UniversityAccountCard extends ConsumerStatefulWidget {
+  const UniversityAccountCard({super.key});
+
+  @override
+  ConsumerState<UniversityAccountCard> createState() =>
+      _UniversityAccountCardState();
+}
+
+class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
+  final Set<DirectService> _busy = <DirectService>{};
+  final Map<DirectService, String> _errors = <DirectService, String>{};
+
+  Future<void> _toggle(
+    DirectService service, {
+    required bool connected,
+    required bool hasIdentity,
+  }) async {
+    if (_busy.contains(service)) return;
+    if (!connected && !hasIdentity) {
+      await showUniversityAccountSetupSheet(context, initialService: service);
+      return;
+    }
+
+    setState(() {
+      _busy.add(service);
+      _errors.remove(service);
+    });
+    try {
+      final UniversityServiceConnector connector = ref.read(
+        universityServiceConnectorProvider,
+      );
+      if (connected) {
+        await connector.disconnect(service);
+      } else {
+        await connector.connect(service);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errors[service] = connected
+            ? context.l10n.universityAccountDisconnectFailed
+            : universityAccountErrorMessage(context.l10n, service, error);
+      });
+    } finally {
+      if (mounted) setState(() => _busy.remove(service));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    final AsyncValue<UniversityAccountState> account = ref.watch(
+      universityAccountControllerProvider,
+    );
+    final UniversityAccountState? identity = account.value;
+    final bool hasIdentity = identity?.hasIdentity ?? false;
+    final bool accountUnavailable = account.isLoading || account.hasError;
+    final Set<DirectService> connected = ref
+        .watch(connectedDirectServicesProvider)
+        .toSet();
+
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.xs,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Padding(
+                    padding: EdgeInsets.only(top: AppSpacing.xs),
+                    child: Icon(AppIcons.account_circle_outlined),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          l10n.universityAccountTitle,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          hasIdentity
+                              ? l10n.universityAccountStoredFor(
+                                  identity!.identifier!,
+                                )
+                              : l10n.universityAccountNotStored,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (account.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      child: SizedBox.square(
+                        dimension: AppSizes.icon,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Text(
+                l10n.universityAccountIntro,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            if (account.hasError)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  0,
+                ),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    l10n.universityAccountSecureStorageError,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final DirectService service in DirectService.values)
+              _UniversityServiceRow(
+                service: service,
+                connected: connected.contains(service),
+                busy: _busy.contains(service),
+                error: _errors[service],
+                onPressed: accountUnavailable
+                    ? null
+                    : () => _toggle(
+                        service,
+                        connected: connected.contains(service),
+                        hasIdentity: hasIdentity,
+                      ),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: accountUnavailable
+                      ? null
+                      : () => showUniversityAccountSetupSheet(context),
+                  icon: Icon(
+                    hasIdentity
+                        ? AppIcons.edit_outlined
+                        : AppIcons.add_circle_outline,
+                  ),
+                  label: Text(
+                    hasIdentity
+                        ? l10n.universityAccountUpdate
+                        : l10n.universityAccountAdd,
+                  ),
+                ),
+              ),
+            ),
+            const Divider(),
+            const SignOutEverywhereTile(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UniversityServiceRow extends StatelessWidget {
+  const _UniversityServiceRow({
+    required this.service,
+    required this.connected,
+    required this.busy,
+    required this.error,
+    required this.onPressed,
+  });
+
+  final DirectService service;
+  final bool connected;
+  final bool busy;
+  final String? error;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    final String label = universityServiceLabel(l10n, service);
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final IconData serviceIcon = switch (service) {
+      DirectService.mail => AppIcons.mail_outline,
+      DirectService.moodle => AppIcons.school_outlined,
+      DirectService.grades => AppIcons.grade_outlined,
+    };
+    final String actionLabel = connected
+        ? l10n.universityAccountDisconnectService(label)
+        : l10n.universityAccountConnectService(label);
+
+    return ListTile(
+      leading: Icon(serviceIcon),
+      title: Text(label),
+      subtitle: Semantics(
+        liveRegion: error != null,
+        child: Text(
+          error ??
+              (connected
+                  ? l10n.universityAccountConnected
+                  : l10n.universityAccountDisconnected),
+          style: error == null ? null : TextStyle(color: colors.error),
+        ),
+      ),
+      trailing: busy
+          ? Semantics(
+              label: actionLabel,
+              child: const SizedBox.square(
+                dimension: AppSizes.minTouchTarget,
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          : IconButton(
+              constraints: const BoxConstraints.tightFor(
+                width: AppSizes.minTouchTarget,
+                height: AppSizes.minTouchTarget,
+              ),
+              onPressed: onPressed,
+              tooltip: actionLabel,
+              icon: Icon(
+                connected
+                    ? AppIcons.remove_circle_outline
+                    : AppIcons.add_circle_outline,
+              ),
+            ),
+    );
+  }
+}

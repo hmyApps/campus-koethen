@@ -23,14 +23,19 @@ class DirectServiceSignOutOutcome {
 /// service. Partial failure is a first-class case: successful sign-outs stay
 /// in effect and failed ones are reported so the user can retry just those.
 class SignOutEverywhereResult {
-  const SignOutEverywhereResult(this.outcomes);
+  const SignOutEverywhereResult(
+    this.outcomes, {
+    required this.identityDeleted,
+    required this.identityDeletionAttempted,
+  });
 
   final List<DirectServiceSignOutOutcome> outcomes;
+  final bool identityDeleted;
+  final bool identityDeletionAttempted;
 
-  bool get attemptedAny => outcomes.isNotEmpty;
+  bool get attemptedAny => outcomes.isNotEmpty || identityDeletionAttempted;
 
-  bool get isFullSuccess =>
-      outcomes.isNotEmpty && outcomes.every((o) => o.success);
+  bool get isFullSuccess => outcomes.every((o) => o.success) && identityDeleted;
 
   List<DirectService> get failedServices => outcomes
       .where((DirectServiceSignOutOutcome o) => !o.success)
