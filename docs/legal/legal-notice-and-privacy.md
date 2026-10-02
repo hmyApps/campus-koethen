@@ -1,6 +1,6 @@
 # Legal notice
 
-Last updated: 24 September 2026
+Last updated: 2 October 2026
 
 ## Provider of the mobile app
 
@@ -51,7 +51,7 @@ Campus Köthen is not an official Hochschule Anhalt app. The app is independentl
 
 # Privacy
 
-Last updated: 24 September 2026
+Last updated: 2 October 2026
 
 ## Scope and controllers
 
@@ -73,17 +73,27 @@ The Campus backend runs on a VPS in Germany. The student body's hosting provider
 
 The app stores settings for language and appearance, selected channels, calendars and course group, canteen settings and favourites, saved events, tasks you create, and cached public content solely on your device. This storage is necessary to provide the app functions and offline use you request (section 25(2)(2) TDDDG). Where personal data is processed in this context, the legal basis is Article 6(1)(b) GDPR, as the processing is necessary to provide the app functions you expressly request. The app's own functions and the Campus backend do not use cookies. Technically necessary session cookies may be used when signing in directly to the exam portals. They are held temporarily in memory only and deleted after the request has been completed. There are no advertising identifiers or cross-device tracking. Settings and local content remain stored until you delete or reset them in the app. Credentials and personal caches have their own deletion controls in the respective features; use these before uninstalling because operating systems handle deletion of securely stored keys upon uninstall differently.
 
+## NFC canteen-card balance check
+
+When you select “Check balance”, the app uses NFC solely to read the balance stored on a supported canteen card. On Android, presenting an ISO-DEP card while outside the app may also trigger the operating system's prompt to open Campus Köthen; only tapping that prompt opens the app and starts the read. On iOS, platform restrictions require the scan to be started manually inside the app. The app does not evaluate the card identifier. The card identifier, raw card response and balance are never stored, logged or transmitted to the Campus backend, the student body, Hochschule Anhalt or any third party. The displayed amount exists only temporarily in memory and is discarded when you close the view. There is no background scan. Processing is limited to providing the local function you request under Article 6(1)(b) GDPR and section 25(2)(2) TDDDG.
+
+## Central university access
+
+You can optionally store exactly one university identifier — a username or full university email address — and one password centrally. They are stored only after your explicit confirmation and after at least one of email, Moodle or grades has accepted them. Both values remain exclusively in the device-bound secure keystore. For email, the app locally expands an identifier without `@` to `<identifier>@hs-anhalt.de`; a full email address remains unchanged. Moodle and grades receive the identifier unchanged. If the retired three-field schema is detected, it is wiped completely and is not migrated automatically. The values are never sent to the Campus backend, Strapi or worker and are never placed in settings, caches, logs or public app state. The central access is only a local input aid, not a shared SSO session: only tapping `+` signs the selected service in separately and directly with the respective university system. `−` deletes only that service's session and local data; the central access remains available to other services. “Delete university access completely” disconnects every service first and deletes the central access last. If a service fails, the central access is retained for a retry. After a password change, “Update credentials” verifies the new values with a selected service before replacing the stored identity.
+
 ## Student email
 
-When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. Your email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. After a successful “Remove account”, the credentials, local cache and its encryption key are removed from the device; your email on the university server remains unchanged.
+When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. The service-specific email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. After a successful “Delete email connection and local data”, the service-specific credentials, local cache and its encryption key are removed; an optional central university access is retained. Your email on the university server remains unchanged.
 
 ## Grades
 
-When you use grades, the app connects directly and securely to the Hochschule Anhalt exam portal identified for your account: HIS-QIS at service.ssc.hs-anhalt.de or HISinOne at sscportal.ssc.hs-anhalt.de. There is no intermediary server: neither the Campus backend nor Hostinger receives your credentials or grades. Your username, password and portal choice are stored only in your device's secure keystore; grades are cached locally and encrypted with a key held on the device. An automatic fetch occurs at most once every 24 hours, plus manually at your request. “Delete credentials and local grades” removes credentials, portal choice, grades and encryption key from the device. Hochschule Anhalt is responsible for processing on the exam portals.
+When you use grades, the app connects directly and securely to the Hochschule Anhalt exam portal identified for your account: HIS-QIS at service.ssc.hs-anhalt.de or HISinOne at sscportal.ssc.hs-anhalt.de. There is no intermediary server: neither the Campus backend nor Hostinger receives your credentials or grades. The service-specific username, password and portal choice are stored only in your device's secure keystore; grades are cached locally and encrypted with a key held on the device. An automatic fetch occurs at most once every 24 hours, plus manually at your request. “Delete grades connection and local grades” removes the service-specific credentials, portal choice, grades and encryption key; an optional central university access is retained. Hochschule Anhalt is responsible for processing on the exam portals.
+
+If your account is set up on HISinOne, the app's "HISinOne" module additionally offers read-only access to a "Study Service" page with several sections: your certificate overview with download, your personal and contact data, and your programme overview — over the same connection and the same credentials as grades, without a second sign-in. Portal pages and form actions are sent only to `sscportal.ssc.hs-anhalt.de`; only a certificate URL produced by the current portal response is fetched once from the exactly restricted endpoint `untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload`. These functions do not modify university records; no exam registration, address change or other mutation is sent. Downloaded certificates are not archived permanently on the device; they are held in memory only and opened in the app or handed to your operating system's share action. The Study Service overview is cached locally in encrypted form. Deleting the grades connection waits for in-flight operations and removes this cache and its key as well as access to these functions.
 
 ## Moodle
 
-When you connect Moodle, the app communicates directly and securely with moodle.hs-anhalt.de. Your password is used only to sign in and is not stored. The session token issued by Moodle, your Moodle user ID, courses, materials, assignments, announcements and deadlines are stored securely or encrypted on your device. The Campus backend and Hostinger do not receive this data. “Remove Moodle connection” deletes the token, user ID, cache and associated local synchronisation data. Hochschule Anhalt is responsible for processing on Moodle.
+When you connect Moodle, the app communicates directly and securely with moodle.hs-anhalt.de. The Moodle sign-in does not store your password in the Moodle account; after your explicit confirmation, the same password may optionally be stored separately in the central university access. The session token issued by Moodle, your Moodle user ID, courses, materials, assignments, announcements and deadlines are stored securely or encrypted on your device. The Campus backend and Hostinger do not receive this data. “Delete Moodle connection and local data” deletes the token, user ID, cache and associated local synchronisation data; an optional central university access is retained. Hochschule Anhalt is responsible for processing on Moodle.
 
 ## Funding applications and feedback
 

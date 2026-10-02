@@ -92,6 +92,9 @@ nie**; erst ein vollständig erfolgreicher Abruf fügt hinzu/aktualisiert/deakti
 
 - Getrennte Jobs `catalog` und `events`, per `PUBLIC_CALENDAR_ENABLED` schaltbar, eigener
   Overlap-Guard, unabhängig von Canteen/Timetable.
+- Der Event-Job verarbeitet höchstens **vier Feeds gleichzeitig**. Die Katalogreihenfolge bleibt
+  in den Ergebnissen erhalten; ein unerwarteter Fehler vor oder außerhalb eines normalen
+  Feed-Laufs wird als isoliertes Fehlerergebnis erfasst und stoppt die übrigen Feeds nicht.
 - Pro Kalender: SyncRun `running` → ICS laden (bytebegrenzt) → validieren → parsen → im Zielfenster
   expandieren → **Transaktion**: upsert + Löschen **nur** im bestätigten Fenster für nicht mehr
   gesehene `occurrenceKey` → Status/`lastSuccessfulSyncAt` setzen.
@@ -104,6 +107,10 @@ nie**; erst ein vollständig erfolgreicher Abruf fügt hinzu/aktualisiert/deakti
   `invalid` (ohne) — bei erstem Sync nicht öffentlich.
 - **Freigabe entzogen** (404/410/403): Status `revoked`/`unavailable`, Termine gelöscht, aus dem
   öffentlichen Katalog entfernt.
+- Jeder Feed-Lauf schreibt genau eine strukturierte Betriebsmetrik mit `status`, `durationMs`,
+  UTF-8-genauen `responseBytes`, `errorClass` und Ergebniszählern. URL, Google-Kalender-ID,
+  Kalender-Slug und Feed-Inhalte erscheinen nicht in diesen Logs. Die interne Zuordnung bleibt
+  ausschließlich im geschützten `PublicCalendarSyncRun` der operativen Datenbank.
 
 ## 7. Campus API
 

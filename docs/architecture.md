@@ -72,6 +72,20 @@ Zwei Besonderheiten, die aus dem Diagramm allein nicht hervorgehen:
   Person und eine **Kopie des Studierendenausweises**. Der zurückgegebene **Statuslink ist ein
   Geheimnis** und der einzige Zugang zum Vorgang ([requests.md](requests.md)).
 
+Die optionale `UniversityIdentity` verbindet diese Netze **nicht** zu einer technischen SSO-
+Sitzung. Sie ist eine lokale Eingabehilfe mit genau **einer** Kennung (Hochschul-Benutzername
+oder -Mailadresse, je nachdem was eingegeben wurde) und einem Passwort — das spiegelt, dass die
+Hochschule dieselbe Kennung und dasselbe Passwort für alle drei Dienste akzeptiert. Der öffentliche
+Controller-State enthält nur diese Kennung; das Passwort wird für
+eine ausdrücklich ausgelöste `+`-Aktion just in time aus dem gerätegebundenen Keychain/Keystore
+gelesen. Moodle und Noten erhalten sie unverändert im Benutzername-Feld. Der Mail-Adapter ergänzt
+nur eine Kennung ohne `@` zu `<Kennung>@hs-anhalt.de`; eine bereits vollständige Mailadresse bleibt
+unverändert. Das frühere Drei-Feld-Schema wird vollständig gelöscht und nicht geraten migriert.
+Danach erzeugt
+der jeweilige Adapter ausschließlich seinen eigenen Zustand: Mail-Credentials, Moodle-Token oder
+Noten-Credentials samt Portalwahl. Es gibt weder ein Campus-Köthen-Konto noch einen
+Identity-Endpunkt im Backend.
+
 Die Zusammenführung von Stundenplan (Pfad 1), öffentlichen Kalendern (Pfad 1) und Moodle-Deadlines
 (Pfad 2) im Kalender-Tab geschieht **ausschließlich lokal auf dem Gerät**. Kein Server sieht die
 kombinierte Ansicht.
@@ -259,18 +273,27 @@ zwischen Backend und Flutter und wird in CI gegen den Code geprüft.
 Vier geräteseitige Integrationen ohne jede Backend-Beteiligung. Jede hat ein eigenes Dokument mit
 Bedrohungsmodell, Sicherheitszusagen und manueller Testcheckliste.
 
-| Dienst           | Ziel                                                                                               | Transport                                     | Umfang                                                                                                                                   | Doku                               |
-| ---------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS      | lesen, suchen, antworten, senden; Ordner wechseln; Anhänge anzeigen                                                                      | [student-mail.md](student-mail.md) |
-| Notenspiegel     | `service.ssc.hs-anhalt.de` **oder** `sscportal.ssc.hs-anhalt.de` — nie beide, getrennte Allowlists | HTTPS, HTML-Parsing (keine offizielle API)    | Notenspiegel lesen; 24-Stunden-Regel; Portalwahl bei der Einrichtung                                                                     | [grades.md](grades.md)             |
-| Moodle           | `moodle.hs-anhalt.de`                                                                              | HTTPS, Moodle-Webservice (REST)               | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                                  | [moodle.md](moodle.md)             |
-| Anträge/Feedback | `REQUESTS_BASE_URL` (Build-Environment, **nie** Quellcode-Konstante, **muss** HTTPS sein)          | HTTPS, öffentliche JSON-API, Multipart-Upload | Finanzanträge und Rückmeldungen einreichen; Vorgangsstatus per `POST` abfragen; Entwürfe, Nachweise und Statuslink bleiben auf dem Gerät | [requests.md](requests.md)         |
+| Dienst           | Ziel                                                                                                                                                                                                                          | Transport                                       | Umfang                                                                                                                                                                                                                                                                                      | Doku                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                                                                                                                                           | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS        | lesen, suchen, antworten, senden; Ordner wechseln; Anhänge anzeigen                                                                                                                                                                                                                         | [student-mail.md](student-mail.md) |
+| Notenspiegel     | `service.ssc.hs-anhalt.de` **oder** `sscportal.ssc.hs-anhalt.de` — nie beide, getrennte Allowlists; für einen erzeugten HISinOne-Nachweis zusätzlich nur `untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` | HTTPS, HTML-/JSF-Parsing (keine offizielle API) | Notenspiegel lesen; 24-Stunden-Regel; Portalwahl bei der Einrichtung. Auf HISinOne zusätzlich **nur lesend**, eine Seite „Studienservice" mit mehreren Tabs: Bescheinigungsübersicht/-abruf, Personendaten/Kontaktdaten, Studiengangsübersicht — dieselben Zugangsdaten, kein zweiter Login | [grades.md](grades.md)             |
+| Moodle           | `moodle.hs-anhalt.de`                                                                                                                                                                                                         | HTTPS, Moodle-Webservice (REST)                 | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                                                                                                                                                                                     | [moodle.md](moodle.md)             |
+| Anträge/Feedback | `REQUESTS_BASE_URL` (Build-Environment, **nie** Quellcode-Konstante, **muss** HTTPS sein)                                                                                                                                     | HTTPS, öffentliche JSON-API, Multipart-Upload   | Finanzanträge und Rückmeldungen einreichen; Vorgangsstatus per `POST` abfragen; Entwürfe, Nachweise und Statuslink bleiben auf dem Gerät                                                                                                                                                    | [requests.md](requests.md)         |
 
 Der Antragsdienst ist **nicht nutzerauthentifiziert**. Er steht hier trotzdem, weil die Begründung
 dieselbe ist wie bei den übrigen drei: die Einreichung trägt den Namen der antragstellenden Person
 und eine Kopie des Studierendenausweises, und genau solche Daten sollen kein Campus-Köthen-Backend
 erreichen. Es gibt hier keine Sitzung zum Beenden — der entsprechende Weg heißt daher „lokale Daten
 löschen" und nicht „abmelden".
+
+Der **Mensa-€-Check per NFC** ist keine fünfte Netzwerkintegration: Der Lesevorgang bleibt vollständig
+zwischen Gerät und vorgehaltener Mensakarte. Ein schmales natives Bridge-Modul stellt Android
+`IsoDep` und iOS Core NFC bereit; die gemeinsame Dart-Schicht sendet ausschließlich die zwei
+festgelegten Read-Kommandos, validiert Statuswort, Länge und Wertebereich und hält das Ergebnis nur
+flüchtig im Widget-State. Die App wertet keine Kartenkennung aus und speichert, protokolliert oder
+überträgt weder Kartenkennung, Rohantwort noch Saldo. Es gibt keinen Hintergrundscan. Android darf
+einen bereits per `TECH_DISCOVERED` erkannten Tag nach der systemseitigen Öffnen-Aktion unmittelbar
+verarbeiten; iOS startet ausschließlich eine manuelle In-App-Session.
 
 Gemeinsame, nicht verhandelbare Zusagen (G10–G12):
 
@@ -285,11 +308,18 @@ Gemeinsame, nicht verhandelbare Zusagen (G10–G12):
   bei jedem Vordergrundwechsel, Kalender frühestens 10 Minuten nach dem letzten Versuch. Noten
   folgen weiterhin einer 24-Stunden-Regel. Moodle und Noten behalten Single-Flight und manuelle
   Übersteuerung.
-- „Account entfernen“ bzw. „Verbindung und lokale Daten löschen“ entfernt Zugangsdaten, Token,
-  Cache, Cache-Schlüssel, Zeitstempel und den zugehörigen State logisch. Beim Mailkonto wird
+- Das dienstbezogene `−` beziehungsweise „Verbindung und lokale Daten löschen“ entfernt die
+  Credential-Kopie beziehungsweise den Token dieses Diensts, Cache, Cache-Schlüssel, Zeitstempel
+  und den zugehörigen State logisch. Ein optionaler zentraler Hochschulzugang bleibt erhalten. Beim Mailkonto wird
   Erfolg erst nach bestätigter Abwesenheit der persistenten Artefakte gemeldet. Ein Teilfehler
   hält die Sitzung gesperrt und wird beim Retry oder nächsten Start fortgesetzt.
-- Für die drei nutzerauthentifizierten Dienste fasst „Überall abmelden“ diese Wege zusammen. Die
+- „Hochschulzugang vollständig löschen“ ruft für alle verbundenen Dienste genau diese kanonischen
+  Wipes auf. Erst wenn jeder erfolgreich war, wird die zentrale Identität zuletzt verifiziert
+  gelöscht. Bei Teilfehlern bleiben erfolgreiche Dienst-Wipes bestehen, fehlgeschlagene Dienste
+  werden benannt, und die zentrale Identität bleibt für den Retry erhalten. Bei einem
+  Passwortwechsel wird die Identität über „Zugangsdaten aktualisieren“ erneut an einem bewusst
+  gewählten Dienst geprüft; erst danach ersetzt sie den bisherigen sicheren Wert.
+- Die
   Anträge haben stattdessen ihre eigene Aktion **„Lokale Antragsdaten und Nachweise löschen“**
   (Einstellungen → Daten): sie entfernt Entwürfe, eingereichte Vorgänge, Anhänge und beide
   Verschlüsselungsschlüssel und meldet einen unvollständigen Lauf als solchen. Mit dem Statuslink
@@ -377,19 +407,20 @@ Durchgehende Regeln:
 
 ### 4.3 Gerätelokale Speicher (Pfad 2 und lokale Funktionen)
 
-| Daten                                                            | Speicher                                                                                             |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Zugangsdaten Mail, Notenspiegel · Moodle-Token                   | `flutter_secure_storage` (Keychain/Keystore)                                                         |
-| Gewähltes Prüfungsportal des Notenkontos                         | `flutter_secure_storage`                                                                             |
-| Schlüssel der verschlüsselten Boxen (256 Bit, CSPRNG)            | `flutter_secure_storage`                                                                             |
-| Noten, Moodle-Inhalte                                            | verschlüsselte `hive_ce`-Box                                                                         |
-| E-Mail-Kopfzeilen, -Inhalte, Adressindex, optional Anhänge       | verschlüsselte `hive_ce`-Box                                                                         |
-| Antragsentwürfe, eingereichte Vorgänge, **Statuslinks**          | verschlüsselte `hive_ce`-Box `campus_requests_secure_v1` (Schlüssel `campus_requests_secure_key_v1`) |
-| Hochgeladene Nachweise inkl. **Kopie des Studierendenausweises** | verschlüsselte `hive_ce`-Box `campus_request_files_v1` (Schlüssel `campus_request_files_key_v1`)     |
-| Aufgabenliste                                                    | `hive_ce`, rein lokal, ohne Netz                                                                     |
-| News, Kanäle, Kontakte, Mensadaten                               | `hive_ce` (Inhaltscache)                                                                             |
-| Kanal-Abos, Kalenderauswahl, Sprache, Theme, Mensa               | `SharedPreferences` (kleine Skalare)                                                                 |
-| Benachrichtigungs-Opt-in und Kategorieschalter                   | `SharedPreferences` (vier kleine Skalare)                                                            |
+| Daten                                                                      | Speicher                                                                                             |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Zugangsdaten Mail, Notenspiegel · Moodle-Token                             | `flutter_secure_storage` (Keychain/Keystore)                                                         |
+| Gewähltes Prüfungsportal des Notenkontos                                   | `flutter_secure_storage`                                                                             |
+| Schlüssel der verschlüsselten Boxen (256 Bit, CSPRNG)                      | `flutter_secure_storage`                                                                             |
+| Noten, Moodle-Inhalte                                                      | verschlüsselte `hive_ce`-Box                                                                         |
+| E-Mail-Kopfzeilen, begrenzte Inhalte, Adress-/Suchindex, optionale Anhänge | verschlüsselte `hive_ce`-Box (Retention: 500 Header, 200 Bodies, 100 MiB)                            |
+| Antragsentwürfe, eingereichte Vorgänge, **Statuslinks**                    | verschlüsselte `hive_ce`-Box `campus_requests_secure_v1` (Schlüssel `campus_requests_secure_key_v1`) |
+| Hochgeladene Nachweise inkl. **Kopie des Studierendenausweises**           | verschlüsselte `hive_ce`-Box `campus_request_files_v1` (Schlüssel `campus_request_files_key_v1`)     |
+| Aufgabenliste                                                              | `hive_ce`, rein lokal, ohne Netz                                                                     |
+| News, Kanäle, Kontakte, Mensadaten, Kalender-/Stundenplanfenster           | `hive_ce` (Inhaltscache; 128 Einträge/20 MiB, Namespace-LRU, 90-Tage-Fenster-Retention)              |
+| Kanal-Abos, Kalenderauswahl, Sprache, Theme, Mensa                         | `SharedPreferences` (kleine Skalare)                                                                 |
+| Benachrichtigungs-Opt-in und Kategorieschalter                             | `SharedPreferences` (vier kleine Skalare)                                                            |
+| NFC-Mensaguthaben und Kartenantwort                                        | **keine Persistenz**; nur flüchtig im Arbeitsspeicher der geöffneten Anzeige                         |
 
 Alle Einträge — Zugangsdaten wie Box-Schlüssel — werden mit derselben, an genau einer
 Stelle definierten Konfiguration abgelegt (`apps/mobile/lib/core/security/app_secure_storage.dart`).
@@ -403,6 +434,13 @@ Der Mailcache nutzt `campus_mail_cache_secure_v2`; sein gerätegebundener Schlü
 Testcache `campus_mail_cache_v1` ungeöffnet und idempotent entfernt, nicht inhaltlich migriert.
 Kann der Altcache nicht sicher entfernt oder der sichere Speicher nicht genutzt werden, degradiert
 Mail auf Memory-only und erzeugt niemals eine unverschlüsselte Persistenz.
+
+Der allgemeine Inhaltscache führt pro Dokument Namespace, Erstell- und Zugriffszeit. Beim Öffnen
+der Box und nach erfolgreichen Schreibvorgängen werden ungültige Einträge, alte Bereichsfenster
+und anschließend die am längsten nicht verwendeten Dokumente entfernt. Je
+Stundenplan-/Kalender-Scope bleibt das jüngste erfolgreiche Fenster bei der Altersbereinigung
+erhalten; eine einzelne Antwort, die das gesamte Bytebudget überschreitet, ersetzt keinen zuvor
+nutzbaren Cacheeintrag.
 
 Ein gewöhnlicher Cachefehler darf **nie** zum Absturz führen — er degradiert auf Memory-only oder
 einen Netzabruf. Umgekehrt **löscht** eine leere, ungültige oder fehlgeschlagene Antwort **nie** den
@@ -463,6 +501,12 @@ Worker-Tick (CANTEEN_SYNC_CRON, Standard "0 */2 * * *")
 `lastSuccessfulSyncAt` ist der jüngste `SyncRun` mit `status = success`. `dataStale` ist `true`,
 wenn dieser Zeitpunkt älter als `CANTEEN_STALE_AFTER_MINUTES` ist.
 
+Davon getrennt läuft die optionale lokale NFC-Guthabenprüfung ohne Campus API und ohne Worker. Nach
+der Auswahl von DESFire-Anwendung `5F8415` wird nur bei erfolgreichem Statuswort der Wert gelesen;
+vier Nutzdatenbytes werden als vorzeichenbehafteter 32-Bit-Wert in Little Endian interpretiert und
+in Tausendstel Euro dargestellt. Ein Protokoll-, Längen- oder Plausibilitätsfehler beendet den
+Vorgang mit einem Fehlerzustand und erzeugt keinen scheinbaren Nullsaldo.
+
 ### 6.2 Stundenplan
 
 Zwei getrennte Jobs, beide über `WEBUNTIS_ENABLED` schaltbar (Default `false`):
@@ -488,6 +532,8 @@ Zwei getrennte Jobs, beide über `PUBLIC_CALENDAR_ENABLED` schaltbar (Default `f
   oder unvollständige Strapi-Antwort löscht den letzten gültigen Katalog nie.
 - **Events** — pro Kalender: ICS laden (bytebegrenzt) → validieren → parsen → im Zielfenster
   expandieren → **eine Transaktion** aus Upsert und Löschen ausschließlich im bestätigten Fenster.
+  Der Job nutzt einen Worker-Pool mit höchstens vier parallelen Feeds, behält die deterministische
+  Katalogreihenfolge bei und isoliert auch unerwartete Einzelfehler.
 
 Bemerkenswerte Zustände:
 
@@ -503,6 +549,10 @@ Der ICS-Client folgt **keinen** Redirects (3xx wird abgelehnt), konstruiert Sche
 selbst und nimmt **keine** Basis-URL aus Strapi oder dem Environment entgegen. Wiederholungsregeln
 werden nur im Zielfenster expandiert, mit harten Obergrenzen pro Event und pro Lauf gegen
 „recurrence bombs“. Details: [public-calendars.md](public-calendars.md).
+
+Für jeden Feed entstehen strukturierte Betriebsmetriken zu Status, Gesamtlaufzeit, tatsächlich
+empfangenen UTF-8-Bytes, Fehlerklasse und Datensatzanzahlen. Sie enthalten weder URL noch
+Google-Kalender-ID, Slug oder Termininhalte; die interne Feed-Zuordnung verbleibt im Sync-Run.
 
 ## 7. Betrieb
 

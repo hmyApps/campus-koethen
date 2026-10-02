@@ -56,6 +56,11 @@ Die App funktioniert **ohne Nutzerkonto bei diesem Projekt**. Alle Präferenzen 
 Gerät. Für die persönlichen Dienste meldet man sich beim jeweiligen Hochschulsystem an; diese
 Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
 
+Optional kann eine zentrale lokale Hochschulidentität hinterlegt werden. Sie ist kein Konto und
+keine gemeinsame SSO-Sitzung, sondern erspart nach einem bewussten `+` die erneute Passworteingabe
+für Mail, Moodle oder Noten. Gespeichert wird erst nach Einwilligung und erfolgreicher Prüfung
+mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore.
+
 ## 3. Umfang
 
 ### 3.1 Enthalten
@@ -66,12 +71,20 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
   in der Liste auf, es gibt **keine** Detailseite
 - Mensa-Auswahl und Speiseplan mit Tagesnavigation, festem Trait-/Allergenfilter und dem Preis
   **einer** gewählten Personengruppe
+- Freiwillige, rein lokale Guthabenprüfung einer unterstützten Mensakarte per NFC. Der Tap auf
+  „Guthaben prüfen“ ist die bewusste Nutzeraktion und startet ohne zweite Bestätigung; Erklärung,
+  Live-Status und Abbrechen bleiben während des Scans sichtbar. Android kann zusätzlich eine außerhalb der App
+  erkannte ISO-DEP-Karte nach der systemseitigen Öffnen-Aktion unmittelbar lesen. iOS unterstützt
+  nur den manuellen Einstieg innerhalb einer laufenden Core-NFC-Sitzung. Kartenkennung, rohe
+  Kartenantwort und Saldo werden weder gespeichert noch geloggt oder übertragen.
 - Kontaktbereiche und Kontaktdetail sowie eine **lokale Kontaktsuche** über einen einmal geladenen
   Suchindex (`/v1/contact-areas/search-index`) — kein Request pro Tastendruck, kein Nachladen pro
   Bereich
 - **Gruppenstundenplan** aus der öffentlichen WebUntis-Ansicht — vollständig umgesetzt, aber
   serverseitig über `WEBUNTIS_ENABLED` **standardmäßig deaktiviert**, bis die Nutzung
-  organisatorisch freigegeben ist (siehe Release-Gates)
+  organisatorisch freigegeben ist (siehe Release-Gates). Er erscheint als Quelle im lokalen
+  Kalender und als eigenes, über die Navigationseinstellungen anheftbares Studienmodul; beide
+  Ansichten teilen Kursgruppe, Filter, Datenprovider und Details.
 - **Öffentliche Google-Kalender** über deren öffentlichen ICS-Feed, redaktionell in Strapi
   gepflegt — vollständig umgesetzt, aber über `PUBLIC_CALENDAR_ENABLED` **standardmäßig
   deaktiviert**; ohne Google API Key, ohne OAuth, ohne Anbindung persönlicher Google-Konten
@@ -90,10 +103,23 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
 - **Studenten-E-Mail** (`mail.hs-anhalt.de`): Posteingang mit verschlüsseltem Offline-Cache, alle
   Server-Ordner, serverseitige Suche über IMAP SEARCH, Anhänge anzeigen und in der App öffnen,
   Verfassen, Antworten und Allen antworten — reiner Text
-- **Notenspiegel** (HIS-QIS): Notenübersicht mit Detailansicht, verschlüsselter lokaler Cache,
-  24-Stunden-Regel mit manueller Übersteuerung
+- **Notenspiegel** (HIS-QIS **und** HISinOne): Notenübersicht mit Detailansicht, verschlüsselter
+  lokaler Cache, 24-Stunden-Regel mit manueller Übersteuerung. Auf HISinOne zusätzlich **nur
+  lesend**, eine Seite „Studienservice" mit mehreren per Voll-POST gewechselten Tabs:
+  Bescheinigungsübersicht, Personendaten (inkl. Hörerstatus) und Kontaktdaten,
+  Studiengangsübersicht, sowie ein aus den Zahlungen abgeleiteter Rückmeldehinweis — dieselben
+  Zugangsdaten, kein zweiter Login. Bescheinigungen werden über den eng begrenzten zweiten Host
+  `untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` abgerufen; keine
+  Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
   **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
+- **Zentraler Hochschulzugang**: optionale lokale Eingabehilfe für Mail, Moodle und Noten mit
+  getrennten `+`-/`−`-Aktionen; keine gemeinsame Sitzung und kein Campus-Backend-Konto
+- **Ersteinrichtung**: eigener Kalender-Schritt für Stundenplan, Moodle-Fristen, gemerkte Events,
+  Lieblingsspeisen und öffentliche Kalender. Danach kann die gemeinsame Hochschulkennung einmal
+  eingegeben und auf einem getrennten Schritt bewusst für Mail, Moodle und/oder Noten verwendet
+  werden. Die Eingabe bleibt bis zur erfolgreichen Prüfung mindestens eines gewählten Diensts
+  flüchtig; erst danach wird sie mit Einwilligung im Keychain/Keystore gespeichert.
 - **Anträge & Feedback**: Finanzanträge **und** Feedback gehen **direkt** an die öffentliche API
   des Gremiensystems des Studierendenrats. Der Dienst ist als einziger der vier nicht
   nutzerauthentifiziert; ausschlaggebend ist der Inhalt — eine Einreichung trägt den Namen der
@@ -199,6 +225,17 @@ gebaut.
 - Gerichte können als Favorit markiert werden. Favoriten filtern **nicht** und ändern die
   Reihenfolge **nicht**: Die Thekenreihenfolge ist die Reihenfolge, in der ausgegeben wird.
 - **Keine Mensabilder.** `food.image_url` wird weder gespeichert noch ausgeliefert.
+- Die Aktion **„Guthaben prüfen“** liest ausschließlich nach einer bewussten Nutzeraktion zwei
+  fest vorgegebene, nur lesende DESFire/ISO-DEP-Kommandos. Das Ergebnis bleibt nur bis zum
+  Schließen der Anzeige im Arbeitsspeicher. Fehler, ungültige Antworten und nicht unterstützte
+  Karten werden als eigener Zustand gezeigt, niemals als `0,00 €`.
+- Android registriert NFC nur als optionales Gerätefeature. Ein Tap auf die systemseitige
+  Öffnen-Abfrage nach einer außerhalb der App erkannten ISO-DEP-Karte gilt als Nutzeraktion und
+  öffnet den bereits laufenden Lesezustand ohne zweiten Tap. Auf iOS beginnt der Scan immer
+  manuell aus der Mensaansicht; diese Abweichung ist eine Plattformgrenze.
+- Ist der einmalig von Android übergebene Tag beim Öffnen bereits außer Reichweite, wechselt
+  „Erneut versuchen“ in den aktiven Reader-Modus und wartet auf eine erneut vorgehaltene Karte;
+  derselbe verbrauchte Tag wird nicht wiederverwendet.
 - Der Worker synchronisiert alle zwei Stunden (`CANTEEN_SYNC_CRON="0 */2 * * *"`).
 - Eine leere, ungültige oder fehlgeschlagene Quellantwort **löscht niemals** den letzten
   erfolgreichen Datenbestand.
@@ -253,14 +290,29 @@ Gemeinsame, nicht verhandelbare Regeln für E-Mail, Noten und Moodle:
   Klartext werden abgebrochen. Zertifikatsprüfung ist nie deaktiviert.
 - Zugangsdaten und Token liegen **ausschließlich** im Keychain/Keystore. Gibt es keinen sicheren
   Speicher, wird **nicht** gespeichert und ein klarer Fehler gezeigt — kein unsicherer Fallback.
+- Die zentrale Identität (eine Kennung — Benutzername oder Mailadresse, je nach Eingabe — plus
+  Passwort) wird erst nach ausdrücklicher Bestätigung und erfolgreicher Dienstprüfung gespeichert.
+  Dieselbe Kennung und dasselbe Passwort gelten bei der Hochschule für Mail, Moodle und
+  Noten/HISinOne gleichermaßen; die App fragt sie deshalb nur einmal ab. Moodle und Noten erhalten
+  die Kennung unverändert. Ausschließlich der Mail-Adapter ergänzt einen reinen Benutzernamen lokal
+  zu `<Kennung>@hs-anhalt.de`; eine vollständige Mailadresse bleibt unverändert. Ein erkanntes
+  früheres Drei-Feld-Schema wird vollständig gelöscht statt still migriert. Das Passwort erscheint
+  nie im öffentlichen State. `+` erstellt
+  nur die gewählte Dienstverbindung; `−` löscht deren Credential-Kopie/Token und Cache, behält aber
+  die zentrale Identität.
 - Persönliche Inhalte liegen nur **verschlüsselt** lokal. Der Mailcache umfasst Kopfzeilen,
   Inhalte, den Adressindex und optional Anhangbytes; das Passwort liegt **nie** im Cache.
 - Nichts davon erscheint in Logs, Exceptions, `toString()` oder Fehlermeldungen.
 - Eine leere, ungültige oder fehlgeschlagene Antwort **überschreibt den letzten guten Stand nie**.
-- „Account entfernen" beziehungsweise „Verbindung und lokale Daten löschen" entfernt Zugangsdaten,
-  Token, Cache, Cache-Schlüssel, Zeitstempel und State logisch. Beim Mailkonto wird Erfolg erst
+- „Verbindung und lokale Daten löschen" entfernt die dienstbezogenen Zugangsdaten beziehungsweise
+  Token, Cache, Cache-Schlüssel, Zeitstempel und State logisch; ein optionaler zentraler Zugang
+  bleibt bestehen. Beim Mailkonto wird Erfolg erst
   nach bestätigter Abwesenheit der persistenten Artefakte gemeldet; ein Teilfehler bleibt gesperrt
   und kann wiederholt werden. Dies ist keine forensische Secure-Erase-Zusage für Flash oder Backups.
+- „Hochschulzugang vollständig löschen“ trennt alle Dienste zuerst und entfernt die zentrale
+  Identität zuletzt. Scheitert ein Dienst oder der sichere Löschvorgang, wird kein voller Erfolg
+  gemeldet; die Identität bleibt für den Retry erhalten. Passwortänderungen werden über
+  „Zugangsdaten aktualisieren“ erneut gegen einen ausgewählten Dienst validiert.
 
 Dienstspezifisch:
 
@@ -336,46 +388,47 @@ Touch-Ziele >= 48dp · keine reine Farbcodierung · Light/Dark/System-Theme.
 
 ## 5. Akzeptanzkriterien
 
-| #   | Kriterium                                                                                               |
-| --- | ------------------------------------------------------------------------------------------------------- |
-| A1  | Ein neuer Strapi-Kanal erscheint ohne Flutter-Codeänderung.                                             |
-| A2  | Campus News und FB5 News sind unabhängig aktivierbar; beide standardmäßig abonniert.                    |
-| A3  | Auswahl bleibt nach App-Neustart erhalten; neue Default-Kanäle überschreiben keine Nutzerentscheidung.  |
-| A4  | News in mehreren abonnierten Kanälen erscheint genau einmal.                                            |
-| A5  | Entwürfe sind nicht öffentlich sichtbar.                                                                |
-| A6  | Inaktiver Kanal verschwindet ohne App-Fehler.                                                           |
-| A7  | Alle Kanäle deaktiviert ⇒ Empty State, kein Request für alle Kanäle.                                    |
-| A8  | Beide Startmensen erscheinen über Backend-Daten; Flutter kennt keine Location-IDs.                      |
-| A9  | Nur der Preis der gewählten Personengruppe wird angezeigt; keine Mensabilder.                           |
-| A10 | Leere/ungültige Quellantwort löscht bestehende Mensadaten nicht.                                        |
-| A11 | Wiederholter Import erzeugt keine Duplikate.                                                            |
-| A12 | Neuer Kontaktbereich erscheint ohne Codeänderung; Bereich ohne Person funktioniert.                     |
-| A13 | Inaktive Bereiche/Personen werden nicht ausgeliefert.                                                   |
-| A14 | API leakt keine Strapi-Internas (`data`/`attributes`/`documentId`/`populate`).                          |
-| A15 | Flutter spricht nur mit `/v1` der Campus API.                                                           |
-| A16 | de/en sind in Flutter, Strapi und API real getestet.                                                    |
-| A17 | Kein offizieller HSA-Eindruck, keine Hochschulassets; Unabhängigkeitshinweis sichtbar.                  |
-| A18 | Keine Secrets im Repository oder in den Images.                                                         |
-| A19 | Zwei getrennte Datenbanken mit getrennten Rollen.                                                       |
-| A20 | Backend-, Strapi- und Flutter-Gates lokal grün.                                                         |
-| A21 | Ein neuer öffentlicher Kalender erscheint ohne App- und ohne Backend-Änderung.                          |
-| A22 | Keine Kalenderauswahl ⇒ keine öffentlichen Termine, niemals „alle".                                     |
-| A23 | Google-Kalender-ID, Feed-URL und ETag erscheinen in keiner API-Antwort.                                 |
-| A24 | Ein Fehler einer Kalenderquelle blendet die übrigen Quellen nicht aus.                                  |
-| A25 | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten- oder Moodle-Daten.            |
-| A26 | Mailcache ist verschlüsselt; Zugangsdaten, Token und Cache-Schlüssel liegen nur im Keychain/Keystore.   |
-| A27 | Ein Redirect auf einen fremden Host oder auf Klartext bricht den Aufruf ab, ohne Token weiterzugeben.   |
-| A28 | Eine leere oder fehlgeschlagene Antwort überschreibt bei keiner Quelle den letzten guten Stand.         |
-| A29 | Nach Mail-Wipe und Neustart sind alte Maildaten und Empfängervorschläge app-seitig unzugänglich.        |
-| A30 | Moodle wird ausschließlich lesend angesprochen; es existiert keine generische Aufruf-Schnittstelle.     |
-| A31 | Die Aufgabenliste funktioniert vollständig ohne Netzverbindung.                                         |
-| A32 | Der Katalog enthält exakt die 30 vorhandenen roomKeys; generierte App-Assets sind driftgesichert.       |
-| A33 | „Mehr → Lageplan" öffnet den fiktiven Demo-Plan mit sichtbarem Demo-Hinweis in DE/EN.                   |
-| A34 | `B.201` und `B201` finden denselben Raum; die Auswahl fokussiert und markiert ihn.                      |
-| A35 | Raumdaten funktionieren nach einem erfolgreichen Abruf offline aus dem Cache.                           |
-| A36 | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.               |
-| A37 | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten. |
-| A38 | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                              |
+| #    | Kriterium                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------- |
+| A1   | Ein neuer Strapi-Kanal erscheint ohne Flutter-Codeänderung.                                                   |
+| A2   | Campus News und FB5 News sind unabhängig aktivierbar; beide standardmäßig abonniert.                          |
+| A3   | Auswahl bleibt nach App-Neustart erhalten; neue Default-Kanäle überschreiben keine Nutzerentscheidung.        |
+| A4   | News in mehreren abonnierten Kanälen erscheint genau einmal.                                                  |
+| A5   | Entwürfe sind nicht öffentlich sichtbar.                                                                      |
+| A6   | Inaktiver Kanal verschwindet ohne App-Fehler.                                                                 |
+| A7   | Alle Kanäle deaktiviert ⇒ Empty State, kein Request für alle Kanäle.                                          |
+| A8   | Beide Startmensen erscheinen über Backend-Daten; Flutter kennt keine Location-IDs.                            |
+| A9   | Nur der Preis der gewählten Personengruppe wird angezeigt; keine Mensabilder.                                 |
+| A10  | Leere/ungültige Quellantwort löscht bestehende Mensadaten nicht.                                              |
+| A10a | NFC-Guthaben wird nur nach Nutzeraktion gelesen, nie persistiert oder übertragen; Fehler sind kein Nullsaldo. |
+| A11  | Wiederholter Import erzeugt keine Duplikate.                                                                  |
+| A12  | Neuer Kontaktbereich erscheint ohne Codeänderung; Bereich ohne Person funktioniert.                           |
+| A13  | Inaktive Bereiche/Personen werden nicht ausgeliefert.                                                         |
+| A14  | API leakt keine Strapi-Internas (`data`/`attributes`/`documentId`/`populate`).                                |
+| A15  | Flutter spricht nur mit `/v1` der Campus API.                                                                 |
+| A16  | de/en sind in Flutter, Strapi und API real getestet.                                                          |
+| A17  | Kein offizieller HSA-Eindruck, keine Hochschulassets; Unabhängigkeitshinweis sichtbar.                        |
+| A18  | Keine Secrets im Repository oder in den Images.                                                               |
+| A19  | Zwei getrennte Datenbanken mit getrennten Rollen.                                                             |
+| A20  | Backend-, Strapi- und Flutter-Gates lokal grün.                                                               |
+| A21  | Ein neuer öffentlicher Kalender erscheint ohne App- und ohne Backend-Änderung.                                |
+| A22  | Keine Kalenderauswahl ⇒ keine öffentlichen Termine, niemals „alle".                                           |
+| A23  | Google-Kalender-ID, Feed-URL und ETag erscheinen in keiner API-Antwort.                                       |
+| A24  | Ein Fehler einer Kalenderquelle blendet die übrigen Quellen nicht aus.                                        |
+| A25  | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten- oder Moodle-Daten.                  |
+| A26  | Mailcache ist verschlüsselt; Zugangsdaten, Token und Cache-Schlüssel liegen nur im Keychain/Keystore.         |
+| A27  | Ein Redirect auf einen fremden Host oder auf Klartext bricht den Aufruf ab, ohne Token weiterzugeben.         |
+| A28  | Eine leere oder fehlgeschlagene Antwort überschreibt bei keiner Quelle den letzten guten Stand.               |
+| A29  | Nach Mail-Wipe und Neustart sind alte Maildaten und Empfängervorschläge app-seitig unzugänglich.              |
+| A30  | Moodle wird ausschließlich lesend angesprochen; es existiert keine generische Aufruf-Schnittstelle.           |
+| A31  | Die Aufgabenliste funktioniert vollständig ohne Netzverbindung.                                               |
+| A32  | Der Katalog enthält exakt die 30 vorhandenen roomKeys; generierte App-Assets sind driftgesichert.             |
+| A33  | „Mehr → Lageplan" öffnet den fiktiven Demo-Plan mit sichtbarem Demo-Hinweis in DE/EN.                         |
+| A34  | `B.201` und `B201` finden denselben Raum; die Auswahl fokussiert und markiert ihn.                            |
+| A35  | Raumdaten funktionieren nach einem erfolgreichen Abruf offline aus dem Cache.                                 |
+| A36  | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.                     |
+| A37  | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten.       |
+| A38  | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                                    |
 
 ## 6. Offene Release-Gates
 
@@ -390,9 +443,14 @@ werden:
 6. **Nutzungsfreigabe der WebUntis-Stundenplanquelle** — Erlaubnis zur automatisierten Nutzung
    der internen View-API, akzeptable Abrufrate, Stabilitätszusage beziehungsweise offizielle API,
    gewünschte Quellenangabe sowie zulässige Speicherung und Aufbewahrung von Lehrpersonennamen.
-   Bis dahin bleibt `WEBUNTIS_ENABLED=false`.
+   Bis dahin bleibt `WEBUNTIS_ENABLED=false` — auch in den versionierten Produktions- und
+   Test-Templates. Vor jedem Rollout wird zusätzlich der effektive, nicht versionierte Wert auf
+   dem Zielsystem geprüft und `GET /v1/timetable/status` muss in Produktion
+   `featureEnabled: false` melden. Ein Template allein belegt den realen Deploymentwert nicht.
 7. **Abstimmung über die Prüfungsportale** — automatisierte Nutzung von HIS-QIS und HISinOne mit der
-   Hochschule Anhalt klären.
+   Hochschule Anhalt klären; das schließt die lesenden HISinOne-Funktionen auf der Seite
+   „Studienservice" (Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht) ausdrücklich
+   ein.
 8. **Veröffentlichungsrechte je öffentlichem Kalender** — Zustimmung des Inhabers, zulässiger
    Quellenhinweis, ob Beschreibung und Ort gezeigt werden dürfen, Ansprechpartner und Verhalten
    bei Entzug der Freigabe. Bis Kalender gepflegt sind, bleibt `PUBLIC_CALENDAR_ENABLED=false`.

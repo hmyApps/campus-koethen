@@ -33,10 +33,11 @@ Eine Zahl ohne ihre Umgebung ist nicht vergleichbar. Die Referenzumgebung dieser
 | Campus API     | `NODE_ENV=production`, `node dist/main.js` (kein Watch, kein TS) |
 | Messdatum      | 2026-08-25                                                       |
 
-> **Node 24 statt der gepinnten 22.x.** Die Referenzmaschine hatte 24.19.0 installiert. Für die
-> **relative** Aussage — der Vergleich zweier Läufe auf derselben Maschine — ist das ohne Belang.
-> Für einen absoluten Vergleich mit dem Server ist es einer: Eine Wiederholung auf Node 22 kann
-> abweichen und muss die Version mitschreiben.
+> **Node-24-Patchstand.** Die historische Referenzmessung lief mit 24.19.0; das Repository ist
+> inzwischen auf 24.21.0 LTS gepinnt. Die vorhandenen Werte bleiben als historische Baseline
+> erhalten, weil sie auf derselben Hauptversion erhoben wurden. Jede neue Vergleichsmessung muss
+> den exakten Patchstand mitschreiben und für eine belastbare Vorher-/Nachher-Aussage beide Läufe
+> auf demselben Patchstand ausführen.
 
 Gemessen wird gegen einen Prozess im Produktionsmodus, nicht gegen `start:dev`. Der Watch-Modus
 kompiliert TypeScript zur Laufzeit und misst damit den Compiler mit.
@@ -56,6 +57,22 @@ begrenztes Lesen, JSON-Parsing, Block-Sanitising, DTO-Mapping, Serialisierung, K
 Ende-zu-Ende-Wert. Die reale Latenz ist diese Zahl **plus** der Antwortzeit des CMS. Der Stub
 kennt dafür `--upstream-delay-ms`, mit dem sich eine angenommene CMS-Latenz kontrolliert
 zuschalten lässt; ein Ende-zu-Ende-Budget für Strapi selbst ist offen (Abschnitt 9).
+
+### 2.2 Verifikation des Node-24.21.0-Pins
+
+Die Toolchain-Migration wurde am 1. Oktober 2026 mit dem exakten Repository-Pin Node 24.21.0
+und pnpm 11.15.1 erneut geprüft. Der Lauf umfasste den Frozen-Lockfile-Install, Prisma 7.9.1,
+Nest- und Strapi-Build einschließlich des nativen `sharp`-Moduls, alle Workspace-Tests sowie die
+Datenbank-Integrations- und Skalierungstests gegen eine isolierte, anschließend entfernte
+PostgreSQL-16-Instanz. Die Produktionsimages wurden unter Linux mit Node 24.21.0 gebaut, als
+unprivilegierter Benutzer gestartet und über `/health/live` beziehungsweise `/_health` geprüft.
+Der High-/Critical-Scan der beiden fertigen Images blieb ohne Befund.
+
+Dieser Lauf ist eine **Kompatibilitäts- und Regressionprüfung**, keine neue absolute
+Latenzreferenz: Er lief auf einer Windows-/Docker-Desktop-Maschine und ist deshalb nicht mit den
+Linux-Zahlen der Referenzumgebung vergleichbar. Die Werte aus Abschnitt 6 bleiben gültig; eine
+neue Zahlenreihe darf sie erst ersetzen, wenn Vorher und Nachher auf derselben Maschine, mit
+demselben Datenprofil und demselben Node-Patchstand gemessen wurden.
 
 ## 3. Datenprofile
 

@@ -140,6 +140,95 @@ Aktionen`) → `extras: Map<String,String>` mit dem **originalen Kopfzeilentext*
 - Die Spalte `Bonus` trägt Werte, die wie Credits aussehen — sie wird **nie** als ECTS
   umgedeutet oder umbenannt; Kopfzeilentext und Wert werden wörtlich übernommen.
 
+## Lesende HISinOne-Funktionen jenseits des Notenspiegels
+
+Dieselbe HISinOne-Verbindung (`sscportal.ssc.hs-anhalt.de`, **nicht** das HIS-QIS-Bestandsportal)
+wird um weitere, ausschließlich **lesende** Funktionen erweitert. Erreichbar über ein eigenes,
+anheftbares Modul „HISinOne" (`student_service`).
+
+### Reale Seitenstruktur (Stand 01.10.2026, gegen die echte, laufende Seite verifiziert)
+
+Anders als zunächst angenommen gibt es **keine** drei getrennten Seiten und **kein**
+„Accountdatenblatt". Alles liegt auf **einer** Seite:
+
+```
+GET/POST https://sscportal.ssc.hs-anhalt.de/qisserver/pages/cm/stu/studyService/start.xhtml
+         ?_flowId=studyservice-flow&_flowExecutionKey=e{N}s{N}
+```
+
+Fünf Tabs **in einem Formular** (`studyserviceForm`), Tab-Wechsel per **vollem Formular-POST**
+(kein AJAX) mit jeweils neuem `_flowExecutionKey`:
+
+| Tab-Button                       | Inhalt                                                          |
+| -------------------------------- | --------------------------------------------------------------- |
+| `…:stgStudent_TabBtn` (Standard) | Studiengangsübersicht                                           |
+| `…:newContactData_TabBtn`        | Kontaktdaten (Semester-/Heimatanschrift, E-Mail, Telefon)       |
+| `…:billsAndPayment_TabBtn`       | Zahlungen — einzige indirekte Quelle für einen Rückmeldehinweis |
+| `…:report_TabBtn`                | Bescheide / Bescheinigungen                                     |
+| `…:agreements_TabBtn`            | (nicht erschlossen)                                             |
+
+Jeder Tab zeigt oben zusätzlich den eingeklappten Block `…:fieldsetPersoenlicheData`
+(Personendaten: Matrikelnummer, **Hörerstatus**, Geburtsdatum/-ort/-land, Staatsangehörigkeit —
+Label/Wert-Paare über `.labelWithBG`/`.answer`, nie als Tabelle).
+
+**Es gibt kein eigenes Feld „Immatrikulationsstatus"** — der nächstliegende Wert ist der
+„Hörerstatus" in den Personendaten. **Es gibt kein eigenes Feld „Rückmeldestatus"** — ableitbar
+nur indirekt aus dem Zahlungen-Tab: eine leere offene-Zahlungen-Tabelle zeigt stattdessen den Text
+„Sie haben keine offenen Zahlungen!"; vorhandene Posten erscheinen in einer Tabelle mit den Spalten
+Zeitraum/Verwendungszweck/Soll/Ist. Diese beiden Werte werden deshalb als **Hinweise**, nicht als
+verlässliche, eigenständige Statusfelder dargestellt.
+
+**Bescheinigungen** sind kein direkter Download-Link, sondern ein mehrstufiger Ablauf: Button
+klicken (`…:job2`, AJAX) → Overlay „PDF erstellen" (`startJob`) → Polling
+(`…:jobDownloadPoll`) → die AJAX-Partial-Response löst per JavaScript einen `GET` auf einem
+**zweiten, ausdrücklich nur für diesen Abruf freigegebenen Host** aus:
+
+```
+https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload
+  &accountId=…&hash=…&timestamp=…&docId=…&docName=…
+```
+
+`hash`/`timestamp`/`docId` sind pro Vorgang neu und **nicht im Voraus konstruierbar** — sie müssen
+aus der Partial-Response gelesen werden. Ein manueller Testabruf dieser URL lieferte `503`; die
+wahrscheinlichste Erklärung ist ein lokal installierter Download-Manager (IDM), der den
+Download-Intent abfing und den Einweg-Token vor der eigentlichen Anfrage verbrauchte — ein
+Artefakt der Testumgebung, kein belegtes Server-Verhalten. Der Ablauf ist anhand der realen
+Seitenstruktur und des JSF/MyFaces-Vertrags implementiert und durch deterministische
+Start-/Polling-/ViewState-/PDF-Tests abgesichert. Eine erfolgreiche Ende-zu-Ende-Prüfung mit einem
+realen Konto und einer unverbrauchten Einweg-URL steht weiterhin als manueller Portaltest aus.
+
+### Konsequenzen für die Umsetzung
+
+- **Kein zweiter Login.** Alle Tabs nutzen dieselben, bereits für den Notenspiegel hinterlegten
+  Zugangsdaten (`GradeCredentialStore`) weiter und sind nur verfügbar, wenn das aktive Portal
+  `GradePortal.hisInOne` ist — das Bestandsportal HIS-QIS bietet diese Seite nicht. Es gibt dafür
+  **keinen** eigenen `+`/`−`-Eintrag im Hochschulzugang-Widget; das Modul selbst verweist auf die
+  Noten-Einrichtung, solange keine HISinOne-Verbindung besteht.
+- **Ausdrücklich ausgeschlossen** ist jede zustandsändernde Interaktion: keine Prüfungsanmeldung,
+  keine Adressänderung und kein Antrag. Erlaubt sind nur die wiederverwendete Login-Mechanik,
+  Tab-Wechsel sowie Start und Polling der bewusst gewählten Bescheinigung. Dieser Bereich bleibt
+  fachlich reines Lesen.
+- Die Session-/Redirect-/Host-Validierung (positive `isAuthenticated`-Prüfung statt Prüfung auf
+  Abwesenheit von `sessionTimeoutLoginForm`) ist aus `HisInOneGradesGateway` in die geteilte
+  Komponente `HisInOneSession` extrahiert und wird identisch genutzt.
+- **Kapazitätserkennung statt Annahme:** Welcher Tab-Inhalt tatsächlich vorhanden ist, wird aus
+  der jeweils geladenen Seite abgeleitet, nie angenommen. Eine nicht erkannte Seitenstruktur
+  ergibt einen klassifizierten Fehler (`portalStructureChanged`) und überschreibt **nie** einen
+  vorhandenen Cache-Stand.
+- Heruntergeladene Bescheinigungen werden **nicht dauerhaft archiviert**: Die Bytes bleiben im
+  Arbeitsspeicher, begrenzt auf dieselbe Obergrenze wie bei anderen Dokument-Downloads
+  (`kMaxInMemoryPreviewBytes`), und werden ausschließlich über die sichere Teilen-/Öffnen-Aktion
+  des Betriebssystems weitergegeben. Die Übersichten (Bescheinigungsliste, Personendaten,
+  Kontaktdaten, Studiengangsübersicht) liegen verschlüsselt lokal, exakt wie der
+  Notenspiegel-Cache.
+- Logout/Wipe ist an dieselbe Session-Generation gekoppelt wie Noten und Moodle: ein nach dem
+  Trennen verspätet eintreffendes Ergebnis darf den lokalen Stand nie wiederbeleben.
+- Der zweite Host `untrust-sscportal.ssc.hs-anhalt.de` ist mit einer **eigenen, expliziten und
+  pfadbegrenzten Allowlist** freigegeben: ausschließlich HTTPS, Standardport,
+  `/qisserver/rds` und `state=docdownload`. Der Download läuft im selben kurzlebigen Cookie-Jar wie
+  Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder Antwort-Hosts werden
+  abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte Hosts.
+
 ## Sicherheit (für beide Portale identisch)
 
 - **Nur HTTPS**, **nur** der jeweils angeheftete Host. Ein Redirect auf einen anderen Host oder
@@ -155,6 +244,9 @@ Aktionen`) → `extras: Map<String,String>` mit dem **originalen Kopfzeilentext*
   unsicheren Fallback. Das Passwort wird **erst unmittelbar vor** einem Portalaufruf gelesen und
   **nie** dauerhaft im State/Controller gehalten. Der öffentliche Account-State enthält höchstens
   Benutzername und aktives Portal, **nie** das Passwort.
+- Ein optionaler zentraler Hochschulzugang kann dasselbe Passwort getrennt im gerätegebundenen
+  Keychain/Keystore halten. Er ist nur eine lokale Eingabehilfe: `+` übergibt die Identität nach
+  Nutzeraktion an diese Portalwahl; es entsteht keine gemeinsame SSO-Sitzung.
 
 ## Portalwahl
 
@@ -181,7 +273,8 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
   Zugangsdaten) — jede weitere Synchronisation spricht nur noch dieses eine Portal an.
 - Im Notenbereich gibt es einen sichtbaren, faktischen Umschalter „Prüfungsportal wechseln" mit
   Anzeige des aktiven Hosts. Ein Wechsel verwirft den lokalen Cache und synchronisiert neu.
-- „Zugangsdaten und lokale Noten löschen" entfernt auch die Portalwahl in **einem** Schritt.
+- „Noten-Verbindung und lokale Noten löschen" entfernt auch die Portalwahl in **einem** Schritt,
+  behält aber einen optionalen zentralen Hochschulzugang für andere Dienste.
 
 ## Lokaler, verschlüsselter Notencache
 
@@ -196,9 +289,10 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
     `v1`-Inhalten fehl; die App startet einfach mit einem leeren Cache und lädt neu, wie bei
     jedem anderen Cache-Fehltreffer auch.
 - **Keine** Noten in einer unverschlüsselten Box oder als JSON in SharedPreferences.
-- „Zugangsdaten und lokale Noten löschen" entfernt vollständig: Benutzername, Passwort, aktive
-  Portalwahl, Cacheinhalt, Cache-Schlüssel, Synchronisationszeitpunkte, Sitzungsspuren und den
-  State.
+- „Noten-Verbindung und lokale Noten löschen" entfernt vollständig aus dem **Notendienst**:
+  Benutzername, Passwort, aktive Portalwahl, Cacheinhalt, Cache-Schlüssel,
+  Synchronisationszeitpunkte, Sitzungsspuren und den State. Die separate Komplettlöschung in den
+  Einstellungen entfernt nach allen Dienst-Wipes auch die zentrale Identität.
 - Eine leere, ungültige oder fehlgeschlagene Portalantwort **überschreibt den letzten
   erfolgreichen Cache nie** — nur ein verifizierter Notenspiegel wird geschrieben. Ein
   Portalwechsel ist die einzige absichtliche Ausnahme: er verwirft den Cache explizit, weil ein

@@ -162,10 +162,13 @@ daraus eine Löschung abzuleiten würde einen Vorgang unerreichbar machen.
 Der AES-Schlüssel liegt ausschließlich im Keychain/Keystore. **Nichts** davon landet in
 SharedPreferences oder einer unverschlüsselten Hive-Box.
 
-Anhänge werden als Bytes verschlüsselt abgelegt und für den Upload direkt in den Prozessspeicher
-gelesen — es entsteht zu **keinem** Zeitpunkt eine entschlüsselte Datei auf der Platte, also auch
-keine, die ein Absturz zurücklassen könnte. Die Originaldatei der Person wird nie verändert oder
-gelöscht.
+Die Dateigröße wird über die Picker-Metadaten geprüft, **bevor** Inhalt gelesen wird. Neue Anhänge
+werden in verschlüsselten Blöcken von 256 KiB abgelegt und beim Multipart-Upload blockweise wieder
+entschlüsselt; Einzel-, Anzahl- und Gesamtbudget werden vor und während dieses Pfads erneut geprüft.
+Es entsteht zu **keinem** Zeitpunkt eine entschlüsselte Datei auf der Platte, also auch keine, die
+ein Absturz zurücklassen könnte. Die Originaldatei der Person wird nie verändert oder gelöscht.
+Bereits vorhandene Ganzdatei-Einträge der ersten verschlüsselten Fassung bleiben lesbar und werden
+beim nächsten Ersetzen automatisch im Blockformat gespeichert.
 
 **Migration:** Entwürfe der ersten Fassung lagen in einer Klartext-Box (`campus_requests_v1`). Sie
 werden gelesen, verschlüsselt geschrieben, zurückgelesen — und **erst dann** wird die alte Box von der

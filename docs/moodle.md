@@ -32,8 +32,10 @@ verlassen das Gerät in Richtung eines Dienstes dieser App.
 1. `POST https://moodle.hs-anhalt.de/login/token.php` (form-urlencoded: `username`, `password`,
    `service=moodle_mobile_app`) → Token.
 2. **Vor** dem Speichern: `core_webservice_get_site_info` verifiziert das Token und liefert die
-   Nutzer-ID. Erst danach wird das Token abgelegt; das **Passwort wird sofort verworfen** und nie
-   gespeichert.
+   Nutzer-ID. Erst danach wird das Token abgelegt; der Moodle-Dienststore speichert das Passwort
+   **nie**. Wenn die Person den optionalen zentralen Hochschulzugang ausdrücklich aktiviert hat,
+   kann dasselbe Passwort getrennt davon im gerätegebundenen Keychain/Keystore liegen. Das ist eine
+   lokale Eingabehilfe und keine Moodle- oder SSO-Sitzung.
 3. Alle weiteren Aufrufe: `POST .../webservice/rest/server.php` mit `wstoken`, `wsfunction`,
    `moodlewsrestformat=json`.
 
@@ -89,7 +91,9 @@ und im Datei-Downloader:
   aktuell einstuft; eine leere Deadline-Antwort behält weiterhin den letzten guten Bestand.
 
 **„Moodle-Verbindung und lokale Daten löschen"** entfernt Token, Nutzer-ID, verschlüsselten Cache,
-Cache-Schlüssel, Sync-Zeitstempel und alle zugehörigen Riverpod-Zustände.
+Cache-Schlüssel, Sync-Zeitstempel und alle zugehörigen Riverpod-Zustände. Ein optionaler zentraler
+Hochschulzugang bleibt erhalten; seine Komplettlöschung ist eine separate, ausdrücklich bestätigte
+Aktion in den Einstellungen.
 
 ## 6. Quellenübergreifender Kalender
 

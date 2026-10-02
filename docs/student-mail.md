@@ -36,6 +36,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   `campus_mail_cache_secure_v2` zwischengespeichert. Ihr gerätegebundener 256-Bit-Schlüssel
   `mail.cache.key.v2` liegt ausschließlich in iOS Keychain beziehungsweise Android Keystore.
   Adresse und Passwort bleiben getrennte Secure-Storage-Daten und liegen **nie** im Cache.
+  Der Cache ist auf 500 Header, 200 vollständige Nachrichten und 100 MiB Nachrichtendaten begrenzt;
+  Header älter als 365 Tage und Bodies älter als 180 Tage werden bei der Bereinigung entfernt.
+  Einstellungen → Studentische E-Mail zeigt Belegung und Anzahl und kann die vollständigen
+  Offline-Inhalte samt abgeleiteten Indizes löschen, ohne den Account oder die Headerliste zu
+  entfernen.
 - **Upgrade:** Der frühere unverschlüsselte Testcache `campus_mail_cache_v1` wird ungeöffnet und
   idempotent entfernt. Seine Inhalte werden weder gelesen noch in die neue Box migriert. Kann
   seine Abwesenheit nicht bestätigt werden oder ist der sichere Speicher nicht verfügbar, bleibt
@@ -43,13 +48,16 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 - HTML-Mails werden zu **reinem Text** reduziert. Kein WebView, kein JavaScript, **keine**
   automatische Nachladung entfernter Bilder. Links laufen nur über den bestehenden
   sicheren URL-Launcher (`https`/`mailto`/`tel`).
-- Verbindungen werden je Aufruf geöffnet und geschlossen. „Account entfernen“ sperrt zuerst die
-  laufende Mailsitzung und entfernt dann logisch Adresse, Passwort, alten und neuen Cache,
+- Verbindungen werden je Aufruf geöffnet und geschlossen. „E-Mail-Verbindung und lokale Daten
+  löschen“ sperrt zuerst die laufende Mailsitzung und entfernt dann logisch die dienstbezogene
+  Adresse und Passwortkopie, alten und neuen Cache,
   Cache-Schlüssel sowie den zugehörigen In-Memory-/Riverpod-State. Erfolg wird erst nach
   bestätigter Abwesenheit der persistenten Artefakte gemeldet; ein Teilfehler bleibt gesperrt und
   wird per dauerhaftem Lösch-Intent beim Retry oder nächsten App-Start fortgesetzt. Die
   Servermails bleiben unverändert. Dateilöschung und verworfener Schlüssel sind keine Zusage eines
   forensischen Secure Erase für Flash-Zellen, Betriebssystem-Snapshots oder Backups.
+  Ein optionaler zentraler Hochschulzugang bleibt dabei erhalten; nur dessen separate Aktion
+  „Hochschulzugang vollständig löschen“ entfernt ihn nach den Dienst-Wipes.
 
 ## Offline & Synchronisierung
 
@@ -59,9 +67,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 - **Ausgelöst** wird der Sync beim **App-Start**, bei **Anmeldung**, **alle 10 Minuten**
   (`kMailSyncInterval`, geplant im App-Shell) und **manuell** (Sync-Button /
   Pull-to-Refresh).
-- Der Sync holt die **50 neuesten** INBOX-Header, **akkumuliert** sie in den Cache
-  (nichts wird gelöscht — der Offline-Bestand wächst über 50 hinaus) und lädt die
-  vollständigen Inhalte **neuer** Nachrichten im Hintergrund nach.
+- Der Sync holt die **50 neuesten** INBOX-Header und führt sie mit dem lokalen Bestand zusammen.
+  Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Pro Lauf werden höchstens die
+  **20 neuesten** noch fehlenden Inhalte vorgeladen; ältere Inhalte lädt das Öffnen der Nachricht
+  bei Bedarf direkt vom IMAP-Server.
 - Am Ende der Nachrichtenliste lädt „100 ältere E-Mails laden“ die jeweils nächsten
   bis zu 100 Header vor der ältesten bereits sichtbaren IMAP-UID. Weitere Seiten werden
   mit demselben Button geladen. Die UID dient als stabiler Cursor; neue oder gelöschte
@@ -83,9 +92,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 
 - **Lokal zuerst:** Das Abschicken der Suche durchsucht ausschließlich den verschlüsselten
   Gerätecache des aktiven Kontos — Absender, Empfänger (To/Cc), Betreff und den bereits als
-  Text vorliegenden Nachrichtentext. Treffer erscheinen sofort und **ohne Netz**. Es wird
-  **kein** zusätzlicher Index angelegt; gesucht wird auf den Daten, die der Offline-Cache
-  ohnehin hält. Anhangbytes werden **nicht** durchsucht.
+  Text vorliegenden Nachrichtentext. Treffer erscheinen sofort und **ohne Netz**. Ein kompakter,
+  normalisierter und ebenfalls verschlüsselter Suchindex hält nur diese Suchfelder plus einen
+  kleinen Ergebnisheader. Dadurch muss eine Suche nicht jeden Body entschlüsseln und parsen;
+  Anhangbytes werden weder indexiert noch durchsucht.
 - **Robustheit:** Der Suchbegriff wird getrimmt und Unicode-korrekt kleingeschrieben, damit
   deutsche Groß-/Kleinschreibung (`Prüfung`/`PRÜFUNG`) und umgebende Leerzeichen keine Rolle
   spielen. `ß`/`ss` werden **nicht** aufeinander abgebildet — dafür bleibt die Serversuche.
@@ -105,7 +115,7 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   gefunden“, solange der Server nicht gefragt wurde.
 - Ein Servertreffer öffnet sich wie jede andere Nachricht: fehlende Inhalte werden geladen und
   anschließend (INBOX) gecacht.
-- **Kontowechsel:** „Account entfernen“ verwirft Cache und Suchzustand (Begriff, lokale und
+- **Kontowechsel:** „E-Mail-Verbindung und lokale Daten löschen“ verwirft Cache und Suchzustand (Begriff, lokale und
   Servertreffer, Fehler) über dieselbe Session-Generation wie der übrige Mail-State.
 
 ## Schichten
@@ -140,6 +150,15 @@ Artefaktlöschung.
 `MailLocalDataCoordinator` koordiniert diesen Adapter mit Credentials und Lösch-Intent vor der
 Kontowiederherstellung sowie beim Entfernen des Accounts.
 
+Beim Verfassen gelten standardmäßig höchstens 10 Anhänge, 20 MiB je Datei und 20 MiB insgesamt.
+Die Binärgrenze lässt Platz für die Base64-Vergrößerung einer üblichen 25-MiB-SMTP-Nachricht.
+Deployments können die drei Werte mit `MAIL_ATTACHMENT_MAX_COUNT`,
+`MAIL_ATTACHMENT_MAX_FILE_BYTES` und `MAIL_ATTACHMENT_MAX_TOTAL_BYTES` als `--dart-define`
+an die verifizierte Serverkonfiguration anpassen. Die App prüft Metadaten vor dem Lesen, liest
+dateibasiert nur bis zum verbleibenden Budget und validiert die tatsächlich gelesenen Bytes erneut.
+`enough_mail` benötigt für den abschließenden MIME-Aufbau weiterhin die begrenzten Binärdaten im
+Speicher; die Obergrenzen verhindern dabei unkontrollierte Mehrfachbelegung.
+
 ## Automatisierte Tests
 
 ```bash
@@ -154,19 +173,23 @@ flutter test test/features/mail/
   (Grundlage dafür, dass Sent-Kopie und SMTP-Versand exakt dieselben Bytes tragen).
 - `mail_cache_test.dart` — verschlüsselter Roundtrip einschließlich Anhängen und Adressindex,
   Altcache-Verwerfung, Schlüssel-/Speicherfehler, Restart-Recovery, idempotenter Wipe und die
-  lokale Suche über den verschlüsselten Cache (Betreff/Text/Empfänger, Reihenfolge, keine
-  Anhangbytes, Header-Rekonstruktion, nach dem Wipe keine Treffer mehr).
+  lokale Suche über den kompakten verschlüsselten Index (Betreff/Text/Empfänger, Reihenfolge,
+  keine Anhangbytes, Header-Rekonstruktion, keine Body-Entschlüsselung pro Suche), Retention nach
+  Anzahl/Bytes sowie die getrennte Offline-Bereinigung.
 - `mail_controller_test.dart` — Anmelden/Abmelden, unvollständigen Wipe erneut versuchen,
   Write-Fence bei laufendem Sync, Inbox-Laden, typisierte Fehler, Doppel-Send-Schutz (auch mit
   Anhängen), Sent-Kopie-Ergebnis, dass Anhänge unverändert bis zum Gateway durchgereicht werden,
   sowie die Suche: lokaler Treffer ohne IMAP-Aufruf, deutsche Groß-/Kleinschreibung und
   Leerzeichen, Nichttreffer, nicht gecachter Ordner, Deduplizierung Cache↔IMAP, IMAP-Fehler mit
-  erhaltenen lokalen Treffern und Retry, verworfene verspätete Antwort, Kontoentfernung.
+  erhaltenen lokalen Treffern und Retry, verworfene verspätete Antwort, Kontoentfernung sowie das
+  auf 20 Bodies begrenzte Hintergrund-Vorladen.
 - `mail_ui_test.dart` — Gate (Setup ↔ Inbox), Anmeldeformular-Validierung, Account
   entfernen, Nachricht anzeigen (+ als gelesen markieren), Verfassen/Senden inkl. Anhänge:
   auswählen und mit Name/Größe anzeigen, vor dem Senden entfernen, abgebrochener Picker lässt
   den Entwurf unverändert, gesendete Nachricht enthält den Anhang, eine beim Senden nicht mehr
-  lesbare Datei zeigt einen verständlichen Fehler und lässt Screen/Entwurf unangetastet, Senden
+  lesbare oder zu große Datei zeigt einen verständlichen Fehler und lässt Screen/Entwurf
+  unangetastet; Anzahl, Einzel- und Gesamtgröße werden vor SMTP begrenzt und die Gesamtsumme wird
+  angezeigt; Senden
   deaktiviert Anhang-Auswahl und Entfernen-Buttons; Suche: gecachter Treffer ohne Serverkontakt,
   zusätzliche Servertreffer ohne Dubletten, IMAP-Fehler mit erhaltenen lokalen Treffern und
   Retry, klarer Leerzustand, Öffnen eines nur serverseitigen Treffers (wird dabei gecacht).
@@ -188,7 +211,7 @@ Einrichtung / Sicherheit
 - [ ] Upgrade einer präparierten Testinstallation mit befülltem `campus_mail_cache_v1`: Start
       ohne Absturz, keine alten Nachrichten oder Empfängervorschläge, neuer Cache zunächst leer;
       nach erneutem App-Start bleibt der Altcache abwesend.
-- [ ] Nach erfolgreichem „Account entfernen“ ist wieder der Setup-Screen sichtbar; erneuter
+- [ ] Nach erfolgreichem „E-Mail-Verbindung und lokale Daten löschen“ ist wieder der Setup-Screen sichtbar; erneuter
       App-Start landet im Setup und zeigt weder alte Nachrichten/Details noch alte
       Empfängervorschläge.
 - [ ] Ein simulierter Teilfehler beim Entfernen meldet keinen Erfolg, hält Mail gesperrt und lässt
@@ -230,7 +253,7 @@ Suche
 - [ ] Ein Treffer öffnet die Nachricht (wird bei Bedarf nachgeladen und gecacht).
 - [ ] In einem anderen Ordner weist die Suche darauf hin, dass er nicht lokal vorliegt, und
       zeigt keine lokalen Treffer.
-- [ ] Nach „Account entfernen“ zeigt die Suche keine Ergebnisse des vorherigen Kontos.
+- [ ] Nach „E-Mail-Verbindung und lokale Daten löschen“ zeigt die Suche keine Ergebnisse des vorherigen Kontos.
 
 Ordner
 

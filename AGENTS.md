@@ -40,7 +40,25 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      `https://service.ssc.hs-anhalt.de` (HIS-QIS, Bestandsportal) und
      `https://sscportal.ssc.hs-anhalt.de` (HISinOne, neueres Portal). Welches Portal ein
      Konto nutzt, wird bei der Einrichtung einmalig ermittelt (`docs/grades.md`
-     „Portalwahl") und lokal gespeichert;
+     „Portalwahl") und lokal gespeichert.
+     Dieselbe HISinOne-Verbindung (für Login, Seiten und Formularaktionen **ausschließlich**
+     `https://sscportal.ssc.hs-anhalt.de`, **nicht** das HIS-QIS-Bestandsportal) erweitert um
+     konkret benannte, ausschließlich
+     **lesende** Funktionen auf der Seite „Studienservice" (ein Formular, Tab-Wechsel per
+     Voll-POST): Bescheinigungsübersicht, Personendaten und Kontaktdaten, Studiengangsübersicht
+     sowie die nur über die Zahlungsübersicht ableitbaren Status-Hinweise (Hörerstatus unter
+     Personendaten; ein Rückmeldestatus existiert nicht als eigenes Feld, nur indirekt über
+     offene/keine offenen Zahlungen). Diese Funktionen nutzen dieselben, bereits für
+     den Notenspiegel hinterlegten Zugangsdaten wieder — kein zweiter Login, kein separater
+     `+`/`−`-Dienst. Der erzeugte Bescheinigungsabruf darf zusätzlich ausschließlich per `GET`
+     an `https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
+     `state=docdownload` gehen; Ziel und Einweg-Token müssen aus der aktuellen AJAX-Antwort
+     stammen, und dieser zweite Host ist **keine** gemeinsame oder allgemeine Allowlist.
+     Erlaubte Formularaktionen sind nur Login, Studienservice-Tabwechsel sowie Start und Polling
+     der vom Nutzer gewählten Bescheinigung. **Ausdrücklich ausgeschlossen** bleibt jede Änderung
+     des Hochschul-Datensatzes: keine Prüfungsanmeldung, keine Adressänderung und kein Antrag.
+     Eine unbekannte oder unerwartete Seitenstruktur erhält einen klassifizierten Fehler und wird
+     **nie** geraten geparst;
    - die **Moodle-Integration** (Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines) →
      direkt und **nur** zu `https://moodle.hs-anhalt.de`. Kein Moodle-Token, keine Kurs-,
      Aufgaben-, Abgabe-, Ankündigungs- oder Deadline-Daten dürfen ein Campus-Köthen-Backend
@@ -68,6 +86,21 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    Analytics-/Logging-Umweg. Zugangsdaten nur im Keychain/Keystore, sensible Inhalte nur
    verschlüsselt lokal. Dies ist **keine** allgemeine Erlaubnis für beliebige direkte
    Drittanbieterzugriffe — jede weitere Ausnahme muss hier ausdrücklich ergänzt werden.
+
+   Die optionale zentrale `UniversityIdentity` ist ausschließlich eine **lokale Eingabehilfe** für
+   Mail, Moodle und Noten — **keine** gemeinsame SSO-Sitzung und kein App-/Backend-Konto. Sie enthält
+   genau **eine Kennung** (Benutzername oder vollständige Mailadresse) und ein Passwort, wird erst
+   nach ausdrücklicher Bestätigung und erfolgreicher Prüfung durch mindestens einen Dienst
+   gespeichert und liegt nur im gerätegebundenen Keychain/Keystore. Ein reiner Benutzername wird
+   ausschließlich für Mail zu `<Kennung>@hs-anhalt.de` ergänzt; eine eingegebene Mailadresse bleibt
+   unverändert, Moodle und Noten erhalten die Kennung unverändert. Das frühere Drei-Feld-Schema wird
+   beim Erkennen vollständig verworfen, nie still migriert. `+` erzeugt nach bewusster Nutzeraktion
+   ausschließlich die dienstbezogene Session beziehungsweise Credential-Kopie; `−` wischt nur
+   diesen Dienst und seinen
+   Cache, nicht die zentrale Identität. „Hochschulzugang vollständig löschen“ trennt alle Dienste
+   über deren kanonische Wipes und löscht die zentrale Identität **zuletzt**; bei einem Teilfehler
+   bleibt sie für den sichtbaren, wiederholbaren Retry erhalten. Kein Wert daraus darf in
+   `SharedPreferences`, Hive, öffentlichen Riverpod-State, Campus API, Logs oder Telemetrie gelangen.
 
    **Öffentliche Google-Kalender** sind dagegen **öffentliche** Campusdaten und laufen bewusst über
    den **öffentlichen** Backend-Pfad: Der Campus-Worker liest die in Strapi gepflegte öffentliche
@@ -151,7 +184,8 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
 ## 7. Technische Standards
 
 - TypeScript **strict**. Kein `any` ohne begründeten, kommentierten Ausnahmefall.
-- Node.js 22.x. pnpm-Workspace mit Lockfile; `--frozen-lockfile` in CI.
+- Node.js 24.x, repositoryweit exakt über `.node-version` und `.nvmrc` gepinnt. pnpm-Workspace
+  mit Lockfile; `--frozen-lockfile` in CI.
 - Öffentliche DTOs leaken **keine** Strapi-Internas (`data`, `attributes`, `documentId`,
   `populate`-Metadaten) und keine internen Fremd-IDs wie WebUntis-IDs, `location_id` oder eine
   Google-Kalender-ID als eigenständiges Feld.

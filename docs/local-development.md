@@ -8,13 +8,16 @@ Campus Köthen App · `AGPL-3.0-only`
 
 | Werkzeug         | Erwartet                | Prüfen                              |
 | ---------------- | ----------------------- | ----------------------------------- |
-| Node.js          | 22.x                    | `node --version`                    |
+| Node.js          | 24.21.0 LTS             | `pnpm node:check`                   |
 | pnpm             | >= 10                   | `corepack enable && pnpm --version` |
 | Docker + Compose | Docker 29.x, Compose v5 | `docker compose version`            |
 | Flutter          | stable                  | `flutter doctor -v`                 |
 
-Node 22 ist gewählt, weil Strapi 5.50 offiziell `node >=20.0.0 <=26.x.x` unterstützt. Die Version
-ist in `package.json` unter `engines` und in den Dockerfiles gepinnt.
+Node 24 ist gewählt, weil es die aktuelle LTS-Linie ist und Strapi 5.52 offiziell
+`node >=20.0.0 <=26.x.x` unterstützt. Die exakte Version steht in `.node-version` und `.nvmrc`;
+CI und beide Dockerfiles verwenden denselben Patchstand. `package.json` begrenzt die unterstützte
+Hauptversion zusätzlich auf 24.x. Ein abweichender lokaler Patchstand bricht die Installation
+früh mit einer verständlichen Meldung ab.
 
 ## 2. Erststart
 

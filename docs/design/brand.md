@@ -6,14 +6,23 @@ Icons und Abstände folgen den mitgelieferten Light- und Dark-Mockups.
 
 ## Farbe
 
-Die App besitzt genau zwei feste Paletten. Eine frei wählbare Akzentfarbe oder
-ein Systemmodus werden nicht angeboten.
+Helligkeit und Akzent sind zwei unabhängige Einstellungen. Hell und Dunkel
+können fest gewählt werden oder der Systemeinstellung folgen. Rosa bleibt der
+Standard und die Migrationsfarbe; Grün, Blau, Violett und Bernstein stehen als
+gleichwertige Akzentfamilien bereit.
+
+| Akzent    | Light     | Dark      |
+| --------- | --------- | --------- |
+| Rosa      | `#C2185B` | `#EC6E9F` |
+| Grün      | `#176B48` | `#71D6A5` |
+| Blau      | `#1769A6` | `#75BFFF` |
+| Violett   | `#6843B5` | `#C4A7FF` |
+| Bernstein | `#7A4B00` | `#F4B942` |
+
+Die neutralen und semantischen Rollen bleiben akzentübergreifend stabil:
 
 | Rolle            | Light     | Dark      |
 | ---------------- | --------- | --------- |
-| Primär / Beere   | `#C2185B` | `#EC6E9F` |
-| Primär gedrückt  | `#97114A` | `#EC6E9F` |
-| Primär-Container | `#FBE4EE` | `#511F37` |
 | Himmel-Container | `#E0F2FE` | `#15384E` |
 | Himmel-Tinte     | `#075985` | `#8ECDF2` |
 | Hintergrund      | `#FAF7F8` | `#1B1418` |
@@ -67,10 +76,14 @@ Switch, nicht angehakte Checkbox — nutzt `Begleittext`, weil sie das Einzige
 ist, was das Element sichtbar macht, und deshalb 3:1 gegen Oberfläche und
 Hintergrund erreichen muss (WCAG 2.1 SC 1.4.11). `Kontur` erreicht 1,3:1 und
 darf keine Bedienelementgrenze allein tragen. Abgesichert in
-`test/core/theme/theme_contrast_test.dart`.
+`test/core/theme/theme_contrast_test.dart`. Fordert die Plattform hohen
+Kontrast an, werden auch dekorative Konturen auf mindestens 3:1 angehoben,
+Fokusringe und Statusmarker werden dicker. Icon und Text bleiben als
+nicht-farbige Zustandsmerkmale erhalten.
 
 Der `ScreenHeader` trägt Eyebrow und Titel. Die untere Navigation liegt auf
-einer abgegrenzten Oberfläche; der aktive Eintrag verwendet die Beerenfarbe.
+einer abgegrenzten Oberfläche; der aktive Eintrag verwendet den gewählten
+Akzent.
 
 ## Seitenübergänge und Zurück-Geste
 
@@ -93,22 +106,31 @@ Loslassen sie abbricht. Abgesichert in `test/app/app_navigation_test.dart` und
 
 ## Theme-Einstellung
 
-In den Einstellungen stehen ausschließlich **Hell** und **Dunkel** zur Wahl.
-Alte gespeicherte Werte für den Systemmodus werden auf Hell migriert. Die
-frühere Auswahl einer Akzentpalette ist entfernt.
+In den Einstellungen stehen **Systemeinstellung**, **Hell** und **Dunkel** zur
+Wahl. Ein gespeicherter Systemmodus bleibt erhalten und wird als echter
+`ThemeMode.system` an Flutter weitergegeben. Bestehende Hell-/Dunkel-Werte
+werden unverändert übernommen; fehlt die neue Akzenteinstellung, wird Rosa
+verwendet.
 
 ## Zentrale Implementierung
 
-| Datei                               | Inhalt                              |
-| ----------------------------------- | ----------------------------------- |
-| `core/theme/app_colors.dart`        | feste Light- und Dark-Palette       |
-| `core/theme/app_typography.dart`    | Albert-Sans-Typografie              |
-| `core/theme/app_icons.dart`         | semantische Tabler-Icon-Zuordnung   |
-| `core/theme/app_dimensions.dart`    | Raster, Radien und Strichstärken    |
-| `core/theme/app_metrics.dart`       | Abstände und Layoutmaße             |
-| `core/theme/app_theme.dart`         | Material-Theme und Komponentenstile |
-| `core/widgets/screen_scaffold.dart` | Screen-Gerüst und Kopf              |
-| `app/takt_navigation_bar.dart`      | untere Navigation                   |
+Die gebündelten Branding-Raster werden über `BrandMark` beziehungsweise `BrandWordmark` mit einer
+aus logischer Darstellungsgröße und Device-Pixel-Ratio berechneten `cacheWidth` decodiert. Die
+Anforderung wird auf die native Pixelbreite begrenzt. Dadurch bleiben hochauflösende Displays
+scharf, ohne für kleine Navigations- oder Lizenzdarstellungen stets das vollständige Raster in den
+Bildspeicher zu laden.
+
+| Datei                                    | Inhalt                              |
+| ---------------------------------------- | ----------------------------------- |
+| `core/theme/appearance_preferences.dart` | Helligkeits- und Akzentmodell       |
+| `core/theme/app_colors.dart`             | Light-/Dark-/Kontrastpaletten       |
+| `core/theme/app_typography.dart`         | Albert-Sans-Typografie              |
+| `core/theme/app_icons.dart`              | semantische Tabler-Icon-Zuordnung   |
+| `core/theme/app_dimensions.dart`         | Raster, Radien und Strichstärken    |
+| `core/theme/app_metrics.dart`            | Abstände und Layoutmaße             |
+| `core/theme/app_theme.dart`              | Material-Theme und Komponentenstile |
+| `core/widgets/screen_scaffold.dart`      | Screen-Gerüst und Kopf              |
+| `app/takt_navigation_bar.dart`           | untere Navigation                   |
 
 Neue Screens orientieren sich an den vorhandenen Komponenten und Tokens, auch
 wenn für sie kein eigener Mockup-Screenshot vorliegt.
