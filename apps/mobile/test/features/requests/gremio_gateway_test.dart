@@ -95,6 +95,11 @@ void main() {
         reason: 'the key is mandatory and belongs to the draft',
       );
       expect(adapter.lastRequest.contentType, contains('multipart/form-data'));
+      expect(
+        store.wholeFileReads,
+        0,
+        reason: 'multipart must consume the bounded attachment stream',
+      );
     });
 
     test('sends exactly the documented fields, and nothing else', () async {
@@ -175,6 +180,28 @@ void main() {
         contains(RequestField.financeRequestFile),
       );
     });
+
+    test(
+      'still submits a migrated draft whose old reference has no size',
+      () async {
+        final (gateway, adapter, store) = await _build((_) => _created);
+        final FinanceApplicationDraft base = await _application(store);
+        final RequestAttachment current = base.fileFor(
+          ApplicationFileSlot.financeRequest,
+        )!;
+        final FinanceApplicationDraft migrated = base.withFile(
+          ApplicationFileSlot.financeRequest,
+          RequestAttachment(fileName: current.fileName, path: current.path),
+        );
+
+        final SubmissionResult result = await gateway.submitApplication(
+          migrated,
+        );
+
+        expect(result, isA<SubmissionAccepted>());
+        expect(adapter.requests, hasLength(1));
+      },
+    );
   });
 
   group('submitting feedback', () {

@@ -786,6 +786,49 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('detail layout matrix keeps refresh and status reachable', (
+      WidgetTester tester,
+    ) async {
+      for (final (Size size, TextScaler scaler) in <(Size, TextScaler)>[
+        (const Size(320, 900), TextScaler.noScaling),
+        (const Size(360, 900), const TextScaler.linear(1.3)),
+        (const Size(800, 360), TextScaler.noScaling),
+        (const Size(320, 1400), const TextScaler.linear(2)),
+      ]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        final FlakyRequestStore store = FlakyRequestStore()
+          ..cases = <SubmittedCase>[
+            SubmittedCase(
+              id: 'case-1',
+              kind: RequestKind.financeApplication,
+              submittedAt: _now,
+              statusUrl: kFakeStatusUrl,
+              receiptPdfUrl: kFakeReceiptUrl,
+              localTitle: 'Testantrag',
+            ),
+          ];
+
+        await pumpScreen(
+          tester,
+          const SubmissionDetailScreen(submissionId: 'case-1'),
+          textScaler: scaler,
+          overrides: _overrides(
+            store: store,
+            status: ScriptedStatusGateway(
+              StatusLoaded(CaseStatus.fromJson(applicationStatusBody())!),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byTooltip('Aktualisieren'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$size at $scaler');
+      }
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     testWidgets('offers a retry when the status cannot be read', (
       WidgetTester tester,
     ) async {

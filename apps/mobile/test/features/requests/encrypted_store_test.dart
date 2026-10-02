@@ -24,10 +24,12 @@ final DateTime _now = DateTime(2026, 8, 6, 12);
 /// is the *protocol* around it — read back before reporting success, migrate
 /// before clearing, never write plaintext anywhere else.
 class RecordingBox implements EncryptedBox {
-  RecordingBox({this.failWrites = false});
+  RecordingBox({this.failWrites = false, this.failOnWriteNumber});
 
   final Map<String, String> entries = <String, String>{};
   bool failWrites;
+  final int? failOnWriteNumber;
+  int _writes = 0;
 
   @override
   String get boxName => 'recording';
@@ -40,8 +42,17 @@ class RecordingBox implements EncryptedBox {
 
   @override
   Future<void> write(String key, String value) async {
-    if (failWrites) return; // silently drops, exactly like a full disk
+    _writes++;
+    if (failWrites || _writes == failOnWriteNumber) {
+      return; // silently drops, exactly like a full disk
+    }
     entries[key] = value;
+  }
+
+  @override
+  Future<bool> writeChecked(String key, String value) async {
+    await write(key, value);
+    return entries[key] == value;
   }
 
   @override
@@ -140,6 +151,30 @@ void main() {
       );
     });
 
+    test(
+      'rejects a failed write when an older value is still present',
+      () async {
+        final RecordingBox box = RecordingBox();
+        box.entries['cases'] = jsonEncode(<Map<String, dynamic>>[
+          _case('old-case').toJson(),
+        ]);
+        box.failWrites = true;
+        final EncryptedRequestStore store = EncryptedRequestStore(
+          box: box,
+          legacy: FakeLegacyBox(null),
+        );
+
+        expect(
+          () => store.writeCases(<SubmittedCase>[_case('new-case')]),
+          throwsA(isA<RequestStoreUnavailable>()),
+        );
+        expect(
+          (jsonDecode(box.entries['cases']!) as List<Object?>).single,
+          containsPair('id', 'old-case'),
+        );
+      },
+    );
+
     test('degrades to empty rather than crashing on a corrupt box', () async {
       final RecordingBox box = RecordingBox();
       box.entries['drafts'] = 'not json at all';
@@ -231,7 +266,26 @@ void main() {
       // The identifier is a store key, never a file-system path a crash could
       // leave behind in the clear.
       expect(stored.path, startsWith('attachment:'));
-      expect(box.entries.keys.single, stored.path);
+      expect(box.entries.keys, contains(stored.path));
+      expect(
+        box.entries.length,
+        2,
+        reason: 'metadata plus one encrypted chunk',
+      );
+    });
+
+    test('stores a large attachment in bounded encrypted chunks', () async {
+      final RecordingBox box = RecordingBox();
+      final EncryptedAttachmentStore store = EncryptedAttachmentStore(box: box);
+      final Uint8List bytes = Uint8List(
+        EncryptedAttachmentStore.chunkBytes * 2 + 17,
+      );
+
+      final RequestAttachment stored = (await store.put('large.pdf', bytes))!;
+
+      expect(box.entries.length, 4, reason: 'metadata plus three chunks');
+      expect(box.entries.containsKey(stored.path), isTrue);
+      expect(await store.read(stored), bytes);
     });
 
     test('reports a failed write rather than a dangling reference', () async {
@@ -243,6 +297,17 @@ void main() {
         await store.put('ausweis.pdf', Uint8List.fromList(<int>[1])),
         isNull,
       );
+    });
+
+    test('removes chunks when committing their metadata fails', () async {
+      final RecordingBox box = RecordingBox(failOnWriteNumber: 2);
+      final EncryptedAttachmentStore store = EncryptedAttachmentStore(box: box);
+
+      expect(
+        await store.put('ausweis.pdf', Uint8List.fromList(<int>[1, 2, 3])),
+        isNull,
+      );
+      expect(box.entries, isEmpty);
     });
 
     test('a missing entry reads as null, not as a crash', () async {

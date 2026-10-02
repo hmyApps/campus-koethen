@@ -57,13 +57,12 @@ class EncryptedRequestStore implements RequestStore {
 
   @override
   Future<void> writeDrafts(List<RequestDraft> drafts) async {
-    await _box.write(
-      _draftsKey,
-      jsonEncode(drafts.map((RequestDraft d) => d.toJson()).toList()),
+    final String payload = jsonEncode(
+      drafts.map((RequestDraft d) => d.toJson()).toList(),
     );
-    // A silent failure here would lose the user's work without telling them.
-    final String? written = await _box.read(_draftsKey);
-    if (written == null) throw const RequestStoreUnavailable();
+    if (!await _box.writeChecked(_draftsKey, payload)) {
+      throw const RequestStoreUnavailable();
+    }
   }
 
   @override
@@ -74,14 +73,14 @@ class EncryptedRequestStore implements RequestStore {
 
   @override
   Future<void> writeCases(List<SubmittedCase> cases) async {
-    await _box.write(
-      _casesKey,
-      jsonEncode(cases.map((SubmittedCase c) => c.toJson()).toList()),
+    final String payload = jsonEncode(
+      cases.map((SubmittedCase c) => c.toJson()).toList(),
     );
-    // Read back before the caller is told the case is safe: it is about to
-    // delete the draft, and the status link cannot be recovered from anywhere.
-    final String? written = await _box.read(_casesKey);
-    if (written == null) throw const RequestStoreUnavailable();
+    // Confirm this exact payload before the caller deletes the draft. Merely
+    // seeing any value here could be a stale predecessor after a failed write.
+    if (!await _box.writeChecked(_casesKey, payload)) {
+      throw const RequestStoreUnavailable();
+    }
   }
 
   static List<T> _decode<T>(String? raw, T? Function(Object?) parse) {

@@ -371,7 +371,20 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
     final AppLocalizations l10n = context.l10n;
     final PickResult result = await ref
         .read(attachmentPickerProvider)
-        .pickFor(slot);
+        .pickFor(
+          slot,
+          currentTotalBytes:
+              _draft?.files.entries
+                  .where(
+                    (MapEntry<ApplicationFileSlot, RequestAttachment> entry) =>
+                        entry.key != slot,
+                  )
+                  .fold<int>(
+                    0,
+                    (int total, entry) => total + (entry.value.sizeBytes ?? 0),
+                  ) ??
+              0,
+        );
     if (!mounted) return;
 
     switch (result) {

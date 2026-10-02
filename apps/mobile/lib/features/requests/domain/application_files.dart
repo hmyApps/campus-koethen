@@ -44,9 +44,6 @@ enum ApplicationFileSlot {
   /// Lower-case, without the dot.
   final Set<String> extensions;
 
-  /// Documented per-file ceiling of the endpoint.
-  static const int maxBytes = 25 * 1024 * 1024;
-
   static const Map<String, String> _contentTypes = <String, String>{
     'pdf': 'application/pdf',
     'png': 'image/png',
@@ -71,7 +68,7 @@ enum ApplicationFileSlot {
     return extension != null && extensions.contains(extension);
   }
 
-  bool acceptsSize(int bytes) => bytes >= 0 && bytes <= maxBytes;
+  bool acceptsSize(int bytes) => ApplicationFileLimits.acceptsFile(bytes);
 
   /// The content type to send, or `null` when the file does not belong here.
   String? contentTypeFor(String fileName) {
@@ -91,4 +88,19 @@ enum ApplicationFileSlot {
   static List<ApplicationFileSlot> get required => ApplicationFileSlot.values
       .where((ApplicationFileSlot s) => s.isRequired)
       .toList(growable: false);
+}
+
+/// Central upload budget for one finance application.
+///
+/// The endpoint documents 25 MiB per named field. There are exactly four
+/// fields, so the aggregate ceiling deliberately preserves that server
+/// contract while giving every client layer one explicit count/byte budget.
+abstract final class ApplicationFileLimits {
+  static const int maxFiles = 4;
+  static const int maxFileBytes = 25 * 1024 * 1024;
+  static const int maxTotalBytes = maxFiles * maxFileBytes;
+
+  static bool acceptsFile(int bytes) => bytes >= 0 && bytes <= maxFileBytes;
+
+  static bool acceptsTotal(int bytes) => bytes >= 0 && bytes <= maxTotalBytes;
 }

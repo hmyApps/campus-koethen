@@ -48,7 +48,10 @@ class PickFailed extends PickResult {
 /// named fields with different accepted types, and a generic "add files" button
 /// would let a student attach something that is then silently not sent.
 abstract interface class AttachmentPicker {
-  Future<PickResult> pickFor(ApplicationFileSlot slot);
+  Future<PickResult> pickFor(
+    ApplicationFileSlot slot, {
+    int currentTotalBytes = 0,
+  });
 }
 
 typedef AttachmentFileOpener =
@@ -71,7 +74,10 @@ class SecureAttachmentPicker implements AttachmentPicker {
   final AttachmentFileOpener _fileOpener;
 
   @override
-  Future<PickResult> pickFor(ApplicationFileSlot slot) async {
+  Future<PickResult> pickFor(
+    ApplicationFileSlot slot, {
+    int currentTotalBytes = 0,
+  }) async {
     try {
       final XFile? chosen = await _fileOpener(<XTypeGroup>[
         XTypeGroup(
@@ -95,10 +101,38 @@ class SecureAttachmentPicker implements AttachmentPicker {
       // platforms the user can still end up with something else.
       if (!slot.accepts(chosen.name)) return const PickWrongType();
 
+      // XFile.length() reads metadata, not contents. This guard must happen
+      // before readAsBytes/openRead so a wildly oversized selection cannot
+      // allocate its way to the error message.
+      final int declaredLength = await chosen.length();
+      if (!slot.acceptsSize(declaredLength) ||
+          !ApplicationFileLimits.acceptsTotal(
+            currentTotalBytes + declaredLength,
+          )) {
+        return const PickTooLarge();
+      }
+
+      if (_store case final StreamingAttachmentStore streaming) {
+        final RequestAttachment? stored = await streaming.putStream(
+          chosen.name,
+          declaredLength,
+          chosen.openRead(),
+        );
+        return stored == null ? const PickFailed() : PickedFile(stored);
+      }
+
       final Uint8List bytes = await chosen.readAsBytes();
-      if (!slot.acceptsSize(bytes.length)) return const PickTooLarge();
+      if (!slot.acceptsSize(bytes.length) ||
+          bytes.length != declaredLength ||
+          !ApplicationFileLimits.acceptsTotal(
+            currentTotalBytes + bytes.length,
+          )) {
+        return const PickTooLarge();
+      }
       final RequestAttachment? stored = await _store.put(chosen.name, bytes);
       return stored == null ? const PickFailed() : PickedFile(stored);
+    } on AttachmentLimitExceeded {
+      return const PickTooLarge();
     } catch (_) {
       return const PickFailed();
     }

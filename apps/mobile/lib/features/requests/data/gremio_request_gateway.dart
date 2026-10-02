@@ -2,8 +2,6 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 
@@ -76,23 +74,45 @@ class GremioRequestGateway implements RequestGateway {
       ..add(MapEntry<String, String>('title', draft.title.trim()))
       ..add(MapEntry<String, String>('applicant', draft.applicant.trim()));
 
+    int totalBytes = 0;
+    int fileCount = 0;
     for (final ApplicationFileSlot slot in ApplicationFileSlot.values) {
       final RequestAttachment? file = draft.fileFor(slot);
       if (file == null) continue;
-      // Read straight into memory: no decrypted copy is ever written to disk,
-      // so there is no temporary file for a crash to leave behind.
-      final Uint8List? bytes = await _attachments.read(file);
-      if (bytes == null) {
+      fileCount++;
+      final int? declaredSize = file.sizeBytes;
+      if (fileCount > ApplicationFileLimits.maxFiles ||
+          (declaredSize != null &&
+              !ApplicationFileLimits.acceptsFile(declaredSize))) {
         return SubmissionRejected(
           fieldErrors: <RequestField, String>{RequestField.forSlot(slot): ''},
         );
+      }
+
+      final StoredAttachmentStream? source = switch (_attachments) {
+        final StreamingAttachmentStore streaming => await streaming.openRead(
+          file,
+        ),
+        _ => await _wholeFileSource(file),
+      };
+      if (source == null ||
+          (declaredSize != null && source.length != declaredSize) ||
+          !ApplicationFileLimits.acceptsFile(source.length)) {
+        return SubmissionRejected(
+          fieldErrors: <RequestField, String>{RequestField.forSlot(slot): ''},
+        );
+      }
+      totalBytes += source.length;
+      if (!ApplicationFileLimits.acceptsTotal(totalBytes)) {
+        return const SubmissionTooLarge();
       }
       final String? contentType = slot.contentTypeFor(file.fileName);
       form.files.add(
         MapEntry<String, MultipartFile>(
           slot.field,
-          MultipartFile.fromBytes(
-            bytes,
+          MultipartFile.fromStream(
+            source.open,
+            source.length,
             filename: file.fileName,
             contentType: contentType == null
                 ? null
@@ -108,6 +128,17 @@ class GremioRequestGateway implements RequestGateway {
       idempotencyKey: draft.idempotencyKey,
       onProgress: onProgress,
       cancel: cancel,
+    );
+  }
+
+  Future<StoredAttachmentStream?> _wholeFileSource(
+    RequestAttachment attachment,
+  ) async {
+    final bytes = await _attachments.read(attachment);
+    if (bytes == null) return null;
+    return StoredAttachmentStream(
+      length: bytes.length,
+      open: () => Stream<List<int>>.value(bytes),
     );
   }
 

@@ -32,6 +32,24 @@ class _MemoryAttachmentStore implements AttachmentStore {
   Future<bool> wipeEverything() async => true;
 }
 
+class _SizedXFile extends XFile {
+  _SizedXFile({required this.reportedLength, required this.bytes})
+    : super('oversized.pdf');
+
+  final int reportedLength;
+  final Uint8List bytes;
+  bool wasRead = false;
+
+  @override
+  Future<int> length() async => reportedLength;
+
+  @override
+  Future<Uint8List> readAsBytes() async {
+    wasRead = true;
+    return bytes;
+  }
+}
+
 void main() {
   test(
     'keeps Android extensions and supplies the iOS PDF identifier',
@@ -91,5 +109,22 @@ void main() {
       await picker.pickFor(ApplicationFileSlot.financeRequest),
       isA<PickFailed>(),
     );
+  });
+
+  test('rejects an oversized file before materializing its bytes', () async {
+    final _SizedXFile file = _SizedXFile(
+      reportedLength: ApplicationFileLimits.maxFileBytes + 1,
+      bytes: Uint8List(1),
+    );
+    final SecureAttachmentPicker picker = SecureAttachmentPicker(
+      _MemoryAttachmentStore(),
+      (_) async => file,
+    );
+
+    expect(
+      await picker.pickFor(ApplicationFileSlot.financeRequest),
+      isA<PickTooLarge>(),
+    );
+    expect(file.wasRead, isFalse);
   });
 }

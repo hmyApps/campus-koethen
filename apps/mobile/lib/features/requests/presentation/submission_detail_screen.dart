@@ -1,8 +1,6 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +24,7 @@ import '../domain/request_drafts.dart';
 import '../domain/status_gateway.dart';
 import '../domain/submitted_case.dart';
 import 'request_status_labels.dart';
+import 'submission_polling_controller.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 
 /// Everything the public API says about one case, rendered natively.
@@ -67,7 +66,7 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
     with WidgetsBindingObserver {
   static const Duration _pollInterval = Duration(seconds: 60);
 
-  Timer? _poll;
+  late final SubmissionPollingController _polling;
   bool _loadingDocument = false;
 
   /// URL of the document currently being fetched, so the spinner appears on
@@ -77,6 +76,10 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
   @override
   void initState() {
     super.initState();
+    _polling = SubmissionPollingController(
+      interval: _pollInterval,
+      onPoll: _refresh,
+    );
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refresh();
@@ -87,7 +90,7 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
   @override
   void dispose() {
     // Leaving the screen stops the polling immediately.
-    _poll?.cancel();
+    _polling.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -98,14 +101,12 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
       _refresh();
       _startPolling();
     } else {
-      _poll?.cancel();
-      _poll = null;
+      _polling.stop();
     }
   }
 
   void _startPolling() {
-    _poll?.cancel();
-    _poll = Timer.periodic(_pollInterval, (_) => _refresh());
+    _polling.start();
   }
 
   Future<void> _refresh() async {
@@ -125,12 +126,8 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
         .refresh(item, now: DateTime.now());
     // The server's own instruction wins: while rate limited, stop asking.
     if (result is StatusRateLimited && mounted) {
-      _poll?.cancel();
-      _poll = null;
       final Duration wait = result.retryAfter ?? const Duration(minutes: 1);
-      Future<void>.delayed(wait, () {
-        if (mounted) _startPolling();
-      });
+      _polling.pauseFor(wait);
     }
   }
 

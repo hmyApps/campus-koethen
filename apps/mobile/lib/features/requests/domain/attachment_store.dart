@@ -40,3 +40,32 @@ abstract interface class AttachmentStore {
   /// was no path that could remove them.
   Future<bool> wipeEverything();
 }
+
+/// A repeatable, length-bounded plaintext view of one encrypted attachment.
+///
+/// The stream factory is repeatable because Dio starts consuming it only once
+/// the request is dispatched. No plaintext file path is exposed.
+class StoredAttachmentStream {
+  const StoredAttachmentStream({required this.length, required this.open});
+
+  final int length;
+  final Stream<List<int>> Function() open;
+}
+
+/// Optional streaming capability used by the production encrypted store.
+///
+/// Keeping it separate preserves compatibility with small in-memory test and
+/// fallback stores, while the real path never materialises a whole file.
+abstract interface class StreamingAttachmentStore {
+  Future<RequestAttachment?> putStream(
+    String fileName,
+    int expectedLength,
+    Stream<List<int>> bytes,
+  );
+
+  Future<StoredAttachmentStream?> openRead(RequestAttachment attachment);
+}
+
+class AttachmentLimitExceeded implements Exception {
+  const AttachmentLimitExceeded();
+}
