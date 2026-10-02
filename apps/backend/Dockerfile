@@ -12,13 +12,15 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — install workspace dependencies (cached on manifests alone)
 # ---------------------------------------------------------------------------
-FROM node:22.23.2-alpine AS deps
+FROM node:24.21.0-alpine AS deps
 
 RUN corepack enable
 WORKDIR /repo
 
 # Only the manifests, so a source-only change does not bust the install cache.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .node-version ./
+COPY scripts/check-node-version.mjs scripts/
 COPY apps/backend/package.json apps/backend/
 COPY apps/cms/package.json apps/cms/
 COPY packages/openapi/package.json packages/openapi/
@@ -53,7 +55,7 @@ RUN pnpm --filter @campus/backend deploy --prod --legacy /opt/deploy
 # ---------------------------------------------------------------------------
 # Stage 3 — runtime
 # ---------------------------------------------------------------------------
-FROM node:22.23.2-alpine AS runtime
+FROM node:24.21.0-alpine AS runtime
 
 # openssl is required by Prisma; tini gives us correct signal handling so the
 # worker's SIGTERM shutdown path actually runs.

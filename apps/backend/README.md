@@ -32,6 +32,10 @@ and CI fails if the two drift apart.
 
 ## Local development
 
+Local commands require the repository's exact Node.js pin, currently 24.21.0,
+with pnpm supplied through Corepack. Run `pnpm node:check` from the repository
+root before diagnosing toolchain-dependent failures.
+
 ```bash
 cp .env.example .env
 pnpm --filter @campus/backend prisma:generate

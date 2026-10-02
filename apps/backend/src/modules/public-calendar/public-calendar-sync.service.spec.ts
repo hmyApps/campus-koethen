@@ -1,5 +1,7 @@
+import { Logger } from '@nestjs/common';
 import { validateEnv } from '../../config/env.schema';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IcsClientError } from './google-public-ics.client';
 import { PublicCalendarSyncService } from './public-calendar-sync.service';
 
 /**
@@ -14,6 +16,8 @@ import { PublicCalendarSyncService } from './public-calendar-sync.service';
  */
 describe('PublicCalendarSyncService reconciliation', () => {
   const env = validateEnv(process.env);
+
+  afterEach(() => jest.restoreAllMocks());
 
   /** A synthetic feed with `count` timed events, all inside the sync window. */
   function ics(count: number): string {
@@ -55,7 +59,7 @@ describe('PublicCalendarSyncService reconciliation', () => {
    * Runs one event sync over `body` against a store that already holds
    * `stored` occurrences, and reports what the write phase did.
    */
-  async function run(body: string, stored: Array<Record<string, unknown>>) {
+  async function run(body: string | Error, stored: Array<Record<string, unknown>>) {
     const tx = {
       publicCalendarEvent: {
         findMany: jest.fn().mockResolvedValue(stored),
@@ -83,7 +87,10 @@ describe('PublicCalendarSyncService reconciliation', () => {
       prisma,
       {} as never,
       {
-        fetchCalendar: async () => ({ kind: 'ok', body, etag: null, lastModified: null }),
+        fetchCalendar: async () => {
+          if (body instanceof Error) throw body;
+          return { kind: 'ok', body, etag: null, lastModified: null };
+        },
       } as never,
       env,
     );
@@ -135,6 +142,98 @@ describe('PublicCalendarSyncService reconciliation', () => {
     expect(findMany).toHaveBeenCalledTimes(1);
     const args = findMany.mock.calls[0]![0] as { select?: Record<string, boolean> };
     expect(args.select).toEqual({ slug: true });
+  });
+
+  it('runs at most four calendar feeds at once and preserves result order', async () => {
+    const calendars = Array.from({ length: 11 }, (_, index) => ({ slug: `calendar-${index}` }));
+    const prisma = {
+      publicCalendar: { findMany: jest.fn().mockResolvedValue(calendars) },
+    } as unknown as PrismaService;
+    const service = new PublicCalendarSyncService(prisma, {} as never, {} as never, env);
+    let active = 0;
+    let peak = 0;
+
+    jest.spyOn(service, 'syncCalendarEvents').mockImplementation(async (slug) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return { slug, status: 'success', received: 0, written: 0, removed: 0 };
+    });
+
+    const outcomes = await service.syncEvents();
+
+    expect(peak).toBe(4);
+    expect(outcomes.map((outcome) => outcome.slug)).toEqual(calendars.map((row) => row.slug));
+  });
+
+  it('keeps syncing other feeds when one isolated feed throws unexpectedly', async () => {
+    const calendars = [{ slug: 'first' }, { slug: 'broken' }, { slug: 'last' }];
+    const prisma = {
+      publicCalendar: { findMany: jest.fn().mockResolvedValue(calendars) },
+    } as unknown as PrismaService;
+    const service = new PublicCalendarSyncService(prisma, {} as never, {} as never, env);
+
+    jest.spyOn(service, 'syncCalendarEvents').mockImplementation(async (slug) => {
+      if (slug === 'broken') throw new Error('database details must not escape');
+      return { slug, status: 'success', received: 0, written: 0, removed: 0 };
+    });
+
+    const outcomes = await service.syncEvents();
+
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(['success', 'failed', 'success']);
+    expect(outcomes[1]).toMatchObject({ slug: 'broken', errorCode: 'unexpected' });
+  });
+
+  it('logs one structured, identifier-free metric with actual UTF-8 bytes per feed', async () => {
+    const body = ics(1).replace('Termin 0', 'Termin Köthen');
+    const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+    await run(body, []);
+
+    const metric = log.mock.calls.find(
+      ([message, details]) =>
+        message === 'Public-calendar feed sync' &&
+        typeof details === 'object' &&
+        details !== null &&
+        (details as { event?: string }).event === 'publicCalendar.feedSync',
+    )?.[1] as Record<string, unknown> | undefined;
+    expect(metric).toMatchObject({
+      event: 'publicCalendar.feedSync',
+      status: 'success',
+      responseBytes: Buffer.byteLength(body, 'utf8'),
+      errorClass: null,
+      durationMs: expect.any(Number),
+    });
+    expect(JSON.stringify(metric)).not.toContain(calendarRow.slug);
+    expect(JSON.stringify(metric)).not.toContain(calendarRow.googleCalendarId);
+    expect(JSON.stringify(metric)).not.toContain('Termin Köthen');
+    log.mockRestore();
+  });
+
+  it('reports a safe error class without logging the calendar identifier', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await run(new IcsClientError('timeout', 'secret upstream detail'), []);
+
+    const metric = warn.mock.calls.find(
+      ([message, details]) =>
+        message === 'Public-calendar feed sync' &&
+        typeof details === 'object' &&
+        details !== null &&
+        (details as { event?: string }).event === 'publicCalendar.feedSync',
+    )?.[1] as Record<string, unknown> | undefined;
+    expect(metric).toMatchObject({
+      event: 'publicCalendar.feedSync',
+      status: 'stale',
+      responseBytes: 0,
+      errorClass: 'timeout',
+      durationMs: expect.any(Number),
+    });
+    expect(JSON.stringify(metric)).not.toContain(calendarRow.slug);
+    expect(JSON.stringify(metric)).not.toContain(calendarRow.googleCalendarId);
+    expect(JSON.stringify(metric)).not.toContain('secret upstream detail');
+    warn.mockRestore();
   });
 
   it('inserts a brand-new window in one statement', async () => {

@@ -174,12 +174,19 @@ async function bootstrap(): Promise<void> {
     logger,
     async (trigger) => {
       const outcomes = await publicCalendar.syncEvents();
-      for (const outcome of outcomes) {
-        logger.log(
-          `[public-calendar-events:${trigger}] ${outcome.slug}: ${outcome.status} ` +
-            `(written=${outcome.written} removed=${outcome.removed})`,
-        );
-      }
+      logger.log('Public-calendar event sync completed', {
+        event: 'publicCalendar.batchSync',
+        trigger,
+        feeds: outcomes.length,
+        successful: outcomes.filter((outcome) =>
+          ['success', 'notModified', 'empty'].includes(outcome.status),
+        ).length,
+        degraded: outcomes.filter((outcome) =>
+          ['stale', 'revoked', 'failed'].includes(outcome.status),
+        ).length,
+        written: outcomes.reduce((sum, outcome) => sum + outcome.written, 0),
+        removed: outcomes.reduce((sum, outcome) => sum + outcome.removed, 0),
+      });
     },
   );
 

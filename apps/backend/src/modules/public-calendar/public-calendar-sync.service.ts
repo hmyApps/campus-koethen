@@ -42,6 +42,8 @@ export interface EventOutcome {
   errorCode?: string;
 }
 
+const PUBLIC_CALENDAR_FEED_CONCURRENCY = 4;
+
 @Injectable()
 export class PublicCalendarSyncService {
   private readonly logger = new Logger(PublicCalendarSyncService.name);
@@ -210,21 +212,64 @@ export class PublicCalendarSyncService {
       orderBy: { sortOrder: 'asc' },
       select: { slug: true },
     });
-    // Each calendar is isolated: one failing feed never stops the others.
-    return Promise.all(calendars.map((calendar) => this.syncCalendarEvents(calendar.slug)));
+    if (calendars.length === 0) return [];
+
+    // Four workers apply backpressure to both Google and Postgres. Results are
+    // written into their catalogue position, so limiting concurrency never
+    // makes the worker output nondeterministic. The outer guard also isolates
+    // infrastructure failures that happen before a per-feed run can be
+    // created and therefore sit outside syncCalendarEvents' normal catch path.
+    const outcomes = new Array<EventOutcome>(calendars.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= calendars.length) return;
+
+        const calendar = calendars[index]!;
+        const startedAt = Date.now();
+        try {
+          outcomes[index] = await this.syncCalendarEvents(calendar.slug);
+        } catch {
+          outcomes[index] = this.recordEventMetric(
+            {
+              slug: calendar.slug,
+              status: 'failed',
+              received: 0,
+              written: 0,
+              removed: 0,
+              errorCode: 'unexpected',
+            },
+            0,
+            startedAt,
+          );
+        }
+      }
+    };
+
+    const workerCount = Math.min(PUBLIC_CALENDAR_FEED_CONCURRENCY, calendars.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return outcomes;
   }
 
   async syncCalendarEvents(slug: string): Promise<EventOutcome> {
+    const startedAt = Date.now();
+    let responseBytes = 0;
     const calendar = await this.prisma.publicCalendar.findUnique({ where: { slug } });
     if (!calendar || !calendar.isActive) {
-      return {
-        slug,
-        status: 'failed',
-        received: 0,
-        written: 0,
-        removed: 0,
-        errorCode: 'unknownCalendar',
-      };
+      return this.recordEventMetric(
+        {
+          slug,
+          status: 'failed',
+          received: 0,
+          written: 0,
+          removed: 0,
+          errorCode: 'unknownCalendar',
+        },
+        responseBytes,
+        startedAt,
+      );
     }
 
     const win = this.window();
@@ -250,9 +295,14 @@ export class PublicCalendarSyncService {
           data: { lastSuccessfulSyncAt: new Date(), operationalStatus: 'ready' },
         });
         await this.finishRun(run.id, { status: 'notModified' });
-        return { slug, status: 'notModified', received: 0, written: 0, removed: 0 };
+        return this.recordEventMetric(
+          { slug, status: 'notModified', received: 0, written: 0, removed: 0 },
+          responseBytes,
+          startedAt,
+        );
       }
 
+      responseBytes = Buffer.byteLength(fetched.body, 'utf8');
       const contentHash = createHash('sha256').update(fetched.body).digest('hex');
       if (contentHash === calendar.lastContentHash) {
         await this.prisma.publicCalendar.update({
@@ -264,8 +314,12 @@ export class PublicCalendarSyncService {
             lastModified: fetched.lastModified,
           },
         });
-        await this.finishRun(run.id, { status: 'notModified', feedBytes: fetched.body.length });
-        return { slug, status: 'notModified', received: 0, written: 0, removed: 0 };
+        await this.finishRun(run.id, { status: 'notModified', feedBytes: responseBytes });
+        return this.recordEventMetric(
+          { slug, status: 'notModified', received: 0, written: 0, removed: 0 },
+          responseBytes,
+          startedAt,
+        );
       }
 
       const events = parseIcs(fetched.body, {
@@ -295,20 +349,24 @@ export class PublicCalendarSyncService {
       });
       await this.finishRun(run.id, {
         status: events.length === 0 ? 'empty' : 'success',
-        feedBytes: fetched.body.length,
+        feedBytes: responseBytes,
         eventsExpanded: events.length,
         recordsWritten: events.length,
         recordsRemoved: removed,
       });
-      return {
-        slug,
-        status: events.length === 0 ? 'empty' : 'success',
-        received: events.length,
-        written: events.length,
-        removed,
-      };
+      return this.recordEventMetric(
+        {
+          slug,
+          status: events.length === 0 ? 'empty' : 'success',
+          received: events.length,
+          written: events.length,
+          removed,
+        },
+        responseBytes,
+        startedAt,
+      );
     } catch (error) {
-      return this.handleEventFailure(
+      const outcome = await this.handleEventFailure(
         run.id,
         calendar.id,
         slug,
@@ -316,7 +374,36 @@ export class PublicCalendarSyncService {
         calendar.lastSuccessfulSyncAt,
         error,
       );
+      return this.recordEventMetric(outcome, responseBytes, startedAt);
     }
+  }
+
+  /**
+   * One machine-readable observation per feed, deliberately without slug,
+   * Google calendar id, URL or content. The operational sync-run row retains
+   * the internal association; logs only expose bounded performance counters.
+   */
+  private recordEventMetric(
+    outcome: EventOutcome,
+    responseBytes: number,
+    startedAt: number,
+  ): EventOutcome {
+    const metric = {
+      event: 'publicCalendar.feedSync',
+      status: outcome.status,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      responseBytes,
+      errorClass: outcome.errorCode ?? null,
+      received: outcome.received,
+      written: outcome.written,
+      removed: outcome.removed,
+    };
+    if (outcome.status === 'failed' || outcome.status === 'stale' || outcome.status === 'revoked') {
+      this.logger.warn('Public-calendar feed sync', metric);
+    } else {
+      this.logger.log('Public-calendar feed sync', metric);
+    }
+    return outcome;
   }
 
   /** True when the feed carries anything the stored occurrence does not already say. */
@@ -507,9 +594,6 @@ export class PublicCalendarSyncService {
       data: { operationalStatus: nextStatus },
     });
     await this.finishRun(runId, { status: runStatus, errorCode, errorMessage: this.redact(error) });
-    this.logger.warn(
-      `Public-calendar events sync for "${slug}" -> ${runStatus} (${errorCode}); data kept`,
-    );
     return { slug, status: runStatus, received: 0, written: 0, removed: 0, errorCode };
   }
 
