@@ -13,13 +13,15 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — install workspace dependencies
 # ---------------------------------------------------------------------------
-FROM node:22.23.2-slim AS deps
+FROM node:24.21.0-slim AS deps
 
 RUN corepack enable
 WORKDIR /repo
 
 # Only the manifests, so a source-only change does not bust the install cache.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .node-version ./
+COPY scripts/check-node-version.mjs scripts/
 COPY apps/cms/package.json apps/cms/
 COPY apps/backend/package.json apps/backend/
 COPY packages/openapi/package.json packages/openapi/
@@ -62,7 +64,7 @@ RUN pnpm --filter @campus/cms deploy --prod --legacy /opt/deploy
 # ---------------------------------------------------------------------------
 # Stage 3 — runtime
 # ---------------------------------------------------------------------------
-FROM node:22.23.2-slim AS runtime
+FROM node:24.21.0-slim AS runtime
 
 # tini gives correct signal handling so Strapi shuts down cleanly.
 RUN apt-get update \
