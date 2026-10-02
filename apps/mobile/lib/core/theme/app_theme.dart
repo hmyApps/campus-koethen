@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart'
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'appearance_preferences.dart';
 import 'app_metrics.dart';
 import 'app_dimensions.dart';
 import 'app_motion.dart';
@@ -36,11 +37,31 @@ abstract final class AppTheme {
   /// on a style they build themselves.
   static const String fontFamily = AppFonts.ui;
 
-  static ThemeData light({AppMotion motion = AppMotion.enabled}) =>
-      _resolved(AppColors.light, motion);
+  static ThemeData light({
+    AccentScheme accentScheme = AccentScheme.pink,
+    AppMotion motion = AppMotion.enabled,
+  }) => _resolved(AppColors.forScheme(accentScheme, Brightness.light), motion);
 
-  static ThemeData dark({AppMotion motion = AppMotion.enabled}) =>
-      _resolved(AppColors.dark, motion);
+  static ThemeData dark({
+    AccentScheme accentScheme = AccentScheme.pink,
+    AppMotion motion = AppMotion.enabled,
+  }) => _resolved(AppColors.forScheme(accentScheme, Brightness.dark), motion);
+
+  static ThemeData highContrastLight({
+    AccentScheme accentScheme = AccentScheme.pink,
+    AppMotion motion = AppMotion.enabled,
+  }) => _resolved(
+    AppColors.forScheme(accentScheme, Brightness.light, highContrast: true),
+    motion,
+  );
+
+  static ThemeData highContrastDark({
+    AccentScheme accentScheme = AccentScheme.pink,
+    AppMotion motion = AppMotion.enabled,
+  }) => _resolved(
+    AppColors.forScheme(accentScheme, Brightness.dark, highContrast: true),
+    motion,
+  );
 
   /// The assembled themes, one per palette and motion setting.
   ///
@@ -55,9 +76,9 @@ abstract final class AppTheme {
   /// rebuild of the whole tree — every time an unrelated setting changed.
   ///
   /// Returning the same instance for the same inputs removes both. The map is
-  /// bounded to the four real combinations (two palettes × two motion
-  /// settings); anything else is assembled fresh rather than cached, so a
-  /// caller inventing its own [AppMotion] can never grow this.
+  /// bounded to the registered accent, brightness, contrast and motion
+  /// combinations. A caller-made [AppMotion] is assembled fresh, so it can
+  /// never grow this cache.
   static final Map<(AppColors, AppMotion), ThemeData> _assembled =
       <(AppColors, AppMotion), ThemeData>{};
 
@@ -115,8 +136,14 @@ abstract final class AppTheme {
 
     final BorderSide hairline = BorderSide(
       color: colors.outline,
-      width: AppSizes.hairline,
+      width: colors.highContrast ? AppSizes.rule : AppSizes.hairline,
     );
+    final double focusWidth = colors.highContrast
+        ? AppSizes.beam
+        : AppSizes.rule;
+    final Color focusRingColor = colors.highContrast
+        ? colors.rule
+        : colors.primary;
     final OutlinedBorder cardShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(metrics.cardRadius),
       side: hairline,
@@ -135,6 +162,9 @@ abstract final class AppTheme {
       fontFamily: AppFonts.ui,
       scaffoldBackgroundColor: colors.background,
       canvasColor: colors.background,
+      focusColor: colors.primary.withValues(
+        alpha: colors.highContrast ? 0.28 : 0.16,
+      ),
       textTheme: text,
       extensions: <ThemeExtension<dynamic>>[colors, metrics, motion, type],
       splashFactory: InkSparkle.splashFactory,
@@ -253,38 +283,63 @@ abstract final class AppTheme {
       ),
 
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
-          disabledBackgroundColor: colors.surfaceVariant,
-          disabledForegroundColor: colors.textSecondary,
-          elevation: 0,
-          minimumSize: const Size(
-            AppSizes.minTouchTarget,
-            AppSizes.minTouchTarget,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          textStyle: text.labelLarge,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-        ),
+        style:
+            FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              disabledBackgroundColor: colors.surfaceVariant,
+              disabledForegroundColor: colors.textSecondary,
+              elevation: 0,
+              minimumSize: const Size(
+                AppSizes.minTouchTarget,
+                AppSizes.minTouchTarget,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              textStyle: text.labelLarge,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+              ),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.focused)
+                    ? BorderSide(color: focusRingColor, width: focusWidth)
+                    : null,
+              ),
+            ),
       ),
 
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colors.primary,
-          side: BorderSide(color: colors.primary, width: AppSizes.hairline),
-          minimumSize: const Size(
-            AppSizes.minTouchTarget,
-            AppSizes.minTouchTarget,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          textStyle: text.labelLarge,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-        ),
+        style:
+            OutlinedButton.styleFrom(
+              foregroundColor: colors.primary,
+              side: BorderSide(
+                color: colors.primary,
+                width: colors.highContrast ? AppSizes.rule : AppSizes.hairline,
+              ),
+              minimumSize: const Size(
+                AppSizes.minTouchTarget,
+                AppSizes.minTouchTarget,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              textStyle: text.labelLarge,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+              ),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (Set<WidgetState> states) => BorderSide(
+                  color: states.contains(WidgetState.focused)
+                      ? focusRingColor
+                      : colors.primary,
+                  width: states.contains(WidgetState.focused)
+                      ? focusWidth
+                      : (colors.highContrast
+                            ? AppSizes.rule
+                            : AppSizes.hairline),
+                ),
+              ),
+            ),
       ),
 
       textButtonTheme: TextButtonThemeData(
@@ -303,16 +358,24 @@ abstract final class AppTheme {
       ),
 
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          foregroundColor: colors.textPrimary,
-          minimumSize: const Size(
-            AppSizes.minTouchTarget,
-            AppSizes.minTouchTarget,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-        ),
+        style:
+            IconButton.styleFrom(
+              foregroundColor: colors.textPrimary,
+              minimumSize: const Size(
+                AppSizes.minTouchTarget,
+                AppSizes.minTouchTarget,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+              ),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.focused)
+                    ? BorderSide(color: focusRingColor, width: focusWidth)
+                    : null,
+              ),
+            ),
       ),
 
       segmentedButtonTheme: SegmentedButtonThemeData(
@@ -349,9 +412,9 @@ abstract final class AppTheme {
         // below, so the two controls read as one family.
         border: fieldBorder(colors.textSecondary, AppSizes.hairline),
         enabledBorder: fieldBorder(colors.textSecondary, AppSizes.hairline),
-        focusedBorder: fieldBorder(colors.primary, AppSizes.rule),
+        focusedBorder: fieldBorder(focusRingColor, focusWidth),
         errorBorder: fieldBorder(colors.error, AppSizes.hairline),
-        focusedErrorBorder: fieldBorder(colors.error, AppSizes.rule),
+        focusedErrorBorder: fieldBorder(colors.error, focusWidth),
       ),
 
       switchTheme: SwitchThemeData(
@@ -368,7 +431,7 @@ abstract final class AppTheme {
         // Off, nothing else distinguishes the control: track
         // (`surfaceVariant`), thumb (`surface`) and the page behind it are all
         // within 1.15:1 of one another, so the outline carries the whole
-        // boundary and owes the same 3:1 as the field border. On, the berry
+        // boundary and owes the same 3:1 as the field border. On, the accent
         // track already carries it and a ring would only add noise.
         trackOutlineColor: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
@@ -433,7 +496,7 @@ abstract final class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: colors.textPrimary,
         contentTextStyle: text.bodyMedium!.copyWith(color: colors.surface),
-        // Not `accent`: the snack bar sits on `textPrimary`, and the berry on
+        // Not `accent`: the snack bar sits on `textPrimary`, and the accent on
         // that ink is 2.9:1 (light) / 2.5:1 (dark) — a button label nobody can
         // read. The container tint keeps the action brand-coloured and clears
         // AA in both palettes; `theme_contrast_test` now asserts the pair, so

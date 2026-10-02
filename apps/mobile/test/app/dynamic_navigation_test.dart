@@ -15,6 +15,8 @@ import 'package:campus_koethen/core/network/api_client.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
 import 'package:campus_koethen/features/news/presentation/news_list_screen.dart';
+import 'package:campus_koethen/features/student_service/presentation/student_service_screen.dart';
+import 'package:campus_koethen/features/timetable/presentation/timetable_screen.dart';
 import 'package:campus_koethen/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -137,6 +139,62 @@ void main() {
     // …and the defaults are gone.
     expect(inBar('Kalender'), findsNothing);
     expect(inBar('Mensa'), findsNothing);
+  });
+
+  testWidgets('a pinned timetable opens its own module branch', (
+    WidgetTester tester,
+  ) async {
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+    await store.setStringList(PreferenceKeys.navigationTabs, <String>[
+      AppModule.timetable.storageValue,
+      AppModule.news.storageValue,
+      AppModule.canteen.storageValue,
+      AppModule.mail.storageValue,
+    ]);
+
+    await pumpApp(
+      tester,
+      store: store,
+      initialLocation: AppRoutes.timetable,
+      settle: false,
+    );
+
+    expect(inBar('Stundenplan'), findsOneWidget);
+    expect(find.byType(TimetableScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<TaktNavigationBar>(find.byType(TaktNavigationBar))
+          .selectedIndex,
+      0,
+    );
+  });
+
+  testWidgets('a pinned student service opens its own module branch', (
+    WidgetTester tester,
+  ) async {
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+    await store.setStringList(PreferenceKeys.navigationTabs, <String>[
+      AppModule.studentService.storageValue,
+      AppModule.news.storageValue,
+      AppModule.canteen.storageValue,
+      AppModule.mail.storageValue,
+    ]);
+
+    await pumpApp(
+      tester,
+      store: store,
+      initialLocation: AppRoutes.studentService,
+      settle: false,
+    );
+
+    expect(inBar('HISinOne'), findsOneWidget);
+    expect(find.byType(StudentServiceScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<TaktNavigationBar>(find.byType(TaktNavigationBar))
+          .selectedIndex,
+      0,
+    );
   });
 
   testWidgets('a corrupted configuration still yields a usable bar', (

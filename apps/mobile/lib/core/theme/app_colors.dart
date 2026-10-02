@@ -3,6 +3,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'appearance_preferences.dart';
+
 /// Central, typed colour tokens of the app.
 ///
 /// This is the **only** place in the code base that is allowed to contain
@@ -19,7 +21,8 @@ import 'package:flutter/material.dart';
 ///   [surface] is the sheet lying on it. Depth is the difference between those
 ///   two values plus a hairline, never a shadow.
 /// * **Tinte** — warm near-black text and rules.
-/// * **Beere** — the primary brand colour for actions, links and active state.
+/// * **Akzent** — the selected colour family for actions, links and active
+///   state. Pink is the compatible default, not a brightness setting.
 /// * **Himmel** — the quiet secondary surface for information and selection.
 ///
 /// ## Light palette — "Papier"
@@ -32,12 +35,12 @@ import 'package:flutter/material.dart';
 /// ## Dark palette — "Nachtdruck"
 ///
 /// The dark palette is **not** a mechanical inversion. It keeps the warmth of
-/// the light one. Both palettes use the fixed berry brand family and warm,
-/// slightly rosy neutrals from the supplied design:
+/// the light one. Every accent family uses the same warm, slightly rosy
+/// neutrals from the supplied design:
 ///
 /// * `background` and `surface` form a two-step elevation
 ///   system. Elevation is expressed by lighter surfaces, never by shadows only.
-/// * `primary` and `accent` represent the fixed berry brand/active colour.
+/// * `primary` and `accent` represent the selected active colour.
 /// * `surfaceVariant` carries the pale-sky supporting colour family.
 /// * `success` and `error` are lightened so that both clear 4.5:1 on
 ///   `background` and on `surface`.
@@ -49,6 +52,7 @@ import 'package:flutter/material.dart';
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.brightness,
+    this.highContrast = false,
     required this.primary,
     required this.onPrimary,
     required this.primaryDark,
@@ -73,6 +77,9 @@ class AppColors extends ThemeExtension<AppColors> {
   });
 
   final Brightness brightness;
+
+  /// Whether this token set is the platform-requested stronger variant.
+  final bool highContrast;
 
   /// Primary brand colour. Carries [onPrimary] when used as a fill.
   final Color primary;
@@ -200,9 +207,135 @@ class AppColors extends ThemeExtension<AppColors> {
     onError: Color(0xFF1B1418),
   );
 
+  /// Green accent on the same warm neutral light materials.
+  static final AppColors greenLight = light.copyWith(
+    primary: const Color(0xFF176B48),
+    primaryDark: const Color(0xFF0E5035),
+    primaryContainer: const Color(0xFFD7F3E4),
+    onPrimaryContainer: const Color(0xFF0E5035),
+    accent: const Color(0xFF176B48),
+  );
+
+  /// Green accent for the dark material.
+  static final AppColors greenDark = dark.copyWith(
+    primary: const Color(0xFF71D6A5),
+    primaryDark: const Color(0xFFB4F0D1),
+    primaryContainer: const Color(0xFF174C35),
+    onPrimaryContainer: const Color(0xFFB4F0D1),
+    accent: const Color(0xFF71D6A5),
+  );
+
+  /// Blue accent on the same warm neutral light materials.
+  static final AppColors blueLight = light.copyWith(
+    primary: const Color(0xFF1769A6),
+    primaryDark: const Color(0xFF0D4E7D),
+    primaryContainer: const Color(0xFFDCEEFF),
+    onPrimaryContainer: const Color(0xFF0D4E7D),
+    accent: const Color(0xFF1769A6),
+  );
+
+  /// Blue accent for the dark material.
+  static final AppColors blueDark = dark.copyWith(
+    primary: const Color(0xFF75BFFF),
+    primaryDark: const Color(0xFFBBDFFF),
+    primaryContainer: const Color(0xFF173D5D),
+    onPrimaryContainer: const Color(0xFFBBDFFF),
+    accent: const Color(0xFF75BFFF),
+  );
+
+  /// Violet accent on the same warm neutral light materials.
+  static final AppColors violetLight = light.copyWith(
+    primary: const Color(0xFF6843B5),
+    primaryDark: const Color(0xFF4E318A),
+    primaryContainer: const Color(0xFFEEE5FF),
+    onPrimaryContainer: const Color(0xFF4E318A),
+    accent: const Color(0xFF6843B5),
+  );
+
+  /// Violet accent for the dark material.
+  static final AppColors violetDark = dark.copyWith(
+    primary: const Color(0xFFC4A7FF),
+    primaryDark: const Color(0xFFE0D1FF),
+    primaryContainer: const Color(0xFF432F69),
+    onPrimaryContainer: const Color(0xFFE0D1FF),
+    accent: const Color(0xFFC4A7FF),
+  );
+
+  /// Amber is deliberately ochre in light mode so white button copy still
+  /// clears 4.5:1; the usual bright yellow is reserved for the dark variant.
+  static final AppColors amberLight = light.copyWith(
+    primary: const Color(0xFF7A4B00),
+    primaryDark: const Color(0xFF5A3600),
+    primaryContainer: const Color(0xFFFFE9B5),
+    onPrimaryContainer: const Color(0xFF5A3600),
+    accent: const Color(0xFF7A4B00),
+  );
+
+  /// Amber accent for the dark material.
+  static final AppColors amberDark = dark.copyWith(
+    primary: const Color(0xFFF4B942),
+    primaryDark: const Color(0xFFFFD98A),
+    primaryContainer: const Color(0xFF4D3510),
+    onPrimaryContainer: const Color(0xFFFFD98A),
+    accent: const Color(0xFFF4B942),
+  );
+
+  static final AppColors _pinkLightHigh = _asHighContrast(light);
+  static final AppColors _pinkDarkHigh = _asHighContrast(dark);
+  static final AppColors _greenLightHigh = _asHighContrast(greenLight);
+  static final AppColors _greenDarkHigh = _asHighContrast(greenDark);
+  static final AppColors _blueLightHigh = _asHighContrast(blueLight);
+  static final AppColors _blueDarkHigh = _asHighContrast(blueDark);
+  static final AppColors _violetLightHigh = _asHighContrast(violetLight);
+  static final AppColors _violetDarkHigh = _asHighContrast(violetDark);
+  static final AppColors _amberLightHigh = _asHighContrast(amberLight);
+  static final AppColors _amberDarkHigh = _asHighContrast(amberDark);
+
+  /// Returns one of the twenty registered, stable token sets.
+  static AppColors forScheme(
+    AccentScheme accent,
+    Brightness brightness, {
+    bool highContrast = false,
+  }) {
+    if (highContrast) {
+      return switch ((accent, brightness)) {
+        (AccentScheme.pink, Brightness.light) => _pinkLightHigh,
+        (AccentScheme.pink, Brightness.dark) => _pinkDarkHigh,
+        (AccentScheme.green, Brightness.light) => _greenLightHigh,
+        (AccentScheme.green, Brightness.dark) => _greenDarkHigh,
+        (AccentScheme.blue, Brightness.light) => _blueLightHigh,
+        (AccentScheme.blue, Brightness.dark) => _blueDarkHigh,
+        (AccentScheme.violet, Brightness.light) => _violetLightHigh,
+        (AccentScheme.violet, Brightness.dark) => _violetDarkHigh,
+        (AccentScheme.amber, Brightness.light) => _amberLightHigh,
+        (AccentScheme.amber, Brightness.dark) => _amberDarkHigh,
+      };
+    }
+    return switch ((accent, brightness)) {
+      (AccentScheme.pink, Brightness.light) => light,
+      (AccentScheme.pink, Brightness.dark) => dark,
+      (AccentScheme.green, Brightness.light) => greenLight,
+      (AccentScheme.green, Brightness.dark) => greenDark,
+      (AccentScheme.blue, Brightness.light) => blueLight,
+      (AccentScheme.blue, Brightness.dark) => blueDark,
+      (AccentScheme.violet, Brightness.light) => violetLight,
+      (AccentScheme.violet, Brightness.dark) => violetDark,
+      (AccentScheme.amber, Brightness.light) => amberLight,
+      (AccentScheme.amber, Brightness.dark) => amberDark,
+    };
+  }
+
+  static AppColors _asHighContrast(AppColors base) => base.copyWith(
+    highContrast: true,
+    // Standard outlines are decorative. In the stronger variant every
+    // outline becomes a perceivable 3:1 component boundary.
+    outline: base.textSecondary,
+  );
+
   @override
   AppColors copyWith({
     Brightness? brightness,
+    bool? highContrast,
     Color? primary,
     Color? onPrimary,
     Color? primaryDark,
@@ -227,6 +360,7 @@ class AppColors extends ThemeExtension<AppColors> {
   }) {
     return AppColors(
       brightness: brightness ?? this.brightness,
+      highContrast: highContrast ?? this.highContrast,
       primary: primary ?? this.primary,
       onPrimary: onPrimary ?? this.onPrimary,
       primaryDark: primaryDark ?? this.primaryDark,
@@ -257,6 +391,7 @@ class AppColors extends ThemeExtension<AppColors> {
     Color mix(Color a, Color b) => Color.lerp(a, b, t) ?? a;
     return AppColors(
       brightness: t < 0.5 ? brightness : other.brightness,
+      highContrast: t < 0.5 ? highContrast : other.highContrast,
       primary: mix(primary, other.primary),
       onPrimary: mix(onPrimary, other.onPrimary),
       primaryDark: mix(primaryDark, other.primaryDark),

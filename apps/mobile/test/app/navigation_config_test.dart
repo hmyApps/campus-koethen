@@ -33,6 +33,19 @@ void main() {
       ]);
     });
 
+    test('the timetable storage id remains pinnable after an upgrade', () {
+      final NavigationConfig config = NavigationConfig.fromStorage(<String>[
+        'timetable',
+        'news',
+        'canteen',
+        'mail',
+      ]);
+
+      expect(config.tabs.first, AppModule.timetable);
+      expect(config.toStorage().first, 'timetable');
+      expect(config.isValid, isTrue);
+    });
+
     test('unknown ids are dropped, not fatal', () {
       // A module removed in a later version, or a hand-edited preference.
       final NavigationConfig config = NavigationConfig.fromStorage(<String>[

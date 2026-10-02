@@ -115,6 +115,9 @@ abstract final class AppIcons {
   static const IconData message_2 = TablerIcons.message_2;
   static const IconData more_horiz = TablerIcons.dots;
   static const IconData motion_photos_off_outlined = TablerIcons.circle_off;
+  static const IconData nfc = TablerIcons.nfc;
+  static const IconData nfc_off = TablerIcons.nfc_off;
+  static const IconData currency_euro = TablerIcons.currency_euro;
   static const IconData no_meals_outlined = TablerIcons.tools_kitchen_2_off;
   static const IconData notifications_active_outlined = TablerIcons.bell_check;
   static const IconData notifications_off_outlined = TablerIcons.bell_off;

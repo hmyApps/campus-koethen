@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_modules.dart';
 import '../../app/navigation_config.dart';
 import '../locale/locale_mode.dart';
+import '../theme/appearance_preferences.dart';
 import 'key_value_store.dart';
 import 'preference_keys.dart';
 
@@ -14,7 +15,8 @@ import 'preference_keys.dart';
 class AppSettings {
   const AppSettings({
     this.localeMode = LocaleMode.german,
-    this.themeMode = ThemeMode.light,
+    this.brightnessPreference = BrightnessPreference.system,
+    this.accentScheme = AccentScheme.pink,
     this.reducedMotion = false,
     this.navigation = NavigationConfig.defaults,
     this.preferredCanteenSlug,
@@ -25,7 +27,12 @@ class AppSettings {
   });
 
   final LocaleMode localeMode;
-  final ThemeMode themeMode;
+  final BrightnessPreference brightnessPreference;
+  final AccentScheme accentScheme;
+
+  /// Material consumes [ThemeMode], while storage and UI use the explicit
+  /// product vocabulary above. In particular, `system` stays `system`.
+  ThemeMode get themeMode => brightnessPreference.themeMode;
 
   /// The **local** reduced-motion wish. The operating system's own setting is
   /// honoured separately, so this being false does not mean "animate".
@@ -53,7 +60,8 @@ class AppSettings {
 
   AppSettings copyWith({
     LocaleMode? localeMode,
-    ThemeMode? themeMode,
+    BrightnessPreference? brightnessPreference,
+    AccentScheme? accentScheme,
     bool? reducedMotion,
     NavigationConfig? navigation,
     String? preferredCanteenSlug,
@@ -67,7 +75,8 @@ class AppSettings {
   }) {
     return AppSettings(
       localeMode: localeMode ?? this.localeMode,
-      themeMode: themeMode ?? this.themeMode,
+      brightnessPreference: brightnessPreference ?? this.brightnessPreference,
+      accentScheme: accentScheme ?? this.accentScheme,
       reducedMotion: reducedMotion ?? this.reducedMotion,
       navigation: navigation ?? this.navigation,
       defaultBuildingKey: clearDefaultBuilding
@@ -114,8 +123,12 @@ class SettingsController extends Notifier<AppSettings> {
       localeMode: LocaleMode.fromStorage(
         store.getString(PreferenceKeys.localeMode),
       ),
-      themeMode: _themeModeFromStorage(
-        store.getString(PreferenceKeys.themeMode),
+      brightnessPreference: BrightnessPreference.fromStorage(
+        store.getString(PreferenceKeys.brightnessPreference) ??
+            store.getString(PreferenceKeys.legacyThemeMode),
+      ),
+      accentScheme: AccentScheme.fromStorage(
+        store.getString(PreferenceKeys.accentScheme),
       ),
       reducedMotion: store.getInt(PreferenceKeys.reducedMotion) == 1,
       navigation: NavigationConfig.fromStorage(
@@ -136,9 +149,20 @@ class SettingsController extends Notifier<AppSettings> {
     await _store.setString(PreferenceKeys.localeMode, mode.storageValue);
   }
 
-  Future<void> setThemeMode(ThemeMode mode) async {
-    state = state.copyWith(themeMode: mode);
-    await _store.setString(PreferenceKeys.themeMode, _themeModeToStorage(mode));
+  Future<void> setBrightnessPreference(BrightnessPreference preference) async {
+    state = state.copyWith(brightnessPreference: preference);
+    await _store.setString(
+      PreferenceKeys.brightnessPreference,
+      preference.storageValue,
+    );
+    // Once the v2 value exists it wins on every read. Removing the old value
+    // avoids leaving two apparently active sources in a preferences export.
+    await _store.remove(PreferenceKeys.legacyThemeMode);
+  }
+
+  Future<void> setAccentScheme(AccentScheme scheme) async {
+    state = state.copyWith(accentScheme: scheme);
+    await _store.setString(PreferenceKeys.accentScheme, scheme.storageValue);
   }
 
   Future<void> setPreferredCanteen(String? slug) async {
@@ -215,7 +239,9 @@ class SettingsController extends Notifier<AppSettings> {
     bool complete = true;
     for (final String key in <String>[
       PreferenceKeys.localeMode,
-      PreferenceKeys.themeMode,
+      PreferenceKeys.brightnessPreference,
+      PreferenceKeys.legacyThemeMode,
+      PreferenceKeys.accentScheme,
       PreferenceKeys.reducedMotion,
       PreferenceKeys.navigationTabs,
       PreferenceKeys.preferredCanteen,
@@ -245,18 +271,6 @@ class SettingsController extends Notifier<AppSettings> {
       enabled ? 1 : 0,
     );
   }
-
-  static ThemeMode _themeModeFromStorage(String? value) => switch (value) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.light,
-  };
-
-  static String _themeModeToStorage(ThemeMode mode) => switch (mode) {
-    ThemeMode.light => 'light',
-    ThemeMode.dark => 'dark',
-    ThemeMode.system => 'light',
-  };
 }
 
 final NotifierProvider<SettingsController, AppSettings> settingsProvider =

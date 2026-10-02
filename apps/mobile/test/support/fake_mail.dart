@@ -130,6 +130,7 @@ class FakeMailGateway implements MailGateway {
   final List<String> fetchedMailboxes = <String>[];
   String? lastFetchHeadersBeforeId;
   int? lastFetchHeadersLimit;
+  List<String> lastFetchMessageIds = <String>[];
   final List<OutgoingMessage> sent = <OutgoingMessage>[];
   final List<OutgoingMessage> appended = <OutgoingMessage>[];
 
@@ -212,6 +213,7 @@ class FakeMailGateway implements MailGateway {
     bool includeAttachmentBytes = false,
   }) async {
     lastIncludeAttachmentBytes = includeAttachmentBytes;
+    lastFetchMessageIds = List<String>.of(ids);
     return ids
         .map((String id) => detailsById[id])
         .whereType<MailMessageDetail>()
@@ -261,6 +263,7 @@ class FakePickedMailFile implements PickedMailFile {
     required this.mediaType,
     required Uint8List bytes,
     this.readError,
+    this.reportedSizeBytes,
     // The public parameter is named `bytes` for a readable call site, so it
     // cannot be an initializing formal for the private `_bytes` field (that
     // would force callers to write the private name).
@@ -275,16 +278,24 @@ class FakePickedMailFile implements PickedMailFile {
 
   /// When set, [readBytes] throws this instead of returning the bytes.
   final Object? readError;
+  final int? reportedSizeBytes;
 
   int readCalls = 0;
 
   @override
-  Future<int?> sizeBytes() async => _bytes.length;
+  Future<int?> sizeBytes() async => reportedSizeBytes ?? _bytes.length;
 
   @override
-  Future<Uint8List> readBytes() async {
+  Future<Uint8List> readBytes({
+    int maxBytes = MailAttachmentLimits.maxFileBytes,
+  }) async {
     readCalls++;
     if (readError != null) throw readError!;
+    if (_bytes.length > maxBytes) {
+      throw const MailAttachmentLimitException(
+        MailAttachmentBudgetIssue.fileTooLarge,
+      );
+    }
     return _bytes;
   }
 }

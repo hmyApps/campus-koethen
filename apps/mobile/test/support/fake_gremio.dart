@@ -123,7 +123,7 @@ Dio fakeGremioDio(FakeGremioAdapter adapter) {
 }
 
 /// An [AttachmentStore] that keeps bytes in a map.
-class FakeAttachmentStore implements AttachmentStore {
+class FakeAttachmentStore implements AttachmentStore, StreamingAttachmentStore {
   bool wipeSucceeds = true;
   int wipes = 0;
 
@@ -136,6 +136,7 @@ class FakeAttachmentStore implements AttachmentStore {
 
   final Map<String, Uint8List> entries = <String, Uint8List>{};
   int _next = 0;
+  int wholeFileReads = 0;
 
   @override
   Future<RequestAttachment?> put(String fileName, Uint8List bytes) async {
@@ -149,8 +150,37 @@ class FakeAttachmentStore implements AttachmentStore {
   }
 
   @override
-  Future<Uint8List?> read(RequestAttachment attachment) async =>
-      entries[attachment.path];
+  Future<Uint8List?> read(RequestAttachment attachment) async {
+    wholeFileReads++;
+    return entries[attachment.path];
+  }
+
+  @override
+  Future<RequestAttachment?> putStream(
+    String fileName,
+    int expectedLength,
+    Stream<List<int>> bytes,
+  ) async {
+    final BytesBuilder builder = BytesBuilder(copy: false);
+    await for (final List<int> chunk in bytes) {
+      builder.add(chunk);
+    }
+    final Uint8List materialized = builder.takeBytes();
+    if (materialized.length != expectedLength) {
+      throw const AttachmentLimitExceeded();
+    }
+    return put(fileName, materialized);
+  }
+
+  @override
+  Future<StoredAttachmentStream?> openRead(RequestAttachment attachment) async {
+    final Uint8List? bytes = entries[attachment.path];
+    if (bytes == null) return null;
+    return StoredAttachmentStream(
+      length: bytes.length,
+      open: () => Stream<List<int>>.value(bytes),
+    );
+  }
 
   @override
   Future<void> delete(RequestAttachment attachment) async =>

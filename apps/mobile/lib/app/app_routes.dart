@@ -19,9 +19,13 @@ abstract final class AppRoutes {
   static const String newsEventsName = 'news-events';
   static const String newsEventsPath = 'events';
 
-  /// The second top-level destination is the cross-source calendar. The
-  /// timetable is no longer a tab of its own — it is the calendar's first source.
+  /// The cross-source calendar combines timetable, public calendars and
+  /// Moodle deadlines locally on the device.
   static const String calendar = '/calendar';
+
+  /// Focused, pinnable timetable module. It shares its data providers and
+  /// selected course group with the timetable source in [calendar].
+  static const String timetable = '/timetable';
 
   /// "Manage calendars" (Y-of-X public calendar selection + Google buttons).
   static const String calendarManagePath = 'manage';
@@ -30,6 +34,20 @@ abstract final class AppRoutes {
   static const String canteen = '/canteen';
   static const String canteenFavouritesPath = 'favourites';
   static const String canteenFavourites = '/canteen/favourites';
+
+  /// Non-sensitive Android NFC dispatch marker. It contains neither a card
+  /// identifier nor a balance; the changing launch token merely retriggers
+  /// the sheet when two tags arrive while the canteen route is already open.
+  static const String canteenBalanceParam = 'balance';
+  static const String canteenBalanceLaunchParam = 'launch';
+
+  static String canteenExternalBalanceLocation(int launch) => Uri(
+    path: canteen,
+    queryParameters: <String, String>{
+      canteenBalanceParam: 'external',
+      canteenBalanceLaunchParam: '$launch',
+    },
+  ).toString();
 
   static const String contacts = '/contacts';
   static const String contactAreaName = 'contact-area';
@@ -48,6 +66,11 @@ abstract final class AppRoutes {
 
   // Student grades (HIS-QIS), nested under More.
   static const String grades = '/more/grades';
+
+  /// Read-only HISinOne functions (Bescheinigungen, Personen-/Kontaktdaten,
+  /// Studiengangsübersicht). Rides on the grades connection — no sign-in of
+  /// its own, see `AGENTS.md` §2.
+  static const String studentService = '/more/student-service';
 
   // Moodle (direct integration), nested under More.
   static const String moodle = '/more/moodle';

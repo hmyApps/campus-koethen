@@ -25,7 +25,15 @@ class CachedEndpoint {
     required T Function(Object? data) parse,
     Map<String, Object?> query = const <String, Object?>{},
     String? locale,
+
+    /// Whether a network failure may read the document stored at [cacheKey].
     bool allowCacheFallback = true,
+
+    /// Whether a successful network response may replace [cacheKey].
+    ///
+    /// This is intentionally independent from [allowCacheFallback]: callers
+    /// such as paginated feeds can disable both for every page after page one.
+    bool writeToCache = true,
     Duration? freshFor,
   }) async {
     if (freshFor != null) {
@@ -55,7 +63,7 @@ class CachedEndpoint {
       );
       // Storing is best effort and happens *after* the value was parsed, so a
       // failing cache can never turn a good network response into an error.
-      await _writeCache(cacheKey, response);
+      if (writeToCache) await _writeCache(cacheKey, response);
       return loaded;
     } catch (error) {
       if (!allowCacheFallback) rethrow;

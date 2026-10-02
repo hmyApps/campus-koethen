@@ -9,8 +9,14 @@ abstract final class PreferenceKeys {
   /// `system` | `de` | `en`
   static const String localeMode = 'settings.localeMode.v1';
 
-  /// `light` | `dark`. Legacy `system` values migrate to `light`.
-  static const String themeMode = 'settings.themeMode.v1';
+  /// `system` | `light` | `dark`.
+  static const String brightnessPreference = 'settings.brightness.v2';
+
+  /// Old brightness key read only as a migration source.
+  static const String legacyThemeMode = 'settings.themeMode.v1';
+
+  /// `pink` | `green` | `blue` | `violet` | `amber`.
+  static const String accentScheme = 'settings.accent.v1';
 
   /// Canteen slug, or absent when the user has not chosen one yet.
   static const String preferredCanteen = 'settings.preferredCanteen.v1';
@@ -28,6 +34,13 @@ abstract final class PreferenceKeys {
   /// `1` when lessons without a lesson information text are hidden.
   static String timetableLessonInfoWithoutHidden(String groupId) =>
       'timetable.lessonInfo.withoutHidden.v1.$groupId';
+
+  /// Exact course titles (`TimetableEntry.displayTitle`) hidden for one Campus
+  /// group — distinct from [timetableLessonInfoDisabled], which filters by the
+  /// lesson-info remark, not by the course itself. A newly appearing course is
+  /// always visible by default.
+  static String timetableHiddenCourses(String groupId) =>
+      'timetable.courses.hidden.v1.$groupId';
 
   /// Schema version of the news channel subscription store.
   static const String channelStoreVersion = 'news.channels.version';
@@ -147,6 +160,11 @@ abstract final class PreferenceKeys {
   /// classic calendar sources every install starts with.
   static const String calendarSavedEventsEnabled =
       'calendar.savedEvents.enabled.v1';
+
+  /// `1` while the preferred canteen's favourited dishes appear on the
+  /// calendar. Off by default, same reasoning as [calendarSavedEventsEnabled].
+  static const String calendarShowFavouriteMeals =
+      'calendar.favouriteMeals.enabled.v1';
 
   // --- Local notifications (device-only, no registration) -----------------
   //

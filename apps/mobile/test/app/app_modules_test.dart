@@ -49,9 +49,11 @@ void main() {
     test('the categories hold what the product defines', () {
       expect(AppModule.inCategory(ModuleCategory.study), <AppModule>[
         AppModule.calendar,
+        AppModule.timetable,
         AppModule.mail,
         AppModule.moodle,
         AppModule.grades,
+        AppModule.studentService,
         AppModule.todos,
       ]);
       expect(AppModule.inCategory(ModuleCategory.campus), <AppModule>[
@@ -82,7 +84,7 @@ void main() {
       expect(AppModule.settings.pinnable, isFalse);
       expect(AppModule.about.pinnable, isFalse);
       expect(AppModule.pinnableModules, isNot(contains(AppModule.settings)));
-      expect(AppModule.pinnableModules, hasLength(10));
+      expect(AppModule.pinnableModules, hasLength(12));
     });
 
     test('the pinnable modules are the leading values of the enum', () {
@@ -116,8 +118,10 @@ void main() {
           NavigationConfig.defaults.moreEntries;
 
       expect(modulesUnder(entries, ModuleCategory.study), <AppModule>[
+        AppModule.timetable,
         AppModule.moodle,
         AppModule.grades,
+        AppModule.studentService,
         AppModule.todos,
       ]);
       expect(modulesUnder(entries, ModuleCategory.campus), <AppModule>[

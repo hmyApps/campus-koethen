@@ -504,7 +504,14 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(tester.getSize(find.byType(BrandMark)), const Size(40, 40));
-      expect(find.image(const AssetImage(BrandAssets.icon)), findsOneWidget);
+      final Image image = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(BrandMark),
+          matching: find.byType(Image),
+        ),
+      );
+      final ResizeImage provider = image.image as ResizeImage;
+      expect(provider.imageProvider, const AssetImage(BrandAssets.icon));
     });
 
     testWidgets('renders the binding logo with one accessible app name', (
@@ -516,7 +523,14 @@ void main() {
       );
 
       expect(find.bySemanticsLabel('Campus Köthen'), findsOneWidget);
-      expect(find.image(const AssetImage(BrandAssets.logo)), findsOneWidget);
+      final Image image = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(BrandWordmark),
+          matching: find.byType(Image),
+        ),
+      );
+      final ResizeImage provider = image.image as ResizeImage;
+      expect(provider.imageProvider, const AssetImage(BrandAssets.logo));
       expect(find.text('CAMPUS'), findsNothing);
       expect(find.text('Köthen'), findsNothing);
     });

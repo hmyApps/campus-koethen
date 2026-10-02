@@ -11,6 +11,19 @@ import '../theme/app_dimensions.dart';
 abstract final class BrandAssets {
   static const String icon = 'assets/branding/campus-koethen-icon.png';
   static const String logo = 'assets/branding/campus-koethen-logo.png';
+
+  static const int iconPixelWidth = 1024;
+  static const int logoPixelWidth = 1672;
+  static const int logoPixelHeight = 941;
+}
+
+int _decodeWidth(
+  BuildContext context,
+  double logicalWidth,
+  int sourcePixelWidth,
+) {
+  final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+  return (logicalWidth * devicePixelRatio).ceil().clamp(1, sourcePixelWidth);
 }
 
 /// The binding Campus Köthen courtyard-and-meeting icon.
@@ -37,6 +50,11 @@ class BrandMark extends StatelessWidget {
                 BrandAssets.icon,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
+                cacheWidth: _decodeWidth(
+                  context,
+                  size,
+                  BrandAssets.iconPixelWidth,
+                ),
               ),
             ),
           ),
@@ -67,11 +85,17 @@ class BrandWordmark extends StatelessWidget {
             child: SizedBox(
               width: width,
               child: AspectRatio(
-                aspectRatio: 1672 / 941,
+                aspectRatio:
+                    BrandAssets.logoPixelWidth / BrandAssets.logoPixelHeight,
                 child: Image.asset(
                   BrandAssets.logo,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
+                  cacheWidth: _decodeWidth(
+                    context,
+                    width,
+                    BrandAssets.logoPixelWidth,
+                  ),
                 ),
               ),
             ),

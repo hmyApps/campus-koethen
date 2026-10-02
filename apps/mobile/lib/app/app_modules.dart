@@ -47,11 +47,19 @@ enum AppModule {
     icon: AppIcons.calendar_month_outlined,
     selectedIcon: AppIcons.calendar_month,
   ),
+  timetable(
+    storageValue: 'timetable',
+    route: AppRoutes.timetable,
+    category: ModuleCategory.study,
+    sortOrder: 2,
+    icon: AppIcons.schedule_outlined,
+    selectedIcon: AppIcons.schedule_outlined,
+  ),
   mail(
     storageValue: 'mail',
     route: AppRoutes.mail,
     category: ModuleCategory.study,
-    sortOrder: 2,
+    sortOrder: 3,
     icon: AppIcons.mail_outline,
     selectedIcon: AppIcons.mail,
   ),
@@ -59,7 +67,7 @@ enum AppModule {
     storageValue: 'moodle',
     route: AppRoutes.moodle,
     category: ModuleCategory.study,
-    sortOrder: 3,
+    sortOrder: 4,
     icon: AppIcons.book_outlined,
     selectedIcon: AppIcons.book_outlined,
   ),
@@ -67,15 +75,23 @@ enum AppModule {
     storageValue: 'grades',
     route: AppRoutes.grades,
     category: ModuleCategory.study,
-    sortOrder: 4,
+    sortOrder: 5,
     icon: AppIcons.grade_outlined,
     selectedIcon: AppIcons.grade_outlined,
+  ),
+  studentService(
+    storageValue: 'studentService',
+    route: AppRoutes.studentService,
+    category: ModuleCategory.study,
+    sortOrder: 6,
+    icon: AppIcons.badge_outlined,
+    selectedIcon: AppIcons.badge_outlined,
   ),
   todos(
     storageValue: 'todos',
     route: AppRoutes.todos,
     category: ModuleCategory.study,
-    sortOrder: 5,
+    sortOrder: 7,
     icon: AppIcons.checklist_outlined,
     selectedIcon: AppIcons.checklist,
   ),
@@ -172,9 +188,11 @@ enum AppModule {
   /// The module's full name, as used on its own screen and in lists.
   String title(AppLocalizations l10n) => switch (this) {
     AppModule.calendar => l10n.navCalendar,
+    AppModule.timetable => l10n.timetableTitle,
     AppModule.mail => l10n.mailTitle,
     AppModule.moodle => l10n.moodleTitle,
     AppModule.grades => l10n.gradesTitle,
+    AppModule.studentService => l10n.studentServiceTitle,
     AppModule.todos => l10n.todosTitle,
     AppModule.news => l10n.navNews,
     AppModule.canteen => l10n.navCanteen,
@@ -198,8 +216,10 @@ enum AppModule {
 
   /// One line explaining the module, or `null` where the name says it all.
   String? subtitle(AppLocalizations l10n) => switch (this) {
+    AppModule.timetable => l10n.moreTimetableSubtitle,
     AppModule.mail => l10n.moreMailSubtitle,
     AppModule.grades => l10n.moreGradesSubtitle,
+    AppModule.studentService => l10n.moreStudentServiceSubtitle,
     AppModule.moodle => l10n.moreMoodleSubtitle,
     AppModule.todos => l10n.moreTodosSubtitle,
     AppModule.campusMap => l10n.moreCampusMapSubtitle,
@@ -212,7 +232,10 @@ enum AppModule {
   ///
   /// A property of the module itself, so no caller has to remember the list.
   bool get isPersonalService => switch (this) {
-    AppModule.mail || AppModule.grades || AppModule.moodle => true,
+    AppModule.mail ||
+    AppModule.grades ||
+    AppModule.studentService ||
+    AppModule.moodle => true,
     _ => false,
   };
 

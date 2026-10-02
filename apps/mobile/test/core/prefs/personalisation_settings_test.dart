@@ -7,6 +7,7 @@ import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
+import 'package:campus_koethen/core/theme/appearance_preferences.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -27,7 +28,9 @@ void main() {
         InMemoryKeyValueStore(),
       ).read(settingsProvider);
 
-      expect(settings.themeMode, ThemeMode.light);
+      expect(settings.themeMode, ThemeMode.system);
+      expect(settings.brightnessPreference, BrightnessPreference.system);
+      expect(settings.accentScheme, AccentScheme.pink);
       expect(settings.localeMode, LocaleMode.german);
       expect(settings.reducedMotion, isFalse);
       expect(settings.navigation, NavigationConfig.defaults);
@@ -43,16 +46,46 @@ void main() {
       'a corrupted store degrades to defaults instead of throwing',
       () async {
         final InMemoryKeyValueStore store = InMemoryKeyValueStore();
-        await store.setString(PreferenceKeys.themeMode, 'system');
+        await store.setString(PreferenceKeys.brightnessPreference, 'neon');
+        await store.setString(PreferenceKeys.accentScheme, 'infrared');
         await store.setStringList(PreferenceKeys.navigationTabs, <String>[
           'nope',
         ]);
 
         final AppSettings settings = _container(store).read(settingsProvider);
-        expect(settings.themeMode, ThemeMode.light);
+        expect(settings.brightnessPreference, BrightnessPreference.system);
+        expect(settings.accentScheme, AccentScheme.pink);
         expect(settings.navigation.isValid, isTrue);
       },
     );
+
+    for (final BrightnessPreference preference in BrightnessPreference.values) {
+      test(
+        'legacy ${preference.storageValue} brightness is preserved',
+        () async {
+          final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+          await store.setString(
+            PreferenceKeys.legacyThemeMode,
+            preference.storageValue,
+          );
+
+          final AppSettings settings = _container(store).read(settingsProvider);
+
+          expect(settings.brightnessPreference, preference);
+          expect(settings.themeMode, preference.themeMode);
+          expect(settings.accentScheme, AccentScheme.pink);
+        },
+      );
+    }
+
+    for (final AccentScheme accent in AccentScheme.values) {
+      test('stored ${accent.storageValue} accent is preserved', () async {
+        final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+        await store.setString(PreferenceKeys.accentScheme, accent.storageValue);
+
+        expect(_container(store).read(settingsProvider).accentScheme, accent);
+      });
+    }
 
     test('the removed system-language preference migrates to German', () async {
       final InMemoryKeyValueStore store = InMemoryKeyValueStore();
@@ -77,7 +110,8 @@ void main() {
       );
 
       await controller.setLocaleMode(LocaleMode.english);
-      await controller.setThemeMode(ThemeMode.dark);
+      await controller.setBrightnessPreference(BrightnessPreference.system);
+      await controller.setAccentScheme(AccentScheme.green);
       await controller.setReducedMotion(true);
       await controller.setDefaultBuilding('ratke-gebaeude');
       await controller.setOnboardingCompleted(true);
@@ -91,7 +125,9 @@ void main() {
       // The live state is updated…
       final AppSettings live = container.read(settingsProvider);
       expect(live.localeMode, LocaleMode.english);
-      expect(live.themeMode, ThemeMode.dark);
+      expect(live.brightnessPreference, BrightnessPreference.system);
+      expect(live.themeMode, ThemeMode.system);
+      expect(live.accentScheme, AccentScheme.green);
       expect(live.reducedMotion, isTrue);
       expect(live.defaultBuildingKey, 'ratke-gebaeude');
       expect(live.onboardingCompleted, isTrue);
@@ -105,7 +141,17 @@ void main() {
       // …and so is the store, so a restart keeps the choice.
       final AppSettings reloaded = _container(store).read(settingsProvider);
       expect(reloaded.localeMode, LocaleMode.english);
-      expect(reloaded.themeMode, ThemeMode.dark);
+      expect(reloaded.brightnessPreference, BrightnessPreference.system);
+      expect(reloaded.themeMode, ThemeMode.system);
+      expect(reloaded.accentScheme, AccentScheme.green);
+      expect(
+        store.getString(PreferenceKeys.brightnessPreference),
+        BrightnessPreference.system.storageValue,
+      );
+      expect(
+        store.getString(PreferenceKeys.accentScheme),
+        AccentScheme.green.storageValue,
+      );
       expect(reloaded.reducedMotion, isTrue);
       expect(reloaded.defaultBuildingKey, 'ratke-gebaeude');
       expect(reloaded.onboardingCompleted, isTrue);
@@ -160,7 +206,8 @@ void main() {
         settingsProvider.notifier,
       );
 
-      await controller.setThemeMode(ThemeMode.dark);
+      await controller.setBrightnessPreference(BrightnessPreference.dark);
+      await controller.setAccentScheme(AccentScheme.violet);
       await controller.setReducedMotion(true);
       await controller.setPreferredCanteen('mensa-koethen');
       await controller.setDefaultBuilding('ratke-gebaeude');
@@ -169,7 +216,9 @@ void main() {
       await controller.resetLocalPreferences();
 
       final AppSettings after = container.read(settingsProvider);
-      expect(after.themeMode, ThemeMode.light);
+      expect(after.themeMode, ThemeMode.system);
+      expect(after.brightnessPreference, BrightnessPreference.system);
+      expect(after.accentScheme, AccentScheme.pink);
       expect(after.reducedMotion, isFalse);
       expect(after.preferredCanteenSlug, isNull);
       expect(after.defaultBuildingKey, isNull);
@@ -188,7 +237,8 @@ void main() {
 
       // And the store is genuinely empty, not just the in-memory state.
       final AppSettings reloaded = _container(store).read(settingsProvider);
-      expect(reloaded.themeMode, ThemeMode.light);
+      expect(reloaded.themeMode, ThemeMode.system);
+      expect(reloaded.accentScheme, AccentScheme.pink);
       expect(reloaded.onboardingCompleted, isTrue);
     });
 
@@ -200,10 +250,12 @@ void main() {
       final SettingsController controller = container.read(
         settingsProvider.notifier,
       );
-      await controller.setThemeMode(ThemeMode.dark);
+      await controller.setBrightnessPreference(BrightnessPreference.dark);
+      await controller.setAccentScheme(AccentScheme.amber);
 
       expect(await controller.resetLocalPreferences(), isTrue);
-      expect(container.read(settingsProvider).themeMode, ThemeMode.light);
+      expect(container.read(settingsProvider).themeMode, ThemeMode.system);
+      expect(container.read(settingsProvider).accentScheme, AccentScheme.pink);
     });
 
     test('does not touch keys owned by the secure personal services', () async {

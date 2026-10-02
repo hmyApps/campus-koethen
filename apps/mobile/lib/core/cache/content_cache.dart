@@ -9,6 +9,27 @@ class CacheEntry {
   final DateTime cachedAt;
 }
 
+class ContentCacheBudget {
+  const ContentCacheBudget({
+    this.maxEntries = 128,
+    this.maxBytes = 20 * 1024 * 1024,
+    this.maxRangeEntries = 24,
+    this.rangeRetention = const Duration(days: 90),
+  });
+
+  final int maxEntries;
+  final int maxBytes;
+  final int maxRangeEntries;
+  final Duration rangeRetention;
+}
+
+class ContentCacheStats {
+  const ContentCacheStats({required this.entryCount, required this.byteCount});
+
+  final int entryCount;
+  final int byteCount;
+}
+
 /// Persistent cache for content documents.
 ///
 /// Implementations **must not** throw. A cache is an optimisation: when it

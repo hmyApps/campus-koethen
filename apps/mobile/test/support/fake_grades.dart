@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/grades/domain/clock.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/domain/grade_cache_store.dart';
@@ -29,6 +31,7 @@ class InMemoryGradeCredentialStore implements GradeCredentialStore {
   GradeCredentials? _stored;
   int writes = 0;
   int clears = 0;
+  Object? clearError;
 
   GradeCredentials? get lastWritten => _stored;
 
@@ -46,8 +49,9 @@ class InMemoryGradeCredentialStore implements GradeCredentialStore {
 
   @override
   Future<void> clear() async {
-    _stored = null;
     clears++;
+    if (clearError != null) throw clearError!;
+    _stored = null;
   }
 }
 
@@ -135,11 +139,15 @@ class FakeGradesGateway implements GradesGateway {
   /// Optional delay so tests can overlap concurrent syncs.
   Duration? delay;
 
+  /// Optional deterministic gate for logout-race tests.
+  Completer<GradeReport>? pendingReport;
+
   int fetchCalls = 0;
 
   @override
   Future<GradeReport> fetchGrades(GradeCredentials credentials) async {
     fetchCalls++;
+    if (pendingReport != null) return pendingReport!.future;
     if (delay != null) await Future<void>.delayed(delay!);
     if (error != null) throw error!;
     return report ?? const GradeReport(<GradeEntry>[]);

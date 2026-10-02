@@ -6,6 +6,7 @@ import 'package:campus_koethen/core/theme/app_metrics.dart';
 import 'package:campus_koethen/core/theme/app_dimensions.dart';
 import 'package:campus_koethen/core/theme/app_motion.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
+import 'package:campus_koethen/core/theme/appearance_preferences.dart';
 import 'package:campus_koethen/core/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,11 +92,53 @@ void main() {
       expect(theme.extension<AppTypography>()!.eyebrow.fontFamily, AppFonts.ui);
     });
 
-    test('the fixed berry palette reaches the colour scheme', () {
+    test('pink remains the compatible default palette', () {
       final ThemeData theme = themed();
       expect(theme.colorScheme.primary, AppColors.light.primary);
       expect(theme.extension<AppColors>()!.primary, const Color(0xFFC2185B));
       expect(AppTheme.dark().colorScheme.primary, const Color(0xFFEC6E9F));
+    });
+
+    test('every accent has stable light and dark tokens', () {
+      final Set<Color> lightPrimaries = <Color>{};
+      final Set<Color> darkPrimaries = <Color>{};
+      for (final AccentScheme accent in AccentScheme.values) {
+        final AppColors light = AppColors.forScheme(accent, Brightness.light);
+        final AppColors dark = AppColors.forScheme(accent, Brightness.dark);
+        expect(light.brightness, Brightness.light);
+        expect(dark.brightness, Brightness.dark);
+        expect(light.highContrast, isFalse);
+        expect(dark.highContrast, isFalse);
+        lightPrimaries.add(light.primary);
+        darkPrimaries.add(dark.primary);
+      }
+      expect(lightPrimaries, hasLength(AccentScheme.values.length));
+      expect(darkPrimaries, hasLength(AccentScheme.values.length));
+    });
+
+    test('accent and high contrast participate in the theme cache key', () {
+      expect(
+        identical(
+          AppTheme.light(accentScheme: AccentScheme.green),
+          AppTheme.light(accentScheme: AccentScheme.green),
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          AppTheme.light(),
+          AppTheme.light(accentScheme: AccentScheme.green),
+        ),
+        isFalse,
+      );
+      expect(
+        identical(AppTheme.light(), AppTheme.highContrastLight()),
+        isFalse,
+      );
+      expect(
+        AppTheme.highContrastDark().extension<AppColors>()!.highContrast,
+        isTrue,
+      );
     });
 
     test(

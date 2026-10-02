@@ -12,8 +12,10 @@ import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/theme/app_icons.dart';
+import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_motion.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
+import 'package:campus_koethen/core/theme/appearance_preferences.dart';
 import 'package:campus_koethen/features/more/presentation/more_screen.dart';
 import 'package:campus_koethen/features/news/presentation/news_list_screen.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
@@ -232,6 +234,66 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('system brightness follows the OS and keeps the chosen accent', (
+    WidgetTester tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(highContrast: true);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore(<String, Object>{
+      PreferenceKeys.onboardingCompleted: 1,
+      PreferenceKeys.brightnessPreference:
+          BrightnessPreference.system.storageValue,
+      PreferenceKeys.accentScheme: AccentScheme.green.storageValue,
+    });
+
+    await pumpApp(tester, useCampusApp: true, store: store);
+
+    final MaterialApp app = tester.widget<MaterialApp>(
+      find.byType(MaterialApp),
+    );
+    expect(app.themeMode, ThemeMode.system);
+    expect(
+      app.theme!.extension<AppColors>()!.primary,
+      AppColors.greenLight.primary,
+    );
+    expect(
+      app.darkTheme!.extension<AppColors>()!.primary,
+      AppColors.greenDark.primary,
+    );
+    expect(app.highContrastTheme!.extension<AppColors>()!.highContrast, isTrue);
+    expect(
+      app.highContrastDarkTheme!.extension<AppColors>()!.highContrast,
+      isTrue,
+    );
+    expect(
+      Theme.of(tester.element(find.byType(TaktNavigationBar))).brightness,
+      Brightness.dark,
+    );
+    expect(
+      Theme.of(
+        tester.element(find.byType(TaktNavigationBar)),
+      ).extension<AppColors>()!.highContrast,
+      isTrue,
+    );
+
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+
+    expect(
+      Theme.of(tester.element(find.byType(TaktNavigationBar))).brightness,
+      Brightness.light,
+    );
+    expect(
+      Theme.of(
+        tester.element(find.byType(TaktNavigationBar)),
+      ).extension<AppColors>()!.highContrast,
+      isTrue,
+    );
   });
 
   group('iOS back swipe', () {

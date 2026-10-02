@@ -5,6 +5,11 @@
          Flutter-Vorlage deklariert INTERNET nur im Debug- und Profile-Manifest.
          Cleartext bleibt bewusst verboten: alle Ziele sind HTTPS. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Optional NFC hardware: the rest of Campus Köthen remains usable on
+         devices without NFC. Reading starts only after the in-app action or
+         an Android TECH_DISCOVERED opening prompt. -->
+    <uses-permission android:name="android.permission.NFC"/>
+    <uses-feature android:name="android.hardware.nfc" android:required="false"/>
     <!-- Lokale Benachrichtigungen (ADR-0001): Nach einem Neustart des Geräts
          sind alle beim System vorgemerkten Termine verloren. Mit dieser
          Berechtigung stellt das Plugin sie nach dem Boot wieder her, ohne dass
@@ -52,6 +57,16 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Android-only system dispatch. The user's tap on the system
+                 opening prompt is the explicit action that authorises the
+                 immediate, one-shot balance read in Flutter. -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/nfc_tech_filter" />
         </activity>
         <!-- Zustellung der lokal vorausgeplanten Benachrichtigungen. Der erste
              Receiver zeigt einen fälligen Eintrag an, der zweite plant den

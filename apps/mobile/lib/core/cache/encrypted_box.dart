@@ -187,6 +187,21 @@ class EncryptedBox {
     } catch (_) {}
   }
 
+  /// Persists [value] and confirms that this exact payload can be read back.
+  ///
+  /// Security-sensitive callers must not infer success merely from a
+  /// non-null read: an older value may still be present after a failed write.
+  Future<bool> writeChecked(String key, String value) async {
+    try {
+      final Box<String>? box = await _open();
+      if (box == null) return false;
+      await box.put(key, value);
+      return box.get(key) == value;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Writes a related group with one Hive operation.
   ///
   /// Values still pass through the box's [HiveAesCipher]; this only avoids a

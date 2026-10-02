@@ -91,6 +91,73 @@ void main() {
     expect(await cache.read('bare'), isNull);
   });
 
+  test('evicts the least recently used document at the entry budget', () async {
+    DateTime now = DateTime.utc(2026, 10, 1, 12);
+    final HiveContentCache bounded = HiveContentCache(
+      box,
+      now: () => now,
+      budget: const ContentCacheBudget(maxEntries: 2, maxBytes: 1024 * 1024),
+    );
+    await bounded.write('a', <String, dynamic>{'value': 'a'});
+    now = now.add(const Duration(minutes: 1));
+    await bounded.write('b', <String, dynamic>{'value': 'b'});
+    now = now.add(const Duration(minutes: 1));
+    expect(await bounded.read('a'), isNotNull);
+    now = now.add(const Duration(minutes: 1));
+
+    await bounded.write('c', <String, dynamic>{'value': 'c'});
+
+    expect(await bounded.read('a'), isNotNull);
+    expect(await bounded.read('b'), isNull);
+    expect(await bounded.read('c'), isNotNull);
+    expect((await bounded.stats()).entryCount, 2);
+  });
+
+  test('keeps the encrypted-on-disk payload within the byte budget', () async {
+    final HiveContentCache bounded = HiveContentCache(
+      box,
+      budget: const ContentCacheBudget(maxEntries: 20, maxBytes: 900),
+    );
+
+    for (int index = 0; index < 8; index++) {
+      await bounded.write('entry.$index', <String, dynamic>{
+        'value': 'x' * 220,
+      });
+    }
+
+    final ContentCacheStats stats = await bounded.stats();
+    expect(stats.byteCount, lessThanOrEqualTo(900));
+    expect(stats.entryCount, lessThan(8));
+  });
+
+  test(
+    'prunes old range windows but preserves their newest successful entry',
+    () async {
+      DateTime now = DateTime.utc(2026, 1, 1);
+      final HiveContentCache bounded = HiveContentCache(
+        box,
+        now: () => now,
+        budget: const ContentCacheBudget(
+          maxEntries: 20,
+          maxBytes: 1024 * 1024,
+          rangeRetention: Duration(days: 30),
+        ),
+      );
+      const String oldKey = 'timetable.entries.de.group.2025-12-01.2025-12-07';
+      const String newestKey =
+          'timetable.entries.de.group.2025-12-08.2025-12-14';
+      await bounded.write(oldKey, <String, dynamic>{'value': 'old'});
+      now = now.add(const Duration(days: 1));
+      await bounded.write(newestKey, <String, dynamic>{'value': 'newest'});
+      now = now.add(const Duration(days: 40));
+
+      await bounded.prune();
+
+      expect(await bounded.read(oldKey), isNull);
+      expect(await bounded.read(newestKey), isNotNull);
+    },
+  );
+
   group('decodeCacheDocument', () {
     test('decodes below and above the threshold alike', () async {
       final String small = jsonEncode(<String, dynamic>{'a': 1});

@@ -40,20 +40,25 @@ class FakeHtmlResponse {
     this.statusCode = 200,
     this.location,
     this.setCookie,
+    this.contentType = 'text/html; charset=utf-8',
   });
 
   /// A 3xx redirect to [location].
-  const FakeHtmlResponse.redirect(this.location, {this.statusCode = 302})
-    : body = '',
-      setCookie = null;
+  const FakeHtmlResponse.redirect(
+    this.location, {
+    this.statusCode = 302,
+    this.setCookie,
+  }) : body = '',
+       contentType = 'text/html; charset=utf-8';
 
   final String body;
   final int statusCode;
   final String? location;
   final String? setCookie;
+  final String contentType;
 
   Map<String, List<String>> get headers => <String, List<String>>{
-    Headers.contentTypeHeader: <String>['text/html; charset=utf-8'],
+    Headers.contentTypeHeader: <String>[contentType],
     if (location != null) 'location': <String>[location!],
     if (setCookie != null) 'set-cookie': <String>[setCookie!],
   };

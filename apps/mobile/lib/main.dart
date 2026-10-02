@@ -17,6 +17,8 @@ import 'features/mail/data/mail_cache.dart';
 import 'features/mail/data/mail_local_data_coordinator.dart';
 import 'features/mail/data/secure_mail_credential_store.dart';
 import 'features/mail/domain/mail_credential_store.dart';
+import 'features/grades/application/grades_providers.dart';
+import 'features/student_service/application/student_service_providers.dart';
 
 /// Entry point.
 ///
@@ -64,6 +66,16 @@ Future<void> main() async {
         mailCredentialStoreProvider.overrideWithValue(mailCredentials),
         mailWipeIntentStoreProvider.overrideWithValue(wipeIntent),
         mailLocalDataCoordinatorProvider.overrideWithValue(mailLocalData),
+        gradeLinkedPersonalDataWipersProvider.overrideWith((Ref ref) {
+          return <GradeLinkedPersonalDataWiper>[
+            () async {
+              await ref
+                  .read(studentServiceSessionGuardProvider)
+                  .invalidateAndWait();
+              await ref.read(studentServiceCacheStoreProvider).clear();
+            },
+          ];
+        }),
       ],
       child: const CampusApp(),
     ),

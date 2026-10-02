@@ -14,6 +14,10 @@ List<File> _productionDartFiles() => Directory('lib')
     .where((File file) => file.path.endsWith('.dart'))
     .toList(growable: false);
 
+/// Forward-slash form of [File.path] — on Windows, `Directory.listSync`
+/// yields backslash paths, which never equal a hardcoded `lib/...` literal.
+String _posixPath(File file) => file.path.replaceAll('\\', '/');
+
 void main() {
   const String cataloguePath = 'lib/core/theme/app_icons.dart';
 
@@ -45,7 +49,7 @@ void main() {
             'package:flutter_tabler_icons/flutter_tabler_icons.dart',
           ),
         )
-        .map((File file) => file.path)
+        .map(_posixPath)
         .toList(growable: false);
 
     expect(importers, <String>[cataloguePath]);

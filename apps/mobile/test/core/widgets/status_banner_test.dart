@@ -2,6 +2,8 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:campus_koethen/core/widgets/status_banner.dart';
+import 'package:campus_koethen/core/theme/app_dimensions.dart';
+import 'package:campus_koethen/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
@@ -22,6 +24,45 @@ Future<double> heightIn(WidgetTester tester, Widget parent) async {
 }
 
 void main() {
+  testWidgets('high contrast strengthens its outline and non-colour marker', (
+    WidgetTester tester,
+  ) async {
+    Future<(double, double)> dimensions(ThemeData theme) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: const Scaffold(body: Center(child: _banner)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final PositionedDirectional beam = tester.widget<PositionedDirectional>(
+        find.descendant(
+          of: find.byType(StatusBanner),
+          matching: find.byType(PositionedDirectional),
+        ),
+      );
+      final DecoratedBox box = tester.widget<DecoratedBox>(
+        find.descendant(
+          of: find.byType(StatusBanner),
+          matching: find.byType(DecoratedBox),
+        ),
+      );
+      final BoxDecoration decoration = box.decoration as BoxDecoration;
+      return (beam.width!, decoration.border!.top.width);
+    }
+
+    final (double standardBeam, double standardOutline) = await dimensions(
+      AppTheme.light(),
+    );
+    final (double strongBeam, double strongOutline) = await dimensions(
+      AppTheme.highContrastLight(),
+    );
+
+    expect(standardBeam, AppSizes.beam);
+    expect(strongBeam, greaterThan(standardBeam));
+    expect(strongOutline, greaterThan(standardOutline));
+  });
+
   testWidgets('hugs its content when the height is bounded', (
     WidgetTester tester,
   ) async {

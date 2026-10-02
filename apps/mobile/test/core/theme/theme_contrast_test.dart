@@ -3,6 +3,7 @@
 
 import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
+import 'package:campus_koethen/core/theme/appearance_preferences.dart';
 import 'package:campus_koethen/core/theme/contrast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,8 +122,33 @@ List<_Pair> _pairsFor(AppColors c) => <_Pair>[
 ];
 
 void main() {
-  _controlBoundaryTests('light theme', AppTheme.light(), AppColors.light);
-  _controlBoundaryTests('dark theme', AppTheme.dark(), AppColors.dark);
+  for (final AccentScheme accent in AccentScheme.values) {
+    for (final Brightness brightness in Brightness.values) {
+      for (final bool highContrast in <bool>[false, true]) {
+        final AppColors colors = AppColors.forScheme(
+          accent,
+          brightness,
+          highContrast: highContrast,
+        );
+        final ThemeData theme = switch (brightness) {
+          Brightness.light =>
+            highContrast
+                ? AppTheme.highContrastLight(accentScheme: accent)
+                : AppTheme.light(accentScheme: accent),
+          Brightness.dark =>
+            highContrast
+                ? AppTheme.highContrastDark(accentScheme: accent)
+                : AppTheme.dark(accentScheme: accent),
+        };
+        final String label =
+            '${accent.name} ${brightness.name}'
+            '${highContrast ? ' high contrast' : ''}';
+
+        _paletteContrastTests(label, colors);
+        _controlBoundaryTests(label, theme, colors);
+      }
+    }
+  }
 
   group('Contrast helper', () {
     test('matches the WCAG reference values', () {
@@ -148,23 +174,66 @@ void main() {
     });
   });
 
-  group('light theme', () {
-    for (final _Pair pair in _pairsFor(AppColors.light)) {
-      test('${pair.name} meets ${pair.threshold}:1', () {
-        final double ratio = Contrast.ratio(pair.foreground, pair.background);
-        expect(
-          ratio,
-          greaterThanOrEqualTo(pair.threshold),
-          reason:
-              '${pair.name} is ${ratio.toStringAsFixed(2)}:1, '
-              'required ${pair.threshold}:1',
-        );
-      });
+  test('high contrast strengthens outlines and focus rings', () {
+    for (final Brightness brightness in Brightness.values) {
+      final AppColors standard = AppColors.forScheme(
+        AccentScheme.pink,
+        brightness,
+      );
+      final AppColors high = AppColors.forScheme(
+        AccentScheme.pink,
+        brightness,
+        highContrast: true,
+      );
+      expect(high.highContrast, isTrue);
+      expect(
+        Contrast.ratio(high.outline, high.surface),
+        greaterThan(Contrast.ratio(standard.outline, standard.surface)),
+      );
+
+      final ThemeData standardTheme = brightness == Brightness.light
+          ? AppTheme.light()
+          : AppTheme.dark();
+      final ThemeData highTheme = brightness == Brightness.light
+          ? AppTheme.highContrastLight()
+          : AppTheme.highContrastDark();
+      final OutlineInputBorder standardFocus =
+          standardTheme.inputDecorationTheme.focusedBorder!
+              as OutlineInputBorder;
+      final OutlineInputBorder highFocus =
+          highTheme.inputDecorationTheme.focusedBorder! as OutlineInputBorder;
+      expect(
+        highFocus.borderSide.width,
+        greaterThan(standardFocus.borderSide.width),
+      );
+      expect(
+        Contrast.ratio(highFocus.borderSide.color, high.surface),
+        greaterThanOrEqualTo(Contrast.aaLarge),
+      );
+      expect(
+        Contrast.ratio(highFocus.borderSide.color, high.background),
+        greaterThanOrEqualTo(Contrast.aaLarge),
+      );
     }
   });
 
-  group('dark theme', () {
-    for (final _Pair pair in _pairsFor(AppColors.dark)) {
+  test('dark variants use genuinely dark surfaces', () {
+    for (final AccentScheme accent in AccentScheme.values) {
+      final AppColors colors = AppColors.forScheme(accent, Brightness.dark);
+      expect(Contrast.relativeLuminance(colors.background), lessThan(0.05));
+      expect(Contrast.relativeLuminance(colors.surface), lessThan(0.06));
+      expect(
+        Contrast.relativeLuminance(colors.surface),
+        greaterThan(Contrast.relativeLuminance(colors.background)),
+        reason: 'elevation is expressed by lighter surfaces',
+      );
+    }
+  });
+}
+
+void _paletteContrastTests(String label, AppColors colors) {
+  group('$label · colour pairs', () {
+    for (final _Pair pair in _pairsFor(colors)) {
       test('${pair.name} meets ${pair.threshold}:1', () {
         final double ratio = Contrast.ratio(pair.foreground, pair.background);
         expect(
@@ -177,21 +246,16 @@ void main() {
       });
     }
 
-    test('uses genuinely dark surfaces', () {
-      expect(
-        Contrast.relativeLuminance(AppColors.dark.background),
-        lessThan(0.05),
-      );
-      expect(
-        Contrast.relativeLuminance(AppColors.dark.surface),
-        lessThan(0.06),
-      );
-      expect(
-        Contrast.relativeLuminance(AppColors.dark.surface),
-        greaterThan(Contrast.relativeLuminance(AppColors.dark.background)),
-        reason: 'elevation is expressed by lighter surfaces',
-      );
-    });
+    if (colors.highContrast) {
+      test('outline itself is a perceivable component boundary', () {
+        for (final Color ground in <Color>[colors.surface, colors.background]) {
+          expect(
+            Contrast.ratio(colors.outline, ground),
+            greaterThanOrEqualTo(Contrast.aaLarge),
+          );
+        }
+      });
+    }
   });
 }
 
