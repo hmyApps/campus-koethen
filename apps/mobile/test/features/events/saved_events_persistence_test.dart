@@ -194,6 +194,38 @@ void main() {
     );
   });
 
+  test('a failed commit does not publish an event as saved', () async {
+    final _FailingSavedEventsStore store = _FailingSavedEventsStore();
+    final ProviderContainer container = _containerWith(
+      store,
+      now: DateTime.utc(2026, 8, 5),
+    );
+    await container.read(savedEventsControllerProvider.future);
+
+    await expectLater(
+      container
+          .read(savedEventsControllerProvider.notifier)
+          .save(
+            UnifiedEvent(
+              eventRef: 'post:not-written',
+              kind: UnifiedEventKind.postEvent,
+              title: 'Nicht gespeichert',
+              start: DateTime.utc(2026, 8, 12),
+            ),
+          ),
+      throwsA(
+        isA<SavedEventsStoreFailure>().having(
+          (SavedEventsStoreFailure failure) => failure.operation,
+          'operation',
+          SavedEventsStoreOperation.write,
+        ),
+      ),
+    );
+
+    expect(container.read(savedEventsControllerProvider).requireValue, isEmpty);
+    expect(await store.readAll(), isEmpty);
+  });
+
   group('the 500-entry cap', () {
     test(
       'declines a save once the cap is reached, without evicting anything',
@@ -573,4 +605,37 @@ void main() {
       },
     );
   });
+}
+
+class _FailingSavedEventsStore implements SavedEventsStore {
+  @override
+  Future<List<SavedEventSnapshot>> readAll() async =>
+      const <SavedEventSnapshot>[];
+
+  @override
+  Future<void> writeAll(List<SavedEventSnapshot> snapshots) async =>
+      throw SavedEventsStoreFailure(
+        SavedEventsStoreOperation.write,
+        StateError('failed'),
+      );
+
+  @override
+  Future<void> upsert(SavedEventSnapshot snapshot) async =>
+      throw SavedEventsStoreFailure(
+        SavedEventsStoreOperation.write,
+        StateError('failed'),
+      );
+
+  @override
+  Future<void> upsertAll(Iterable<SavedEventSnapshot> snapshots) async =>
+      throw SavedEventsStoreFailure(
+        SavedEventsStoreOperation.write,
+        StateError('failed'),
+      );
+
+  @override
+  Future<void> delete(String eventRef) async => throw SavedEventsStoreFailure(
+    SavedEventsStoreOperation.write,
+    StateError('failed'),
+  );
 }

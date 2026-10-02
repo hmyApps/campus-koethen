@@ -180,6 +180,7 @@ Future<void> pumpMap(
   String? initialRoomKey,
   Locale locale = AppLocales.german,
   Size? size,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   if (size == null) {
     useTallSurface(tester);
@@ -191,6 +192,7 @@ Future<void> pumpMap(
     tester,
     CampusMapScreen(initialRoomKey: initialRoomKey),
     locale: locale,
+    textScaler: textScaler,
     keyValueStore: store,
     overrides: mapOverrides(rooms ?? roomsFixture, contacts: contacts),
   );
@@ -232,6 +234,23 @@ Rect controlBarRect(WidgetTester tester) => tester.getRect(
 );
 
 void main() {
+  testWidgets('layout matrix keeps search and map actions on screen', (
+    WidgetTester tester,
+  ) async {
+    for (final (Size size, TextScaler scaler) in <(Size, TextScaler)>[
+      (const Size(320, 800), TextScaler.noScaling),
+      (const Size(360, 800), const TextScaler.linear(1.3)),
+      (const Size(800, 360), TextScaler.noScaling),
+      (const Size(320, 1000), const TextScaler.linear(2)),
+    ]) {
+      await pumpMap(tester, size: size, textScaler: scaler);
+
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byTooltip('Ansicht zurücksetzen'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: '$size at $scaler');
+    }
+  });
+
   testWidgets('room search fallback opens the map without a room selection', (
     WidgetTester tester,
   ) async {

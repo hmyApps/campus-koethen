@@ -231,6 +231,37 @@ void main() {
     });
   });
 
+  test(
+    'a failed commit leaves the published and stored task unchanged',
+    () async {
+      final Todo original = Todo(
+        id: '1',
+        title: 'Wichtig',
+        createdAt: DateTime(2026),
+      );
+      final _FailingWriteTodoStore broken = _FailingWriteTodoStore(original);
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[todoStoreProvider.overrideWithValue(broken)],
+      );
+      addTearDown(c.dispose);
+      await c.read(todosControllerProvider.future);
+
+      await expectLater(
+        c.read(todosControllerProvider.notifier).toggle(original.id),
+        throwsA(
+          isA<TodoStoreFailure>().having(
+            (TodoStoreFailure failure) => failure.operation,
+            'operation',
+            TodoStoreOperation.write,
+          ),
+        ),
+      );
+
+      expect(c.read(todosControllerProvider).requireValue.single.done, isFalse);
+      expect(broken.stored.single.done, isFalse);
+    },
+  );
+
   group('undo puts a task back where it was', () {
     test('restore inserts at the original index', () async {
       await store.writeAll(<Todo>[
@@ -289,8 +320,63 @@ class _UnreadableTodoStore implements TodoStore {
   }
 
   @override
+  Future<void> upsertTodo(Todo todo) async {
+    writes++;
+  }
+
+  @override
+  Future<void> upsertTodos(Iterable<Todo> todos) async {
+    writes++;
+  }
+
+  @override
+  Future<void> deleteTodo(String id) async {
+    writes++;
+  }
+
+  @override
+  Future<void> deleteTodos(Iterable<String> ids) async {
+    writes++;
+  }
+
+  @override
   Future<List<TodoFolder>> readFolders() async => folders;
 
   @override
   Future<void> writeFolders(List<TodoFolder> next) async => folders = next;
+}
+
+class _FailingWriteTodoStore implements TodoStore {
+  _FailingWriteTodoStore(Todo todo) : stored = <Todo>[todo];
+
+  List<Todo> stored;
+
+  @override
+  Future<List<Todo>> readAll() async => List<Todo>.of(stored);
+
+  @override
+  Future<void> writeAll(List<Todo> todos) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
+
+  @override
+  Future<void> upsertTodo(Todo todo) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
+
+  @override
+  Future<void> upsertTodos(Iterable<Todo> todos) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
+
+  @override
+  Future<void> deleteTodo(String id) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
+
+  @override
+  Future<void> deleteTodos(Iterable<String> ids) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
+
+  @override
+  Future<List<TodoFolder>> readFolders() async => const <TodoFolder>[];
+
+  @override
+  Future<void> writeFolders(List<TodoFolder> folders) async {}
 }

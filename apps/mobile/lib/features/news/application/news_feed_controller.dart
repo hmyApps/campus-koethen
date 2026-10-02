@@ -89,13 +89,14 @@ class NewsFeedState {
 class NewsFeedController extends AsyncNotifier<NewsFeedState> {
   NewsRepository get _repository => ref.read(newsRepositoryProvider);
 
-  String? _channelsParameter = '';
-  String? _tagsParameter;
-  String _locale = 'de';
+  int _generation = 0;
+  _NewsFeedScope? _activeScope;
 
   @override
   Future<NewsFeedState> build() async {
-    _locale = ref.watch(localeCodeProvider);
+    final int generation = ++_generation;
+    _activeScope = null;
+    final String locale = ref.watch(localeCodeProvider);
     // Both catalogues are requested before either is awaited: they are separate
     // endpoints that do not depend on one another, and awaiting the first
     // before asking for the second put two full round trips in front of the
@@ -118,10 +119,17 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
     final ChannelSubscriptionState subscriptions = ref.watch(
       channelSubscriptionProvider,
     );
-    _tagsParameter = ref.watch(newsTagFilterProvider);
+    final String? tagsParameter = ref.watch(newsTagFilterProvider);
 
     if (channels.value.isEmpty) {
-      _channelsParameter = '';
+      if (generation == _generation) {
+        _activeScope = _NewsFeedScope(
+          generation: generation,
+          locale: locale,
+          channelsParameter: '',
+          tagsParameter: tagsParameter,
+        );
+      }
       return const NewsFeedState(
         articles: <NewsArticle>[],
         page: 1,
@@ -129,16 +137,23 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
       );
     }
 
-    _channelsParameter = ChannelSubscriptionRules.queryValue(
+    final String? channelsParameter = ChannelSubscriptionRules.queryValue(
       available: channels.value,
       selected: subscriptions.selectedSlugs,
     );
+    final _NewsFeedScope scope = _NewsFeedScope(
+      generation: generation,
+      locale: locale,
+      channelsParameter: channelsParameter,
+      tagsParameter: tagsParameter,
+    );
 
     final Loaded<NewsPage> first = await _repository.fetchArticles(
-      locale: _locale,
-      channelsParameter: _channelsParameter,
-      tagsParameter: _tagsParameter,
+      locale: scope.locale,
+      channelsParameter: scope.channelsParameter,
+      tagsParameter: scope.tagsParameter,
     );
+    if (generation == _generation) _activeScope = scope;
 
     return NewsFeedState(
       articles: List<NewsArticle>.unmodifiable(first.value.articles),
@@ -156,7 +171,13 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
   /// reached, so scrolling near the end cannot fire a burst of requests.
   Future<void> loadMore() async {
     final NewsFeedState? current = state.value;
-    if (current == null || current.isLoadingMore || !current.hasMore) return;
+    final _NewsFeedScope? scope = _activeScope;
+    if (current == null ||
+        scope == null ||
+        current.isLoadingMore ||
+        !current.hasMore) {
+      return;
+    }
 
     state = AsyncData<NewsFeedState>(
       current.copyWith(isLoadingMore: true, loadMoreFailed: false),
@@ -164,11 +185,12 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
 
     try {
       final Loaded<NewsPage> next = await _repository.fetchArticles(
-        locale: _locale,
-        channelsParameter: _channelsParameter,
-        tagsParameter: _tagsParameter,
+        locale: scope.locale,
+        channelsParameter: scope.channelsParameter,
+        tagsParameter: scope.tagsParameter,
         page: current.page + 1,
       );
+      if (!_isCurrent(scope)) return;
       // The state may have been replaced while the request was in flight.
       final NewsFeedState base = state.value ?? current;
       state = AsyncData<NewsFeedState>(
@@ -181,6 +203,7 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
         ),
       );
     } on Object {
+      if (!_isCurrent(scope)) return;
       final NewsFeedState base = state.value ?? current;
       // Everything already loaded stays. Only the footer changes.
       state = AsyncData<NewsFeedState>(
@@ -188,6 +211,9 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
       );
     }
   }
+
+  bool _isCurrent(_NewsFeedScope scope) =>
+      identical(_activeScope, scope) && scope.generation == _generation;
 
   /// Pull-to-refresh: back to page one for the current selection.
   Future<void> refresh() async {
@@ -207,6 +233,21 @@ class NewsFeedController extends AsyncNotifier<NewsFeedState> {
     }
     return List<NewsArticle>.unmodifiable(merged);
   }
+}
+
+@immutable
+class _NewsFeedScope {
+  const _NewsFeedScope({
+    required this.generation,
+    required this.locale,
+    required this.channelsParameter,
+    required this.tagsParameter,
+  });
+
+  final int generation;
+  final String locale;
+  final String? channelsParameter;
+  final String? tagsParameter;
 }
 
 final AsyncNotifierProvider<NewsFeedController, NewsFeedState>

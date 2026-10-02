@@ -17,6 +17,7 @@ import '../application/todo_folders_controller.dart';
 import '../application/todos_controller.dart';
 import '../domain/todo.dart';
 import '../domain/todo_folder.dart';
+import '../domain/todo_store.dart';
 import 'todo_folder_sheets.dart';
 
 /// Sentinel filter value for "show items without a folder", distinct from
@@ -79,9 +80,14 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
     // The field is NOT cleared up front any more. A failed read blocks every
     // write, and clearing first threw the typed task away silently while the
     // body was still showing the read error next to a retry button.
-    final bool added = await ref
-        .read(todosControllerProvider.notifier)
-        .add(text);
+    bool added;
+    try {
+      added = await ref.read(todosControllerProvider.notifier).add(text);
+    } on TodoStoreFailure {
+      if (!mounted) return;
+      _refuse(context.l10n.todoSaveFailedError);
+      return;
+    }
     if (!mounted) return;
     if (!added) {
       _refuse(context.l10n.todoAddUnavailableError);
@@ -174,7 +180,11 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
     );
     final int index = (ref.read(todosControllerProvider).value ?? <Todo>[])
         .indexWhere((Todo t) => t.id == todo.id);
-    await controller.remove(todo.id);
+    final bool committed = await _runTodoWrite(
+      context,
+      () => controller.remove(todo.id),
+    );
+    if (!committed) return;
     if (!mounted) return;
 
     messenger.hideCurrentSnackBar();
@@ -183,8 +193,12 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
         content: Text(l10n.todoDeletedUndo),
         action: SnackBarAction(
           label: l10n.todoUndo,
-          onPressed: () =>
-              controller.restore(todo, index: index < 0 ? 0 : index),
+          onPressed: () async {
+            await _runTodoWrite(
+              context,
+              () => controller.restore(todo, index: index < 0 ? 0 : index),
+            );
+          },
         ),
       ),
     );
@@ -204,7 +218,11 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
     ];
     if (removed.isEmpty) return;
 
-    await controller.clearCompleted();
+    final bool committed = await _runTodoWrite(
+      context,
+      controller.clearCompleted,
+    );
+    if (!committed) return;
     if (!mounted) return;
 
     messenger.hideCurrentSnackBar();
@@ -213,7 +231,9 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
         content: Text(l10n.todoCompletedCleared),
         action: SnackBarAction(
           label: l10n.todoUndo,
-          onPressed: () => controller.restoreAll(removed),
+          onPressed: () async {
+            await _runTodoWrite(context, () => controller.restoreAll(removed));
+          },
         ),
       ),
     );
@@ -422,7 +442,9 @@ class _TodoList extends ConsumerWidget {
         return CheckboxListTile(
           key: ValueKey<String>(todo.id),
           value: todo.done,
-          onChanged: (_) => controller.toggle(todo.id),
+          onChanged: (_) async {
+            await _runTodoWrite(context, () => controller.toggle(todo.id));
+          },
           controlAffinity: ListTileControlAffinity.leading,
           title: Text(
             todo.title,
@@ -477,7 +499,25 @@ Future<void> _renameTodo(
     builder: (BuildContext context) => _TodoRenameDialog(todo.title),
   );
   if (next == null || next.trim().isEmpty) return;
-  await controller.rename(todo.id, next);
+  if (!context.mounted) return;
+  await _runTodoWrite(context, () => controller.rename(todo.id, next));
+}
+
+Future<bool> _runTodoWrite(
+  BuildContext context,
+  Future<void> Function() operation,
+) async {
+  try {
+    await operation();
+    return true;
+  } on TodoStoreFailure {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.todoSaveFailedError)));
+    }
+    return false;
+  }
 }
 
 /// Owns the text controller for exactly as long as the dialog is mounted.

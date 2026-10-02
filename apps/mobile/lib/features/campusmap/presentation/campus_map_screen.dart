@@ -19,6 +19,7 @@ import '../application/campus_map_providers.dart';
 import '../application/room_search.dart';
 import '../domain/map_catalog.dart';
 import '../domain/room.dart';
+import 'campus_map_search_controller.dart';
 import 'floor_map_view.dart';
 import 'room_labels.dart';
 
@@ -51,14 +52,13 @@ const double kSearchBarHeight = 56;
 const double kDetailSheetHeight = 236;
 
 class _CampusMapScreenState extends ConsumerState<CampusMapScreen> {
-  final TextEditingController _search = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
+  late final CampusMapSearchController _searchState;
   final GlobalKey<FloorMapViewState> _mapKey = GlobalKey<FloorMapViewState>();
-  String _query = '';
 
   @override
   void initState() {
     super.initState();
+    _searchState = CampusMapSearchController()..addListener(_onSearchChanged);
     final String? initial = widget.initialRoomKey;
     if (initial != null && initial.isNotEmpty) {
       // Providers must not be written during initState.
@@ -70,9 +70,14 @@ class _CampusMapScreenState extends ConsumerState<CampusMapScreen> {
 
   @override
   void dispose() {
-    _search.dispose();
-    _searchFocus.dispose();
+    _searchState
+      ..removeListener(_onSearchChanged)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
   }
 
   void _select(Room room) {
@@ -80,9 +85,7 @@ class _CampusMapScreenState extends ConsumerState<CampusMapScreen> {
     ref.read(visibleFloorProvider.notifier).show(room.floorKey);
     // Picking a result closes the search, the way a map app hands the screen
     // back to the map once you have chosen a destination.
-    _search.clear();
-    setState(() => _query = '');
-    _searchFocus.unfocus();
+    _searchState.clearAfterSelection();
   }
 
   void _clearSelection() {
@@ -107,11 +110,11 @@ class _CampusMapScreenState extends ConsumerState<CampusMapScreen> {
         ),
         _ => _MapSurface(
           loaded: rooms.requireValue,
-          query: _query,
-          search: _search,
-          searchFocus: _searchFocus,
+          query: _searchState.query,
+          search: _searchState.textController,
+          searchFocus: _searchState.focusNode,
           mapKey: _mapKey,
-          onQueryChanged: (String value) => setState(() => _query = value),
+          onQueryChanged: _searchState.updateQuery,
           onSelect: _select,
           onClearSelection: _clearSelection,
         ),

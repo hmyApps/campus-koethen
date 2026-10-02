@@ -264,5 +264,54 @@ void main() {
         throwsA(isA<ApiFailure>()),
       );
     });
+
+    test('page two never replaces the cached first page', () async {
+      bool offline = false;
+      final FakeHttpAdapter adapter = FakeHttpAdapter((options) {
+        if (offline) throw Exception('offline');
+        final int page =
+            int.tryParse('${options.queryParameters['page'] ?? 1}') ?? 1;
+        final Map<String, dynamic> article = Map<String, dynamic>.of(_article)
+          ..['slug'] = 'page-$page'
+          ..['title'] = 'Page $page';
+        return FakeHttpResponse(
+          envelope(
+            <Object>[article],
+            meta: <String, dynamic>{
+              'pagination': <String, dynamic>{
+                'page': page,
+                'pageSize': 20,
+                'total': 2,
+                'totalPages': 2,
+              },
+            },
+          ),
+        );
+      });
+      final NewsRepository repository = NewsRepository(
+        client: fakeApiClient(adapter),
+        cache: SafeContentCache(MemoryContentCache()),
+      );
+
+      await repository.fetchArticles(
+        locale: 'de',
+        channelsParameter: 'campus-news',
+      );
+      await repository.fetchArticles(
+        locale: 'de',
+        channelsParameter: 'campus-news',
+        page: 2,
+      );
+      offline = true;
+
+      final Loaded<NewsPage> cached = await repository.fetchArticles(
+        locale: 'de',
+        channelsParameter: 'campus-news',
+      );
+
+      expect(cached.fromCache, isTrue);
+      expect(cached.value.page, 1);
+      expect(cached.value.articles.single.slug, 'page-1');
+    });
   });
 }

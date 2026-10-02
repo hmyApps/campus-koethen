@@ -31,8 +31,8 @@ class TodoFoldersController extends AsyncNotifier<List<TodoFolder>> {
   List<TodoFolder> get _current => state.value ?? const <TodoFolder>[];
 
   Future<void> _persist(List<TodoFolder> next) async {
-    state = AsyncData<List<TodoFolder>>(next);
     await _store.writeFolders(next);
+    state = AsyncData<List<TodoFolder>>(next);
   }
 
   String _newId() => '${DateTime.now().microsecondsSinceEpoch}-${_seq++}';

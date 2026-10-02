@@ -71,16 +71,24 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
   final String slug;
 
   NewsRepository get _repository => ref.read(newsRepositoryProvider);
-  String _locale = 'de';
+  int _generation = 0;
+  _NewsChannelFeedScope? _activeScope;
 
   @override
   Future<NewsChannelFeedState> build() async {
-    _locale = ref.watch(localeCodeProvider);
+    final int generation = ++_generation;
+    _activeScope = null;
+    final _NewsChannelFeedScope scope = _NewsChannelFeedScope(
+      generation: generation,
+      locale: ref.watch(localeCodeProvider),
+      channelSlug: slug,
+    );
 
     final Loaded<NewsPage> first = await _repository.fetchArticles(
-      locale: _locale,
-      channelsParameter: slug,
+      locale: scope.locale,
+      channelsParameter: scope.channelSlug,
     );
+    if (generation == _generation) _activeScope = scope;
 
     return NewsChannelFeedState(
       articles: List<NewsArticle>.unmodifiable(first.value.articles),
@@ -96,7 +104,13 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
   /// rationale — identical here.
   Future<void> loadMore() async {
     final NewsChannelFeedState? current = state.value;
-    if (current == null || current.isLoadingMore || !current.hasMore) return;
+    final _NewsChannelFeedScope? scope = _activeScope;
+    if (current == null ||
+        scope == null ||
+        current.isLoadingMore ||
+        !current.hasMore) {
+      return;
+    }
 
     state = AsyncData<NewsChannelFeedState>(
       current.copyWith(isLoadingMore: true, loadMoreFailed: false),
@@ -104,10 +118,11 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
 
     try {
       final Loaded<NewsPage> next = await _repository.fetchArticles(
-        locale: _locale,
-        channelsParameter: slug,
+        locale: scope.locale,
+        channelsParameter: scope.channelSlug,
         page: current.page + 1,
       );
+      if (!_isCurrent(scope)) return;
       final NewsChannelFeedState base = state.value ?? current;
       state = AsyncData<NewsChannelFeedState>(
         base.copyWith(
@@ -119,12 +134,16 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
         ),
       );
     } on Object {
+      if (!_isCurrent(scope)) return;
       final NewsChannelFeedState base = state.value ?? current;
       state = AsyncData<NewsChannelFeedState>(
         base.copyWith(isLoadingMore: false, loadMoreFailed: true),
       );
     }
   }
+
+  bool _isCurrent(_NewsChannelFeedScope scope) =>
+      identical(_activeScope, scope) && scope.generation == _generation;
 
   /// Pull-to-refresh: back to page one for this channel.
   Future<void> refresh() async {
@@ -143,6 +162,19 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
     }
     return List<NewsArticle>.unmodifiable(merged);
   }
+}
+
+@immutable
+class _NewsChannelFeedScope {
+  const _NewsChannelFeedScope({
+    required this.generation,
+    required this.locale,
+    required this.channelSlug,
+  });
+
+  final int generation;
+  final String locale;
+  final String channelSlug;
 }
 
 final newsChannelFeedControllerProvider =

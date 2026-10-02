@@ -80,6 +80,7 @@ class NewsRepository {
       parse: NewsArticle.listFromJson,
       // Only the first page is cached; deeper pages always need the network.
       allowCacheFallback: page == 1,
+      writeToCache: page == 1,
     );
 
     return loaded.map(

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -245,6 +246,43 @@ void main() {
         linkNodes.map((SemanticsNode n) => n.label),
         containsAll(<String>['Kanal FB5-News öffnen', 'Kanal FSR.INS öffnen']),
       );
+    });
+
+    testWidgets('uses a focusable 48 dp button for every channel', (
+      WidgetTester tester,
+    ) async {
+      await _pumpCardWithRouter(
+        tester,
+        _article(
+          channels: const <NewsChannelRef>[
+            NewsChannelRef(slug: 'fb5-news', name: 'FB5-News'),
+          ],
+        ),
+      );
+
+      final Finder button = find.ancestor(
+        of: find.text('FB5-News'),
+        matching: find.byType(TextButton),
+      );
+      expect(button, findsOneWidget);
+      expect(
+        tester.getSize(button).height,
+        greaterThanOrEqualTo(kMinInteractiveDimension),
+      );
+
+      for (
+        int i = 0;
+        i < 8 && !Focus.of(tester.element(find.text('FB5-News'))).hasFocus;
+        i++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(Focus.of(tester.element(find.text('FB5-News'))).hasFocus, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('channel:fb5-news'), findsOneWidget);
     });
 
     testWidgets(

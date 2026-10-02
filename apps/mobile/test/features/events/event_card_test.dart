@@ -6,6 +6,7 @@ import 'package:campus_koethen/core/links/linkified_text.dart';
 import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/features/events/application/saved_events_controller.dart';
 import 'package:campus_koethen/features/events/data/saved_events_store.dart';
+import 'package:campus_koethen/features/events/domain/saved_event_snapshot.dart';
 import 'package:campus_koethen/features/events/domain/unified_event.dart';
 import 'package:campus_koethen/features/events/presentation/event_card.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +58,7 @@ Future<void> _pumpCard(
   List<ContentBlock>? content,
   bool isPast = false,
   bool isOrphaned = false,
+  SavedEventsStore? store,
   List<Override> overrides = const <Override>[],
 }) async {
   await pumpScreen(
@@ -74,7 +76,9 @@ Future<void> _pumpCard(
       ),
     ),
     overrides: <Override>[
-      savedEventsStoreProvider.overrideWithValue(MemorySavedEventsStore()),
+      savedEventsStoreProvider.overrideWithValue(
+        store ?? MemorySavedEventsStore(),
+      ),
       savedEventsClockProvider.overrideWithValue(
         () => DateTime.utc(2026, 8, 1),
       ),
@@ -151,6 +155,28 @@ void main() {
     expect(find.byTooltip('Event merken'), findsOneWidget);
   });
 
+  testWidgets('a failed save stays unsaved and shows a storage error', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCard(
+      tester,
+      _postEvent(),
+      store: _WriteFailingSavedEventsStore(),
+    );
+
+    await tester.tap(find.byTooltip('Event merken'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Event merken'), findsOneWidget);
+    expect(
+      find.text(
+        'Das Event konnte nicht auf diesem Gerät gespeichert werden. '
+        'Versuche es erneut.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows a location line when the event has one', (
     WidgetTester tester,
   ) async {
@@ -217,4 +243,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Save event'), findsOneWidget);
   });
+}
+
+class _WriteFailingSavedEventsStore extends MemorySavedEventsStore {
+  @override
+  Future<void> upsert(SavedEventSnapshot snapshot) async =>
+      throw SavedEventsStoreFailure(
+        SavedEventsStoreOperation.write,
+        StateError('failed'),
+      );
 }

@@ -96,11 +96,7 @@ class AboutScreen extends ConsumerWidget {
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: l10n.appTitle,
-                applicationIcon: Image.asset(
-                  'assets/branding/campus-koethen-icon-centered.jpg',
-                  width: 64,
-                  height: 64,
-                ),
+                applicationIcon: const BrandMark(size: 64),
                 applicationLegalese: l10n.aboutCopyright,
                 applicationVersion: version.hasValue
                     ? version.requireValue.version

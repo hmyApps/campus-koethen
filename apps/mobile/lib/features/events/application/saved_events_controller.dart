@@ -8,89 +8,82 @@ import '../domain/saved_event_snapshot.dart';
 import '../domain/saved_events_rules.dart';
 import '../domain/unified_event.dart';
 
-/// Riverpod front end of [SavedEventsStore], applying the cap and orphan rules from `saved_events_rules.dart` around plain persistence.
+/// Riverpod front end of [SavedEventsStore], applying cap and orphan rules.
+/// State changes become visible only after the store confirms the commit.
 class SavedEventsController extends AsyncNotifier<List<SavedEventSnapshot>> {
   SavedEventsStore get _store => ref.read(savedEventsStoreProvider);
   DateTime Function() get _now => ref.read(savedEventsClockProvider);
 
   @override
-  Future<List<SavedEventSnapshot>> build() async {
-    final List<SavedEventSnapshot> loaded = await _store.readAll();
-    return loaded;
-  }
+  Future<List<SavedEventSnapshot>> build() => _store.readAll();
 
-  /// Saves [event]. Silently declines once the 500-entry cap is reached
-  /// (returns `false`) rather than evicting anything — the cap is a limit,
-  /// not a rotation policy the user did not ask for.
+  bool get acceptsWrites => state.hasValue && !state.isLoading;
+
   Future<bool> save(UnifiedEvent event) async {
-    final List<SavedEventSnapshot> current =
-        state.value ?? const <SavedEventSnapshot>[];
+    if (!acceptsWrites) return false;
+    final List<SavedEventSnapshot> current = state.requireValue;
     if (current.any((SavedEventSnapshot s) => s.eventRef == event.eventRef)) {
-      return true; // already saved
+      return true;
     }
     if (!canAddSavedEvent(current)) return false;
 
-    final List<SavedEventSnapshot> next = <SavedEventSnapshot>[
-      ...current,
-      SavedEventSnapshot.fromUnifiedEvent(event, savedAt: _now()),
-    ];
-    state = AsyncData<List<SavedEventSnapshot>>(next);
-    await _store.writeAll(next);
+    final SavedEventSnapshot added = SavedEventSnapshot.fromUnifiedEvent(
+      event,
+      savedAt: _now(),
+    );
+    await _store.upsert(added);
+    state = AsyncData<List<SavedEventSnapshot>>(
+      List<SavedEventSnapshot>.unmodifiable(<SavedEventSnapshot>[
+        ...current,
+        added,
+      ]),
+    );
     return true;
   }
 
-  /// Explicit user removal is the only removal path.
   Future<void> remove(String eventRef) async {
-    final List<SavedEventSnapshot> current =
-        state.value ?? const <SavedEventSnapshot>[];
+    if (!acceptsWrites) return;
+    final List<SavedEventSnapshot> current = state.requireValue;
     final List<SavedEventSnapshot> next = current
         .where((SavedEventSnapshot s) => s.eventRef != eventRef)
         .toList();
     if (next.length == current.length) return;
-    state = AsyncData<List<SavedEventSnapshot>>(next);
-    await _store.writeAll(next);
+    await _store.delete(eventRef);
+    state = AsyncData<List<SavedEventSnapshot>>(
+      List<SavedEventSnapshot>.unmodifiable(next),
+    );
   }
 
-  /// Whether [eventRef] is on the list.
-  ///
-  /// A linear scan, which is fine for the one-off question an action asks.
-  /// A widget that renders many events asks [savedEventRefsProvider] instead —
-  /// see its doc comment.
   bool isSaved(String eventRef) => (state.value ?? const <SavedEventSnapshot>[])
       .any((SavedEventSnapshot s) => s.eventRef == eventRef);
 
-  /// Applies the orphan rule after a **successful** load of one source's
-  /// window — never call this from an error/timeout/offline handler.
-  ///
-  /// [loadedEventRefs] are the `eventRef`s the load actually returned; only
-  /// the identity is needed for the orphan check, not the full events.
   Future<void> reconcileAfterSuccessfulLoad({
     required Iterable<String> loadedEventRefs,
     required DateTime windowFrom,
     required DateTime windowTo,
     required bool Function(SavedEventSnapshot snapshot) belongsToThisSource,
   }) async {
-    final List<SavedEventSnapshot> current =
-        state.value ?? const <SavedEventSnapshot>[];
+    if (!acceptsWrites) return;
+    final List<SavedEventSnapshot> current = state.requireValue;
     if (current.isEmpty) return;
-    final Set<String> loadedRefs = loadedEventRefs.toSet();
     final List<SavedEventSnapshot> next = reconcileOrphanStatus(
       saved: current,
-      loadedEventRefs: loadedRefs,
+      loadedEventRefs: loadedEventRefs.toSet(),
       windowFrom: windowFrom,
       windowTo: windowTo,
       belongsToThisSource: belongsToThisSource,
     );
-    final bool changed = List.generate(
-      next.length,
-      (int i) => next[i].isOrphaned != current[i].isOrphaned,
-    ).any((bool b) => b);
-    if (!changed) return;
-    state = AsyncData<List<SavedEventSnapshot>>(next);
-    await _store.writeAll(next);
+    final List<SavedEventSnapshot> changed = <SavedEventSnapshot>[
+      for (int i = 0; i < next.length; i++)
+        if (next[i].isOrphaned != current[i].isOrphaned) next[i],
+    ];
+    if (changed.isEmpty) return;
+    await _store.upsertAll(changed);
+    state = AsyncData<List<SavedEventSnapshot>>(
+      List<SavedEventSnapshot>.unmodifiable(next),
+    );
   }
 
-  /// The two deterministic display groups.
   SavedEventsGroups groups({DateTime? now}) => groupSavedEvents(
     state.value ?? const <SavedEventSnapshot>[],
     now: now ?? _now(),
@@ -101,19 +94,9 @@ final AsyncNotifierProvider<SavedEventsController, List<SavedEventSnapshot>>
 savedEventsControllerProvider =
     AsyncNotifierProvider<SavedEventsController, List<SavedEventSnapshot>>(
       SavedEventsController.new,
+      retry: (_, _) => null,
     );
 
-/// Which events are on the saved list, as a set of their `eventRef`s.
-///
-/// An event card asks one question: "is THIS event saved". Answering it from
-/// the list itself meant two costs on a screen full of cards. Watching the
-/// list rebuilt every visible card whenever any event anywhere was saved or
-/// unsaved, and the answer itself was a linear scan of a list the cap allows
-/// to hold [kSavedEventsCap] entries — so n cards paid n × 500 comparisons.
-///
-/// Derived here once per change, so a card can `select` the single boolean it
-/// cares about: it then rebuilds only when its own state changes, and the
-/// lookup is a set membership test.
 final Provider<Set<String>> savedEventRefsProvider = Provider<Set<String>>((
   Ref ref,
 ) {
@@ -125,13 +108,8 @@ final Provider<Set<String>> savedEventRefsProvider = Provider<Set<String>>((
   };
 });
 
-/// Overridable clock, so tests can control "now" for saving and orphan
-/// reconciliation without depending on the wall clock.
 final Provider<DateTime Function()> savedEventsClockProvider =
     Provider<DateTime Function()>((Ref ref) => DateTime.now);
 
-/// Overridable store, same convention as `todoStoreProvider`: the default is
-/// the real Hive-backed store, and tests override with
-/// [MemorySavedEventsStore].
 final Provider<SavedEventsStore> savedEventsStoreProvider =
     Provider<SavedEventsStore>((Ref ref) => HiveSavedEventsStore());

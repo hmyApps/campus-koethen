@@ -4,12 +4,31 @@
 import 'todo.dart';
 import 'todo_folder.dart';
 
-/// Port: local, on-device persistence for the to-do list and its folders. Each
-/// collection is read and written as one unit — both are small and this keeps
-/// the store trivially correct.
+enum TodoStoreOperation { open, migrate, read, write }
+
+/// A typed persistence failure for user-authored task data.
+class TodoStoreFailure implements Exception {
+  const TodoStoreFailure(this.operation, this.cause);
+
+  final TodoStoreOperation operation;
+  final Object cause;
+
+  @override
+  String toString() => 'TodoStoreFailure($operation, $cause)';
+}
+
+/// Port for local, on-device persistence of tasks and their folders.
+///
+/// Tasks have stable IDs and support entry-level mutations. [writeAll] exists
+/// for imports and test setup; production mutations use the targeted methods.
+/// Store failures are never converted to an empty list or a successful write.
 abstract interface class TodoStore {
   Future<List<Todo>> readAll();
   Future<void> writeAll(List<Todo> todos);
+  Future<void> upsertTodo(Todo todo);
+  Future<void> upsertTodos(Iterable<Todo> todos);
+  Future<void> deleteTodo(String id);
+  Future<void> deleteTodos(Iterable<String> ids);
 
   Future<List<TodoFolder>> readFolders();
   Future<void> writeFolders(List<TodoFolder> folders);
@@ -26,6 +45,32 @@ class InMemoryTodoStore implements TodoStore {
   @override
   Future<void> writeAll(List<Todo> todos) async =>
       _items = List<Todo>.of(todos);
+
+  @override
+  Future<void> upsertTodo(Todo todo) => upsertTodos(<Todo>[todo]);
+
+  @override
+  Future<void> upsertTodos(Iterable<Todo> todos) async {
+    final List<Todo> next = List<Todo>.of(_items);
+    for (final Todo todo in todos) {
+      final int index = next.indexWhere((Todo item) => item.id == todo.id);
+      if (index < 0) {
+        next.add(todo);
+      } else {
+        next[index] = todo;
+      }
+    }
+    _items = next;
+  }
+
+  @override
+  Future<void> deleteTodo(String id) => deleteTodos(<String>[id]);
+
+  @override
+  Future<void> deleteTodos(Iterable<String> ids) async {
+    final Set<String> removed = ids.toSet();
+    _items = _items.where((Todo todo) => !removed.contains(todo.id)).toList();
+  }
 
   @override
   Future<List<TodoFolder>> readFolders() async => List<TodoFolder>.of(_folders);

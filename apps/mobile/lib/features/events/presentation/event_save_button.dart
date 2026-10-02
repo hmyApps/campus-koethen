@@ -12,6 +12,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../l10n/l10n.dart';
 import '../../notifications/presentation/pre_permission_sheet.dart';
 import '../application/saved_events_controller.dart';
+import '../data/saved_events_store.dart';
 import '../domain/saved_event_snapshot.dart';
 import '../domain/unified_event.dart';
 
@@ -29,9 +30,10 @@ class EventSaveButton extends ConsumerWidget {
         (Set<String> refs) => refs.contains(event.eventRef),
       ),
     );
-    final bool loading = ref.watch(
+    final bool unavailable = ref.watch(
       savedEventsControllerProvider.select(
-        (AsyncValue<List<SavedEventSnapshot>> value) => value.isLoading,
+        (AsyncValue<List<SavedEventSnapshot>> value) =>
+            value.isLoading || !value.hasValue,
       ),
     );
     final String tooltip = saved ? l10n.eventSaveRemove : l10n.eventSaveAdd;
@@ -41,20 +43,28 @@ class EventSaveButton extends ConsumerWidget {
         savedEventsControllerProvider.notifier,
       );
       unawaited(HapticFeedback.selectionClick());
-      if (saved) {
-        await controller.remove(event.eventRef);
-        return;
-      }
-      final bool accepted = await controller.save(event);
-      if (!accepted) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.eventSaveLimitReachedMessage)),
-          );
+      try {
+        if (saved) {
+          await controller.remove(event.eventRef);
+          return;
         }
-        return;
+        final bool accepted = await controller.save(event);
+        if (!accepted) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l10n.eventSaveLimitReachedMessage)),
+            );
+          }
+          return;
+        }
+        if (context.mounted) await maybeOfferNotificationOptIn(context, ref);
+      } on SavedEventsStoreFailure {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.eventSaveFailedMessage)));
+        }
       }
-      if (context.mounted) await maybeOfferNotificationOptIn(context, ref);
     }
 
     return Semantics(
@@ -63,7 +73,7 @@ class EventSaveButton extends ConsumerWidget {
       excludeSemantics: true,
       child: IconButton(
         tooltip: tooltip,
-        onPressed: loading ? null : toggle,
+        onPressed: unavailable ? null : toggle,
         constraints: const BoxConstraints(
           minWidth: AppSizes.minTouchTarget,
           minHeight: AppSizes.minTouchTarget,

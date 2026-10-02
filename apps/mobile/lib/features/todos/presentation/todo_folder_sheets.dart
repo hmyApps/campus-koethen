@@ -11,6 +11,7 @@ import '../application/todo_folders_controller.dart';
 import '../application/todos_controller.dart';
 import '../domain/todo.dart';
 import '../domain/todo_folder.dart';
+import '../domain/todo_store.dart';
 
 /// Opens the "move to folder" picker for [todo] as a modal sheet.
 Future<void> showTodoFolderPicker(
@@ -37,11 +38,14 @@ class _TodoFolderPickerSheet extends ConsumerWidget {
     final List<TodoFolder> folders =
         ref.watch(todoFoldersControllerProvider).value ?? const <TodoFolder>[];
 
-    void select(String? folderId) {
-      ref
-          .read(todosControllerProvider.notifier)
-          .moveToFolder(todo.id, folderId);
-      Navigator.of(context).pop();
+    Future<void> select(String? folderId) async {
+      final bool committed = await _runTodoWrite(
+        context,
+        () => ref
+            .read(todosControllerProvider.notifier)
+            .moveToFolder(todo.id, folderId),
+      );
+      if (committed && context.mounted) Navigator.of(context).pop();
     }
 
     return SafeArea(
@@ -141,8 +145,9 @@ Future<void> _showTodoFolderNameDialog({
       initialName: initialName,
     ),
   );
+  if (!context.mounted) return;
   if (name != null && name.trim().isNotEmpty) {
-    await onConfirm(name);
+    await _runTodoWrite(context, () => onConfirm(name));
   }
 }
 
@@ -293,9 +298,13 @@ Future<void> _confirmAndDeleteTodoFolder(
         ) ??
         false;
     if (!confirmed) return;
-    await ref
-        .read(todoFoldersControllerProvider.notifier)
-        .delete(folder.id, TodoFolderDeleteAction.moveToUnfiled);
+    if (!context.mounted) return;
+    await _runTodoWrite(
+      context,
+      () => ref
+          .read(todoFoldersControllerProvider.notifier)
+          .delete(folder.id, TodoFolderDeleteAction.moveToUnfiled),
+    );
     return;
   }
 
@@ -328,7 +337,28 @@ Future<void> _confirmAndDeleteTodoFolder(
         ),
       );
   if (action == null) return;
-  await ref
-      .read(todoFoldersControllerProvider.notifier)
-      .delete(folder.id, action);
+  if (!context.mounted) return;
+  await _runTodoWrite(
+    context,
+    () => ref
+        .read(todoFoldersControllerProvider.notifier)
+        .delete(folder.id, action),
+  );
+}
+
+Future<bool> _runTodoWrite(
+  BuildContext context,
+  Future<void> Function() operation,
+) async {
+  try {
+    await operation();
+    return true;
+  } on TodoStoreFailure {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.todoSaveFailedError)));
+    }
+    return false;
+  }
 }

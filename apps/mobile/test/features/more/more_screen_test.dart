@@ -65,6 +65,7 @@ void main() {
 
     // Studium: what is not pinned.
     for (final AppModule module in <AppModule>[
+      AppModule.timetable,
       AppModule.moodle,
       AppModule.grades,
       AppModule.todos,
@@ -92,6 +93,7 @@ void main() {
       await pumpMore(tester, themeMode: mode);
 
       for (final IconData glyph in <IconData>[
+        AppIcons.schedule_outlined,
         AppIcons.book_outlined,
         AppIcons.grade_outlined,
         AppIcons.file_pencil,

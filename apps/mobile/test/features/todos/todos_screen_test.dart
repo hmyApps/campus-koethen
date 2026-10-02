@@ -49,6 +49,32 @@ void main() {
     expect(await store.readAll(), hasLength(1));
   });
 
+  testWidgets('a failed add keeps the text and shows a storage error', (
+    WidgetTester tester,
+  ) async {
+    final _WriteFailingTodoStore store = _WriteFailingTodoStore();
+    await pumpScreen(
+      tester,
+      const TodosScreen(),
+      overrides: <Override>[todoStoreProvider.overrideWithValue(store)],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Hausarbeit abgeben');
+    await tester.tap(find.byIcon(AppIcons.add).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hausarbeit abgeben'), findsOneWidget);
+    expect(
+      find.text(
+        'Die Änderung konnte nicht auf diesem Gerät gespeichert werden. '
+        'Versuche es erneut.',
+      ),
+      findsOneWidget,
+    );
+    expect(await store.readAll(), isEmpty);
+  });
+
   testWidgets('renames a task without failing while the dialog closes', (
     WidgetTester tester,
   ) async {
@@ -384,8 +410,34 @@ class _UnreadableTodoStore implements TodoStore {
   }
 
   @override
+  Future<void> upsertTodo(Todo todo) async {
+    writes++;
+  }
+
+  @override
+  Future<void> upsertTodos(Iterable<Todo> todos) async {
+    writes++;
+  }
+
+  @override
+  Future<void> deleteTodo(String id) async {
+    writes++;
+  }
+
+  @override
+  Future<void> deleteTodos(Iterable<String> ids) async {
+    writes++;
+  }
+
+  @override
   Future<List<TodoFolder>> readFolders() async => folders;
 
   @override
   Future<void> writeFolders(List<TodoFolder> next) async => folders = next;
+}
+
+class _WriteFailingTodoStore extends InMemoryTodoStore {
+  @override
+  Future<void> upsertTodo(Todo todo) async =>
+      throw TodoStoreFailure(TodoStoreOperation.write, StateError('failed'));
 }

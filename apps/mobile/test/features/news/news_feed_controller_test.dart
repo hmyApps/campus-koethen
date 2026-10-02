@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/core/cache/cache_providers.dart';
 import 'package:campus_koethen/core/cache/content_cache.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
@@ -290,6 +292,75 @@ void main() {
 
     expect(state.page, 1);
     expect(feed.requestedTagsParams.last, 'event');
+  });
+
+  test('a late page from the old tag never enters the new feed', () async {
+    final Completer<void> releaseOldPage = Completer<void>();
+    final Completer<void> oldPageStarted = Completer<void>();
+    final FakeHttpAdapter adapter = FakeHttpAdapter((
+      RequestOptions options,
+    ) async {
+      if (options.path.contains('channels')) {
+        return FakeHttpResponse(envelope(<Object>[_channel]));
+      }
+      if (options.path.contains('tags')) {
+        return FakeHttpResponse(envelope(<Object>[_tag]));
+      }
+      final int page =
+          int.tryParse('${options.queryParameters['page'] ?? 1}') ?? 1;
+      final String? tag = options.queryParameters['tags'] as String?;
+      if (page == 2 && tag == null) {
+        oldPageStarted.complete();
+        await releaseOldPage.future;
+      }
+      final List<String> slugs = tag == 'event'
+          ? <String>['new-filter']
+          : page == 1
+          ? <String>['old-filter']
+          : <String>['late-old-page'];
+      return FakeHttpResponse(
+        envelope(
+          slugs.map(_article).toList(),
+          meta: <String, dynamic>{
+            'pagination': <String, dynamic>{
+              'page': page,
+              'pageSize': 2,
+              'total': 2,
+              'totalPages': 2,
+            },
+          },
+        ),
+      );
+    });
+    final ProviderContainer container = ProviderContainer(
+      overrides: <Override>[
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        contentCacheProvider.overrideWithValue(
+          SafeContentCache(MemoryContentCache()),
+        ),
+        apiClientProvider.overrideWithValue(fakeApiClient(adapter)),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(newsFeedControllerProvider.future);
+
+    final Future<void> oldLoadMore = container
+        .read(newsFeedControllerProvider.notifier)
+        .loadMore();
+    await oldPageStarted.future;
+    await container.read(newsTagFilterProvider.notifier).select('event');
+    final NewsFeedState refreshed = await container.read(
+      newsFeedControllerProvider.future,
+    );
+    expect(_slugs(refreshed), <String>['new-filter']);
+
+    releaseOldPage.complete();
+    await oldLoadMore;
+
+    expect(
+      _slugs(container.read(newsFeedControllerProvider).requireValue),
+      <String>['new-filter'],
+    );
   });
 
   test(
