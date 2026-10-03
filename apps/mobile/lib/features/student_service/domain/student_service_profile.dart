@@ -5,16 +5,20 @@ import '../../grades/domain/grade_portal_profile.dart' show gradePortalAllows;
 
 /// The pinned endpoints of the read-only HISinOne student-service functions.
 ///
-/// Two deliberately SEPARATE allowlist checks, never folded into one:
+/// Two deliberately SEPARATE allowlist checks, never folded into one, even
+/// though both now pin the same host:
 ///
 ///  - [allows] is the only host every piece of session traffic (login, the
 ///    "Studienservice" page, every tab-switch POST) may reach.
 ///  - [allowsDocumentDownload] is a second, narrower allowlist for exactly
 ///    one purpose: the one-time link a generated certificate's AJAX job
-///    hands back. Real-portal analysis (2026-10-01) found that link points at
-///    a DIFFERENT host than the portal itself — never widen [allows] to cover
-///    it, and never use [allowsDocumentDownload] for anything but that one
-///    fetch (AGENTS.md §2: "kein gemeinsamer Pool").
+///    hands back. A 2026-10-01 analysis had wrongly claimed that link points
+///    at a separate "untrust-" subdomain; a real captured download request
+///    on 2026-10-04 confirmed it is the SAME host as the portal, just with
+///    its own narrow path/query shape. Kept as its own function regardless,
+///    never used for anything but that one fetch (AGENTS.md §2: "kein
+///    gemeinsamer Pool") — a future real difference must not require
+///    re-threading every call site.
 abstract final class StudentServiceProfile {
   static const String scheme = 'https';
 
@@ -31,10 +35,9 @@ abstract final class StudentServiceProfile {
       '$baseUrl/qisserver/pages/cm/stu/studyService/start.xhtml'
       '?_flowId=studyservice-flow';
 
-  /// The host a generated certificate's one-time download link points at.
-  /// Confirmed by real-portal analysis to differ from [host].
-  static const String documentDownloadHost =
-      'untrust-sscportal.ssc.hs-anhalt.de';
+  /// The host a generated certificate's one-time download link points at —
+  /// the same host as the portal itself (see the class doc comment).
+  static const String documentDownloadHost = host;
 
   static bool allows(Uri uri) =>
       gradePortalAllows(uri, scheme: scheme, host: host);

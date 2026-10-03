@@ -238,7 +238,7 @@ void main() {
           if (url.contains('auth.logout')) {
             return const FakeHtmlResponse('bye');
           }
-          if (o.uri.host == 'untrust-sscportal.ssc.hs-anhalt.de') {
+          if (o.uri.queryParameters['state'] == 'docdownload') {
             expect(o.headers['cookie'], contains('student-session=fixture'));
             return const FakeHtmlResponse(
               '%PDF-1.7\nfixture',
@@ -328,7 +328,7 @@ void main() {
           if (url.contains('auth.logout')) {
             return const FakeHtmlResponse('bye');
           }
-          if (o.uri.host == 'untrust-sscportal.ssc.hs-anhalt.de') {
+          if (o.uri.queryParameters['state'] == 'docdownload') {
             return const FakeHtmlResponse(
               '%PDF-1.7\nfixture',
               contentType: 'application/pdf',
@@ -351,8 +351,16 @@ void main() {
                   partialResponseStarted(viewState: 'rotated-token'),
                 );
               }
+              // The real `<p:poll>` widget's own fixed source/render ids
+              // (confirmed 2026-10-04 from a real poll request) — a
+              // `:poll`-suffixed source distinct from the render target.
               expect(
                 body['javax.faces.source'],
+                'studyserviceForm:report:reports:reportButtons:'
+                'jobDownloadPoll:poll',
+              );
+              expect(
+                body['javax.faces.partial.render'],
                 'studyserviceForm:report:reports:reportButtons:'
                 'jobDownloadPoll',
               );

@@ -273,40 +273,6 @@ abstract final class HisInOneStudentServiceParser {
     return const PaymentHint(kind: PaymentHintKind.unrecognised);
   }
 
-  /// The PrimeFaces `<p:poll>` component's own client id, read from
-  /// `data-poll-button-client-id` on the `.polling-data-holder` span the
-  /// started job renders. `null` when that marker is not there — the caller
-  /// treats that as the job having no recognised polling mechanism.
-  ///
-  /// Reads from [cdataContentOf], not [html] directly: a JSF partial-response
-  /// wraps its rendered markup in `<![CDATA[…]]>`, and an HTML5 tokenizer
-  /// treats `<![CDATA[` as a "bogus comment" that swallows everything up to
-  /// the very next `>` — which is the first real tag's own closing bracket.
-  /// Parsing the XML envelope directly as HTML would silently lose that tag.
-  static String? readPollButtonId(String partialResponseXml) {
-    final dom.Element? holder = html_parser
-        .parse(cdataContentOf(partialResponseXml))
-        .querySelector('.polling-data-holder');
-    final String? id = holder?.attributes['data-poll-button-client-id'];
-    return (id == null || id.isEmpty) ? null : id;
-  }
-
-  /// Concatenates every `<![CDATA[ … ]]>` payload of a JSF partial-response,
-  /// so the real rendered HTML inside can be parsed on its own, without the
-  /// XML envelope confusing an HTML5 tokenizer (see [readPollButtonId]).
-  /// Returns the input unchanged when no CDATA section is found — a plain
-  /// HTML page (not a partial-response) parses the same way either way.
-  static String cdataContentOf(String xmlOrHtml) {
-    final Iterable<RegExpMatch> matches = _cdataPattern.allMatches(xmlOrHtml);
-    if (matches.isEmpty) return xmlOrHtml;
-    return matches.map((RegExpMatch m) => m.group(1) ?? '').join('\n');
-  }
-
-  static final RegExp _cdataPattern = RegExp(
-    r'<!\[CDATA\[(.*?)\]\]>',
-    dotAll: true,
-  );
-
   /// A JSF partial response can rotate the view state after every AJAX call.
   /// Keeping that value for the next poll avoids replaying a stale CSRF/view
   /// token while still refusing to synthesize one when the portal omits it.

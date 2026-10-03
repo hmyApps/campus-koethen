@@ -207,29 +207,6 @@ void main() {
     );
   });
 
-  group('readPollButtonId', () {
-    test('reads the poll marker out of a CDATA-wrapped partial response', () {
-      final String? pollId = HisInOneStudentServiceParser.readPollButtonId(
-        partialResponseStarted(),
-      );
-      expect(
-        pollId,
-        'studyserviceForm:report:reports:reportButtons:jobDownloadPoll',
-      );
-    });
-
-    test('an HTML5 parser would otherwise swallow the first real tag after '
-        '<![CDATA[ as a bogus comment — this must not happen here', () {
-      // Regression for the exact failure mode: parsing the raw XML
-      // envelope directly (instead of through `cdataContentOf`) loses the
-      // `<span data-poll-button-client-id="...">` tag entirely, because an
-      // HTML5 tokenizer treats `<![CDATA[` as a bogus comment that runs to
-      // the very next `>` — which is this span's own opening tag.
-      final String xml = partialResponseStarted(pollButtonId: 'x:y:z');
-      expect(HisInOneStudentServiceParser.readPollButtonId(xml), 'x:y:z');
-    });
-  });
-
   group('viewStateFromPartialResponse', () {
     test('reads the rotated JSF view state for the next poll', () {
       expect(
@@ -248,7 +225,7 @@ void main() {
             partialResponseFinished(),
           );
       expect(url, isNotNull);
-      expect(url, contains('untrust-sscportal.ssc.hs-anhalt.de'));
+      expect(url, contains('sscportal.ssc.hs-anhalt.de'));
       expect(url, contains('state=docdownload'));
     });
 

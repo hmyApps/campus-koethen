@@ -51,9 +51,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      offene/keine offenen Zahlungen). Diese Funktionen nutzen dieselben, bereits für
      den Notenspiegel hinterlegten Zugangsdaten wieder — kein zweiter Login, kein separater
      `+`/`−`-Dienst. Der erzeugte Bescheinigungsabruf darf zusätzlich ausschließlich per `GET`
-     an `https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
+     an `https://sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
      `state=docdownload` gehen; Ziel und Einweg-Token müssen aus der aktuellen AJAX-Antwort
-     stammen, und dieser zweite Host ist **keine** gemeinsame oder allgemeine Allowlist.
+     stammen, und diese enge Pfad-/Parameter-Prüfung ist **keine** gemeinsame oder allgemeine
+     Allowlist für den Host.
      Erlaubte Formularaktionen sind nur Login, Studienservice-Tabwechsel sowie Start und Polling
      der vom Nutzer gewählten Bescheinigung. **Ausdrücklich ausgeschlossen** bleibt jede Änderung
      des Hochschul-Datensatzes: keine Prüfungsanmeldung, keine Adressänderung und kein Antrag.

@@ -147,40 +147,38 @@ String studyServiceReportHtml({String flowExecutionKey = 'e1s4'}) =>
 </body></html>
 ''';
 
-/// A JSF partial-response that renders a "poll" marker but no download link
-/// yet — the job just started.
-String partialResponseStarted({
-  String pollButtonId =
-      'studyserviceForm:report:reports:reportButtons:jobDownloadPoll',
-  String viewState = 'view-state-token-5',
-}) =>
+/// A JSF partial-response for the `<p:poll>` widget's own component, with no
+/// download link yet — the job is still running. The real widget carries no
+/// discoverable "poll marker": its render target and the fixed `:poll`
+/// source it polls with are both read directly off the gateway's own
+/// `_pollComponentId` constant (confirmed 2026-10-04 from a real poll
+/// request), not scraped from this response.
+String partialResponseStarted({String viewState = 'view-state-token-5'}) =>
     '''
 <?xml version='1.0' encoding='UTF-8'?>
 <partial-response><changes>
-<update id="studyserviceForm:report:reports:reportButtons:jobDownload"><![CDATA[
-<div id="studyserviceForm:report:reports:reportButtons:jobDownload">
-  <span class="polling-data-holder" data-poll-button-client-id="$pollButtonId"
-        data-timeout="60000" data-stop="false" data-is-ajax="true"></span>
-</div>
+<update id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"><![CDATA[
+<span id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"></span>
 ]]></update>
 <update id="javax.faces.ViewState"><![CDATA[$viewState]]></update>
 </changes></partial-response>
 ''';
 
 /// A JSF partial-response whose job has finished: the eval block navigates to
-/// the one-time download link.
-String partialResponseFinished({
-  String docId = 'abc-123',
-  String hash = 'deadbeef',
-}) =>
+/// the one-time download link. Same host as the portal itself and just
+/// `state`/`docId`, confirmed 2026-10-04 from a real finished download — an
+/// earlier analysis had wrongly claimed a separate "untrust-" subdomain and
+/// additional accountId/hash/timestamp/docName parameters that the real
+/// portal does not send.
+String partialResponseFinished({String docId = 'abc-123'}) =>
     '''
 <?xml version='1.0' encoding='UTF-8'?>
 <partial-response><changes>
-<update id="studyserviceForm:report:reports:reportButtons:jobDownload"><![CDATA[
-<div id="studyserviceForm:report:reports:reportButtons:jobDownload">done</div>
+<update id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"><![CDATA[
+<span id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll">done</span>
 ]]></update>
 <eval><![CDATA[
-window.location = 'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&accountId=1&hash=$hash&timestamp=20261001120000&docId=$docId&docName=Gebuehrenbescheinigung.pdf';
+window.location = 'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=$docId';
 ]]></eval>
 </changes></partial-response>
 ''';

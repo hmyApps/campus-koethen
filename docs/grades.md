@@ -179,23 +179,24 @@ Zeitraum/Verwendungszweck/Soll/Ist. Diese beiden Werte werden deshalb als **Hinw
 verlässliche, eigenständige Statusfelder dargestellt.
 
 **Bescheinigungen** sind kein direkter Download-Link, sondern ein mehrstufiger Ablauf: Button
-klicken (`…:job2`, AJAX) → Overlay „PDF erstellen" (`startJob`) → Polling
-(`…:jobDownloadPoll`) → die AJAX-Partial-Response löst per JavaScript einen `GET` auf einem
-**zweiten, ausdrücklich nur für diesen Abruf freigegebenen Host** aus:
+klicken (`…:job2`, AJAX, die Antwort rendert drei Komponenten: das Overlay, den Download-Slot
+`jobDownload` und die Meldungsbox) → sobald das Overlay den `<p:poll>`-Widget
+`…:jobDownloadPoll` enthält, pollt dieser mit seiner eigenen, festen `:poll`-Quelle und rendert
+sich selbst → sobald fertig, löst die Partial-Response per JavaScript einen `GET` aus:
 
 ```
-https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload
-  &accountId=…&hash=…&timestamp=…&docId=…&docName=…
+https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=…
 ```
 
-`hash`/`timestamp`/`docId` sind pro Vorgang neu und **nicht im Voraus konstruierbar** — sie müssen
-aus der Partial-Response gelesen werden. Ein manueller Testabruf dieser URL lieferte `503`; die
-wahrscheinlichste Erklärung ist ein lokal installierter Download-Manager (IDM), der den
-Download-Intent abfing und den Einweg-Token vor der eigentlichen Anfrage verbrauchte — ein
-Artefakt der Testumgebung, kein belegtes Server-Verhalten. Der Ablauf ist anhand der realen
-Seitenstruktur und des JSF/MyFaces-Vertrags implementiert und durch deterministische
-Start-/Polling-/ViewState-/PDF-Tests abgesichert. Eine erfolgreiche Ende-zu-Ende-Prüfung mit einem
-realen Konto und einer unverbrauchten Einweg-URL steht weiterhin als manueller Portaltest aus.
+Derselbe Host wie das Portal selbst, kein eigener Host — bestätigt am 2026-10-04 durch einen
+echten Download-Mitschnitt. Eine frühere Fassung dieser Dokumentation hatte fälschlich einen
+separaten Host `untrust-sscportal.ssc.hs-anhalt.de` sowie zusätzliche Parameter
+(`accountId`/`hash`/`timestamp`/`docName`) behauptet und einen `503` bei einem Testabruf dieser
+erfundenen URL auf einen lokalen Download-Manager zurückgeführt — tatsächlich war schlicht die
+URL selbst nie real. `docId` ist pro Vorgang neu und **nicht im Voraus konstruierbar** — er muss
+aus der Partial-Response gelesen werden. Der Ablauf ist anhand der realen Seitenstruktur und des
+JSF/MyFaces-Vertrags implementiert und durch deterministische Start-/Polling-/ViewState-/PDF-Tests
+abgesichert.
 
 ### Konsequenzen für die Umsetzung
 
@@ -223,11 +224,13 @@ realen Konto und einer unverbrauchten Einweg-URL steht weiterhin als manueller P
   Notenspiegel-Cache.
 - Logout/Wipe ist an dieselbe Session-Generation gekoppelt wie Noten und Moodle: ein nach dem
   Trennen verspätet eintreffendes Ergebnis darf den lokalen Stand nie wiederbeleben.
-- Der zweite Host `untrust-sscportal.ssc.hs-anhalt.de` ist mit einer **eigenen, expliziten und
-  pfadbegrenzten Allowlist** freigegeben: ausschließlich HTTPS, Standardport,
-  `/qisserver/rds` und `state=docdownload`. Der Download läuft im selben kurzlebigen Cookie-Jar wie
-  Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder Antwort-Hosts werden
-  abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte Hosts.
+- Der Dokument-Download läuft über eine **eigene, explizite und pfadbegrenzte Allowlist** —
+  derselbe Host wie das Portal, aber eng auf ausschließlich HTTPS, Standardport,
+  `/qisserver/rds` und `state=docdownload` geprüft, getrennt von der allgemeinen Session-Allowlist
+  gehalten (AGENTS.md §2: „kein gemeinsamer Pool"). Der Download läuft im selben kurzlebigen
+  Cookie-Jar wie Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder
+  Antwort-Hosts werden abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte
+  Hosts.
 
 ## Sicherheit (für beide Portale identisch)
 

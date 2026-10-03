@@ -199,19 +199,18 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
           );
 
       if (downloadUrl == null) {
-        final String? pollId = HisInOneStudentServiceParser.readPollButtonId(
-          started.html,
-        );
-        if (pollId == null) {
-          return const CertificateUnavailable('no-poll-target');
-        }
+        // The real `<p:poll>` widget's own client id and render target
+        // (confirmed 2026-10-04 from a real poll request): a fixed suffix
+        // of the same component the job-start step already rendered, not
+        // something scraped off a "polling data holder" marker that does
+        // not actually exist on the page.
         for (int attempt = 0; attempt < _maxPollAttempts; attempt++) {
           await Future<void>.delayed(_pollInterval);
           started = await _ajaxRequest(
             session,
             ajaxForm,
-            sourceId: pollId,
-            renderId: renderTarget,
+            sourceId: '$_pollComponentId:poll',
+            renderId: _pollComponentId,
           );
           downloadUrl =
               HisInOneStudentServiceParser.extractDownloadUrlFromPartialResponse(
@@ -239,6 +238,8 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
   // ---------------------------------------------------------------------
 
   static const int _maxPollAttempts = 10;
+  static const String _pollComponentId =
+      'studyserviceForm:report:reports:reportButtons:jobDownloadPoll';
   static const String _loginUrl =
       '${StudentServiceProfile.baseUrl}/qisserver/rds'
       '?state=user&type=1&category=auth.login';

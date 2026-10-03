@@ -10,7 +10,7 @@ void main() {
       expect(
         StudentServiceProfile.allowsDocumentDownload(
           Uri.parse(
-            'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload&docId=abc',
           ),
         ),
@@ -18,21 +18,24 @@ void main() {
       );
     });
 
-    test('rejects a different path, state, origin, port, or user-info', () {
+    test('rejects a different path, state, host, port, or user-info', () {
       const List<String> rejected = <String>[
-        'https://untrust-sscportal.ssc.hs-anhalt.de/other'
-            '?state=docdownload',
-        'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
-            '?state=other',
-        'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+        'https://sscportal.ssc.hs-anhalt.de/other?state=docdownload',
+        'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=other',
+        'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload&state=other',
-        'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+        'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload#fragment',
-        'http://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+        'http://sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload',
-        'https://untrust-sscportal.ssc.hs-anhalt.de:8443/qisserver/rds'
+        'https://sscportal.ssc.hs-anhalt.de:8443/qisserver/rds'
             '?state=docdownload',
-        'https://user@untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+        'https://user@sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload',
+        // An earlier analysis wrongly claimed a separate "untrust-"
+        // subdomain; a real capture confirmed it is the plain portal host,
+        // so that invented subdomain must now be rejected like any other.
+        'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload',
       ];
       for (final String raw in rejected) {

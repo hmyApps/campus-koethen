@@ -108,8 +108,8 @@ mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore
   lesend**, eine Seite „Studienservice" mit mehreren per Voll-POST gewechselten Tabs:
   Bescheinigungsübersicht, Personendaten (inkl. Hörerstatus) und Kontaktdaten,
   Studiengangsübersicht, sowie ein aus den Zahlungen abgeleiteter Rückmeldehinweis — dieselben
-  Zugangsdaten, kein zweiter Login. Bescheinigungen werden über den eng begrenzten zweiten Host
-  `untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` abgerufen; keine
+  Zugangsdaten, kein zweiter Login. Bescheinigungen werden vom selben Host über den eng begrenzten
+  Pfad `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` abgerufen; keine
   Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
   **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
