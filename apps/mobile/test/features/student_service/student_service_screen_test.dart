@@ -220,6 +220,26 @@ void main() {
     expect(find.text('grades-target'), findsOneWidget);
   });
 
+  testWidgets('certificates render above the personal-data sections', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      const StudentServiceScreen(),
+      overrides: _connectedOverrides(_overview()),
+    );
+    await tester.pumpAndSettle();
+
+    final double certificatesTop = tester
+        .getTopLeft(find.text('Bescheinigungen'))
+        .dy;
+    final double personalDataTop = tester
+        .getTopLeft(find.text('Personendaten'))
+        .dy;
+
+    expect(certificatesTop, lessThan(personalDataTop));
+  });
+
   testWidgets('overview and certificate error fit at 320dp and 200% text', (
     WidgetTester tester,
   ) async {
@@ -249,7 +269,13 @@ void main() {
     await tester.tap(find.text('PDF erstellen'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Das Dokument konnte nicht abgerufen werden.'), findsOne);
+    expect(
+      find.text(
+        'Das Dokument konnte nicht abgerufen werden. '
+        '(Diagnosecode: fixture)',
+      ),
+      findsOne,
+    );
     expect(tester.takeException(), isNull);
   });
 

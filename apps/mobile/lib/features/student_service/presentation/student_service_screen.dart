@@ -223,6 +223,22 @@ class _StudentServiceContentState
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Certificates are why most readers open this screen at all —
+          // shown first, ahead of the personal-data sections nobody came
+          // here to re-read.
+          _Section(
+            title: l10n.studentServiceCertificatesHeading,
+            child: overview.certificates.isEmpty
+                ? Text(l10n.studentServiceNoCertificates)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (final CertificateOffer offer
+                          in overview.certificates)
+                        _CertificateRow(offer: offer),
+                    ],
+                  ),
+          ),
           _Section(
             title: l10n.studentServicePersonalDataHeading,
             child: Column(
@@ -283,19 +299,6 @@ class _StudentServiceContentState
                   ),
               ],
             ),
-          ),
-          _Section(
-            title: l10n.studentServiceCertificatesHeading,
-            child: overview.certificates.isEmpty
-                ? Text(l10n.studentServiceNoCertificates)
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      for (final CertificateOffer offer
-                          in overview.certificates)
-                        _CertificateRow(offer: offer),
-                    ],
-                  ),
           ),
           _Section(
             title: l10n.studentServicePaymentHintHeading,
@@ -381,13 +384,24 @@ class _CertificateRowState extends ConsumerState<_CertificateRow> {
           );
         case CertificateTooLarge():
           setState(() => _error = l10n.studentServiceErrorDocumentTooLarge);
-        case CertificateUnavailable():
-          setState(() => _error = l10n.studentServiceErrorDocumentUnavailable);
+        case CertificateUnavailable(:final reason):
+          // `reason` is a short, fixed technical label (never a URL, token
+          // or portal HTML) — safe to show so a real failure can be
+          // reported with the exact cause instead of just "didn't work".
+          setState(
+            () => _error =
+                '${l10n.studentServiceErrorDocumentUnavailable} '
+                '${l10n.studentServiceDiagnosticHint(reason)}',
+          );
       }
     } catch (error) {
       if (!mounted) return;
       setState(
-        () => _error = studentServiceFailureMessage(context.l10n, error),
+        () => _error = _withDiagnosticHint(
+          context.l10n,
+          studentServiceFailureMessage(context.l10n, error),
+          error,
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
