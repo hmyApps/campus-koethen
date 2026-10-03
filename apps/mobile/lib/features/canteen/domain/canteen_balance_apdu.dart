@@ -17,8 +17,8 @@ class CanteenBalance {
   /// top-up: the card's milli-euro precision never produces a smaller unit
   /// the reader would need to show.
   String get euroAmount {
-    final bool negative = milliEuros < 0;
     final int absoluteCents = (milliEuros.abs() + 5) ~/ 10;
+    final bool negative = milliEuros < 0 && absoluteCents != 0;
     final String fraction = (absoluteCents % 100).toString().padLeft(2, '0');
     return '${negative ? '-' : ''}${absoluteCents ~/ 100}.$fraction';
   }

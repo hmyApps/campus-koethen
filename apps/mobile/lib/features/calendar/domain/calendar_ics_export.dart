@@ -35,8 +35,7 @@ String icsFromCalendarEntries(
       // DTEND for an all-day event is the exclusive day-after, the same
       // convention `CalendarEntry.lastDay`'s own doc comment already
       // documents this app's all-day entries as using.
-      final DateTime end =
-          entry.end ?? entry.start.add(const Duration(days: 1));
+      final DateTime end = entry.end ?? _nextCalendarDay(entry.start);
       buffer.write('DTSTART;VALUE=DATE:${_dateStamp(entry.start)}\r\n');
       buffer.write('DTEND;VALUE=DATE:${_dateStamp(end)}\r\n');
     } else {
@@ -73,7 +72,12 @@ String _escape(String value) => value
     .replaceAll(';', '\\;')
     .replaceAll(',', '\\,')
     .replaceAll('\r\n', '\\n')
+    .replaceAll('\r', '\\n')
     .replaceAll('\n', '\\n');
+
+DateTime _nextCalendarDay(DateTime date) => date.isUtc
+    ? DateTime.utc(date.year, date.month, date.day + 1)
+    : DateTime(date.year, date.month, date.day + 1);
 
 String _pad(int value, int width) => value.toString().padLeft(width, '0');
 

@@ -4,10 +4,14 @@
 import 'package:campus_koethen/features/calendar/domain/calendar_entry.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_ics_export.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 DateTime _now() => DateTime.utc(2026, 10, 2, 12);
 
 void main() {
+  setUpAll(tz_data.initializeTimeZones);
+
   test('wraps every entry in one VCALENDAR with the expected header', () {
     final String ics = icsFromCalendarEntries(
       const <CalendarEntry>[],
@@ -59,6 +63,26 @@ void main() {
 
     expect(ics, contains('DTSTART;VALUE=DATE:20261005\r\n'));
     expect(ics, contains('DTEND;VALUE=DATE:20261006\r\n'));
+  });
+
+  test('an all-day fallback advances the calendar date across DST', () {
+    final tz.Location berlin = tz.getLocation('Europe/Berlin');
+    final CalendarEntry entry = CalendarEntry(
+      id: 'canteenFavourite:mensa:dst',
+      source: CalendarSource.canteenFavourite,
+      title: 'Herbstgericht',
+      start: tz.TZDateTime(berlin, 2026, 10, 25),
+      allDay: true,
+    );
+
+    final String ics = icsFromCalendarEntries(
+      <CalendarEntry>[entry],
+      calendarName: 'Campus Köthen',
+      now: _now,
+    );
+
+    expect(ics, contains('DTSTART;VALUE=DATE:20261025\r\n'));
+    expect(ics, contains('DTEND;VALUE=DATE:20261026\r\n'));
   });
 
   test('a cancelled entry is marked STATUS:CANCELLED', () {
@@ -129,6 +153,29 @@ void main() {
     expect(
       ics,
       contains(r'SUMMARY:Raum A\; Gebäude B\, Block\\C\nzweite Zeile'),
+    );
+  });
+
+  test('all newline forms are normalized to escaped ICS newlines', () {
+    final CalendarEntry entry = CalendarEntry(
+      id: 'publicCalendar:x:line-endings',
+      source: CalendarSource.publicCalendar,
+      title: 'erste\rzweite\r\ndritte\nvier',
+      start: DateTime.utc(2026, 10, 5, 9),
+    );
+
+    final String ics = icsFromCalendarEntries(
+      <CalendarEntry>[entry],
+      calendarName: 'Campus Köthen',
+      now: _now,
+    );
+
+    expect(
+      ics,
+      contains(
+        r'SUMMARY:erste\nzweite\ndritte\nvier'
+        '\r\n',
+      ),
     );
   });
 

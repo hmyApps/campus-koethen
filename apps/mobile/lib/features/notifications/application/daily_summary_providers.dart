@@ -18,6 +18,7 @@ import '../../events/application/saved_events_controller.dart';
 import '../../events/domain/saved_event_snapshot.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../moodle/application/moodle_controller.dart';
+import '../../timetable/application/timetable_lesson_info_filter.dart';
 import '../../timetable/application/timetable_providers.dart';
 import '../../timetable/application/timetable_week.dart';
 import '../../timetable/data/timetable_models.dart';
@@ -148,6 +149,9 @@ Iterable<CalendarEntry> _timetableEntries(
 ) sync* {
   final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
   if (groupId == null) return;
+  final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
+    timetableLessonInfoFilterProvider,
+  );
   for (
     DateTime weekStart = TimetableWeek.startOf(today);
     !weekStart.isAfter(lastDay);
@@ -160,7 +164,12 @@ Iterable<CalendarEntry> _timetableEntries(
           ),
         )
         .value;
-    if (week != null) yield* timetableToCalendarEntries(week.value);
+    if (week != null) {
+      yield* timetableToCalendarEntries(
+        week.value,
+        include: lessonInfoFilter.acceptsEntry,
+      );
+    }
   }
 }
 

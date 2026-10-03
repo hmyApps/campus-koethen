@@ -16,6 +16,7 @@ import 'dart:ui' show Locale;
 import 'package:campus_koethen/core/network/api_meta.dart';
 import 'package:campus_koethen/core/network/loaded.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
+import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/time/clock.dart';
@@ -165,8 +166,13 @@ Future<ProviderContainer> harness({
   Set<String> favourites = const <String>{},
   Locale locale = const Locale('de'),
   DateTime? now,
+  Set<String> hiddenCourses = const <String>{},
 }) async {
-  final KeyValueStore store = InMemoryKeyValueStore();
+  final KeyValueStore store = InMemoryKeyValueStore(<String, Object>{
+    PreferenceKeys.preferredTimetableGroup: ?groupId,
+    if (groupId != null && hiddenCourses.isNotEmpty)
+      PreferenceKeys.timetableHiddenCourses(groupId): hiddenCourses.toList(),
+  });
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       keyValueStoreProvider.overrideWithValue(store),
@@ -345,6 +351,40 @@ void main() {
         timetable: timetableWith(<DateTime>[DateTime(2026, 8, 25, 8, 30)]),
       );
       expect(candidatesOf(container), isEmpty);
+    });
+
+    test('a hidden timetable course is absent from the overview', () async {
+      final DateTime day = DateTime(2026, 8, 25);
+      final ProviderContainer container = await harness(
+        timetable: Timetable(
+          group: const TimetableGroup(id: kGroupId, shortName: 'INF 24'),
+          days: <TimetableDay>[
+            TimetableDay(
+              date: day,
+              entries: <TimetableEntry>[
+                TimetableEntry(
+                  id: 'analysis',
+                  start: DateTime(2026, 8, 25, 8, 30),
+                  end: DateTime(2026, 8, 25, 10),
+                  title: 'Analysis I',
+                ),
+                TimetableEntry(
+                  id: 'databases',
+                  start: DateTime(2026, 8, 25, 10, 15),
+                  end: DateTime(2026, 8, 25, 11, 45),
+                  title: 'Datenbanken II',
+                ),
+              ],
+            ),
+          ],
+        ),
+        hiddenCourses: const <String>{'Analysis I'},
+      );
+
+      expect(
+        candidatesOf(container).single.body,
+        'Heute 1 Vorlesung (erste um 10:15 Uhr).',
+      );
     });
 
     test('a saved event alone fills a day', () async {

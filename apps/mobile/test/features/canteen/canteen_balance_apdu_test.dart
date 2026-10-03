@@ -62,6 +62,17 @@ void main() {
     expect(const CanteenBalance(milliEuros: -12345).euroAmount, '-12.35');
   });
 
+  test('never renders rounded sub-cent debt as negative zero', () {
+    for (final int milliEuros in <int>[-1, -2, -3, -4]) {
+      expect(
+        CanteenBalance(milliEuros: milliEuros).euroAmount,
+        '0.00',
+        reason: '$milliEuros milli-euro rounds to zero cents',
+      );
+    }
+    expect(const CanteenBalance(milliEuros: -5).euroAmount, '-0.01');
+  });
+
   test('rejects malformed, failed and implausible responses', () {
     for (final List<int> response in <List<int>>[
       <int>[0x91],
