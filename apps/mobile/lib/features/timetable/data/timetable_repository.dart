@@ -8,6 +8,7 @@ import '../../../core/cache/cache_providers.dart';
 import '../../../core/cache/content_cache.dart';
 import '../../../core/locale/formatters.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_meta.dart';
 import '../../../core/network/cached_endpoint.dart';
 import '../../../core/network/loaded.dart';
 import '../../../core/network/network_providers.dart';
@@ -20,20 +21,75 @@ import 'timetable_models.dart';
 /// id used here is the Campus UUID from the contract.
 class TimetableRepository {
   TimetableRepository({required ApiClient client, required ContentCache cache})
-    : _endpoint = CachedEndpoint(client: client, cache: cache);
+    : _cache = cache,
+      _endpoint = CachedEndpoint(client: client, cache: cache);
 
+  final ContentCache _cache;
   final CachedEndpoint _endpoint;
 
-  /// The whole active group list arrives in one response, so the search runs
-  /// locally and keeps working offline.
-  Future<Loaded<List<TimetableGroup>>> fetchGroups({required String locale}) {
+  static const int groupPageSize = 50;
+
+  /// Loads one bounded picker page. Search is evaluated by the server so the
+  /// result remains complete even when the catalogue grows beyond one page.
+  Future<Loaded<List<TimetableGroup>>> fetchGroups({
+    required String locale,
+    String query = '',
+    int page = 1,
+    int pageSize = groupPageSize,
+  }) {
+    final String normalizedQuery = query.trim();
+    final bool cacheable = page == 1 && normalizedQuery.isEmpty;
     return _endpoint.load<List<TimetableGroup>>(
       path: '/timetable/groups',
-      cacheKey: CacheKeys.timetableGroups(locale),
+      cacheKey: cacheable
+          ? CacheKeys.timetableGroups(locale)
+          : 'timetable.groups.uncached',
       locale: locale,
+      query: <String, Object?>{
+        'page': page,
+        'pageSize': pageSize,
+        if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
+      },
       parse: TimetableGroup.listFromJson,
+      allowCacheFallback: cacheable,
+      writeToCache: cacheable,
     );
   }
+
+  /// Resolves exactly one persisted Campus UUID without loading the catalogue.
+  Future<Loaded<TimetableGroup>> fetchGroup({
+    required String locale,
+    required String groupId,
+  }) => _endpoint.load<TimetableGroup>(
+    path: '/timetable/groups/$groupId',
+    cacheKey: CacheKeys.timetableGroup(locale, groupId),
+    locale: locale,
+    parse: (Object? data) {
+      final TimetableGroup? group = TimetableGroup.fromJson(data);
+      if (group == null) {
+        throw const FormatException('Malformed timetable group payload');
+      }
+      return group;
+    },
+  );
+
+  Future<Loaded<TimetableStatus>> fetchStatus({required String locale}) =>
+      _endpoint.load<TimetableStatus>(
+        path: '/timetable/status',
+        cacheKey: CacheKeys.timetableStatus(locale),
+        locale: locale,
+        parse: TimetableStatus.fromJson,
+      );
+
+  /// Persists a group selected from a non-cacheable search result immediately.
+  Future<void> rememberGroup({
+    required String locale,
+    required TimetableGroup group,
+    required ApiMeta meta,
+  }) => _cache.write(
+    CacheKeys.timetableGroup(locale, group.id),
+    <String, dynamic>{'data': group.toJson(), 'meta': meta.toJson()},
+  );
 
   Future<Loaded<TimetableLessonInfoOptions>> fetchLessonInfo({
     required String locale,

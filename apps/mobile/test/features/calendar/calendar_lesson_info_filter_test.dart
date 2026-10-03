@@ -103,10 +103,10 @@ void main() {
       final ProviderContainer container = ProviderContainer(
         overrides: [
           keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-          timetableGroupsProvider.overrideWith(
-            (Ref ref) async => const Loaded<List<TimetableGroup>>(
-              value: <TimetableGroup>[],
-              meta: ApiMeta(featureEnabled: false, dataState: 'unavailable'),
+          timetableStatusProvider.overrideWith(
+            (Ref ref) async => const Loaded<TimetableStatus>(
+              value: TimetableStatus(featureEnabled: false, groupCount: 0),
+              meta: ApiMeta.empty,
             ),
           ),
           publicCalendarMonthEntriesProvider.overrideWith(
@@ -117,7 +117,7 @@ void main() {
       addTearDown(container.dispose);
       container.listen(calendarDataProvider(monday), (_, _) {});
       await Future.wait([
-        container.read(timetableGroupsProvider.future),
+        container.read(timetableStatusProvider.future),
         container.read(publicCalendarMonthEntriesProvider(monday).future),
       ]);
       await container.pump();

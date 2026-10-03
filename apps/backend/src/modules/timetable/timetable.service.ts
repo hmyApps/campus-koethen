@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ApiError } from '../../common/errors/api-error';
+import { PaginationMetaDto } from '../../common/dto/meta.dto';
 import { LocaleResolution } from '../../common/locale/locale';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
@@ -113,42 +114,101 @@ export class TimetableService {
 
   async listGroups(
     locale: LocaleResolution,
-    filter: { query?: string; department?: string },
-  ): Promise<{ data: TimetableGroupDto[]; lastSyncAt: Date | null; stale: boolean }> {
+    filter: { page: number; pageSize: number; query?: string; department?: string },
+  ): Promise<{
+    data: TimetableGroupDto[];
+    pagination: PaginationMetaDto;
+    lastSyncAt: Date | null;
+    stale: boolean;
+  }> {
     if (!this.featureEnabled) {
       const lastSyncAt = await this.lastSuccessful('groups');
-      return { data: [], lastSyncAt, stale: true };
+      return {
+        data: [],
+        pagination: { page: filter.page, pageSize: filter.pageSize, total: 0, totalPages: 0 },
+        lastSyncAt,
+        stale: true,
+      };
     }
 
     const query = filter.query?.trim();
-    const [lastSyncAt, groups] = await Promise.all([
+    const where = {
+      active: true,
+      catalogVisible: true,
+      ...(filter.department ? { department: filter.department } : {}),
+      ...(query
+        ? {
+            OR: [
+              { shortName: { contains: query, mode: 'insensitive' as const } },
+              { longName: { contains: query, mode: 'insensitive' as const } },
+              { department: { contains: query, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const [lastSyncAt, total, groups] = await Promise.all([
       this.lastSuccessful('groups'),
+      this.prisma.timetableGroup.count({ where }),
       this.prisma.timetableGroup.findMany({
-        where: {
-          active: true,
-          ...(filter.department ? { department: filter.department } : {}),
-          ...(query
-            ? {
-                OR: [
-                  { shortName: { contains: query, mode: 'insensitive' as const } },
-                  { longName: { contains: query, mode: 'insensitive' as const } },
-                  { department: { contains: query, mode: 'insensitive' as const } },
-                ],
-              }
-            : {}),
-        },
-        orderBy: [{ shortName: 'asc' }],
+        where,
+        orderBy: [{ shortName: 'asc' }, { longName: 'asc' }, { department: 'asc' }, { id: 'asc' }],
         select: { id: true, shortName: true, longName: true, department: true },
-        // The full catalogue is ~270 rows and is delivered in one response, but
-        // the cap keeps an unexpected catalogue explosion from becoming an
-        // unbounded payload.
-        take: 500,
+        skip: (filter.page - 1) * filter.pageSize,
+        take: filter.pageSize,
       }),
     ]);
 
     void locale;
     return {
       data: groups.map((group) => TimetableService.mapGroup(group)),
+      pagination: {
+        page: filter.page,
+        pageSize: filter.pageSize,
+        total,
+        totalPages: Math.ceil(total / filter.pageSize),
+      },
+      lastSyncAt,
+      stale: this.isStale(lastSyncAt),
+    };
+  }
+
+  /** Resolve one stored Campus UUID without downloading the catalogue. */
+  async getGroup(
+    locale: LocaleResolution,
+    groupId: string,
+  ): Promise<{ data: TimetableGroupDto; lastSyncAt: Date | null; stale: boolean }> {
+    const select = {
+      id: true,
+      shortName: true,
+      longName: true,
+      department: true,
+      catalogVisible: true,
+    } as const;
+    const [group, lastSyncAt] = await Promise.all([
+      this.prisma.timetableGroup.findFirst({
+        where: { id: groupId },
+        select,
+      }),
+      this.lastSuccessful('groups'),
+    ]);
+    if (!group) {
+      throw new ApiError('TIMETABLE_GROUP_NOT_FOUND', locale.resolvedLocale);
+    }
+    const publicGroup = group.catalogVisible
+      ? group
+      : ((await this.prisma.timetableGroup.findFirst({
+          where: {
+            active: true,
+            catalogVisible: true,
+            shortName: group.shortName,
+            longName: group.longName,
+            department: group.department,
+          },
+          orderBy: { id: 'asc' },
+          select,
+        })) ?? group);
+    return {
+      data: TimetableService.mapGroup(publicGroup),
       lastSyncAt,
       stale: this.isStale(lastSyncAt),
     };
@@ -309,7 +369,9 @@ export class TimetableService {
 
   async getStatus(): Promise<TimetableStatusDto> {
     const [groupCount, lastGroupSyncAt, lastEntryRun] = await Promise.all([
-      this.prisma.timetableGroup.count({ where: { active: true } }),
+      this.prisma.timetableGroup.count({
+        where: { active: true, catalogVisible: true },
+      }),
       this.lastSuccessful('groups'),
       this.lastEntryRun(),
     ]);

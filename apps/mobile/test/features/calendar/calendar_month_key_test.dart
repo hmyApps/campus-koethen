@@ -55,10 +55,10 @@ void main() {
           envelope(<Object>[_calendar], meta: catalogueMeta),
         );
       }
-      if (options.path == '/timetable/groups') {
+      if (options.path == '/timetable/groups/demo-group') {
         return FakeHttpResponse(
           envelope(
-            <Object>[],
+            <String, dynamic>{'id': 'demo-group', 'shortName': 'Demo'},
             meta: <String, dynamic>{'from': '2026-09-24', 'to': '2026-10-22'},
           ),
         );
@@ -295,7 +295,7 @@ void main() {
       );
       final DateTime today = DateTime(2026, 9, 24);
       c.listen(calendarListDataProvider(today), (_, _) {});
-      await c.read(timetableGroupsProvider.future);
+      await c.read(selectedTimetableGroupProvider.future);
       c.read(calendarListDataProvider(today));
       await c.read(
         timetableRangeProvider(

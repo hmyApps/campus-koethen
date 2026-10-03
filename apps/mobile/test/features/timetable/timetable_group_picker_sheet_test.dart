@@ -1,8 +1,6 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-import 'package:campus_koethen/core/network/api_meta.dart';
-import 'package:campus_koethen/core/network/loaded.dart';
 import 'package:campus_koethen/features/timetable/application/timetable_providers.dart';
 import 'package:campus_koethen/features/timetable/data/timetable_models.dart';
 import 'package:campus_koethen/features/timetable/presentation/timetable_group_picker_sheet.dart';
@@ -12,9 +10,46 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/pump_app.dart';
+import '../../support/fake_timetable.dart';
 
 void main() {
   group('the timetable group picker sheet', () {
+    testWidgets(
+      'distinguishes same-name courses by public metadata without exposing ids',
+      (WidgetTester tester) async {
+        await pumpScreen(
+          tester,
+          const Scaffold(body: TimetableGroupPickerList()),
+          overrides: <Override>[
+            timetableGroupSearchProvider('').overrideWith(
+              () => FixedTimetableGroupSearchController(
+                fixedTimetableGroupSearch(const <TimetableGroup>[
+                  TimetableGroup(
+                    id: 'private-campus-uuid-1',
+                    shortName: 'MER2',
+                    longName: 'Ernährungstherapie',
+                    department: 'FB1',
+                  ),
+                  TimetableGroup(
+                    id: 'private-campus-uuid-2',
+                    shortName: 'MER2',
+                    longName: 'Ernährungstherapie dual',
+                    department: 'FB1',
+                  ),
+                ]),
+              ),
+            ),
+          ],
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('MER2'), findsNWidgets(2));
+        expect(find.text('Ernährungstherapie'), findsOneWidget);
+        expect(find.text('Ernährungstherapie dual'), findsOneWidget);
+        expect(find.textContaining('private-campus-uuid'), findsNothing);
+      },
+    );
+
     testWidgets('never overflows and keeps the search field reachable, at the '
         'smallest supported viewport, a large Android keyboard and 200% '
         'text scale', (WidgetTester tester) async {
@@ -40,10 +75,9 @@ void main() {
           ),
         ),
         overrides: <Override>[
-          timetableGroupsProvider.overrideWith(
-            (Ref ref) async => const Loaded<List<TimetableGroup>>(
-              value: <TimetableGroup>[],
-              meta: ApiMeta.empty,
+          timetableGroupSearchProvider('').overrideWith(
+            () => FixedTimetableGroupSearchController(
+              fixedTimetableGroupSearch(const []),
             ),
           ),
         ],

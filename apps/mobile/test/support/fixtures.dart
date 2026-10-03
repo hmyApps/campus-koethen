@@ -176,6 +176,23 @@ List<Map<String, dynamic>> get timetableGroupsFixture => <Map<String, dynamic>>[
 /// Id of the group used by the timetable fixtures.
 const String timetableGroupIdFixture = '11111111-1111-4111-8111-111111111111';
 
+/// Simulates the backend's server-side group search for a fake adapter: a
+/// case-insensitive substring match against short name, long name and
+/// department. A null or blank [query] returns every fixture group.
+List<Map<String, dynamic>> matchingTimetableGroups(Object? query) {
+  final String normalized = (query is String ? query : '').trim().toLowerCase();
+  if (normalized.isEmpty) return timetableGroupsFixture;
+  return timetableGroupsFixture.where((Map<String, dynamic> group) {
+    return <String?>[
+      group['shortName'] as String?,
+      group['longName'] as String?,
+      group['department'] as String?,
+    ].any(
+      (String? field) => field?.toLowerCase().contains(normalized) ?? false,
+    );
+  }).toList();
+}
+
 String _isoDate(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-'
     '${value.month.toString().padLeft(2, '0')}-'

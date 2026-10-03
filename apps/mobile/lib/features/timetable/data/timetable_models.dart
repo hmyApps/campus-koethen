@@ -107,6 +107,52 @@ class TimetableGroup {
       .map(TimetableGroup.fromJson)
       .whereType<TimetableGroup>()
       .toList(growable: false);
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'shortName': shortName,
+    'longName': longName,
+    'department': department,
+  };
+}
+
+/// Small availability response used by background refreshes.
+///
+/// It deliberately carries no group catalogue. The app can therefore check
+/// whether timetable data is available without downloading hundreds of rows.
+class TimetableStatus {
+  const TimetableStatus({
+    required this.featureEnabled,
+    required this.groupCount,
+    this.coveredFrom,
+    this.coveredTo,
+  });
+
+  final bool featureEnabled;
+  final int groupCount;
+  final String? coveredFrom;
+  final String? coveredTo;
+
+  static TimetableStatus fromJson(Object? json) {
+    final Map<String, dynamic>? map = asJsonMap(json);
+    final Object? featureEnabled = map?['featureEnabled'];
+    final Object? groupCount = map?['groupCount'];
+    final Object? coveredFrom = map?['coveredFrom'];
+    final Object? coveredTo = map?['coveredTo'];
+    if (featureEnabled is! bool ||
+        groupCount is! int ||
+        groupCount < 0 ||
+        (coveredFrom != null && coveredFrom is! String) ||
+        (coveredTo != null && coveredTo is! String)) {
+      throw const FormatException('Malformed timetable status payload');
+    }
+    return TimetableStatus(
+      featureEnabled: featureEnabled,
+      groupCount: groupCount,
+      coveredFrom: coveredFrom as String?,
+      coveredTo: coveredTo as String?,
+    );
+  }
 }
 
 /// Normalised status of a single entry.

@@ -199,7 +199,10 @@ model TimetableGroup {
   longName   String
   department String?
 
-  active     Boolean  @default(true)
+  active         Boolean @default(true)
+  /// False only for a data-verified duplicate whose current timetable is
+  /// represented by another group with the exact same public metadata.
+  catalogVisible Boolean @default(true)
   /// Last successful catalogue run that still contained this group. A group is
   /// only deactivated after a COMPLETE successful catalogue import.
   lastSeenAt DateTime @default(now())
@@ -210,7 +213,7 @@ model TimetableGroup {
   entries TimetableEntryGroup[]
 
   @@unique([source, externalId])
-  @@index([active, shortName])
+  @@index([active, catalogVisible, shortName])
   @@index([department])
   @@map("timetable_groups")
 }

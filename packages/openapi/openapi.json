@@ -525,6 +525,23 @@
             }
           },
           {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Max 50.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "name": "department",
             "required": false,
             "in": "query",
@@ -551,6 +568,39 @@
           }
         },
         "summary": "List selectable class groups.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/v1/timetable/groups/{groupId}": {
+      "get": {
+        "description": "Returns one group by its stable Campus UUID so clients can retain the selection and its public label offline without downloading the catalogue.",
+        "operationId": "TimetableController_group_v1",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "description": "Stable Campus UUID.",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resolve one previously selected class group.",
         "tags": [
           "timetable"
         ]
@@ -2334,6 +2384,21 @@
             "items": {
               "$ref": "#/components/schemas/TimetableGroupDto"
             }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "TimetableGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TimetableGroupDto"
           },
           "meta": {
             "$ref": "#/components/schemas/ResponseMetaDto"

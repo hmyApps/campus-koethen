@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { createTestPrisma } from './helpers/database';
+import { createTestPrisma, resetDatabase } from './helpers/database';
 
 // Real PostgreSQL setup and cleanup can exceed Jest's 5s default on shared CI.
 jest.setTimeout(60_000);
@@ -39,9 +39,7 @@ describe('/v1/timetable (integration)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE timetable_entry_groups, timetable_entries, timetable_groups, timetable_contexts, timetable_sync_runs RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(prisma);
 
     const group = await prisma.timetableGroup.create({
       data: {
@@ -93,6 +91,39 @@ describe('/v1/timetable (integration)', () => {
       const res = await request(app.getHttpServer()).get('/v1/timetable/groups').expect(200);
       expect(res.body.data).toHaveLength(2);
       expect(res.body.data[0].shortName).toBe('AIN2 - BT');
+      expect(res.body.meta.pagination).toEqual({
+        page: 1,
+        pageSize: 20,
+        total: 2,
+        totalPages: 1,
+      });
+    });
+
+    it('reaches every row beyond the former 500-group cap', async () => {
+      await prisma.timetableGroup.createMany({
+        data: Array.from({ length: 501 }, (_, index) => ({
+          externalId: `bulk-${index.toString().padStart(3, '0')}`,
+          shortName: `ZZ-${index.toString().padStart(3, '0')}`,
+          longName: `Synthetic catalogue group ${index}`,
+          department: 'DEMO',
+        })),
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/timetable/groups?page=11&pageSize=50')
+        .expect(200);
+
+      expect(res.body.meta.pagination).toEqual({
+        page: 11,
+        pageSize: 50,
+        total: 503,
+        totalPages: 11,
+      });
+      expect(res.body.data).toHaveLength(3);
+    });
+
+    it('rejects unbounded page sizes', async () => {
+      await request(app.getHttpServer()).get('/v1/timetable/groups?pageSize=51').expect(400);
     });
 
     it('searches short name, long name and department', async () => {
@@ -119,6 +150,17 @@ describe('/v1/timetable (integration)', () => {
       expect(body).not.toContain('14622');
       expect(body).not.toContain('15027');
       expect(body).not.toContain('webuntis');
+    });
+
+    it('resolves a saved group by Campus UUID without exposing source ids', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/v1/timetable/groups/${groupId}`)
+        .expect(200);
+
+      expect(res.body.data).toMatchObject({ id: groupId, shortName: 'AIN2 - BT' });
+      expect(JSON.stringify(res.body)).not.toContain('14622');
+      expect(res.body.meta.from).toBeTruthy();
+      expect(res.body.meta.to).toBeTruthy();
     });
   });
 

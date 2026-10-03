@@ -68,6 +68,32 @@ void main() {
     );
   });
 
+  group('TimetableStatus', () {
+    test('parses the public availability state without upstream detail', () {
+      final TimetableStatus status = TimetableStatus.fromJson(<String, dynamic>{
+        'featureEnabled': true,
+        'groupCount': 503,
+        'coveredFrom': '2026-10-01',
+        'coveredTo': '2027-04-01',
+      });
+
+      expect(status.featureEnabled, isTrue);
+      expect(status.groupCount, 503);
+      expect(status.coveredFrom, '2026-10-01');
+      expect(status.coveredTo, '2027-04-01');
+    });
+
+    test('rejects malformed status payloads', () {
+      expect(
+        () => TimetableStatus.fromJson(<String, dynamic>{
+          'featureEnabled': 'yes',
+          'groupCount': 503,
+        }),
+        throwsFormatException,
+      );
+    });
+  });
+
   group('TimetableEntry', () {
     Timetable parseWeek() {
       final Timetable? timetable = Timetable.fromJson(

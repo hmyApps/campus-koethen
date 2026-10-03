@@ -617,9 +617,16 @@ kann statt wie ein Absturz.
 | ------------ | ------------------------ | ----------------------------------------------------------- |
 | `query`      | String, max. 100 Zeichen | Suche über Kurzname, Langname und Bereich; case-insensitive |
 | `department` | String                   | exakter Bereichsfilter (`shortName`)                        |
+| `page`       | Integer, mindestens 1    | Seite; Standard `1`                                         |
+| `pageSize`   | Integer, 1 bis 50        | Einträge pro Seite; Standard `20`                           |
 | `locale`     | `de` \| `en`             | wie überall                                                 |
 
-Liefert alle aktiven Gruppen in **einer** Antwort (Größenordnung 270). Sortierung: `shortName` ASC.
+Liefert den vollständigen sichtbaren Katalog **paginiert** und ohne feste
+Gesamtkappung. `query` wird serverseitig ausgewertet, damit auch Treffer hinter
+der ersten Seite auffindbar sind. Sortierung: `shortName`, `longName`,
+`department`, `id` jeweils aufsteigend. Exakte, anhand ihrer Stundenplandaten
+bestätigte Aliasse werden auf einen sichtbaren Eintrag konsolidiert; Gruppen mit
+abweichenden Plänen bleiben auch bei gleichem Namen getrennt sichtbar.
 
 ```jsonc
 {
@@ -635,6 +642,12 @@ Liefert alle aktiven Gruppen in **einer** Antwort (Größenordnung 270). Sortier
     "requestedLocale": "de",
     "resolvedLocale": "de",
     "translationFallback": false,
+    "pagination": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 503,
+      "totalPages": 26,
+    },
     "featureEnabled": true,
     "from": "2026-07-30",
     "to": "2026-08-27", // Ende des konfigurierten Stundenplan-Zeitfensters
@@ -645,6 +658,17 @@ Liefert alle aktiven Gruppen in **einer** Antwort (Größenordnung 270). Sortier
 ```
 
 Es gibt **kein** Feld mit der WebUntis-ID.
+
+### `GET /v1/timetable/groups/:groupId`
+
+Löst eine bereits gespeicherte **Campus-UUID** einzeln auf. Dadurch müssen
+Kaltstart, Einstellungen und Kalender nicht den Gruppenkatalog laden. Ein durch
+die Dublettenprüfung ausgeblendeter Alt-Alias liefert seinen sichtbaren
+Vertreter; der Client kann die lokale Campus-UUID darauf migrieren. Die Antwort
+hat dieselbe öffentliche Gruppenform und dieselben Zeitraum-/Freshness-Metadaten
+wie der Katalog, aber keinen Pagination-Block. Unbekannte oder syntaktisch
+ungültige UUIDs liefern den unten beschriebenen Fehlervertrag. Externe IDs
+werden auch hier nie ausgegeben.
 
 ### `GET /v1/timetable/entries`
 

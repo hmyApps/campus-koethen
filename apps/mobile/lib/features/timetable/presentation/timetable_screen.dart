@@ -63,7 +63,8 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
   }
 
   Future<void> _refresh() async {
-    ref.invalidate(timetableGroupsProvider);
+    ref.invalidate(timetableStatusProvider);
+    ref.invalidate(selectedTimetableGroupProvider);
     final String? groupId = ref.read(selectedTimetableGroupIdProvider);
     if (groupId == null) return;
     ref.invalidate(

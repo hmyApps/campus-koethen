@@ -44,6 +44,76 @@ describe('TimetableSyncService school-year catalogue', () => {
   });
 });
 
+describe('TimetableSyncService catalogue duplicate reconciliation', () => {
+  it('publishes only the data-backed alias and writes only changed visibility', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const groups = [
+      {
+        id: 'empty',
+        shortName: 'MER2',
+        longName: '2.Sem.Ernährungstherapie Master',
+        department: 'FB1',
+        catalogVisible: true,
+      },
+      {
+        id: 'working',
+        shortName: 'MER2',
+        longName: '2.Sem.Ernährungstherapie Master',
+        department: 'FB1',
+        catalogVisible: false,
+      },
+      {
+        id: 'other-public-metadata',
+        shortName: 'MER2',
+        longName: '2.Sem.Ernährungstherapie dual',
+        department: 'FB1',
+        catalogVisible: true,
+      },
+    ];
+    const prisma = {
+      timetableGroup: { findMany: jest.fn().mockResolvedValue(groups), updateMany },
+      timetableEntryGroup: {
+        findMany: jest.fn().mockResolvedValue([
+          { groupId: 'working', entryId: 'lesson-1' },
+          { groupId: 'working', entryId: 'lesson-2' },
+        ]),
+      },
+    };
+    const service = new TimetableSyncService(
+      prisma as unknown as PrismaService,
+      {} as WebUntisClient,
+      {} as Env,
+    );
+
+    await service.reconcileGroupCatalogue(
+      new Date('2026-10-01T00:00:00.000Z'),
+      new Date('2027-04-01T00:00:00.000Z'),
+    );
+
+    expect(prisma.timetableEntryGroup.findMany).toHaveBeenCalledWith({
+      where: {
+        groupId: { in: ['empty', 'working'] },
+        entry: {
+          date: {
+            gte: new Date('2026-10-01T00:00:00.000Z'),
+            lte: new Date('2027-04-01T00:00:00.000Z'),
+          },
+        },
+      },
+      select: { groupId: true, entryId: true },
+    });
+    expect(updateMany).toHaveBeenCalledTimes(2);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['working'] } },
+      data: { catalogVisible: true },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['empty'] } },
+      data: { catalogVisible: false },
+    });
+  });
+});
+
 /**
  * Cost contract of the entry write phase.
  *

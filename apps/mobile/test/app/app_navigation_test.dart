@@ -57,6 +57,11 @@ Future<ProviderContainer> pumpApp(
               envelope(
                 options.path.endsWith('/environment')
                     ? <String, Object?>{'userTestData': userTestData}
+                    : options.path.endsWith('/timetable/status')
+                    ? <String, Object?>{
+                        'featureEnabled': false,
+                        'groupCount': 0,
+                      }
                     : <Object>[],
               ),
             ),

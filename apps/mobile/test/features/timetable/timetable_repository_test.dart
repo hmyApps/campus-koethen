@@ -3,6 +3,7 @@
 
 import 'package:campus_koethen/core/cache/content_cache.dart';
 import 'package:campus_koethen/core/network/api_failure.dart';
+import 'package:campus_koethen/core/network/api_meta.dart';
 import 'package:campus_koethen/core/network/loaded.dart';
 import 'package:campus_koethen/features/timetable/data/timetable_models.dart';
 import 'package:campus_koethen/features/timetable/data/timetable_repository.dart';
@@ -27,8 +28,25 @@ TimetableRepository buildRepository(
 
 FakeHttpAdapter workingApi({DateTime? monday, Map<String, dynamic>? meta}) {
   return FakeHttpAdapter((RequestOptions options) {
+    if (options.path.contains('/timetable/groups/')) {
+      return FakeHttpResponse(
+        envelope(timetableGroupsFixture.first, meta: timetableMeta()),
+      );
+    }
     if (options.path.endsWith('/timetable/groups')) {
-      return FakeHttpResponse(envelope(timetableGroupsFixture));
+      return FakeHttpResponse(
+        envelope(
+          timetableGroupsFixture,
+          meta: <String, dynamic>{
+            'pagination': <String, dynamic>{
+              'page': 1,
+              'pageSize': 50,
+              'total': 503,
+              'totalPages': 11,
+            },
+          },
+        ),
+      );
     }
     return FakeHttpResponse(
       envelope(
@@ -52,6 +70,36 @@ void main() {
       expect(loaded.fromCache, isFalse);
       expect(adapter.requests.single.path, '/timetable/groups');
       expect(adapter.queries.single, contains('locale=en'));
+      expect(adapter.queries.single, contains('page=1'));
+      expect(adapter.queries.single, contains('pageSize=50'));
+      expect(loaded.meta.pagination?.total, 503);
+    });
+
+    test('sends server-side search and pagination parameters', () async {
+      final FakeHttpAdapter adapter = workingApi();
+
+      await buildRepository(
+        adapter,
+      ).fetchGroups(locale: 'de', query: ' informatik ', page: 4);
+
+      expect(adapter.queries.single, contains('query=informatik'));
+      expect(adapter.queries.single, contains('page=4'));
+      expect(adapter.queries.single, contains('pageSize=50'));
+    });
+
+    test('resolves one saved group through its Campus UUID', () async {
+      final FakeHttpAdapter adapter = workingApi();
+
+      final Loaded<TimetableGroup> loaded = await buildRepository(
+        adapter,
+      ).fetchGroup(locale: 'de', groupId: timetableGroupIdFixture);
+
+      expect(loaded.value.id, timetableGroupIdFixture);
+      expect(
+        adapter.requests.single.path,
+        '/timetable/groups/$timetableGroupIdFixture',
+      );
+      expect(adapter.queries.single, isNot(contains('untis')));
     });
 
     test('never sends an upstream identifier', () async {
@@ -329,5 +377,56 @@ void main() {
       expect(cached.fromCache, isTrue);
       expect(cached.value, hasLength(3));
     });
+
+    test('keeps the selected group metadata offline independently', () async {
+      bool offline = false;
+      final FakeHttpAdapter adapter = FakeHttpAdapter((RequestOptions options) {
+        if (offline) throw Exception('offline');
+        return FakeHttpResponse(
+          envelope(timetableGroupsFixture.first, meta: timetableMeta()),
+        );
+      });
+      final TimetableRepository repository = buildRepository(adapter);
+
+      await repository.fetchGroup(
+        locale: 'de',
+        groupId: timetableGroupIdFixture,
+      );
+      offline = true;
+      final Loaded<TimetableGroup> cached = await repository.fetchGroup(
+        locale: 'de',
+        groupId: timetableGroupIdFixture,
+      );
+
+      expect(cached.fromCache, isTrue);
+      expect(cached.value.shortName, 'AIN2 - BT');
+      expect(cached.meta.featureEnabled, isTrue);
+    });
+
+    test(
+      'persists a group selected from a server search immediately',
+      () async {
+        final TimetableRepository repository = buildRepository(
+          FakeHttpAdapter((RequestOptions _) => throw Exception('offline')),
+        );
+        final TimetableGroup group = TimetableGroup.fromJson(
+          timetableGroupsFixture.first,
+        )!;
+
+        await repository.rememberGroup(
+          locale: 'de',
+          group: group,
+          meta: const ApiMeta(featureEnabled: true),
+        );
+        final Loaded<TimetableGroup> cached = await repository.fetchGroup(
+          locale: 'de',
+          groupId: group.id,
+        );
+
+        expect(cached.fromCache, isTrue);
+        expect(cached.value.shortName, group.shortName);
+        expect(cached.meta.featureEnabled, isTrue);
+      },
+    );
   });
 }

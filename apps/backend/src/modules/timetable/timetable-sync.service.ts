@@ -2,6 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  resolveTimetableGroupVisibility,
+  TimetableGroupEvidence,
+} from './timetable-group-deduplication';
 import { WebUntisClient, WebUntisError } from './webuntis.client';
 import {
   EntriesResponse,
@@ -526,6 +530,87 @@ export class TimetableSyncService {
   }
 
   /**
+   * Reconciles exact public catalogue aliases against the timetable window
+   * that was just imported.
+   *
+   * The first query carries only ~500 small group rows. Entry ids are loaded
+   * only for exact duplicate labels, not for the whole catalogue. A same-name
+   * group with a different long name or department never enters that second
+   * query and therefore remains independently selectable.
+   */
+  async reconcileGroupCatalogue(rangeStart: Date, rangeEnd: Date): Promise<void> {
+    const rawGroups = await this.prisma.timetableGroup.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        shortName: true,
+        longName: true,
+        department: true,
+        catalogVisible: true,
+      },
+    });
+    // Unit doubles written before catalogue visibility existed only project
+    // ids. Real Prisma rows always pass this guard.
+    const groups = rawGroups.filter(
+      (group) => typeof group.shortName === 'string' && typeof group.longName === 'string',
+    );
+    if (groups.length === 0) return;
+
+    const byPublicIdentity = new Map<string, string[]>();
+    for (const group of groups) {
+      const key = JSON.stringify([group.shortName, group.longName, group.department]);
+      const ids = byPublicIdentity.get(key) ?? [];
+      ids.push(group.id);
+      byPublicIdentity.set(key, ids);
+    }
+    const duplicateIds = [...byPublicIdentity.values()].filter((ids) => ids.length > 1).flat();
+    const links =
+      duplicateIds.length === 0
+        ? []
+        : await this.prisma.timetableEntryGroup.findMany({
+            where: {
+              groupId: { in: duplicateIds },
+              entry: { date: { gte: rangeStart, lte: rangeEnd } },
+            },
+            select: { groupId: true, entryId: true },
+          });
+    const entryIdsByGroup = new Map<string, string[]>();
+    for (const link of links) {
+      const ids = entryIdsByGroup.get(link.groupId) ?? [];
+      ids.push(link.entryId);
+      entryIdsByGroup.set(link.groupId, ids);
+    }
+
+    const evidence: TimetableGroupEvidence[] = groups.map((group) => ({
+      id: group.id,
+      shortName: group.shortName,
+      longName: group.longName,
+      department: group.department,
+      entryIds: entryIdsByGroup.get(group.id) ?? [],
+    }));
+    const visibility = resolveTimetableGroupVisibility(evidence);
+    const show: string[] = [];
+    const hide: string[] = [];
+    for (const group of groups) {
+      const visible = visibility.get(group.id) ?? true;
+      if (visible === group.catalogVisible) continue;
+      (visible ? show : hide).push(group.id);
+    }
+    if (show.length > 0) {
+      await this.prisma.timetableGroup.updateMany({
+        where: { id: { in: show } },
+        data: { catalogVisible: true },
+      });
+    }
+    if (hide.length > 0) {
+      await this.prisma.timetableGroup.updateMany({
+        where: { id: { in: hide } },
+        data: { catalogVisible: false },
+      });
+    }
+  }
+
+  /**
    * Entries for every class in every school year covering the requested window.
    *
    * Removal is limited to the confirmed window AND the confirmed groups, and
@@ -771,6 +856,15 @@ export class TimetableSyncService {
         // real timetable.
         { timeout: 120_000, maxWait: 10_000 },
       );
+
+      // Catalogue de-duplication is derived presentation state. A failure here
+      // must not turn a successfully imported timetable into a failed run or
+      // roll back its data; the next successful entry sync retries it.
+      try {
+        await this.reconcileGroupCatalogue(rangeStart, rangeEnd);
+      } catch {
+        this.logger.warn('Timetable catalogue duplicate reconciliation failed; visibility kept');
+      }
 
       await this.prisma.timetableSyncRun.update({
         where: { id: run.id },

@@ -130,6 +130,11 @@ export class TimetableGroupsResponseDto {
   @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;
 }
 
+export class TimetableGroupResponseDto {
+  @ApiProperty({ type: TimetableGroupDto }) data!: TimetableGroupDto;
+  @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;
+}
+
 export class TimetableWeekResponseDto {
   @ApiProperty({ type: TimetableWeekDto }) data!: TimetableWeekDto;
   @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;

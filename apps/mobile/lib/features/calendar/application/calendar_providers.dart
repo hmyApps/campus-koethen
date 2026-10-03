@@ -453,17 +453,19 @@ final _calendarListDataProvider = Provider.family<CalendarData, DateTime>((
   DateTime today,
 ) {
   final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-  final AsyncValue<Loaded<List<TimetableGroup>>>? groups = groupId == null
+  final AsyncValue<Loaded<TimetableGroup>?>? selectedGroup = groupId == null
       ? null
-      : ref.watch(timetableGroupsProvider);
+      : ref.watch(selectedTimetableGroupProvider);
   final List<CalendarDateWindow> timetableRanges =
-      groups != null && groups.isLoading && groups.value == null
+      selectedGroup != null &&
+          selectedGroup.isLoading &&
+          selectedGroup.value == null
       ? const <CalendarDateWindow>[]
       : splitCalendarWindow(
           calendarListWindow(
             today,
-            groups?.value?.meta.from,
-            groups?.value?.meta.to,
+            selectedGroup?.value?.meta.from,
+            selectedGroup?.value?.meta.to,
           ),
           42,
         );
@@ -471,7 +473,7 @@ final _calendarListDataProvider = Provider.family<CalendarData, DateTime>((
     ref,
     timetableWeekStarts: const <DateTime>[],
     timetableRanges: timetableRanges,
-    timetableMetadataLoading: groups?.isLoading ?? false,
+    timetableMetadataLoading: selectedGroup?.isLoading ?? false,
     publicCalendarEntries: ref.watch(publicCalendarListEntriesProvider(today)),
     windowFrom: today,
   );
@@ -500,21 +502,20 @@ CalendarData _buildCalendarData(
     timetableState = CalendarTimetableState.loading;
     final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
     if (groupId == null) {
-      // Without a selected group there is no entries request whose metadata
-      // could reveal whether the backend is enabled. The shared group
-      // catalogue supplies that status without introducing a second store.
-      final AsyncValue<Loaded<List<TimetableGroup>>> groups = ref.watch(
-        timetableGroupsProvider,
+      // Without a selection, the small status endpoint answers availability;
+      // opening the calendar must not download the group catalogue.
+      final AsyncValue<Loaded<TimetableStatus>> status = ref.watch(
+        timetableStatusProvider,
       );
-      final Loaded<List<TimetableGroup>>? groupCatalog = groups.value;
-      if (groupCatalog == null) {
-        if (groups.hasError) {
+      final Loaded<TimetableStatus>? loadedStatus = status.value;
+      if (loadedStatus == null) {
+        if (status.hasError) {
           timetableError = true;
           timetableState = CalendarTimetableState.unavailable;
         } else {
           timetableLoading = true;
         }
-      } else if (groupCatalog.meta.featureEnabled == false) {
+      } else if (!loadedStatus.value.featureEnabled) {
         timetableLoading = false;
         timetableState = CalendarTimetableState.disabled;
       } else {

@@ -263,12 +263,10 @@ class _TimetableSourceSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
     final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-    final List<TimetableGroup> groups =
-        ref.watch(timetableGroupsProvider).value?.value ??
-        const <TimetableGroup>[];
-    final TimetableGroup? group = groupId == null
-        ? null
-        : groups.where((TimetableGroup g) => g.id == groupId).firstOrNull;
+    final TimetableGroup? group = ref
+        .watch(selectedTimetableGroupProvider)
+        .value
+        ?.value;
 
     return _SourceSheet(
       title: l10n.calendarSourceTimetable,

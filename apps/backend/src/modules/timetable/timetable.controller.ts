@@ -1,16 +1,22 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiResponse, buildMeta } from '../../common/dto/meta.dto';
 import { LocaleResolution } from '../../common/locale/locale';
 import { RequestLocale } from '../../common/locale/locale.decorator';
-import { isoDate, parseWith, refineDateRange } from '../../common/validation/query';
+import {
+  isoDate,
+  paginationSchema,
+  parseWith,
+  refineDateRange,
+} from '../../common/validation/query';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
 import { TimetableService } from './timetable.service';
 import { TIMETABLE_TIMEZONE } from './webuntis.schema';
 import {
   TimetableGroupDto,
+  TimetableGroupResponseDto,
   TimetableGroupsResponseDto,
   TimetableLessonInfoDto,
   TimetableLessonInfoResponseDto,
@@ -23,10 +29,12 @@ import {
 /** A timetable window is bounded; an unbounded range is an availability risk. */
 const MAX_RANGE_DAYS = 42;
 
-const groupsQuerySchema = z.object({
+const groupsQuerySchema = paginationSchema.extend({
   query: z.string().trim().max(100).optional(),
   department: z.string().trim().max(100).optional(),
 });
+
+const groupParamSchema = z.object({ groupId: z.uuid('must be a Campus group id') });
 
 const lessonInfoQuerySchema = z.object({ groupId: z.uuid('must be a Campus group id') });
 
@@ -55,6 +63,8 @@ export class TimetableController {
     description: 'Searches short name, long name and department.',
   })
   @ApiQuery({ name: 'department', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Max 50.' })
   @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
   @ApiOkResponse({ type: TimetableGroupsResponseDto })
   async groups(
@@ -70,6 +80,39 @@ export class TimetableController {
       meta: buildMeta({
         ...locale,
         // Group names are the source's own strings and are never translated.
+        translationFallback: locale.resolvedLocale !== 'de',
+        pagination: result.pagination,
+        featureEnabled: this.timetable.featureEnabled,
+        lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,
+        dataStale: result.stale,
+        from: new Date(now).toISOString().slice(0, 10),
+        to: new Date(now + this.env.WEBUNTIS_LOOKAHEAD_DAYS * 86_400_000)
+          .toISOString()
+          .slice(0, 10),
+      }),
+    };
+  }
+
+  @Get('groups/:groupId')
+  @ApiOperation({
+    summary: 'Resolve one previously selected class group.',
+    description:
+      'Returns one group by its stable Campus UUID so clients can retain the selection and its public label offline without downloading the catalogue.',
+  })
+  @ApiParam({ name: 'groupId', format: 'uuid', description: 'Stable Campus UUID.' })
+  @ApiOkResponse({ type: TimetableGroupResponseDto })
+  async group(
+    @RequestLocale() locale: LocaleResolution,
+    @Param() params: Record<string, unknown>,
+  ): Promise<ApiResponse<TimetableGroupDto>> {
+    const { groupId } = parseWith(groupParamSchema, params, locale.resolvedLocale);
+    const result = await this.timetable.getGroup(locale, groupId);
+    const now = Date.now();
+
+    return {
+      data: result.data,
+      meta: buildMeta({
+        ...locale,
         translationFallback: locale.resolvedLocale !== 'de',
         featureEnabled: this.timetable.featureEnabled,
         lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,

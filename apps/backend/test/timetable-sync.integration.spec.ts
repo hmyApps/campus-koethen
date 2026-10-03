@@ -10,7 +10,7 @@ import {
   entriesResponseSchema,
   filterResponseSchema,
 } from '../src/modules/timetable/webuntis.schema';
-import { createTestPrisma } from './helpers/database';
+import { createTestPrisma, resetDatabase } from './helpers/database';
 
 // These tests exercise a real PostgreSQL service. On a shared CI runner,
 // truncating the timetable tables can legitimately exceed Jest's 5s default.
@@ -89,9 +89,7 @@ describe('TimetableSyncService (integration)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE timetable_entry_groups, timetable_entries, timetable_groups, timetable_contexts, timetable_sync_runs RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(prisma);
   });
 
   const seedCatalogue = async () => {

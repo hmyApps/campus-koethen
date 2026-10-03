@@ -16,6 +16,139 @@ describe('TimetableService feature availability', () => {
   });
 });
 
+describe('TimetableService group catalogue', () => {
+  const locale = { requestedLocale: 'de', resolvedLocale: 'de' } as const;
+  const env = {
+    WEBUNTIS_ENABLED: true,
+    USER_TEST_DATA_ENABLED: false,
+    WEBUNTIS_STALE_AFTER_MINUTES: 180,
+  } as Env;
+
+  it('pages across the complete catalogue without a fixed total cap', async () => {
+    const groups = [
+      {
+        id: '43a7302c-19ce-4fd7-a06e-003599fd75d0',
+        shortName: 'ZZZ',
+        longName: 'Last group',
+        department: 'FB7',
+      },
+    ];
+    const prisma = {
+      timetableGroup: {
+        count: jest.fn().mockResolvedValue(503),
+        findMany: jest.fn().mockResolvedValue(groups),
+      },
+      timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TimetableService(prisma as unknown as PrismaService, env);
+
+    const result = await service.listGroups(locale, {
+      page: 11,
+      pageSize: 50,
+      query: 'zzz',
+    });
+
+    expect(result.data).toEqual(groups);
+    expect(result.pagination).toEqual({
+      page: 11,
+      pageSize: 50,
+      total: 503,
+      totalPages: 11,
+    });
+    const where = {
+      active: true,
+      catalogVisible: true,
+      OR: [
+        { shortName: { contains: 'zzz', mode: 'insensitive' } },
+        { longName: { contains: 'zzz', mode: 'insensitive' } },
+        { department: { contains: 'zzz', mode: 'insensitive' } },
+      ],
+    };
+    expect(prisma.timetableGroup.count).toHaveBeenCalledWith({ where });
+    expect(prisma.timetableGroup.findMany).toHaveBeenCalledWith({
+      where,
+      orderBy: [{ shortName: 'asc' }, { longName: 'asc' }, { department: 'asc' }, { id: 'asc' }],
+      select: { id: true, shortName: true, longName: true, department: true },
+      skip: 500,
+      take: 50,
+    });
+  });
+
+  it('resolves one saved Campus group without exposing its upstream id', async () => {
+    const publicGroup = {
+      id: '43a7302c-19ce-4fd7-a06e-003599fd75d0',
+      shortName: 'AIN2 - BT',
+      longName: 'Angewandte Informatik',
+      department: 'FB5',
+    };
+    const prisma = {
+      timetableGroup: {
+        findFirst: jest.fn().mockResolvedValue({ ...publicGroup, externalId: 'secret-source-id' }),
+      },
+      timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TimetableService(prisma as unknown as PrismaService, env);
+
+    const result = await service.getGroup(locale, publicGroup.id);
+
+    expect(result.data).toEqual(publicGroup);
+    expect(JSON.stringify(result)).not.toContain('secret-source-id');
+    expect(prisma.timetableGroup.findFirst).toHaveBeenCalledWith({
+      where: { id: publicGroup.id },
+      select: {
+        id: true,
+        shortName: true,
+        longName: true,
+        department: true,
+        catalogVisible: true,
+      },
+    });
+  });
+
+  it('migrates a saved hidden alias to its visible public representative', async () => {
+    const hidden = {
+      id: '43a7302c-19ce-4fd7-a06e-003599fd75d0',
+      shortName: 'AIN2 - BT',
+      longName: 'Angewandte Informatik',
+      department: 'FB5',
+      catalogVisible: false,
+    };
+    const visible = {
+      ...hidden,
+      id: '11111111-1111-4111-8111-111111111111',
+      catalogVisible: true,
+    };
+    const prisma = {
+      timetableGroup: {
+        findFirst: jest.fn().mockResolvedValueOnce(hidden).mockResolvedValueOnce(visible),
+      },
+      timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TimetableService(prisma as unknown as PrismaService, env);
+
+    const result = await service.getGroup(locale, hidden.id);
+
+    expect(result.data.id).toBe(visible.id);
+    expect(prisma.timetableGroup.findFirst.mock.calls[1]![0]).toEqual({
+      where: {
+        active: true,
+        catalogVisible: true,
+        shortName: hidden.shortName,
+        longName: hidden.longName,
+        department: hidden.department,
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        shortName: true,
+        longName: true,
+        department: true,
+        catalogVisible: true,
+      },
+    });
+  });
+});
+
 describe('TimetableService lesson information choices', () => {
   it('returns every distinct source text exactly and includes lessons without information', async () => {
     const groupId = '43a7302c-19ce-4fd7-a06e-003599fd75d0';
@@ -115,6 +248,9 @@ describe('TimetableService status lookups', () => {
     // One count plus one lookup per kind. The freshness of the entry run and
     // the window it confirmed come out of the same row.
     expect(prisma.timetableGroup.count).toHaveBeenCalledTimes(1);
+    expect(prisma.timetableGroup.count).toHaveBeenCalledWith({
+      where: { active: true, catalogVisible: true },
+    });
     expect(prisma.timetableSyncRun.findFirst).toHaveBeenCalledTimes(2);
     const kinds = prisma.timetableSyncRun.findFirst.mock.calls.map(
       ([args]: [{ where: { kind: string } }]) => args.where.kind,
@@ -151,7 +287,10 @@ describe('TimetableService status lookups', () => {
     };
     const service = new TimetableService(prisma as unknown as PrismaService, env);
 
-    await service.listGroups({ requestedLocale: 'de', resolvedLocale: 'de' }, {});
+    await service.listGroups(
+      { requestedLocale: 'de', resolvedLocale: 'de' },
+      { page: 1, pageSize: 20 },
+    );
 
     expect(prisma.timetableSyncRun.findFirst).toHaveBeenCalledTimes(1);
     expect(prisma.timetableSyncRun.findFirst.mock.calls[0]![0].select).toEqual({

@@ -5,17 +5,147 @@ import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/locale/locale_providers.dart';
+import '../../../core/network/api_meta.dart';
 import '../../../core/network/loaded.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../data/timetable_models.dart';
 import '../data/timetable_repository.dart';
 import 'timetable_week.dart';
 
-/// All selectable study groups. Comes exclusively from the Campus API.
-final FutureProvider<Loaded<List<TimetableGroup>>> timetableGroupsProvider =
-    FutureProvider<Loaded<List<TimetableGroup>>>((Ref ref) async {
+/// One progressively loaded result set of the server-side group search.
+@immutable
+class TimetableGroupSearchState {
+  const TimetableGroupSearchState({
+    required this.groups,
+    required this.page,
+    required this.totalPages,
+    required this.meta,
+    this.isLoadingMore = false,
+    this.loadMoreFailed = false,
+    this.fromCache = false,
+    this.cachedAt,
+  });
+
+  final List<TimetableGroup> groups;
+  final int page;
+  final int totalPages;
+  final ApiMeta meta;
+  final bool isLoadingMore;
+  final bool loadMoreFailed;
+  final bool fromCache;
+  final DateTime? cachedAt;
+
+  bool get hasMore => page < totalPages;
+
+  TimetableGroupSearchState copyWith({
+    List<TimetableGroup>? groups,
+    int? page,
+    int? totalPages,
+    ApiMeta? meta,
+    bool? isLoadingMore,
+    bool? loadMoreFailed,
+  }) => TimetableGroupSearchState(
+    groups: groups ?? this.groups,
+    page: page ?? this.page,
+    totalPages: totalPages ?? this.totalPages,
+    meta: meta ?? this.meta,
+    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+    loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
+    fromCache: fromCache,
+    cachedAt: cachedAt,
+  );
+}
+
+class TimetableGroupSearchController
+    extends AsyncNotifier<TimetableGroupSearchState> {
+  TimetableGroupSearchController(this.query);
+
+  final String query;
+  int _generation = 0;
+  ({int generation, String locale, String query})? _scope;
+
+  TimetableRepository get _repository => ref.read(timetableRepositoryProvider);
+
+  @override
+  Future<TimetableGroupSearchState> build() async {
+    final int generation = ++_generation;
+    _scope = null;
+    final String locale = ref.watch(localeCodeProvider);
+    final String normalizedQuery = query.trim();
+    final Loaded<List<TimetableGroup>> first = await _repository.fetchGroups(
+      locale: locale,
+      query: normalizedQuery,
+    );
+    _scope = (generation: generation, locale: locale, query: normalizedQuery);
+    final ApiPagination? pagination = first.meta.pagination;
+    return TimetableGroupSearchState(
+      groups: List<TimetableGroup>.unmodifiable(first.value),
+      page: pagination?.page ?? 1,
+      totalPages: pagination?.totalPages ?? 1,
+      meta: first.meta,
+      fromCache: first.fromCache,
+      cachedAt: first.cachedAt,
+    );
+  }
+
+  Future<void> loadMore() async {
+    final TimetableGroupSearchState? current = state.value;
+    final ({int generation, String locale, String query})? scope = _scope;
+    if (current == null ||
+        scope == null ||
+        current.isLoadingMore ||
+        !current.hasMore) {
+      return;
+    }
+    state = AsyncData<TimetableGroupSearchState>(
+      current.copyWith(isLoadingMore: true, loadMoreFailed: false),
+    );
+    try {
+      final Loaded<List<TimetableGroup>> next = await _repository.fetchGroups(
+        locale: scope.locale,
+        query: scope.query,
+        page: current.page + 1,
+      );
+      if (_scope != scope || scope.generation != _generation) return;
+      final TimetableGroupSearchState base = state.value ?? current;
+      final Set<String> seen = base.groups
+          .map((TimetableGroup group) => group.id)
+          .toSet();
+      final List<TimetableGroup> merged = <TimetableGroup>[...base.groups];
+      for (final TimetableGroup group in next.value) {
+        if (seen.add(group.id)) merged.add(group);
+      }
+      final ApiPagination? pagination = next.meta.pagination;
+      state = AsyncData<TimetableGroupSearchState>(
+        base.copyWith(
+          groups: List<TimetableGroup>.unmodifiable(merged),
+          page: pagination?.page ?? current.page + 1,
+          totalPages: pagination?.totalPages ?? current.totalPages,
+          isLoadingMore: false,
+          loadMoreFailed: false,
+        ),
+      );
+    } on Object {
+      if (_scope != scope || scope.generation != _generation) return;
+      final TimetableGroupSearchState base = state.value ?? current;
+      state = AsyncData<TimetableGroupSearchState>(
+        base.copyWith(isLoadingMore: false, loadMoreFailed: true),
+      );
+    }
+  }
+}
+
+final timetableGroupSearchProvider =
+    AsyncNotifierProvider.family<
+      TimetableGroupSearchController,
+      TimetableGroupSearchState,
+      String
+    >(TimetableGroupSearchController.new, isAutoDispose: true);
+
+final FutureProvider<Loaded<TimetableStatus>> timetableStatusProvider =
+    FutureProvider<Loaded<TimetableStatus>>((Ref ref) {
       final String locale = ref.watch(localeCodeProvider);
-      return ref.watch(timetableRepositoryProvider).fetchGroups(locale: locale);
+      return ref.watch(timetableRepositoryProvider).fetchStatus(locale: locale);
     });
 
 final timetableLessonInfoOptionsProvider =
@@ -40,6 +170,27 @@ final Provider<String?> selectedTimetableGroupIdProvider = Provider<String?>(
     ),
   ),
 );
+
+/// Metadata for the selected UUID, resolved independently of the picker.
+///
+/// A hidden legacy alias may resolve to its public representative. In that
+/// case the stored Campus UUID is migrated immediately; no upstream id is
+/// involved.
+final FutureProvider<Loaded<TimetableGroup>?> selectedTimetableGroupProvider =
+    FutureProvider<Loaded<TimetableGroup>?>((Ref ref) async {
+      final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
+      if (groupId == null) return null;
+      final String locale = ref.watch(localeCodeProvider);
+      final Loaded<TimetableGroup> loaded = await ref
+          .watch(timetableRepositoryProvider)
+          .fetchGroup(locale: locale, groupId: groupId);
+      if (loaded.value.id != groupId) {
+        await ref
+            .read(settingsProvider.notifier)
+            .setTimetableGroup(loaded.value.id);
+      }
+      return loaded;
+    });
 
 /// The day the timetable screen currently shows. Defaults to today.
 ///
@@ -150,4 +301,36 @@ final timetableWeekProvider =
             from: request.weekStart,
             to: request.weekEnd,
           );
+    });
+
+typedef TimetableForegroundRefresh = Future<void> Function();
+
+/// Refreshes only availability, the selected group and its current week.
+///
+/// In particular, a cold start with no selection never downloads the picker
+/// catalogue. The catalogue belongs to the picker and onboarding only.
+final Provider<TimetableForegroundRefresh> timetableForegroundRefreshProvider =
+    Provider<TimetableForegroundRefresh>((Ref ref) {
+      return () async {
+        ref.invalidate(timetableStatusProvider);
+        ref.invalidate(selectedTimetableGroupProvider);
+        ref.invalidate(timetableWeekProvider);
+        await ref.read(timetableStatusProvider.future);
+
+        String? groupId = ref.read(selectedTimetableGroupIdProvider);
+        if (groupId == null) return;
+        await ref.read(selectedTimetableGroupProvider.future);
+        final String? migratedGroupId = ref.read(
+          selectedTimetableGroupIdProvider,
+        );
+        if (migratedGroupId == null) return;
+        await ref.read(
+          timetableWeekProvider(
+            TimetableWeekRequest(
+              groupId: migratedGroupId,
+              weekStart: TimetableWeek.startOf(DateTime.now()),
+            ),
+          ).future,
+        );
+      };
     });

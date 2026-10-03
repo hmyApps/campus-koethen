@@ -34,7 +34,29 @@ import '../../support/fake_http_adapter.dart';
 import '../../support/pump_app.dart';
 
 ApiClient _emptyApi() => fakeApiClient(
-  FakeHttpAdapter((RequestOptions _) => FakeHttpResponse(envelope(<Object>[]))),
+  FakeHttpAdapter((RequestOptions options) {
+    if (options.path.endsWith('/timetable/status')) {
+      // Enabled with a non-empty catalogue, matching this file's existing
+      // "course not yet chosen" tests; "distinguishes a disabled backend"
+      // overrides calendarDataProvider directly instead of going through
+      // this fake HTTP layer, so it is unaffected by this default.
+      return FakeHttpResponse(
+        envelope(<String, Object?>{'featureEnabled': true, 'groupCount': 1}),
+      );
+    }
+    final RegExpMatch? groupId = RegExp(
+      r'/timetable/groups/([^/]+)$',
+    ).firstMatch(options.path);
+    if (groupId != null) {
+      return FakeHttpResponse(
+        envelope(<String, Object?>{
+          'id': groupId.group(1),
+          'shortName': 'Fixture',
+        }),
+      );
+    }
+    return FakeHttpResponse(envelope(<Object>[]));
+  }),
 );
 
 /// Records what the export action hands off instead of opening the real OS
