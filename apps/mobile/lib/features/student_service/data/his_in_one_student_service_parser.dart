@@ -288,17 +288,25 @@ abstract final class HisInOneStudentServiceParser {
   );
 
   /// Extracts the one-time document-download URL from a JSF/MyFaces
-  /// partial-response, per the standard protocol: either an `<eval>` block
-  /// whose script assigns `window.location`/navigates to a URL, or an
-  /// `<update>` block whose rendered HTML contains a matching link. Returns
-  /// `null` when neither shape is found — the caller surfaces that as
-  /// `portalStructureChanged` rather than guessing at an undocumented AJAX
-  /// contract.
-  static String? extractDownloadUrlFromPartialResponse(String xml) =>
-      _downloadUrlPattern.firstMatch(xml)?.group(0);
+  /// partial-response. Confirmed 2026-10-04 from a real finished job: the
+  /// link is a plain `<a class="downloadFile" href="…">`, and the `href` is
+  /// SITE-RELATIVE (`/qisserver/rds?state=docdownload&docId=…`), not an
+  /// absolute URL — the caller resolves it against the portal origin before
+  /// fetching. Also matches an absolute `window.location` assignment as a
+  /// fallback shape. Returns `null` when neither is found — the caller
+  /// surfaces that as `portalStructureChanged` rather than guessing at an
+  /// undocumented AJAX contract.
+  static String? extractDownloadUrlFromPartialResponse(String xml) {
+    final String? raw = _downloadUrlPattern.firstMatch(xml)?.group(1);
+    // The real markup renders the query string HTML-escaped
+    // (`…&amp;docId=…`), since an href is an HTML attribute value even
+    // inside a JSF partial-response's CDATA block. Unescaped, `&amp;docId`
+    // reads as one bare query key with no value, silently dropping docId.
+    return raw?.replaceAll('&amp;', '&');
+  }
 
   static final RegExp _downloadUrlPattern = RegExp(
-    r'''https?://[^\s"'<>\\]+state=docdownload[^\s"'<>\\]*''',
+    r'''(?:href|window\.location)\s*=\s*['"]([^'"]*state=docdownload[^'"]*)['"]''',
   );
 
   static String _normalized(String value) =>

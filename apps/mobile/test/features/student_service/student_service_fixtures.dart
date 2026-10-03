@@ -164,21 +164,36 @@ String partialResponseStarted({String viewState = 'view-state-token-5'}) =>
 </changes></partial-response>
 ''';
 
-/// A JSF partial-response whose job has finished: the eval block navigates to
-/// the one-time download link. Same host as the portal itself and just
-/// `state`/`docId`, confirmed 2026-10-04 from a real finished download — an
-/// earlier analysis had wrongly claimed a separate "untrust-" subdomain and
-/// additional accountId/hash/timestamp/docName parameters that the real
-/// portal does not send.
+/// A JSF partial-response whose job has already finished — confirmed
+/// 2026-10-04 from a real job-start response: the download link is already
+/// present the moment the job completes, as a plain hidden `<a>`, not an
+/// `<eval>` block. Its `href` is site-relative and HTML-escaped
+/// (`&amp;`, since it is an attribute value inside CDATA) — the gateway
+/// resolves and unescapes it, never assumes it is already absolute.
+///
+/// An earlier analysis had wrongly claimed a separate "untrust-" subdomain
+/// for this link. A real capture showed the opposite extreme is also
+/// wrong: the richer `accountId`/`hash`/`timestamp`/`docName` parameters it
+/// had invented for THIS link are real, but belong to a same-host redirect
+/// target one hop further — see [docDownloadRedirectTarget] — not to the
+/// link the partial-response itself renders.
 String partialResponseFinished({String docId = 'abc-123'}) =>
     '''
 <?xml version='1.0' encoding='UTF-8'?>
 <partial-response><changes>
-<update id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"><![CDATA[
-<span id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll">done</span>
+<update id="studyserviceForm:report:reports:reportButtons:jobDownload"><![CDATA[
+<div id="studyserviceForm:report:reports:reportButtons:jobDownload">
+<div id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll">
+<span class="polling-data-holder" style="display:none;" data-poll-button-client-id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll:poll" data-timeout="3000" data-stop="false" data-is-ajax="true"></span>
+<a class="downloadFile noDisplay" href="/qisserver/rds?state=docdownload&amp;docId=$docId" target="_blank">cs.sys.job.downloadManual</a>
+</div></div>
 ]]></update>
-<eval><![CDATA[
-window.location = 'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=$docId';
-]]></eval>
 </changes></partial-response>
 ''';
+
+/// The same-host redirect target the entry link above actually resolves to
+/// once followed — confirmed 2026-10-04 from a real completed download.
+String docDownloadRedirectTarget({String docId = 'abc-123'}) =>
+    'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload'
+    '&accountId=52153&hash=e09abb51206c61a0f776a5edc7848fb3'
+    '&timestamp=20261004002735&docId=$docId&docName=Gebuehrenbescheinigung.pdf';

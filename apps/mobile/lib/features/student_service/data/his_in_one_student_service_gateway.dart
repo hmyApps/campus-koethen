@@ -223,7 +223,13 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         return const CertificateUnavailable('job-not-finished');
       }
 
-      return await _fetchDocument(session, downloadUrl, offer.name);
+      // The real link is site-relative; resolve it against the portal
+      // origin before validating/fetching (an already-absolute fallback
+      // shape resolves to itself unchanged).
+      final String absoluteDownloadUrl = Uri.parse(
+        StudentServiceProfile.baseUrl,
+      ).resolve(downloadUrl).toString();
+      return await _fetchDocument(session, absoluteDownloadUrl, offer.name);
     } on StudentServiceFailure {
       rethrow;
     } on HisInOneSessionFailure catch (e) {

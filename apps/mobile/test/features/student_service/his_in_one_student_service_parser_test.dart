@@ -219,14 +219,14 @@ void main() {
   });
 
   group('extractDownloadUrlFromPartialResponse', () {
-    test('finds the one-time download link emitted by an eval block', () {
+    test('finds the one-time download link and unescapes its query string', () {
       final String? url =
           HisInOneStudentServiceParser.extractDownloadUrlFromPartialResponse(
-            partialResponseFinished(),
+            partialResponseFinished(docId: 'the-doc-id'),
           );
-      expect(url, isNotNull);
-      expect(url, contains('sscportal.ssc.hs-anhalt.de'));
-      expect(url, contains('state=docdownload'));
+      // Site-relative, exactly as the real portal renders it — resolving
+      // against the portal origin is the gateway's job, not the parser's.
+      expect(url, '/qisserver/rds?state=docdownload&docId=the-doc-id');
     });
 
     test('a still-running job yields no link, never a fabricated one', () {
