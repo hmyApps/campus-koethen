@@ -288,6 +288,28 @@ void main() {
           ),
           isTrue,
         );
+        // The real job button's own onclick asks the server to re-render
+        // three components, not just the download slot — the overlay that
+        // hosts the client poll widget's init marker among them. Rendering
+        // fewer than that never gets the poll marker back at all.
+        final RequestOptions jobStart = adapter.requests.firstWhere(
+          (RequestOptions request) =>
+              request.data is Map &&
+              (request.data as Map)['javax.faces.source'] == offer.jobButtonId,
+        );
+        expect(
+          (jobStart.data as Map)['javax.faces.partial.render'],
+          allOf(
+            contains(
+              'studyserviceForm:report:reports:reportButtons:'
+              'jobConfigurationButtonsOverlay',
+            ),
+            contains(
+              'studyserviceForm:report:reports:reportButtons:jobDownload',
+            ),
+            contains('studyserviceForm:messages-infobox'),
+          ),
+        );
       },
     );
 

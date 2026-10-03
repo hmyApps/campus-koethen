@@ -177,8 +177,16 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       // page's form/source anchors and the standard partial-response contract.
       // A live account/download token is still part of the manual portal
       // checklist; any unknown response fails closed, never by guessing.
+      //
+      // All three ids, exactly as the real job button's own onclick handler
+      // requests (confirmed 2026-10-04): the overlay that hosts the client
+      // poll widget's init marker, the download slot itself, and the
+      // message box. Rendering only the download slot — as this used to —
+      // never gets back the overlay's poll-init markup at all.
       const String renderTarget =
-          'studyserviceForm:report:reports:reportButtons:jobDownload';
+          'studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay '
+          'studyserviceForm:report:reports:reportButtons:jobDownload '
+          'studyserviceForm:messages-infobox';
       HisInOnePartialResponse started = await _ajaxRequest(
         session,
         ajaxForm,
