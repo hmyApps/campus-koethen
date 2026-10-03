@@ -56,10 +56,14 @@ abstract final class HisInOneStudentServiceParser {
     if (form == null) return null;
     final dom.Element? button = _elementById(document, buttonId);
     final String? buttonName = button?.attributes['name'];
-    final String? buttonValue = button?.attributes['value'];
-    if (button == null || buttonName == null || buttonValue == null) {
+    if (button == null || buttonName == null) {
       return null;
     }
+    // The real tab buttons carry no `value` attribute at all (confirmed
+    // against the live portal on 2026-10-03); per the HTML submit-button
+    // spec that means the submitted value is the empty string, not "this
+    // button doesn't exist".
+    final String buttonValue = button.attributes['value'] ?? '';
     final String? action = form.attributes['action'];
     if (action == null || action.isEmpty) return null;
 

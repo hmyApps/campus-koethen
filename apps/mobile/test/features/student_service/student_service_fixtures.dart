@@ -1,9 +1,12 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-/// Anonymised replica of the live "Studienservice" structure, as observed
-/// on 2026-10-01. Ids, classes and header texts are real; every personal
-/// value (name, Matrikelnummer, address, …) is a placeholder.
+/// Anonymised replica of the live "Studienservice" structure, confirmed
+/// against the real portal on 2026-10-03. Ids, classes, header texts and
+/// the tab buttons' real `name` attributes (JSF's own `content.N`, distinct
+/// from the button's `id` and carrying no `value` attribute at all) are
+/// real; every personal value (name, Matrikelnummer, address, …) is a
+/// placeholder.
 library;
 
 /// The default-tab ("Meine Studiengänge") render, including the always-present
@@ -18,11 +21,11 @@ String studyServiceStgStudentHtml({String flowExecutionKey = 'e1s1'}) =>
   <input type="hidden" name="authenticity_token" value="auth-token" />
   <input type="hidden" name="studyserviceForm_SUBMIT" value="1" />
   <button type="submit" id="studyserviceForm:newContactData_TabBtn"
-          name="studyserviceForm:newContactData_TabBtn" value="Kontaktdaten">Kontaktdaten</button>
+          name="studyserviceForm:content.5" role="tab">Kontaktdaten</button>
   <button type="submit" id="studyserviceForm:billsAndPayment_TabBtn"
-          name="studyserviceForm:billsAndPayment_TabBtn" value="Zahlungen">Zahlungen</button>
+          name="studyserviceForm:content.8" role="tab">Zahlungen</button>
   <button type="submit" id="studyserviceForm:report_TabBtn"
-          name="studyserviceForm:report_TabBtn" value="Bescheide / Bescheinigungen">Bescheide / Bescheinigungen</button>
+          name="studyserviceForm:content.10" role="tab">Bescheide / Bescheinigungen</button>
 
   <div id="studyserviceForm:fieldsetPersoenlicheData">
     <div class="oneLine"><div class="labelWithBG">Matrikelnummer</div><div class="answer">000000</div></div>
@@ -59,9 +62,9 @@ String studyServiceContactDataHtml({String flowExecutionKey = 'e1s2'}) =>
       action="/qisserver/pages/cm/stu/studyService/start.xhtml?_flowId=studyservice-flow&_flowExecutionKey=$flowExecutionKey">
   <input type="hidden" name="javax.faces.ViewState" value="view-state-token-2" />
   <button type="submit" id="studyserviceForm:report_TabBtn"
-          name="studyserviceForm:report_TabBtn" value="Bescheide / Bescheinigungen">Bescheide / Bescheinigungen</button>
+          name="studyserviceForm:content.10" role="tab">Bescheide / Bescheinigungen</button>
   <button type="submit" id="studyserviceForm:billsAndPayment_TabBtn"
-          name="studyserviceForm:billsAndPayment_TabBtn" value="Zahlungen">Zahlungen</button>
+          name="studyserviceForm:content.8" role="tab">Zahlungen</button>
 
   <div id="studyserviceForm:fieldsetPersoenlicheData">
     <div class="oneLine"><div class="labelWithBG">Matrikelnummer</div><div class="answer">000000</div></div>
@@ -104,7 +107,7 @@ String studyServiceBillsAndPaymentHtml({
       action="/qisserver/pages/cm/stu/studyService/start.xhtml?_flowId=studyservice-flow&_flowExecutionKey=$flowExecutionKey">
   <input type="hidden" name="javax.faces.ViewState" value="view-state-token-3" />
   <button type="submit" id="studyserviceForm:report_TabBtn"
-          name="studyserviceForm:report_TabBtn" value="Bescheide / Bescheinigungen">Bescheide / Bescheinigungen</button>
+          name="studyserviceForm:content.10" role="tab">Bescheide / Bescheinigungen</button>
   <div id="studyserviceForm:fieldsetPersoenlicheData">
     <div class="oneLine"><div class="labelWithBG">Hörerstatus</div><div class="answer">Student</div></div>
   </div>

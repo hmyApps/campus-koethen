@@ -40,10 +40,31 @@ void main() {
       expect(request!.action, contains('e7s3'));
       expect(request.formData['javax.faces.ViewState'], 'view-state-token');
       expect(request.formData['authenticity_token'], 'auth-token');
+      // JSF's own internal name, distinct from the button's id — read from
+      // the button's real `name` attribute, never assumed to match the id.
+      expect(request.formData['studyserviceForm:content.5'], '');
       expect(
-        request.formData['studyserviceForm:newContactData_TabBtn'],
-        'Kontaktdaten',
+        request.formData.containsKey('studyserviceForm:newContactData_TabBtn'),
+        isFalse,
       );
+    });
+
+    test('a real tab button has no value attribute at all — that still '
+        'yields a request, not a missing-button failure', () {
+      final TabSwitchRequest?
+      request = HisInOneStudentServiceParser.buildTabSwitchRequest(
+        '<html><body>'
+            '<form id="studyserviceForm" method="post" '
+            'action="/qisserver/pages/cm/stu/studyService/start.xhtml'
+            '?_flowId=studyservice-flow&_flowExecutionKey=e9s1">'
+            '<button type="submit" id="studyserviceForm:newContactData_TabBtn" '
+            'name="studyserviceForm:content.5" role="tab">Kontaktdaten</button>'
+            '</form></body></html>',
+        'studyserviceForm:newContactData_TabBtn',
+      );
+
+      expect(request, isNotNull);
+      expect(request!.formData['studyserviceForm:content.5'], '');
     });
 
     test('a button that is not on the page yields null, never a guess', () {

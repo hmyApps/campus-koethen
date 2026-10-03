@@ -41,13 +41,13 @@ FakeHtmlResponse _happyPath(RequestOptions o) {
       return FakeHtmlResponse(studyServiceStgStudentHtml());
     }
     final Map<String, String> body = Map<String, String>.from(o.data as Map);
-    if (body.containsKey('studyserviceForm:newContactData_TabBtn')) {
+    if (body.containsKey('studyserviceForm:content.5')) {
       return FakeHtmlResponse(studyServiceContactDataHtml());
     }
-    if (body.containsKey('studyserviceForm:billsAndPayment_TabBtn')) {
+    if (body.containsKey('studyserviceForm:content.8')) {
       return FakeHtmlResponse(studyServiceBillsAndPaymentHtml());
     }
-    if (body.containsKey('studyserviceForm:report_TabBtn')) {
+    if (body.containsKey('studyserviceForm:content.10')) {
       return FakeHtmlResponse(studyServiceReportHtml());
     }
   }
@@ -147,7 +147,7 @@ void main() {
           final Map<String, String> body = Map<String, String>.from(
             o.data as Map,
           );
-          if (body.containsKey('studyserviceForm:newContactData_TabBtn')) {
+          if (body.containsKey('studyserviceForm:content.5')) {
             // Recognisable as the Studienservice page, but with none of
             // the contact tiles the real portal always has.
             return const FakeHtmlResponse(
@@ -252,7 +252,7 @@ void main() {
             final Map<String, String> body = Map<String, String>.from(
               o.data as Map,
             );
-            if (body.containsKey('studyserviceForm:report_TabBtn')) {
+            if (body.containsKey('studyserviceForm:content.10')) {
               return FakeHtmlResponse(studyServiceReportHtml());
             }
             if (body['javax.faces.partial.ajax'] == 'true') {
@@ -319,7 +319,7 @@ void main() {
             final Map<String, String> body = Map<String, String>.from(
               o.data as Map,
             );
-            if (body.containsKey('studyserviceForm:report_TabBtn')) {
+            if (body.containsKey('studyserviceForm:content.10')) {
               return FakeHtmlResponse(studyServiceReportHtml());
             }
             if (body['javax.faces.partial.ajax'] == 'true') {
@@ -376,7 +376,7 @@ void main() {
           final Map<String, String> body = Map<String, String>.from(
             o.data as Map,
           );
-          if (body.containsKey('studyserviceForm:report_TabBtn')) {
+          if (body.containsKey('studyserviceForm:content.10')) {
             // A report page with NO certificate offers at all.
             return const FakeHtmlResponse(
               '<html><body><form id="studyserviceForm" method="post" '
