@@ -175,8 +175,25 @@ class _StudentServiceContentState
                   ),
                 ),
               )
+            else if (state.isSyncing)
+              const LoadingView()
             else
-              const LoadingView(),
+              // Neither syncing nor errored, with nothing cached: the
+              // 24h auto-sync throttle can leave exactly this state after
+              // an earlier attempt failed and the in-memory error from
+              // that attempt is gone (app restart, provider recreated).
+              // A spinner with no escape hatch would then spin forever —
+              // always offer a manual way to load instead.
+              EmptyView(
+                icon: AppIcons.sync,
+                title: l10n.studentServiceNeverSynced,
+                message: l10n.studentServiceNotYetLoadedMessage,
+                action: FilledButton.icon(
+                  onPressed: _refresh,
+                  icon: const Icon(AppIcons.refresh),
+                  label: Text(l10n.actionRefresh),
+                ),
+              ),
           ],
         ),
       );

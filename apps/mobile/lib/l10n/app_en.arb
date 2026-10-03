@@ -729,6 +729,7 @@
   "studentServiceWrongPortalMessage": "These functions exist only on HISinOne. Your account uses the older portal HIS-QIS.",
   "studentServiceRefreshFailed": "Refresh failed",
   "studentServiceNeverSynced": "Not fetched yet",
+  "studentServiceNotYetLoadedMessage": "This data has not been fetched yet.",
   "studentServiceLastSyncAt": "Last fetched on {date}",
   "@studentServiceLastSyncAt": {
     "placeholders": {

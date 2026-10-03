@@ -285,6 +285,48 @@ void main() {
   });
 
   testWidgets(
+    'a recent failed attempt with nothing cached offers a manual load '
+    'instead of spinning forever',
+    (WidgetTester tester) async {
+      // The cache's default lastAttemptedSync is "just now" — exactly what
+      // it would be after an earlier attempt failed this session (or in a
+      // previous app run) and the 24h auto-sync throttle is still in
+      // effect. No overview was ever cached, and the in-memory error from
+      // that earlier attempt is gone (e.g. the app was restarted). This is
+      // the state a classified failure such as the real
+      // "tabSwitchRequest:studyserviceForm:newContactData_TabBtn" portal
+      // change leaves behind once the throttle kicks in.
+      final _StudentServiceCache cache = _StudentServiceCache(null);
+      final _FailingStudentServiceGateway gateway =
+          _FailingStudentServiceGateway();
+
+      await pumpScreen(
+        tester,
+        const StudentServiceScreen(),
+        overrides: _connectedOverrides(
+          _overview(),
+          cache: cache,
+          gateway: gateway,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Auto-sync must honour the throttle and not call the gateway.
+      expect(gateway.fetchCount, 0);
+      // The screen must not be an un-escapable spinner: a manual load
+      // action has to be visible and tappable.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Aktualisieren'), findsOneWidget);
+
+      await tester.tap(find.text('Aktualisieren'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.fetchCount, 1);
+      expect(find.text('Laden fehlgeschlagen'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'a real portal mismatch names the exact failing check, not just "changed"',
     (WidgetTester tester) async {
       final _StudentServiceCache cache = _StudentServiceCache(null)

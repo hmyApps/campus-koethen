@@ -1319,6 +1319,7 @@
   "studentServiceWrongPortalMessage": "Diese Funktionen gibt es nur auf HISinOne. Dein Konto nutzt das ältere Bestandsportal HIS-QIS.",
   "studentServiceRefreshFailed": "Aktualisieren fehlgeschlagen",
   "studentServiceNeverSynced": "Noch nicht abgerufen",
+  "studentServiceNotYetLoadedMessage": "Diese Daten wurden noch nicht abgerufen.",
   "studentServiceLastSyncAt": "Zuletzt abgerufen am {date}",
   "@studentServiceLastSyncAt": {
     "placeholders": {
