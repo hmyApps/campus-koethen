@@ -61,16 +61,25 @@ sync route would let anyone drive load onto a third-party service.
 
 ## Tests
 
+Integration tests reset their PostgreSQL tables. They therefore never fall
+back to the application's normal `DATABASE_URL`: both `DATABASE_URL` and the
+dedicated `TEST_DATABASE_URL` must contain the exact same connection string,
+`NODE_ENV` must be `test`, and the database name must be `campus_app_test` or
+`campus_app_test_<run-id>`. Development and production database names are
+rejected before a client can connect. The temporary local workflow, including
+guaranteed cleanup, is documented in
+[`docs/local-development.md`](../../docs/local-development.md#31-isolierte-backend-testdatenbank).
+
 ```bash
 pnpm --filter @campus/backend lint
 pnpm --filter @campus/backend typecheck
 pnpm --filter @campus/backend test
 ```
 
-The canteen tests run against a **real PostgreSQL**. The guarantee they protect
-— that an empty, invalid or failed upstream response never deletes stored data —
-is a statement about database state, so asserting it against a mock would prove
-nothing.
+The integration tests run against a **real, isolated PostgreSQL database**. The
+guarantees they protect — including that an empty, invalid or failed upstream
+response never deletes stored data — are statements about database state, so
+asserting them against a mock would prove nothing.
 
 ## Design notes
 

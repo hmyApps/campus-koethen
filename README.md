@@ -199,6 +199,13 @@ Vollständige Anleitung: [docs/local-development.md](docs/local-development.md)
 
 ## Qualitätsgates
 
+Die Backend-Integrationstests enthalten absichtlich destruktive Tabellenresets.
+Sie starten nur, wenn `DATABASE_URL` und `TEST_DATABASE_URL` exakt dieselbe,
+eigens angelegte Datenbank `campus_app_test` beziehungsweise
+`campus_app_test_<run-id>` bezeichnen. Die normale lokale Datenbank
+`campus_app_local` wird geschlossen abgewiesen. Der sichere temporäre Ablauf
+steht in [docs/local-development.md](docs/local-development.md#31-isolierte-backend-testdatenbank).
+
 ```bash
 pnpm format:check
 pnpm lint

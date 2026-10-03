@@ -8,7 +8,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { ENV } from '../src/config/app-config.module';
 import { Env } from '../src/config/env.schema';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { createTestPrisma } from './helpers/database';
+import { createTestPrisma, resetDatabase } from './helpers/database';
 
 // Booting Nest against a real database plus two seeded windows exceeds Jest's
 // 5s default on a shared runner.
@@ -113,9 +113,7 @@ describe('query budget of the canteen menu read path (integration)', () => {
    * that an `IN` list would be long, which is the case that regressed.
    */
   async function seed(): Promise<void> {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE meal_prices, meals, ingredient_definitions, sync_runs, canteens RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(prisma);
 
     const canteen = await prisma.canteen.create({
       data: {

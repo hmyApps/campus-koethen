@@ -47,7 +47,11 @@ jobs:
           --health-retries 10
 
     env:
+      # AppModule still consumes DATABASE_URL, while every destructive helper
+      # consumes TEST_DATABASE_URL. Exact equality is checked before a client
+      # can connect, so neither side can silently fall back to another DB.
       DATABASE_URL: postgresql://campus_app:ci_only_not_a_secret@localhost:5432/campus_app_test?schema=public
+      TEST_DATABASE_URL: postgresql://campus_app:ci_only_not_a_secret@localhost:5432/campus_app_test?schema=public
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

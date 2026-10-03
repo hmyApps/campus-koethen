@@ -1,5 +1,5 @@
 import { PrismaClient } from '../src/generated/prisma/client';
-import { createTestPrisma } from './helpers/database';
+import { createTestPrisma, resetDatabase } from './helpers/database';
 
 // Two data sizes plus their EXPLAIN runs exceed Jest's 5s default.
 jest.setTimeout(120_000);
@@ -152,10 +152,7 @@ describe('read paths that must not grow with stored history (integration)', () =
    * would dominate the runtime of the suite without changing a single plan.
    */
   async function seedBase(): Promise<void> {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE meal_prices, meals, sync_runs, ingredient_definitions, canteens, ' +
-        'public_calendar_events, public_calendar_sync_runs, public_calendars RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(prisma);
 
     for (const [index, id] of CANTEEN_IDS.entries()) {
       await prisma.$executeRawUnsafe(

@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { createTestPrisma } from './helpers/database';
+import { createTestPrisma, resetDatabase } from './helpers/database';
 
 // Real PostgreSQL setup and cleanup can exceed Jest's 5s default on shared CI.
 jest.setTimeout(60_000);
@@ -40,9 +40,7 @@ describe('/v1/canteens (integration)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE meal_prices, meals, ingredient_definitions, sync_runs, canteens RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(prisma);
 
     const canteen = await prisma.canteen.create({
       data: {

@@ -90,6 +90,11 @@ WEBUNTIS_SYNC_ON_BOOT=true
 
 Danach den Worker starten. Er löst dann nacheinander Kontext-, Katalog- und Eintragslauf aus.
 Der Katalog kostet einen Request, die Einträge **einen einzigen** Request für alle Gruppen.
+Die öffentliche Campus-API liefert den synchronisierten Gruppenkatalog
+anschließend paginiert (`page`, `pageSize` bis 50) und durchsucht ihn mit
+`query` serverseitig. Die App lädt ihn nur im Gruppen-Picker beziehungsweise
+Onboarding; Kaltstart und Stundenplan-Refresh verwenden `/timetable/status`
+und die einzeln gespeicherte Gruppen-UUID.
 
 Ohne aktiviertes Flag antworten die Endpunkte weiterhin mit `200`, melden aber
 `featureEnabled: false` und `dataState: "unavailable"` — die App stellt das als verständlichen
@@ -151,6 +156,51 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 ## 3. Qualitätsgates
+
+### 3.1 Isolierte Backend-Testdatenbank
+
+Die Backend-Integrationstests führen `TRUNCATE` aus. Sie verwenden deshalb nie
+`campus_app_local`, sondern ausschließlich eine pro Lauf erzeugte Datenbank mit
+dem reservierten Namen `campus_app_test_<run-id>`. Der Testhelfer verlangt
+zusätzlich `NODE_ENV=test` und die exakte Gleichheit von `DATABASE_URL` und
+`TEST_DATABASE_URL`; eine versehentlich geladene DEV- oder PROD-Verbindung wird
+vor dem ersten Verbindungsaufbau abgewiesen.
+
+Der folgende Ablauf läuft in einer Bash-Subshell, legt die Datenbank im lokalen
+PostgreSQL-Container an und entfernt sie durch den `EXIT`-Trap auch nach einem
+fehlgeschlagenen Test. Er setzt ein gemäß `infrastructure/local/.env.example`
+erzeugtes URL-sicheres `APP_DB_PASSWORD` voraus.
+
+```bash
+(
+  set -a
+  . infrastructure/local/.env
+  set +a
+
+  test_db="campus_app_test_$(date +%s)"
+  cleanup_test_db() {
+    docker compose --env-file infrastructure/local/.env \
+      -f infrastructure/local/compose.yaml exec -T postgres \
+      dropdb --username postgres --if-exists --force "$test_db"
+  }
+  trap cleanup_test_db EXIT INT TERM
+
+  docker compose --env-file infrastructure/local/.env \
+    -f infrastructure/local/compose.yaml exec -T postgres \
+    createdb --username postgres --owner campus_app "$test_db"
+
+  export NODE_ENV=test
+  export DATABASE_URL="postgresql://campus_app:${APP_DB_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5433}/${test_db}?schema=public"
+  export TEST_DATABASE_URL="$DATABASE_URL"
+
+  pnpm --filter @campus/backend exec prisma migrate deploy
+  pnpm --filter @campus/backend test
+)
+```
+
+In CI übernimmt der kurzlebige PostgreSQL-Service dieselbe Isolation; auch dort
+sind beide Variablen explizit auf `campus_app_test` gesetzt. Keine Testanleitung
+verwendet die normale lokale Entwicklungsdatenbank.
 
 ```bash
 pnpm install --frozen-lockfile
