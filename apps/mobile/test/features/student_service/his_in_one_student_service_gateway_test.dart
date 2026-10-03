@@ -426,6 +426,10 @@ void main() {
                 'studyserviceForm:report:reports:reportButtons:'
                 'jobDownloadPoll',
               );
+              // The real poll button's own onclick explicitly sends
+              // execute:'@none' — never its own id, which would ask the
+              // server to needlessly process it as an input component.
+              expect(body['javax.faces.partial.execute'], '@none');
               expect(body['javax.faces.ViewState'], 'rotated-token');
               return FakeHtmlResponse(partialResponseFinished());
             }

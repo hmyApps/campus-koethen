@@ -187,10 +187,14 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
           'studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay '
           'studyserviceForm:report:reports:reportButtons:jobDownload '
           'studyserviceForm:messages-infobox';
+      // The job button's own onclick calls jsf.ajax.request without an
+      // explicit `execute` option, which defaults to `@this` — the clicked
+      // component itself, i.e. the same id as `source` here.
       HisInOnePartialResponse started = await _ajaxRequest(
         session,
         ajaxForm,
         sourceId: offer.jobButtonId,
+        executeId: offer.jobButtonId,
         renderId: renderTarget,
       );
       String? downloadUrl =
@@ -203,13 +207,17 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         // (confirmed 2026-10-04 from a real poll request): a fixed suffix
         // of the same component the job-start step already rendered, not
         // something scraped off a "polling data holder" marker that does
-        // not actually exist on the page.
+        // not actually exist on the page. Its own onclick explicitly sends
+        // `execute:'@none'` — a plain read-only poll tick, never the poll
+        // button's own id, which would ask the server to needlessly
+        // process/validate it as an input component on every tick.
         for (int attempt = 0; attempt < _maxPollAttempts; attempt++) {
           await Future<void>.delayed(_pollInterval);
           started = await _ajaxRequest(
             session,
             ajaxForm,
             sourceId: '$_pollComponentId:poll',
+            executeId: '@none',
             renderId: _pollComponentId,
           );
           downloadUrl =
@@ -312,8 +320,9 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
     TabSwitchRequest base, {
     required String sourceId,
     required String renderId,
+    required String executeId,
   }) async {
-    if (sourceId.isEmpty || renderId.isEmpty) {
+    if (sourceId.isEmpty || renderId.isEmpty || executeId.isEmpty) {
       throw const StudentServiceFailure(
         StudentServiceFailureKind.portalStructureChanged,
         stage: 'ajaxRequestParams',
@@ -323,7 +332,7 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       ..addAll(<String, String>{
         'javax.faces.partial.ajax': 'true',
         'javax.faces.source': sourceId,
-        'javax.faces.partial.execute': sourceId,
+        'javax.faces.partial.execute': executeId,
         'javax.faces.partial.render': renderId,
       });
     final HisInOnePage raw = await session.postForm(base.action, formData);
