@@ -1,6 +1,7 @@
 # Production-Updateplan nach Cross-Validation
 
-Stand: 2. Oktober 2026  
+Stand: 3. Oktober 2026
+
 Scope: Fehlerkorrekturen und Release-Härtung; keine Phase-14-Erweiterungen
 
 Dieser Plan führt die rekursive Codex-Analyse und die unabhängig gemeldeten
@@ -25,12 +26,14 @@ bleiben bis nach diesem Production-Cut zurückgestellt.
 | Phase | Status                                 | Nachweis                                                                                                                                                                                                                                                                                                                                       |
 | ----- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | U0    | offen                                  | Betriebliche Werte und Dokumentation werden in dieser Phase abgeglichen.                                                                                                                                                                                                                                                                       |
-| U1    | umgesetzt, technische Validierung grün | 13 Guard-Tests; Backend-Lint und Typecheck; 53 Backend-Suites mit 689 Tests gegen einen kurzlebigen PostgreSQL-16-Container; Container anschließend entfernt. Der Lauf erfolgte noch nicht mit dem exakten Repository-Node-Pin, dessen Vereinheitlichung Bestandteil von U7 bleibt.                                                            |
+| U1    | umgesetzt, technische Validierung grün | 13 Guard-Tests; Backend-Lint und Typecheck; abschließend 54 Backend-Suites mit 701 Tests gegen einen kurzlebigen PostgreSQL-16-Container unter dem exakten Repository-Node-Pin; Container anschließend entfernt.                                                                                                                               |
 | U2    | umgesetzt, technische Validierung grün | Alle manuellen Setup- und Entfernen-Pfade laufen über den gemeinsamen Operation-Gate; deterministische Races für Mail, Moodle und Noten sowie Retain-Rollback sind abgedeckt. 32 gezielte Tests, vollständiger Mobile-Lauf mit 2550 Tests und `flutter analyze` sind mit Flutter 3.44.7 grün.                                                  |
 | U3    | umgesetzt, technische Validierung grün | Kontowechsel invalidiert Sessions und sensible Caches vor Sichtbarkeit, führt zuvor verbundene Dienste kontrolliert nach und meldet Teilergebnisse dienstbezogen. Navigation verbindet keinen Dienst mehr implizit. Vollständiger Mobile-Lauf mit 2559 Tests und `flutter analyze` sind mit Flutter 3.44.7 grün.                               |
 | U4    | umgesetzt, technische Validierung grün | Eingebettete und eigenständige Connect-Vorgänge sperren alle Navigations- und Eingabewege konsistent, kündigen ihren Status als Live-Region an und ignorieren verspätete UI-Ergebnisse. Einwilligung und API-Konfigurationshinweis sind gehärtet. Vollständiger Mobile-Lauf mit 2569 Tests und `flutter analyze` sind mit Flutter 3.44.7 grün. |
 | U5    | umgesetzt, technische Validierung grün | Ausgeblendete Stundenplankurse fehlen nun auch in der Tageszusammenfassung; Mensaguthaben zeigt keine negative Null; ICS-Folgetage und Zeilenenden sind DST- beziehungsweise RFC-sicher. Vollständiger Mobile-Lauf mit 2573 Tests und `flutter analyze` sind mit Flutter 3.44.7 grün.                                                          |
-| U6–U8 | offen                                  | Noch keine Umsetzung aus diesen Phasen.                                                                                                                                                                                                                                                                                                        |
+| U6    | umgesetzt, technische Validierung grün | Paginierter und durchsuchbarer Gruppenkatalog; bedarfsgesteuerter Mobile-Abruf; 54 Backend-Suites mit 701 Tests und vollständiger Mobile-Lauf mit 2583 Tests grün.                                                                                                                                                                             |
+| U7    | umgesetzt, technische Validierung grün | API-Origin- und Build-Gates, vereinheitlichter Node-Pin, gehärtete Abhängigkeiten und CMS-Grenztests; vollständige Mobile-, Backend-, CMS- und Map-Gates grün. Verbleibende Auditmeldungen sind unten transparent bewertet.                                                                                                                    |
+| U8    | offen                                  | Reale signierte Builds, Geräte-, Portal-, NFC-, WCAG- und Produktions-Smoke-Tests bleiben menschliche Release-Abnahmen.                                                                                                                                                                                                                        |
 
 ## U0 — Betriebs- und Release-Gates
 
@@ -141,6 +144,22 @@ Tests sind mit Flutter 3.44.7 grün.
 | Der komplette Katalog wird auch ohne Auswahl beim Kaltstart und danach stündlich geladen. | Katalog nur beim Picker, Onboarding oder Auflösen einer gespeicherten Auswahl laden.                                                                  | App-Sync-Host; Timetable-Provider; Settings und Onboarding |
 | Mehrere Gruppen haben denselben sichtbaren Namen.                                         | Echte Dubletten nach Datenprüfung konsolidieren; verschiedene Gruppen mit bereits öffentlichen Metadaten unterscheiden. Keine WebUntis-ID ausliefern. | Timetable-Synchronisation, DTO-Mapping und Picker          |
 
+Status: umgesetzt und technisch validiert. Der Gruppenkatalog ist ohne feste
+Gesamtkappung paginiert und über Kurzname, Langname sowie Bereich serverseitig
+durchsuchbar. Die App lädt ihn ausschließlich im Picker; Kaltstart und
+stündlicher Refresh verwenden den kleinen Status-Endpunkt, lösen nur eine
+gespeicherte Campus-UUID auf und laden anschließend deren aktuelle Woche. Eine
+im Picker gewählte Gruppe wird unabhängig vom Katalog offline gespeichert.
+Nachweisliche Aliasse mit identischem öffentlichen Namen und identischem
+Stundenplan werden konsolidiert; gleich benannte Gruppen mit abweichenden
+Plänen bleiben anhand ihrer öffentlichen Metadaten unterscheidbar. Externe
+WebUntis-IDs werden weder ausgeliefert noch angezeigt. Die aktualisierten
+Fake-HTTP-Verträge decken Status, UUID-Auflösung, serverseitige Suche und den
+300-ms-Debounce ab. `flutter analyze`, der vollständige Mobile-Testlauf mit
+2583 Tests sowie alle 54 Backend-Suites mit 701 Tests sind grün; die
+Timetable-Integrationstests wurden zusätzlich gegen eine isolierte temporäre
+PostgreSQL-Datenbank ausgeführt.
+
 ## U7 — Build-, Abhängigkeits- und Repository-Härtung
 
 | Problem                                                                                                                | Lösung                                                                                                                              | Betroffene Dateien                                                      |
@@ -150,6 +169,37 @@ Tests sind mit Flutter 3.44.7 grün.
 | Abhängigkeitsprüfung meldet verbleibende Produktionsadvisories.                                                        | Direkte und transitive Abhängigkeiten einzeln aktualisieren und betroffene Builds und Tests erneut ausführen.                       | Workspace-Manifeste und `pnpm-lock.yaml`                                |
 | Toolchain, Formatierung, Dokumentationsstand und große Arbeitsbaumänderungen erschweren eine reproduzierbare Freigabe. | Repository-Pin und CI vereinheitlichen; Dokumente formatieren und aktualisieren; Änderungen in nachvollziehbare Einheiten zerlegen. | Root-Konfiguration; CI; README; Audit- und Produktdokumentation         |
 | Teile der CMS-Konfiguration wurden im parallelen Audit nicht vollständig gesichtet.                                    | CMS-Plugins, Admin-Konfiguration und API-Controller gezielt gegen Auth-, Public-Role- und DTO-Grenzen prüfen.                       | `apps/cms/config`; `apps/cms/src/api`                                   |
+
+Status: umgesetzt und technisch validiert. Die Mobile-App zeigt eine fehlende
+oder ungültige `API_BASE_URL` nun auch in Debug-Builds verständlich an. Release-
+und Profile-Builds für Android und iOS verwenden denselben Vorabprüfer und
+brechen ohne eine exakte HTTPS-Origin bereits vor der eigentlichen
+Kompilierung ab. HTTP-Loopback ist nur mit dem ausdrücklichen lokalen
+`ALLOW_LOCAL_API`-Schalter zulässig. Der Android-Negativtest ohne Origin schlug
+wie vorgesehen fehl; ein Release-Build mit einer syntaktisch gültigen
+Test-Origin wurde erfolgreich erzeugt. Die iOS-Buildphase ist unter Windows
+durch Vertragstests abgesichert; der reale Xcode-Build bleibt Bestandteil von
+U8.
+
+CI und lokale Gates beziehen die Node-Version nun einheitlich aus
+`.node-version`. Unter dem exakten Pin Node 24.21.0 sind Frozen-Install,
+Formatierung, Lint, Typecheck, Backend-Build, CMS-Build und Map-Check grün. Die
+54 Backend-Suites mit 701 Tests liefen ausschließlich gegen einen anschließend
+entfernten PostgreSQL-16-Testcontainer. Alle 90 CMS-Tests und alle 2594
+Flutter-Tests sind grün; `flutter analyze` meldet keine Probleme und der
+Mobile-OSV-Audit keine HIGH/CRITICAL-Advisories.
+
+Strapi wurde auf 5.56.0 aktualisiert. Die rekursive Prüfung aller
+CMS-Konfigurationen und API-Controller wird durch neue Auth-, Public-Role-,
+DTO- und Query-Grenztests festgehalten. Der produktive pnpm-Audit beendet das
+HIGH-Gate erfolgreich, meldet aber weiterhin drei Moderate sowie einen formal
+als High eingestuften `braces`-Treffer. `braces` besitzt upstream noch keine
+veröffentlichte korrigierte Version; deshalb ist genau diese Advisory-ID nach
+einem lokalen Tiefenlimit-Patch und einem Regressionstest eng begrenzt
+ausgenommen. Die drei Moderates in `react-router` und `stream-json` erfordern
+derzeit einen mit Strapi inkompatiblen beziehungsweise nicht veröffentlichten
+Major-Zielstand und bleiben für das nächste kompatible Strapi-Update sichtbar
+nachzuverfolgen.
 
 ## U8 — Release-Abnahme
 

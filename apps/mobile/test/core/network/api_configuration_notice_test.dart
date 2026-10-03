@@ -10,6 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/pump_app.dart';
 
 void main() {
+  test('missing API configuration is visible in debug builds', () {
+    expect(
+      shouldShowApiConfigurationNotice(ApiConfigProblem.notConfigured),
+      isTrue,
+    );
+  });
+
   testWidgets(
     'configuration failure is safe-area aware, live and large-text safe',
     (WidgetTester tester) async {

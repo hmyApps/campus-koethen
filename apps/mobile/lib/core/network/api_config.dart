@@ -24,6 +24,24 @@ abstract final class ApiConfig {
 
   static const String _developmentDefault = 'http://localhost:3000';
 
+  /// Whether [baseUrl] came from a Dart define rather than the fallback.
+  ///
+  /// Comparing the value with [_developmentDefault] is insufficient: a local
+  /// developer may deliberately configure that exact origin. `hasEnvironment`
+  /// distinguishes that from an APK which silently inherited the fallback.
+  static const bool _hasExplicitBaseUrl = bool.hasEnvironment('API_BASE_URL');
+
+  /// Explicit opt-in for a loopback endpoint during local work.
+  ///
+  /// This is deliberately independent from the build mode. A debug APK is
+  /// still installable on a real phone, where `localhost` points at the phone
+  /// itself; being a debug build must not silently make an invalid endpoint
+  /// trustworthy.
+  static const bool _allowLocalApi = bool.fromEnvironment(
+    'ALLOW_LOCAL_API',
+    defaultValue: false,
+  );
+
   /// Why this build's [baseUrl] is unusable, or `null` when it is fine.
   ///
   /// * Not HTTPS and not an explicitly local address → refused. There is no
@@ -31,16 +49,52 @@ abstract final class ApiConfig {
   ///   up in a release.
   /// * Left at the development default → reported, because a build that was
   ///   never pointed anywhere is a configuration mistake, not a working app.
-  static ApiConfigProblem? get configurationProblem {
-    if (baseUrl == _developmentDefault) return ApiConfigProblem.notConfigured;
-    final Uri? uri = Uri.tryParse(baseUrl.trim());
-    if (uri == null || !uri.isAbsolute || uri.userInfo.isNotEmpty) {
+  static ApiConfigProblem? get configurationProblem => validateBaseUrl(
+    baseUrl,
+    isExplicitlyConfigured: _hasExplicitBaseUrl,
+    allowLoopback: _allowLocalApi,
+  );
+
+  /// Validates that [value] is one exact Campus API origin.
+  ///
+  /// Production origins are HTTPS. Plain HTTP is available solely for an
+  /// explicitly opted-in loopback origin during local development. Paths,
+  /// query strings and fragments are rejected so callers cannot accidentally
+  /// produce `/v1/v1`, tenant-dependent requests or ambiguous cache keys.
+  static ApiConfigProblem? validateBaseUrl(
+    String value, {
+    required bool isExplicitlyConfigured,
+    required bool allowLoopback,
+  }) {
+    if (!isExplicitlyConfigured) return ApiConfigProblem.notConfigured;
+    if (value.isEmpty || value != value.trim()) {
       return ApiConfigProblem.malformed;
     }
+
+    final Uri? uri = Uri.tryParse(value);
+    if (uri == null ||
+        !uri.isAbsolute ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        (uri.path.isNotEmpty && uri.path != '/') ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      return ApiConfigProblem.malformed;
+    }
+
+    final bool isLoopback = _isLoopback(uri.host);
+    if (isLoopback && !allowLoopback) {
+      return uri.scheme == 'http'
+          ? ApiConfigProblem.insecureScheme
+          : ApiConfigProblem.malformed;
+    }
     if (uri.scheme == 'https') return null;
-    // Plain HTTP is tolerated only against a loopback address, which is what
-    // a developer running the API on their own machine actually has.
-    if (uri.scheme == 'http' && _isLoopback(uri.host)) return null;
+    // Plain HTTP is tolerated only against an explicitly opted-in loopback
+    // address, which is what local development actually needs.
+    if (uri.scheme == 'http' && isLoopback) {
+      return null;
+    }
     return ApiConfigProblem.insecureScheme;
   }
 

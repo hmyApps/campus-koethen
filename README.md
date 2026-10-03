@@ -163,7 +163,7 @@ docs/                          Produkt-, Architektur- und Betriebsdokumentation
 
 | Werkzeug         | Version                                             |
 | ---------------- | --------------------------------------------------- |
-| Node.js          | 24.21.0 LTS (Strapi 5.52.1 unterstützt `>=20 <=26`) |
+| Node.js          | 24.21.0 LTS (Strapi 5.56.0 unterstützt `>=20 <=26`) |
 | pnpm             | >= 10 (hier: 11.15.1, via Corepack)                 |
 | Docker + Compose | Docker 29.x, Compose v5                             |
 | Flutter          | stable channel                                      |
@@ -192,7 +192,9 @@ pnpm --filter @campus/cms develop            # http://localhost:1337/admin
 cd apps/mobile
 flutter pub get
 flutter gen-l10n
-flutter run --dart-define=API_BASE_URL=http://localhost:3000
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:3000 \
+  --dart-define=ALLOW_LOCAL_API=true
 ```
 
 Vollständige Anleitung: [docs/local-development.md](docs/local-development.md)

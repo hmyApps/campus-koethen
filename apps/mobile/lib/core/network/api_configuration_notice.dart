@@ -1,7 +1,6 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
@@ -22,18 +21,13 @@ final Provider<ApiConfigProblem?> apiConfigurationProblemProvider =
 
 /// Whether [problem] is worth putting in front of the reader.
 ///
-/// `notConfigured` means the build still points at `http://localhost:3000` —
-/// which is the documented local development setup, not a defect, and a
-/// permanent banner over every screen of every debug run would be noise. In a
-/// **release** build the same state means the app was shipped without an
-/// endpoint and cannot load anything, which is worth saying loudly.
-///
-/// The other two — a malformed address, or plain HTTP to something that is not
-/// loopback — are wrong in every build.
+/// All three states are visible in every build. A debug APK without an explicit
+/// endpoint is still broken after installation: its `localhost` is the phone
+/// itself, not the developer's computer.
 bool shouldShowApiConfigurationNotice(ApiConfigProblem? problem) =>
     switch (problem) {
       null => false,
-      ApiConfigProblem.notConfigured => kReleaseMode,
+      ApiConfigProblem.notConfigured => true,
       ApiConfigProblem.malformed || ApiConfigProblem.insecureScheme => true,
     };
 
@@ -69,22 +63,30 @@ class ApiConfigurationNotice extends ConsumerWidget {
         l10n.apiInsecureBody,
       ),
     };
+    final double textScale = MediaQuery.textScalerOf(context).scale(1);
+    final bool useCompactVisual =
+        MediaQuery.sizeOf(context).height < 700 && textScale >= 1.5;
 
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          context.metrics.screenPadding,
-          AppSpacing.sm,
-          context.metrics.screenPadding,
-          0,
-        ),
-        child: StatusBanner(
-          tone: StatusTone.warning,
-          icon: AppIcons.cloud_off_outlined,
-          title: title,
-          message: message,
-          liveRegion: true,
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '$title. $message',
+      excludeSemantics: true,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            context.metrics.screenPadding,
+            AppSpacing.sm,
+            context.metrics.screenPadding,
+            0,
+          ),
+          child: StatusBanner(
+            tone: StatusTone.warning,
+            icon: AppIcons.cloud_off_outlined,
+            title: title,
+            message: useCompactVisual ? null : message,
+          ),
         ),
       ),
     );

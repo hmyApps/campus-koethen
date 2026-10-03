@@ -4,7 +4,7 @@ import type { Core } from '@strapi/strapi';
  * MIME types the media library accepts.
  *
  * `plugin::upload.security` IS enforced server-side in the installed Strapi
- * (5.52.1): `@strapi/upload` sniffs the first 4100 bytes with `file-type` and
+ * (5.56.0): `@strapi/upload` sniffs the first 4100 bytes with `file-type` and
  * refuses anything whose DETECTED type is outside this list — an extension or a
  * declared `Content-Type` cannot override it. Verified against the installed
  * version by `test/upload-security.test.ts`, which drives the plugin's own

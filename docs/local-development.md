@@ -13,7 +13,7 @@ Campus Köthen App · `AGPL-3.0-only`
 | Docker + Compose | Docker 29.x, Compose v5 | `docker compose version`            |
 | Flutter          | stable                  | `flutter doctor -v`                 |
 
-Node 24 ist gewählt, weil es die aktuelle LTS-Linie ist und Strapi 5.52 offiziell
+Node 24 ist gewählt, weil es die aktuelle LTS-Linie ist und Strapi 5.56 offiziell
 `node >=20.0.0 <=26.x.x` unterstützt. Die exakte Version steht in `.node-version` und `.nvmrc`;
 CI und beide Dockerfiles verwenden denselben Patchstand. `package.json` begrenzt die unterstützte
 Hauptversion zusätzlich auf 24.x. Ein abweichender lokaler Patchstand bricht die Installation
@@ -146,13 +146,21 @@ Redaktionelle Felder und Kontaktrelationen werden dabei nie überschrieben. Deta
 cd apps/mobile
 flutter pub get
 flutter gen-l10n
-flutter run --dart-define=API_BASE_URL=http://localhost:3000
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:3000 \
+  --dart-define=ALLOW_LOCAL_API=true
 ```
 
-Für den Android-Emulator ist `localhost` des Hosts unter `10.0.2.2` erreichbar:
+Lokales HTTP ist nur mit diesem ausdrücklichen Opt-in erlaubt. Ohne
+`API_BASE_URL` zeigt auch ein Debug-Build einen Konfigurationsfehler. Für einen
+Android-Emulator oder ein per USB verbundenes Testgerät wird der Backend-Port
+über ADB auf dessen Loopback-Adresse weitergereicht:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+adb reverse tcp:3000 tcp:3000
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:3000 \
+  --dart-define=ALLOW_LOCAL_API=true
 ```
 
 ## 3. Qualitätsgates

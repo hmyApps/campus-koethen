@@ -1,7 +1,46 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val mobileRoot = rootProject.projectDir.parentFile
+val flutterProperties = Properties().apply {
+    rootProject.file("local.properties").inputStream().use { input -> load(input) }
+}
+val flutterSdk = flutterProperties.getProperty("flutter.sdk")
+    ?: throw GradleException("flutter.sdk is missing from android/local.properties.")
+val dartExecutable = file(
+    "$flutterSdk/bin/${if (System.getProperty("os.name").startsWith("Windows")) "dart.bat" else "dart"}",
+)
+val encodedDartDefines = providers.gradleProperty("dart-defines").orElse("")
+
+val validateDistributableApiConfiguration by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Rejects release/profile builds without one exact HTTPS Campus API origin."
+    workingDir = mobileRoot
+    inputs.property("dart-defines", encodedDartDefines)
+
+    doFirst {
+        val validatorArguments = listOf(
+            "run",
+            "tool/validate_release_api.dart",
+            "--dart-defines=${encodedDartDefines.get()}",
+        )
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            commandLine(listOf("cmd", "/c", dartExecutable.absolutePath) + validatorArguments)
+        } else {
+            commandLine(listOf(dartExecutable.absolutePath) + validatorArguments)
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild" || name == "preProfileBuild") {
+        dependsOn(validateDistributableApiConfiguration)
+    }
 }
 
 val releaseSigningValues = mapOf(

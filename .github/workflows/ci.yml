@@ -20,7 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '24.21.0'
   FLUTTER_VERSION: '3.44.7'
 
 jobs:
@@ -60,7 +59,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Verify pinned Node.js version
@@ -109,7 +108,7 @@ jobs:
       - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Verify pinned Node.js version
@@ -140,7 +139,7 @@ jobs:
       - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Verify pinned Node.js version
@@ -214,6 +213,11 @@ jobs:
       - name: Generate localisations
         run: flutter gen-l10n
 
+      - name: Validate distributable Campus API configuration
+        run: >-
+          dart run tool/validate_release_api.dart
+          --api-base-url=https://api.example.invalid
+
       - name: Format check
         run: dart format --output=none --set-exit-if-changed .
 
@@ -276,7 +280,7 @@ jobs:
       - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Verify pinned Node.js version

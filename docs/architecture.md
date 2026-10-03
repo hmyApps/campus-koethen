@@ -225,7 +225,10 @@ werden ausschließlich die vier stabilen Modul-IDs in ihrer Reihenfolge; unbekan
 oder eine falsche Anzahl werden beim Lesen repariert, sodass keine Konfiguration ein Modul
 unerreichbar machen kann.
 
-`API_BASE_URL` wird über `--dart-define` gesetzt. Die Strapi-URL gelangt **nie** in die App.
+`API_BASE_URL` wird über `--dart-define` als exakte HTTPS-Origin ohne Pfad, Query oder Fragment
+gesetzt. Jede Loopback-Adresse, einschließlich lokalem HTTP, erfordert zusätzlich das
+ausdrückliche `ALLOW_LOCAL_API=true`; Release- und Profile-Builds verweigern sie immer. Die Strapi-URL gelangt
+**nie** in die App.
 
 Die Direktdienste sind jeweils hinter einem Port gekapselt (`MailGateway`, `GradesGateway`,
 `MoodleRepository`). UI und Riverpod-Controller kennen **keine** `enough_mail`-, Dio-, Cookie-

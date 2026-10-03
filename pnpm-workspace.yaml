@@ -25,7 +25,7 @@ allowBuilds:
 # the dependency audit and the affected builds and tests.
 overrides:
   'browserslist@<=4.28.6': '4.28.7' # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g
-  'multer@<2.3.0': '2.3.0' # GHSA-535w-7cp7-47q4; NestJS platform-express
+  'multer@<2.4.0': '>=2.4.0 <3' # GHSA-535w-7cp7-47q4 plus aborted-upload disk-write DoS
   'tar@<7.5.21': '>=7.5.21' # GHSA-8qq5-c9xr-p97q / GHSA-r292-9mhp-454m — parse/recursion DoS
   'vite@<=6.4.2': '>=6.4.3' # server.fs.deny bypass on Windows alternate paths (high)
   'sharp@<0.35.4': '>=0.35.4' # inherited libvips/libheif CVEs, including GHSA-rgj7-g3m4-5g8c
@@ -41,7 +41,7 @@ overrides:
   # have a patched release of their own, so neither needs a major bump.
   'js-yaml@<3.15.2': '>=3.15.2 <4' # GHSA-5p4m-2wfm-xmqj / GHSA-2883-xcg3-v3hh
   'js-yaml@>=4.0.0 <4.3.2': '>=4.3.2 <5' # GHSA-5p4m-2wfm-xmqj / GHSA-2883-xcg3-v3hh
-  'js-yaml@>=5.0.0 <5.2.2': '>=5.2.2'
+  'js-yaml@>=5.0.0 <5.4.1': '>=5.4.1 <6'
   # DoS via unbounded expansion length. Patched releases exist on every affected
   # major line, so each stays on its own: v5 is an ESM-first rewrite and forcing
   # it onto v1/v2 consumers such as minimatch@3 would risk a runtime break.
@@ -76,8 +76,14 @@ overrides:
   # releases. All three fixes stay on the same major and preserve the public
   # dependency contracts used by their parent packages.
   '@hono/node-server@<1.19.15': '>=1.19.15 <2' # GHSA-frvp-7c67-39w9
-  'hono@<4.12.34': '>=4.12.34 <5' # GHSA-8j4g-w8fx-2239 / GHSA-f23p-vx2j-j53r / GHSA-54fx-42gc-7vw4 / GHSA-79qm-7rj5-m7r9
+  'hono@<4.13.7': '>=4.13.7 <5' # query, traversal, nesting and JSX escaping advisories
   'postcss@<=8.5.22': '>=8.5.23 <9' # GHSA-fxqj-rqcc-2cmp
+  # Patch/minor-only forward pins for CMS build and admin dependencies. These
+  # remain on each package's current major and are covered by CMS tests/build.
+  'baseline-browser-mapping@<2.11.0': '>=2.11.0 <3'
+  'dompurify@>=3.0.0 <3.4.16': '>=3.4.16 <4'
+  'markdown-it@>=14.0.0 <14.3.1': '>=14.3.1 <15'
+  'qs@>=6.0.0 <6.16.0': '>=6.16.0 <7'
   # Stack exhaustion when merging recursive object graphs (high). Comes in under
   # @prisma/config, which ships with prisma and therefore reaches the backend
   # image. The patch is only on the new major; 8.0.1 is a strict superset of the
@@ -107,3 +113,12 @@ auditConfig:
     # All 130 paths are devDependencies (eslint, jest, @nestjs/cli); none reach a
     # production image.
     - GHSA-mh99-v99m-4gvg
+    # braces 3.0.3 has no published fixed release. The maintained patch below
+    # rejects more than 100 nested braces or parentheses before the recursive
+    # walkers run. The CMS test resolves Strapi's installed copy and checks both
+    # paths. The audit sees the upstream version, not our patch; remove this
+    # one-advisory exception when a fixed release is published.
+    - GHSA-vfj7-8cjw-p6xm
+
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch
