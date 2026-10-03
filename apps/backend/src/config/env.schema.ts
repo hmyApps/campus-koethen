@@ -198,7 +198,7 @@ export const envSchema = z.object({
   PUBLIC_CALENDAR_USER_AGENT: z
     .string()
     .min(1)
-    .default('CampusKoethen/1.1.1 (+https://dev.erikengler.campuskoethen)'),
+    .default('CampusKoethen/1.2.4 (+https://dev.erikengler.campuskoethen)'),
   /** API bounds: max calendars per aggregated/combined request, max date range. */
   PUBLIC_CALENDAR_API_MAX_CALENDARS: z.coerce.number().int().min(1).max(100).default(50),
   PUBLIC_CALENDAR_API_MAX_RANGE_DAYS: z.coerce.number().int().min(1).max(400).default(400),

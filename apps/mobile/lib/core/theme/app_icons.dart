@@ -75,6 +75,7 @@ abstract final class AppIcons {
   static const IconData file_pencil = TablerIcons.file_pencil;
   static const IconData folder_outlined = TablerIcons.folder;
   static const IconData forum_outlined = TablerIcons.messages;
+  static const IconData fullscreen = TablerIcons.arrows_maximize;
   static const IconData fullscreen_exit = TablerIcons.minimize;
   static const IconData gavel_outlined = TablerIcons.gavel;
   static const IconData grade_outlined = TablerIcons.certificate;

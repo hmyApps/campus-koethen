@@ -6,30 +6,39 @@ import '../../../core/content/content_block.dart';
 /// How many lines of the article the collapsed card shows.
 const int kNewsPreviewLines = 5;
 
+typedef NewsPreviewRun = ({String text, bool bold});
+
 final Expando<String> _previewTextCache = Expando<String>('newsPreviewText');
+final Expando<List<NewsPreviewRun>> _previewRunsCache =
+    Expando<List<NewsPreviewRun>>('newsPreviewRuns');
 final Expando<bool> _unpreviewableBlocksCache = Expando<bool>(
   'newsUnpreviewable',
 );
 
-/// Flattens the article's blocks into the plain text of the preview.
+/// Flattens the article's blocks into the text of the preview.
 ///
 /// The preview is a **text** preview: it can show what a paragraph, a heading,
 /// a quote or a list says, but not an image. Blocks are separated by newlines
 /// so the five-line limit counts real lines of the article rather than one
 /// endless run-on paragraph.
 ///
-/// Formatting is deliberately dropped here — bold text inside a truncated
-/// preview adds nothing, and the expanded card renders the real rich text.
+/// Bold ranges are kept in [newsPreviewRuns] for the collapsed card.
 String newsPreviewText(List<ContentBlock> blocks) {
   final String? cached = _previewTextCache[blocks];
   if (cached != null) return cached;
-  final List<String> lines = <String>[];
-  for (final ContentBlock block in blocks) {
-    final String text = _blockText(block);
-    if (text.isNotEmpty) lines.add(text);
-  }
-  final String result = lines.join('\n');
+  final String result = newsPreviewRuns(
+    blocks,
+  ).map((NewsPreviewRun run) => run.text).join();
   _previewTextCache[blocks] = result;
+  return result;
+}
+
+/// Text runs for the preview, preserving inline bold formatting without links.
+List<NewsPreviewRun> newsPreviewRuns(List<ContentBlock> blocks) {
+  final List<NewsPreviewRun>? cached = _previewRunsCache[blocks];
+  if (cached != null) return cached;
+  final List<NewsPreviewRun> result = _joinRuns(blocks.map(_blockRuns));
+  _previewRunsCache[blocks] = result;
   return result;
 }
 
@@ -55,32 +64,57 @@ bool hasMoreToShow({
   required bool textOverflows,
 }) => textOverflows || hasUnpreviewableBlocks(blocks);
 
-String _blockText(ContentBlock block) => switch (block) {
-  ParagraphBlock(:final List<InlineNode> children) => _inlineText(children),
-  HeadingBlock(:final List<InlineNode> children) => _inlineText(children),
-  QuoteBlock(:final List<InlineNode> children) => _inlineText(children),
-  ListItemBlock(:final List<InlineNode> children) => _inlineText(children),
-  ListBlock(:final List<ListItemBlock> items) =>
-    items
-        .map((ListItemBlock item) => _inlineText(item.children))
-        .where((String text) => text.isNotEmpty)
-        .join('\n'),
+List<NewsPreviewRun> _blockRuns(ContentBlock block) => switch (block) {
+  ParagraphBlock(:final List<InlineNode> children) => _inlineRuns(children),
+  HeadingBlock(:final List<InlineNode> children) => _inlineRuns(children),
+  QuoteBlock(:final List<InlineNode> children) => _inlineRuns(children),
+  ListItemBlock(:final List<InlineNode> children) => _inlineRuns(children),
+  ListBlock(:final List<ListItemBlock> items) => _joinRuns(
+    items.map((ListItemBlock item) => _inlineRuns(item.children)),
+  ),
   // An image has no text. It is what `hasUnpreviewableBlocks` reports.
-  ImageBlock() => '',
+  ImageBlock() => <NewsPreviewRun>[],
 };
 
-String _inlineText(List<InlineNode> nodes) {
-  final StringBuffer buffer = StringBuffer();
+List<NewsPreviewRun> _joinRuns(Iterable<List<NewsPreviewRun>> groups) {
+  final List<NewsPreviewRun> result = <NewsPreviewRun>[];
+  for (final List<NewsPreviewRun> group in groups) {
+    if (group.isEmpty) continue;
+    if (result.isNotEmpty) result.add((text: '\n', bold: false));
+    result.addAll(group);
+  }
+  return result;
+}
+
+List<NewsPreviewRun> _inlineRuns(List<InlineNode> nodes) {
+  final List<NewsPreviewRun> raw = <NewsPreviewRun>[];
   for (final InlineNode node in nodes) {
     switch (node) {
-      case InlineText(:final String text):
-        buffer.write(text);
+      case InlineText(:final String text, :final bool bold):
+        raw.add((text: text, bold: bold));
       case InlineLink(:final List<InlineText> children):
         // The link's label is part of the sentence; the URL is not.
         for (final InlineText child in children) {
-          buffer.write(child.text);
+          raw.add((text: child.text, bold: child.bold));
         }
     }
   }
-  return buffer.toString().trim();
+
+  final String full = raw.map((NewsPreviewRun run) => run.text).join();
+  final int start = full.length - full.trimLeft().length;
+  final int end = full.trimRight().length;
+  if (end <= start) return <NewsPreviewRun>[];
+
+  final List<NewsPreviewRun> trimmed = <NewsPreviewRun>[];
+  int offset = 0;
+  for (final NewsPreviewRun run in raw) {
+    final int runEnd = offset + run.text.length;
+    if (runEnd > start && offset < end) {
+      final int from = start > offset ? start - offset : 0;
+      final int to = end < runEnd ? end - offset : run.text.length;
+      trimmed.add((text: run.text.substring(from, to), bold: run.bold));
+    }
+    offset = runEnd;
+  }
+  return trimmed;
 }

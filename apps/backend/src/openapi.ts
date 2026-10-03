@@ -21,7 +21,7 @@ export function buildOpenApiConfig(builder: DocumentBuilder) {
         'Canteen dish text comes from a German-only source and is never machine-translated.',
       ].join('\n'),
     )
-    .setVersion('1.1.1')
+    .setVersion('1.2.4')
     .setLicense('AGPL-3.0-only', 'https://www.gnu.org/licenses/agpl-3.0.html')
     .setContact('Campus Köthen App', 'https://github.com/Leviora-Studio/campus-koethen', '')
     .addTag('health', 'Liveness and readiness probes')

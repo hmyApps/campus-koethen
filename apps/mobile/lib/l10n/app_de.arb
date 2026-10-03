@@ -131,6 +131,20 @@
   },
   "newsOpenSource": "Quelle öffnen",
   "@newsOpenSource": {},
+  "newsOpenImage": "Bild im Vollbild öffnen",
+  "@newsOpenImage": {},
+  "newsOpenImageWithDescription": "Bild „{description}“ im Vollbild öffnen",
+  "@newsOpenImageWithDescription": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "newsCloseImage": "Bildansicht schließen",
+  "@newsCloseImage": {},
+  "newsImageUnavailable": "Das Bild konnte nicht geladen werden.",
+  "@newsImageUnavailable": {},
   "newsChannelCountLabel": "{count, plural, =0{Keine Kanäle ausgewählt} =1{1 Kanal ausgewählt} other{{count} Kanäle ausgewählt}}",
   "@newsChannelCountLabel": {
     "placeholders": {
@@ -758,7 +772,7 @@
   },
   "aboutIndependenceTitle": "Unabhängigkeitshinweis",
   "@aboutIndependenceTitle": {},
-  "aboutIndependenceNotice": "Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird unabhängig von Erik Engler, handelnd unter „Leviora Studio“, entwickelt und über die App Stores bereitgestellt. Das Campus-Backend und die redaktionellen Inhalte werden von der rechtlich selbstständigen Studierendenschaft der Hochschule Anhalt betrieben. Die Hochschule Anhalt selbst ist weder Entwicklerin noch Betreiberin der App.",
+  "aboutIndependenceNotice": "Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird von Erik Engler über die App Stores bereitgestellt. Das Campus-Backend und die redaktionellen Inhalte werden von der rechtlich selbstständigen Studierendenschaft der Hochschule Anhalt betrieben. Die Hochschule Anhalt selbst ist weder Entwicklerin noch Betreiberin der App.",
   "@aboutIndependenceNotice": {
     "description": "Kanonischer Unabhängigkeitshinweis. Wortlaut ist verbindlich und darf nicht verändert werden."
   },
@@ -770,8 +784,10 @@
   "@imprintTitle": {},
   "privacyTitle": "Datenschutz",
   "@privacyTitle": {},
-  "legalLastUpdated": "Stand: 1. Oktober 2026",
+  "legalLastUpdated": "Stand: 24. September 2026",
   "@legalLastUpdated": {},
+  "privacyLastUpdated": "Stand: 2. Oktober 2026",
+  "@privacyLastUpdated": {},
   "imprintProviderTitle": "Anbieter der mobilen App",
   "@imprintProviderTitle": {},
   "imprintProviderBody": "Erik Engler\nhandelnd unter „Leviora Studio“\nGartenstraße 29C\n06406 Bernburg\nDeutschland\n\nE-Mail: erik@leviora.studio\nTelefon: +49 151 10481071",
@@ -798,15 +814,15 @@
   "@privacyScopeBody": {},
   "privacyBackendTitle": "Campus-API und öffentliche Inhalte",
   "@privacyBackendTitle": {},
-  "privacyBackendBody": "Beim Abruf von News, Veranstaltungen, Kontakten, Raum-, Mensa-, Stundenplan- und öffentlichen Kalenderdaten verbindet sich die App verschlüsselt mit der Campus-API der Studierendenschaft. Technisch verarbeitet werden dabei insbesondere die IP-Adresse, Zeitpunkt und Ziel des Abrufs, übermittelte Abfrageparameter wie Zeitraum, Sprache oder ausgewählte Kursgruppe sowie übliche Verbindungsinformationen. Dies ist erforderlich, um die angeforderten Inhalte auszuliefern, Fehler zu erkennen und den Dienst gegen Missbrauch und Angriffe zu schützen. Rechtsgrundlage ist Art. 6 Abs. 1 Buchst. e DSGVO in Verbindung mit § 65 Abs. 1 HSG LSA. Die Campus-API führt keine Nutzerkonten, verwendet keine Werbe-, Analyse- oder Trackingdienste und erstellt keine Nutzungsprofile.",
+  "privacyBackendBody": "Beim Abruf von News, Veranstaltungen, Kontakten, Raum-, Mensa-, Stundenplan- und öffentlichen Kalenderdaten verbindet sich die App verschlüsselt mit der Campus-API der Studierendenschaft. Technisch verarbeitet werden dabei insbesondere die IP-Adresse, Zeitpunkt und Ziel des Abrufs, übermittelte Abfrageparameter wie Zeitraum, Sprache oder ausgewählte Kursgruppe sowie übliche Verbindungsinformationen. Dies ist erforderlich, um die angeforderten Inhalte auszuliefern, Fehler zu erkennen und den Dienst gegen Missbrauch und Angriffe zu schützen. Rechtsgrundlage ist Art. 6 Abs. 1 Buchst. e DSGVO in Verbindung mit § 65 Abs. 1 HSG LSA. Die öffentliche Campus-API führt keine Nutzerkonten, verwendet keine Werbe-, Analyse- oder Trackingdienste und erstellt keine Nutzungsprofile. Der getrennte CMS-Administrationsbereich nutzt dagegen Konten und technisch notwendige Sitzungen für berechtigte Redaktionsmitglieder; öffentliche App-Abrufe erfordern keine CMS-Anmeldung.",
   "@privacyBackendBody": {},
   "privacyBackendStorageTitle": "Speicherdauer im Campus-Backend",
   "@privacyBackendStorageTitle": {},
-  "privacyBackendStorageBody": "Technische Verbindungsdaten können während eines Abrufs vorübergehend verarbeitet werden. Die serverseitigen Anwendungsprotokolle der Container werden größenbasiert rotiert. In der derzeitigen Standardkonfiguration werden je Container höchstens fünf Protokolldateien mit jeweils höchstens 10 MB vorgehalten. Sobald diese Grenze erreicht ist, wird die jeweils älteste Datei überschrieben. Eine feste kalendarische Speicherdauer besteht daher nicht; die tatsächliche Dauer hängt vom anfallenden Protokollvolumen ab. Daten zu einem konkreten Sicherheitsvorfall können bis zum Abschluss der Untersuchung und Abwehr sowie darüber hinaus aufbewahrt werden, soweit eine gesetzliche Pflicht dies verlangt. Die im Backend gespeicherten Campus-, Redaktions- und Synchronisationsdaten sind keine Nutzerprofile. Eine Zusammenführung mit den lokal gespeicherten App-Daten findet nicht statt.",
+  "privacyBackendStorageBody": "Technische Verbindungsdaten können während eines Abrufs vorübergehend verarbeitet werden. Der vorgeschaltete Webserver kann in Zugriffs- oder Fehlerprotokollen insbesondere IP-Adresse, Zeitpunkt, angeforderten Pfad samt Abfrageparametern, Antwortstatus und technische Angaben zum Client festhalten. Nach Betreiberangabe sind im globalen Host-nginx error_log /dev/null im Hauptkontext sowie access_log off und error_log /dev/null im HTTP-Kontext gesetzt. Die versionierten Campus-Konfigurationen enthalten keine abweichenden Log-Ziele. Ob die wirksame Konfiguration auf dem laufenden Server weitere Überschreibungen enthält und ob für den Campus-Dienst nginx-Protokolle gespeichert werden, ist noch nicht verifiziert.\n\nBei Sicherheitsereignissen können außerdem IP-Adresse, Zeitpunkt und technische Merkmale eines Verbindungs- oder Angriffsversuchs in lokalen System- und Sicherheitsprotokollen des gemeinsam genutzten Servers erscheinen. Nach Betreiberangabe werden systemd-journald, die täglich rotierten rsyslog-Dateien und das Fail2ban-Protokoll im regulären lokalen Betrieb etwa 15 Tage vorgehalten. Das ist kein Löschversprechen für jede Server-Protokolldatei. Diese Daten dienen der Störungsanalyse sowie der Erkennung, Untersuchung und Abwehr von Angriffen. Rechtsgrundlage für die Studierendenschaft ist Art. 6 Abs. 1 Buchst. e DSGVO in Verbindung mit § 65 Abs. 1 HSG LSA.\n\nDie VPS-Vorlage sieht für serverseitige Anwendungsprotokolle eine größenbasierte Rotation vor: je Container eine aktive Docker-Protokolldatei mit einer Rotationsschwelle von 4m (max-file=1, max-size=4m). Bei Erreichen der Schwelle wird die bisherige Datei verworfen. Im regulären Betrieb ist das eine Größenordnung von bis zu etwa 5 MB je Container; eine feste Obergrenze ist dies nicht, da ein einzelner Logeintrag die Schwelle überschreiten kann. Ob diese Konfiguration auf dem laufenden Server aktiv ist und ob Docker-Protokolle in den Hostinger-Backups enthalten sind, wurde noch nicht verifiziert. Eine feste kalendarische Speicherdauer besteht nicht; die tatsächliche Dauer hängt vom anfallenden Protokollvolumen ab. Die etwa 15 Tage für lokale System- und Sicherheitsprotokolle gelten weder für diese Containerprotokolle noch pauschal für Datenbanken, CMS-Konten oder andere Dienste. Daten zu einem konkreten Sicherheitsvorfall können bis zum Abschluss der Untersuchung und Abwehr sowie darüber hinaus aufbewahrt werden, soweit eine gesetzliche Pflicht dies verlangt. Die im Backend gespeicherten Campus-, Redaktions- und Synchronisationsdaten sind keine Nutzerprofile. Eine Zusammenführung mit den lokal gespeicherten App-Daten findet nicht statt.",
   "@privacyBackendStorageBody": {},
   "privacyHostingTitle": "Hosting durch Hostinger",
   "@privacyHostingTitle": {},
-  "privacyHostingBody": "Das Campus-Backend wird auf einem VPS in Deutschland betrieben. Hosting-Dienstleister und Auftragsverarbeiter der Studierendenschaft ist Hostinger International Ltd., 61 Lordou Vironos Street, 6023 Larnaca, Zypern. Der primäre Serverstandort liegt damit innerhalb der Europäischen Union. Zwischen der Studierendenschaft und Hostinger besteht ein Auftragsverarbeitungsvertrag gemäß Art. 28 DSGVO. Hostinger verarbeitet die beim Hosting anfallenden Daten nach Weisung der Studierendenschaft und kann hierfür Unterauftragsverarbeiter einsetzen. Soweit dabei Daten außerhalb des Europäischen Wirtschaftsraums in ein Land ohne Angemessenheitsbeschluss der Europäischen Kommission übermittelt werden, sieht der Auftragsverarbeitungsvertrag die Standardvertragsklauseln gemäß Durchführungsbeschluss (EU) 2021/914 als geeignete Garantie vor. Informationen zu den eingesetzten Unterauftragsverarbeitern, möglichen Übermittlungen und den Garantien sind unter https://www.hostinger.com/legal/dpa abrufbar.",
+  "privacyHostingBody": "Das Campus-Backend wird auf einem VPS mit Ubuntu 24 in Deutschland betrieben. Hosting-Dienstleister und Auftragsverarbeiter der Studierendenschaft ist Hostinger International Ltd., 61 Lordou Vironos Street, 6023 Larnaca, Zypern. Der primäre Serverstandort liegt damit innerhalb der Europäischen Union. Zwischen der Studierendenschaft und Hostinger besteht ein Auftragsverarbeitungsvertrag gemäß Art. 28 DSGVO. Hostinger verarbeitet die beim Hosting anfallenden Daten nach Weisung der Studierendenschaft und kann hierfür Unterauftragsverarbeiter einsetzen. Soweit dabei Daten außerhalb des Europäischen Wirtschaftsraums in ein Land ohne Angemessenheitsbeschluss der Europäischen Kommission übermittelt werden, sieht der Auftragsverarbeitungsvertrag die Standardvertragsklauseln gemäß Durchführungsbeschluss (EU) 2021/914 als geeignete Garantie vor. Informationen zu den eingesetzten Unterauftragsverarbeitern, möglichen Übermittlungen und den Garantien sind unter https://www.hostinger.com/legal/dpa abrufbar.\n\nNach Betreiberangabe erstellt Hostinger wöchentlich ein automatisches Server-Backup auf Servern innerhalb der EU. Zwei Backups werden vorgehalten; mit einem neuen Backup wird das älteste gelöscht. Ein lokal etwa 15 Tage vorhandener Sicherheitslogeintrag kann, sofern er in einem Backup enthalten ist, dadurch planmäßig noch bis zu etwa 29 Tage nach seiner Entstehung in einer Sicherung enthalten sein. Diese Rechnung beschreibt nur solche Logeinträge, nicht die Speicherdauer anderer gesicherter Daten. Die Aufbewahrung eigener Hostinger-Protokolle sowie mögliche abweichende Regeln für andere Sicherungen sind nicht belegt.",
   "@privacyHostingBody": {},
   "privacyLocalTitle": "Lokale Daten auf deinem Gerät",
   "@privacyLocalTitle": {},

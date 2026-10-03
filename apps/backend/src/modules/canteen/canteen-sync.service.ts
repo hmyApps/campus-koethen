@@ -142,14 +142,12 @@ export class CanteenSyncService {
     // Entries for another canteen are a genuine upstream anomaly. Drop them
     // rather than filing another canteen's menu under this one.
     const received = response.data.length;
-    const blankDates = new Set(
-      response.data
-        .filter(
-          (entry) =>
-            entry.location_id === canteen.sourceLocationId && entry.food.name.trim().length === 0,
-        )
-        .map((entry) => entry.date),
-    );
+    const placeholders = response.data
+      .filter(
+        (entry) =>
+          entry.location_id === canteen.sourceLocationId && entry.food.name.trim().length === 0,
+      )
+      .map((entry) => ({ date: entry.date, sourcePlanId: entry.id }));
     const matching = response.data.filter(
       (entry) =>
         entry.location_id === canteen.sourceLocationId && entry.food.name.trim().length > 0,
@@ -189,7 +187,7 @@ export class CanteenSyncService {
 
     let removed = 0;
     try {
-      removed = await this.persist(record.id, meals, definitions, blankDates);
+      removed = await this.persist(record.id, meals, definitions, placeholders);
     } catch (error) {
       return fail(
         `persistence failed: ${error instanceof Error ? error.message : 'unknown error'}`,
@@ -336,16 +334,28 @@ export class CanteenSyncService {
     canteenId: string,
     meals: NormalizedMeal[],
     definitions: Array<{ code: string; labelDe: string; kind: 'ingredient' | 'marker' }>,
-    unconfirmedDates: Set<string> = new Set(),
+    placeholders: Array<{ date: string; sourcePlanId: number }> = [],
   ): Promise<number> {
     const dates = [...new Set(meals.map((meal) => meal.date))].sort();
     const minDate = new Date(`${dates[0]!}T00:00:00.000Z`);
     const maxDate = new Date(`${dates[dates.length - 1]!}T00:00:00.000Z`);
     const deletionWindow: Prisma.DateTimeFilter = { gte: minDate, lte: maxDate };
+    // A day with only unnamed placeholders is not confirmed. When a day also
+    // has named dishes, preserve only the previous dish for each placeholder's
+    // stable plan ID; unrelated dishes withdrawn upstream can then disappear.
+    const confirmedDates = new Set(dates);
+    const unconfirmedDates = new Set(
+      placeholders.filter((entry) => !confirmedDates.has(entry.date)).map((entry) => entry.date),
+    );
     if (unconfirmedDates.size > 0) {
       deletionWindow.notIn = [...unconfirmedDates].map((date) => new Date(`${date}T00:00:00.000Z`));
     }
-    const keptIds = meals.map((meal) => meal.sourcePlanId);
+    const keptIds = [
+      ...new Set([
+        ...meals.map((meal) => meal.sourcePlanId),
+        ...placeholders.map((entry) => entry.sourcePlanId),
+      ]),
+    ];
 
     const uniqueDefinitions = CanteenSyncService.lastPerKey(
       definitions,

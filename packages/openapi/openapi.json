@@ -1105,7 +1105,7 @@
   "info": {
     "title": "Campus Köthen API",
     "description": "Public read-only API of the Campus Köthen app.\n\nCampus Köthen is an independent, unofficial campus app. It is neither developed\nnor operated by Hochschule Anhalt, nor is it officially endorsed by the university.\n\nAll content endpoints accept `locale=de|en` (default `de`) and report\n`requestedLocale`, `resolvedLocale` and `translationFallback` in their metadata.\nCanteen dish text comes from a German-only source and is never machine-translated.",
-    "version": "1.1.1",
+    "version": "1.2.4",
     "contact": {
       "name": "Campus Köthen App",
       "url": "https://github.com/Leviora-Studio/campus-koethen",

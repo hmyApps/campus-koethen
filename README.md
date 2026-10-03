@@ -11,11 +11,11 @@ angebundene persönliche Dienste (Studenten-E-Mail, Notenspiegel, Moodle) für d
 
 > **Deutsch**
 >
-> Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird unabhängig von Erik Engler, handelnd unter „Leviora Studio“, entwickelt und über die App Stores bereitgestellt. Das Campus-Backend und die redaktionellen Inhalte werden von der rechtlich selbstständigen Studierendenschaft der Hochschule Anhalt betrieben. Die Hochschule Anhalt selbst ist weder Entwicklerin noch Betreiberin der App.
+> Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird von Erik Engler über die App Stores bereitgestellt. Das Campus-Backend und die redaktionellen Inhalte werden von der rechtlich selbstständigen Studierendenschaft der Hochschule Anhalt betrieben. Die Hochschule Anhalt selbst ist weder Entwicklerin noch Betreiberin der App.
 
 > **English**
 >
-> Campus Köthen is not an official Hochschule Anhalt app. The app is independently developed and distributed through app stores by Erik Engler, trading as “Leviora Studio”. The Campus backend and editorial content are operated by the legally independent student body of Hochschule Anhalt. Hochschule Anhalt itself neither develops nor operates the app.
+> Campus Köthen is not an official Hochschule Anhalt app. The app is distributed through app stores by Erik Engler. The Campus backend and editorial content are operated by the legally independent student body of Hochschule Anhalt. Hochschule Anhalt itself neither develops nor operates the app.
 
 Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsysteme der Hochschule Anhalt.
 

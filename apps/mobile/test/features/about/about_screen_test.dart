@@ -68,6 +68,12 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    // The fixed scroll step above only has to get the button built and
+    // roughly on screen; shorter copy above it can leave the button's tap
+    // point just past the viewport edge. ensureVisible() then aligns it
+    // precisely, independent of exactly how much content sits above it.
+    await tester.ensureVisible(licenses);
+    await tester.pumpAndSettle();
     await tester.tap(licenses);
     await tester.pumpAndSettle();
 

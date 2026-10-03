@@ -212,7 +212,18 @@ void main() {
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
     // A project rule, not a footnote: the app must never look official.
-    expect(find.textContaining('unabhängig'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Campus Köthen ist keine offizielle App der Hochschule Anhalt.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Die App wird von Erik Engler über die App Stores bereitgestellt.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a completed setup goes straight to the dashboard', (

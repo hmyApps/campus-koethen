@@ -8,17 +8,17 @@ Stand: 25.08.2026 · Status: **in Entwicklung, nicht veröffentlicht**
 
 **Deutsch**
 
-> Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird unabhängig von Erik
-> Engler, handelnd unter „Leviora Studio“, entwickelt und über die App Stores bereitgestellt. Das
-> Campus-Backend und die redaktionellen Inhalte werden von der rechtlich selbstständigen
+> Campus Köthen ist keine offizielle App der Hochschule Anhalt. Die App wird von Erik Engler über
+> die App Stores bereitgestellt. Das Campus-Backend und die redaktionellen Inhalte
+> werden von der rechtlich selbstständigen
 > Studierendenschaft der Hochschule Anhalt betrieben. Die Hochschule Anhalt selbst ist weder
 > Entwicklerin noch Betreiberin der App.
 
 **English**
 
-> Campus Köthen is not an official Hochschule Anhalt app. The app is independently developed and
-> distributed through app stores by Erik Engler, trading as “Leviora Studio”. The Campus backend
-> and editorial content are operated by the legally independent student body of Hochschule Anhalt.
+> Campus Köthen is not an official Hochschule Anhalt app. The app is distributed
+> through app stores by Erik Engler. The Campus backend and editorial content are operated by the
+> legally independent student body of Hochschule Anhalt.
 > Hochschule Anhalt itself neither develops nor operates the app.
 
 Dieser Hinweis ist verbindlich und erscheint identisch in README, About-Screen und den rechtlichen

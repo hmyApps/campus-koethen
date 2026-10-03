@@ -59,11 +59,12 @@ overrides:
   'nodemailer@>=9.0.0 <10.0.6': '>=10.0.6 <11' # GHSA-2x7j-588g-ccc2 / GHSA-v53p-9fqp-m79j / GHSA-prgh-xp8r-p3m5
   # Framework-owned HTTP clients. All fixes stay inside the dependency's major
   # line and are covered by the Strapi unit/build/runtime gates.
-  'axios@>=1.0.0 <1.20.0': '>=1.20.0 <2'
-  'undici@>=6.7.0 <6.28.1': '>=6.28.1 <7'
-  # The installed Strapi line pins 6.1.3. The traversal fix starts at 7.4.5; this is a
+  'axios@>=1.0.0 <1.20.0': '>=1.20.0 <2' # redirect and request validation advisories
+  'undici@>=6.7.0 <6.28.1': '>=6.28.1 <7' # GHSA-rfgv-xxqx-mfg5
+  # The installed Strapi line pins 6.1.3. The traversal fix starts at 7.4.5,
+  # and a second advisory (CVE-2026-76844) was only fixed in 7.4.6; this is a
   # development middleware and is exercised by the CMS build/test gates.
-  'webpack-dev-middleware@>=6.0.0 <7.4.5': '>=7.4.5 <8' # GHSA-g84c-rxfj-3j2c
+  'webpack-dev-middleware@>=6.0.0 <7.4.6': '>=7.4.6 <8' # GHSA-g84c-rxfj-3j2c / CVE-2026-76844
   # Address4 reads a leading-zero octet as decimal where resolvers read octal,
   # which is an SSRF and trust-boundary bypass (high). Comes in under Strapi.
   # Only the 10.x line is installed, so the pin cannot disturb an older major.

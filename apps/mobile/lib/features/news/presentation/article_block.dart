@@ -1,14 +1,13 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../app/app_routes.dart';
+import '../../../core/locale/formatters.dart';
 import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -16,8 +15,8 @@ import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/content_blocks_view.dart';
 import '../../../core/widgets/panel.dart';
-import '../../../core/widgets/remote_image.dart';
 import '../../../l10n/l10n.dart';
+import '../../calendar/domain/calendar_entry.dart' show calendarDayOf;
 import '../../events/domain/unified_event.dart';
 import '../../events/presentation/event_save_button.dart';
 import '../application/news_feed_ui_providers.dart';
@@ -25,14 +24,7 @@ import '../data/news_models.dart';
 import '../domain/article_age.dart';
 import '../domain/news_preview.dart';
 import 'news_age_text.dart';
-
-/// The tallest a banner may be drawn, as width divided by height.
-///
-/// Editors upload what they have — square press photos, portrait posters — and
-/// a feed that honours every shape turns one article into a full screen before
-/// its headline. Anything wider than this keeps its own proportions; anything
-/// taller is cropped to it.
-const double _maxBannerRatio = 16 / 9;
+import 'post_image_preview.dart';
 
 /// One article in the feed, drawn as its own card.
 ///
@@ -131,20 +123,17 @@ class ArticleBlock extends ConsumerWidget {
                   EventSaveButton(event: postToUnifiedEvent(article)),
               ],
             ),
+            if (article.isEventPost) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              _EventWhen(article: article, locale: locale, l10n: l10n),
+            ],
 
             // The banner follows the headline rather than leading it. A
             // reader scanning a feed reads headlines; a photo above every one
             // of them pushes three articles off the screen for no gain.
             if (article.heroImage != null) ...<Widget>[
               const SizedBox(height: AppSpacing.md),
-              RemoteImage(
-                url: article.heroImage!.url,
-                alternativeText: article.heroImage!.alternativeText,
-                aspectRatio: math.max(
-                  article.heroImage!.aspectRatio ?? _maxBannerRatio,
-                  _maxBannerRatio,
-                ),
-              ),
+              PostImagePreview(image: article.heroImage!),
             ],
 
             const SizedBox(height: AppSpacing.md),
@@ -156,6 +145,72 @@ class ArticleBlock extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The event's own date and time stay visible even while the post is collapsed.
+class _EventWhen extends StatelessWidget {
+  const _EventWhen({
+    required this.article,
+    required this.locale,
+    required this.l10n,
+  });
+
+  final NewsArticle article;
+  final String locale;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors colors = context.colors;
+    final DateTime start = article.eventStart!;
+    final DateTime? end = article.eventEnd;
+    // All-day dates are calendar dates, not instants in the device's time
+    // zone. Reading their UTC components prevents a day shift west of UTC.
+    final DateTime startDay = calendarDayOf(start, allDay: article.eventAllDay);
+    final DateTime? endDay = end == null
+        ? null
+        : calendarDayOf(end, allDay: article.eventAllDay);
+    final String date = AppDateFormats.weekdayDate(startDay, locale);
+
+    final String when;
+    if (article.eventAllDay) {
+      when = endDay != null && endDay.isAfter(startDay)
+          ? '$date – ${AppDateFormats.weekdayDate(endDay, locale)} · '
+                '${l10n.todayAllDayLabel}'
+          : '$date · ${l10n.todayAllDayLabel}';
+    } else {
+      final String startTime = AppDateFormats.time(start, locale);
+      when = end == null
+          ? '$date · $startTime'
+          : endDay != null && endDay.isAfter(startDay)
+          ? '$date · $startTime – '
+                '${AppDateFormats.weekdayDate(endDay, locale)} · '
+                '${AppDateFormats.time(end, locale)}'
+          : '$date · $startTime–${AppDateFormats.time(end, locale)}';
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ExcludeSemantics(
+          child: Icon(
+            AppIcons.event_outlined,
+            size: AppSizes.iconSmall,
+            color: colors.primary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            when,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: colors.primary),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -340,7 +395,16 @@ class _ArticleBody extends ConsumerWidget {
       );
     }
 
-    final String preview = newsPreviewText(article.content);
+    final List<TextSpan> previewSpans = newsPreviewRuns(article.content)
+        .map(
+          (NewsPreviewRun run) => TextSpan(
+            text: run.text,
+            style: run.bold
+                ? const TextStyle(fontWeight: FontWeight.w700)
+                : null,
+          ),
+        )
+        .toList(growable: false);
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -348,7 +412,7 @@ class _ArticleBody extends ConsumerWidget {
         // is answered at the width the text actually gets and at the reader's
         // own text size.
         final TextPainter painter = TextPainter(
-          text: TextSpan(text: preview, style: style),
+          text: TextSpan(style: style, children: previewSpans),
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
           maxLines: kNewsPreviewLines,
@@ -359,8 +423,8 @@ class _ArticleBody extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              preview,
+            Text.rich(
+              TextSpan(children: previewSpans),
               style: style,
               maxLines: kNewsPreviewLines,
               overflow: TextOverflow.ellipsis,

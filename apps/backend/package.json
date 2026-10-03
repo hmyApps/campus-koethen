@@ -1,6 +1,6 @@
 {
   "name": "@campus/backend",
-  "version": "1.1.1",
+  "version": "1.2.4",
   "description": "Campus Köthen API and canteen synchronization worker",
   "private": true,
   "license": "AGPL-3.0-only",

@@ -86,7 +86,7 @@ function harness(
       canteenId: string,
       meals: NormalizedMeal[],
       definitions: Definition[],
-      unconfirmedDates?: Set<string>,
+      placeholders?: Array<{ date: string; sourcePlanId: number }>,
     ) => Promise<number>;
   };
 
@@ -101,7 +101,7 @@ describe('CanteenSyncService persistence boundary', () => {
       'canteen-id',
       [meal(123, { date: '2026-10-04' }), meal(124, { date: '2026-10-06' })],
       [],
-      new Set(['2026-10-05']),
+      [{ date: '2026-10-05', sourcePlanId: 125 }],
     );
 
     expect(tx.meal.deleteMany).toHaveBeenCalledWith({
@@ -111,6 +111,27 @@ describe('CanteenSyncService persistence boundary', () => {
           lte: new Date('2026-10-06T00:00:00.000Z'),
           notIn: [new Date('2026-10-05T00:00:00.000Z')],
         },
+      }),
+    });
+  });
+
+  it('withdraws obsolete dishes on a mixed day but retains the blank plan id', async () => {
+    const { service, tx } = harness();
+
+    await service.persist(
+      'canteen-id',
+      [meal(123, { date: '2026-10-05' })],
+      [],
+      [{ date: '2026-10-05', sourcePlanId: 124 }],
+    );
+
+    expect(tx.meal.deleteMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        date: {
+          gte: new Date('2026-10-05T00:00:00.000Z'),
+          lte: new Date('2026-10-05T00:00:00.000Z'),
+        },
+        sourcePlanId: { notIn: [123, 124] },
       }),
     });
   });
@@ -125,6 +146,7 @@ describe('CanteenSyncService persistence boundary', () => {
           location_id: canteen.sourceLocationId,
           food: { name: 'Gericht' },
         },
+        { id: 125, date: '2026-09-24', location_id: canteen.sourceLocationId, food: { name: '' } },
         { id: 124, date: '2026-10-05', location_id: canteen.sourceLocationId, food: { name: '' } },
       ],
     });
@@ -146,15 +168,18 @@ describe('CanteenSyncService persistence boundary', () => {
 
     expect(outcome).toMatchObject({
       status: 'success',
-      recordsReceived: 2,
+      recordsReceived: 3,
       recordsUpserted: 1,
-      recordsRejected: 1,
+      recordsRejected: 2,
     });
     expect(persist).toHaveBeenCalledWith(
       'canteen-id',
       [expect.objectContaining({ sourcePlanId: 123, name: 'Gericht' })],
       [],
-      new Set(['2026-10-05']),
+      [
+        { date: '2026-09-24', sourcePlanId: 125 },
+        { date: '2026-10-05', sourcePlanId: 124 },
+      ],
     );
   });
 

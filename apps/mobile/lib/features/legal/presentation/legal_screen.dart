@@ -89,7 +89,12 @@ class LegalScreen extends StatelessWidget {
         ),
         children: <Widget>[
           const SizedBox(height: AppSpacing.lg),
-          Text(l10n.legalLastUpdated, style: text.bodySmall),
+          Text(
+            page == LegalPage.privacy
+                ? l10n.privacyLastUpdated
+                : l10n.legalLastUpdated,
+            style: text.bodySmall,
+          ),
           for (final _LegalSection section in sections) ...<Widget>[
             const SizedBox(height: AppSpacing.xl),
             Semantics(

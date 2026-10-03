@@ -98,7 +98,7 @@ void main() {
         article(heroImage: <String, dynamic>{'url': '/v1/media/uploads/h.jpg'}),
       )!;
 
-      // The card then picks a sensible default rather than dividing by zero.
+      // The preview remains square even when the CMS reports no dimensions.
       expect(parsed.heroImage!.aspectRatio, isNull);
     });
   });

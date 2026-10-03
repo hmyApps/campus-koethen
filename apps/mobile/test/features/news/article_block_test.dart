@@ -40,6 +40,10 @@ NewsArticle _article({
   NewsTagRef tag = _defaultTag,
   NewsChannelRef primaryChannel = _defaultPrimaryChannel,
   DateTime? publishedAt,
+  NewsImage? heroImage,
+  DateTime? eventStart,
+  DateTime? eventEnd,
+  bool eventAllDay = false,
 }) => NewsArticle(
   slug: slug,
   title: title,
@@ -47,7 +51,11 @@ NewsArticle _article({
   channels: channels,
   tag: tag,
   primaryChannel: primaryChannel,
+  heroImage: heroImage,
   content: content ?? <ContentBlock>[_p('Kurzer Text.')],
+  eventStart: eventStart,
+  eventEnd: eventEnd,
+  eventAllDay: eventAllDay,
 );
 
 /// Several lines' worth of text, comfortably more than the preview shows.
@@ -183,6 +191,51 @@ void main() {
     expect(find.text('FSR.INS'), findsOneWidget);
     expect(find.text('FB5-News FSR.INS'), findsNothing);
     expect(find.text('Der Artikeltext.'), findsOneWidget);
+  });
+
+  testWidgets('shows a timed event below the title before the body', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCard(
+      tester,
+      _article(
+        title: 'Ersti-Grillen',
+        eventStart: DateTime(2026, 10, 8, 16),
+        eventEnd: DateTime(2026, 10, 8, 21),
+        content: <ContentBlock>[_p('Treffpunkt im Innenhof.')],
+      ),
+    );
+
+    final Finder eventTime = find.textContaining('16:00–21:00');
+    expect(eventTime, findsOneWidget);
+    expect(find.textContaining('Oktober 2026'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Ersti-Grillen')).dy,
+      lessThan(tester.getTopLeft(eventTime).dy),
+    );
+    expect(
+      tester.getTopLeft(eventTime).dy,
+      lessThan(tester.getTopLeft(find.text('Treffpunkt im Innenhof.')).dy),
+    );
+  });
+
+  testWidgets('shows a localized all-day event', (WidgetTester tester) async {
+    await _pumpCard(
+      tester,
+      _article(eventStart: DateTime.utc(2026, 10, 8), eventAllDay: true),
+      locale: AppLocales.english,
+    );
+
+    expect(find.textContaining('October 8, 2026'), findsOneWidget);
+    expect(find.textContaining('All day'), findsOneWidget);
+  });
+
+  testWidgets('omits the event line for ordinary news', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCard(tester, _article());
+    expect(find.textContaining('All day'), findsNothing);
+    expect(find.textContaining('2026 ·'), findsNothing);
   });
 
   testWidgets('an event post can be saved and unsaved from the news feed', (
@@ -332,6 +385,30 @@ void main() {
     expect(inkWells.where((InkWell w) => w.onTap != null), hasLength(1));
   });
 
+  testWidgets('opening a post image does not expand the article', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCard(
+      tester,
+      _article(
+        content: _longArticle,
+        heroImage: const NewsImage(url: '/v1/media/uploads/hero.jpg'),
+      ),
+    );
+
+    expect(find.text('Mehr anzeigen'), findsOneWidget);
+    await tester.tap(find.byTooltip('Bild im Vollbild öffnen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byTooltip('Bildansicht schließen'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Bildansicht schließen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Mehr anzeigen'), findsOneWidget);
+    expect(find.text('Weniger anzeigen'), findsNothing);
+  });
+
   testWidgets('only the real actions announce themselves as buttons', (
     WidgetTester tester,
   ) async {
@@ -356,6 +433,40 @@ void main() {
   });
 
   group('expanding', () {
+    testWidgets('bold text stays bold in the collapsed preview', (
+      WidgetTester tester,
+    ) async {
+      await _pumpCard(
+        tester,
+        _article(
+          content: <ContentBlock>[
+            ParagraphBlock(<InlineNode>[
+              const InlineText(text: 'Das ist '),
+              const InlineText(text: 'wichtig', bold: true),
+              const InlineText(text: ' für alle.'),
+            ]),
+          ],
+        ),
+      );
+
+      final Text preview = tester.widget<Text>(
+        find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is Text &&
+              widget.textSpan?.toPlainText() == 'Das ist wichtig für alle.',
+        ),
+      );
+      final TextSpan span = preview.textSpan! as TextSpan;
+      expect(
+        span.children!
+            .whereType<TextSpan>()
+            .singleWhere((TextSpan child) => child.text == 'wichtig')
+            .style
+            ?.fontWeight,
+        FontWeight.w700,
+      );
+    });
+
     testWidgets('a short article offers nothing to expand', (
       WidgetTester tester,
     ) async {

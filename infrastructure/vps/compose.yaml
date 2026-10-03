@@ -9,8 +9,8 @@ name: ${COMPOSE_PROJECT_NAME:-campus-koethen}
 x-logging: &default-logging
   driver: json-file
   options:
-    max-size: '${DOCKER_LOG_MAX_SIZE:-10m}'
-    max-file: '${DOCKER_LOG_MAX_FILES:-5}'
+    max-size: '${DOCKER_LOG_MAX_SIZE:-4m}'
+    max-file: '${DOCKER_LOG_MAX_FILES:-1}'
 
 x-backend-image: &backend-image
   image: ${BACKEND_IMAGE_REPOSITORY:-ghcr.io/leviora-studio/campus-koethen/backend}:${CAMPUS_IMAGE_TAG:?Set CAMPUS_IMAGE_TAG to an immutable sha- tag}

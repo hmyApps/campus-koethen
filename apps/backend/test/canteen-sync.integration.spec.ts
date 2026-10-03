@@ -166,6 +166,44 @@ describe('CanteenSyncService (integration)', () => {
       expect(await prisma.meal.findUnique({ where: { sourcePlanId: 900002 } })).not.toBeNull();
       expect(await mealNames()).toContain('Linseneintopf');
     });
+
+    it('protects blank placeholders without retaining unrelated withdrawn dishes', async () => {
+      const initial = structuredClone(fixture('success.json'));
+      initial.data.push({
+        ...structuredClone(initial.data[0]!),
+        id: 900004,
+        date: '2026-07-22',
+      });
+      initial.data.push({
+        ...structuredClone(initial.data[1]!),
+        id: 900005,
+        food: { ...structuredClone(initial.data[1]!.food), name: 'Withdrawn dish' },
+      });
+
+      const service = makeService(stubClient(() => initial));
+      await service.seedCanteens();
+      await service.syncCanteen(FASANERIEALLEE);
+      expect(await mealCount()).toBe(5);
+
+      const updated = structuredClone(initial);
+      updated.data = updated.data.filter((entry) => entry.id !== 900005);
+      updated.data.find((entry) => entry.id === 900002)!.food.name = '';
+      updated.data.find((entry) => entry.id === 900003)!.food.name = '';
+
+      const outcome = await makeService(stubClient(() => updated)).syncCanteen(FASANERIEALLEE);
+
+      expect(outcome).toMatchObject({
+        status: 'success',
+        recordsRejected: 2,
+        recordsRemoved: 1,
+      });
+      expect(await prisma.meal.findMany({ orderBy: { sourcePlanId: 'asc' } })).toEqual([
+        expect.objectContaining({ sourcePlanId: 900001 }),
+        expect.objectContaining({ sourcePlanId: 900002, name: 'Nudelauflauf' }),
+        expect.objectContaining({ sourcePlanId: 900003, name: 'Linseneintopf' }),
+        expect.objectContaining({ sourcePlanId: 900004 }),
+      ]);
+    });
   });
 
   describe('batched writes', () => {

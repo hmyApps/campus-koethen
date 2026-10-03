@@ -60,20 +60,32 @@ void main() {
       );
     });
 
-    test(
-      'formatting is dropped — the expanded card renders the real thing',
-      () {
-        expect(
-          newsPreviewText(<ContentBlock>[
-            ParagraphBlock(<InlineNode>[
-              _t('Ganz '),
-              InlineText(text: 'wichtig', bold: true),
-            ]),
-          ]),
-          'Ganz wichtig',
-        );
-      },
-    );
+    test('keeps bold ranges while trimming and joining preview text', () {
+      final List<ContentBlock> blocks = <ContentBlock>[
+        ParagraphBlock(<InlineNode>[
+          _t('  Ganz '),
+          const InlineText(text: 'wichtig', bold: true),
+          InlineLink(
+            url: 'https://example.org',
+            children: const <InlineText>[
+              InlineText(text: ' und '),
+              InlineText(text: 'verlinkt  ', bold: true),
+            ],
+          ),
+        ]),
+        _p('Danach'),
+      ];
+
+      expect(newsPreviewText(blocks), 'Ganz wichtig und verlinkt\nDanach');
+      expect(newsPreviewRuns(blocks), <NewsPreviewRun>[
+        (text: 'Ganz ', bold: false),
+        (text: 'wichtig', bold: true),
+        (text: ' und ', bold: false),
+        (text: 'verlinkt', bold: true),
+        (text: '\n', bold: false),
+        (text: 'Danach', bold: false),
+      ]);
+    });
 
     test('an image contributes nothing to the text', () {
       expect(newsPreviewText(<ContentBlock>[_image, _p('Text')]), 'Text');

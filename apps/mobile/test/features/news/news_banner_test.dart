@@ -1,15 +1,15 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-/// How tall a news banner may get.
-///
-/// Editors upload whatever they have, and the CMS reports the real size. A feed
-/// that honours every shape turns one square press photo into a full screen
-/// before the headline starts, which is what these tests pin down.
+/// Post images use a square preview and open the original media file in-app.
 library;
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:campus_koethen/core/network/api_config.dart';
+import 'package:campus_koethen/core/theme/app_icons.dart';
 import 'package:campus_koethen/features/news/data/news_models.dart';
 import 'package:campus_koethen/features/news/presentation/article_block.dart';
+import 'package:campus_koethen/features/news/presentation/post_image_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -63,41 +63,44 @@ Future<void> pumpCard(WidgetTester tester, NewsArticle value) async {
 }
 
 void main() {
-  testWidgets('a square photo is cropped instead of filling the screen', (
+  testWidgets('a square photo stays square in the preview', (
     WidgetTester tester,
   ) async {
     await pumpCard(tester, article(width: 800, height: 800));
 
-    expect(bannerRatio(tester), closeTo(16 / 9, 0.001));
+    expect(bannerRatio(tester), 1);
   });
 
-  testWidgets('a portrait photo is cropped just the same', (
+  testWidgets('a portrait photo has a square preview', (
     WidgetTester tester,
   ) async {
     await pumpCard(tester, article(width: 900, height: 1600));
 
-    expect(bannerRatio(tester), closeTo(16 / 9, 0.001));
+    expect(bannerRatio(tester), 1);
   });
 
-  testWidgets('a wide photo keeps its own proportions', (
+  testWidgets('a wide photo also has a square preview', (
     WidgetTester tester,
   ) async {
-    // Nothing to protect against here: a panorama is short by itself, and
-    // letterboxing it into 16:9 would crop the picture for no reason.
     await pumpCard(tester, article(width: 2100, height: 900));
 
-    expect(bannerRatio(tester), closeTo(21 / 9, 0.001));
+    expect(bannerRatio(tester), 1);
+    final Rect preview = tester.getRect(find.byType(PostImagePreview));
+    final Rect icon = tester.getRect(find.byIcon(AppIcons.fullscreen));
+    expect(preview.width, closeTo(preview.height, 0.01));
+    expect(icon.center.dx, greaterThan(preview.center.dx));
+    expect(icon.center.dy, greaterThan(preview.center.dy));
   });
 
-  testWidgets('an image without a reported size falls back to the cap', (
+  testWidgets('an image without a reported size is square too', (
     WidgetTester tester,
   ) async {
     await pumpCard(tester, article());
 
-    expect(bannerRatio(tester), closeTo(16 / 9, 0.001));
+    expect(bannerRatio(tester), 1);
   });
 
-  testWidgets('the banner keeps its alternative text', (
+  testWidgets('the preview announces its action and alternative text', (
     WidgetTester tester,
   ) async {
     await pumpCard(tester, article(width: 800, height: 800));
@@ -106,10 +109,47 @@ void main() {
       find.byWidgetPredicate(
         (Widget widget) =>
             widget is Semantics &&
-            widget.properties.label == 'Ein Bild' &&
-            widget.properties.image == true,
+            widget.properties.label?.contains('Ein Bild') == true &&
+            widget.properties.button == true,
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the preview opens original resolution and closes both ways', (
+    WidgetTester tester,
+  ) async {
+    await pumpCard(tester, article(width: 1600, height: 900));
+
+    await tester.tap(find.byTooltip('Bild im Vollbild öffnen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byTooltip('Bildansicht schließen'), findsOneWidget);
+    final List<CachedNetworkImage> images = tester
+        .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage))
+        .toList();
+    expect(images, hasLength(2));
+    expect(
+      images.last.imageUrl,
+      ApiConfig.resolveMediaUrl('/v1/media/uploads/banner.jpg'),
+    );
+    expect(images.last.memCacheWidth, isNull);
+    expect(images.last.memCacheHeight, isNull);
+
+    await tester.tap(find.byTooltip('Bildansicht schließen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byTooltip('Bildansicht schließen'), findsNothing);
+
+    await tester.tap(find.byTooltip('Bild im Vollbild öffnen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byTooltip('Bildansicht schließen'), findsOneWidget);
+
+    await tester.tapAt(const Offset(10, 100));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byTooltip('Bildansicht schließen'), findsNothing);
   });
 }

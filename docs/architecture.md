@@ -577,7 +577,7 @@ auf alle nicht begründet ausgenommenen, behebbaren HIGH/CRITICAL-CVEs geprüft.
 Build wird mit SBOM und maximaler Build-Provenance nach GHCR veröffentlicht.
 
 `main` erhält die Tags `main` und `sha-<voller Commit SHA>`. Ein Git-Tag erhält zusätzlich seinen
-eigenen Namen, für diesen Release also `1.1.1`. Deployments verwenden ausschließlich den
+eigenen Namen, für diesen Release also `1.2.4`. Deployments verwenden ausschließlich den
 unveränderlichen `sha-`-Tag; CI verbindet sich nie mit einem Server und deployt nichts.
 
 ### 7.2 Health-Semantik

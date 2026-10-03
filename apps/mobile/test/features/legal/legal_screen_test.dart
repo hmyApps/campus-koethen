@@ -64,9 +64,12 @@ void main() {
     expect(en.privacyHostingBody, contains('2021/914'));
     expect(de.privacyScopeBody, contains('Gartenstraße 29C'));
     expect(en.privacyScopeBody, contains('Gartenstraße 29C'));
-    expect(de.privacyBackendStorageBody, contains('fünf Protokolldateien'));
-    expect(de.privacyBackendStorageBody, contains('10 MB'));
-    expect(en.privacyBackendStorageBody, contains('five log files'));
+    expect(de.privacyBackendStorageBody, contains('max-file=1'));
+    expect(de.privacyBackendStorageBody, contains('max-size=4m'));
+    expect(de.privacyBackendStorageBody, contains('etwa 5 MB'));
+    expect(en.privacyBackendStorageBody, contains('max-file=1'));
+    expect(en.privacyBackendStorageBody, contains('max-size=4m'));
+    expect(en.privacyBackendStorageBody, contains('about 5 MB'));
     expect(de.privacyLocalBody, contains('Art. 6 Abs. 1 Buchst. b DSGVO'));
     expect(de.privacyLocalBody, contains('Sitzungscookies'));
     expect(en.privacyLocalBody, contains('Article 6(1)(b) GDPR'));

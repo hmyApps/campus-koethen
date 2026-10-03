@@ -12,7 +12,6 @@ import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/icon_keys.dart';
 import '../../../core/widgets/offline_notice.dart';
-import '../../../core/widgets/remote_image.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/translation_fallback_notice.dart';
 import '../../../l10n/l10n.dart';
@@ -375,20 +374,7 @@ class _AreaCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  // A picture takes the icon's place rather than sitting next
-                  // to it: two marks for one area would only compete, and the
-                  // photo says more than the symbol it replaces.
-                  if (area.imageUrl != null)
-                    SizedBox(
-                      width: AppSizes.icon * 2,
-                      child: RemoteImage(
-                        url: area.imageUrl!,
-                        alternativeText: area.name,
-                        aspectRatio: 1,
-                      ),
-                    )
-                  else
-                    Icon(IconKeys.resolve(area.iconKey), size: AppSizes.icon),
+                  Icon(IconKeys.resolve(area.iconKey), size: AppSizes.icon),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(

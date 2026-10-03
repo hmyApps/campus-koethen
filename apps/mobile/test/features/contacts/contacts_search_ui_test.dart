@@ -3,6 +3,8 @@
 
 import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
+import 'package:campus_koethen/core/widgets/icon_keys.dart';
+import 'package:campus_koethen/core/widgets/remote_image.dart';
 import 'package:campus_koethen/features/contacts/presentation/contacts_list_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -71,6 +73,9 @@ List<Map<String, dynamic>> get _index => <Map<String, dynamic>>[
 ];
 
 class ContactsApi {
+  ContactsApi({this.includeAreaImage = false});
+
+  final bool includeAreaImage;
   final List<String> requestedPaths = <String>[];
 
   FakeHttpAdapter get adapter => FakeHttpAdapter((RequestOptions options) {
@@ -79,7 +84,11 @@ class ContactsApi {
       return FakeHttpResponse(envelope(_index));
     }
     if (options.path.contains('contact-areas')) {
-      return FakeHttpResponse(envelope(_areas));
+      final List<Map<String, dynamic>> areas = _areas;
+      if (includeAreaImage) {
+        areas.first['image'] = '/v1/media/contact-area.jpg';
+      }
+      return FakeHttpResponse(envelope(areas));
     }
     return FakeHttpResponse(envelope(<Object>[]));
   });
@@ -90,6 +99,7 @@ Future<ContactsApi> pumpContacts(
   Locale locale = AppLocales.german,
   TextScaler textScaler = TextScaler.noScaling,
   Size size = const Size(390, 1200),
+  bool includeAreaImage = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -98,7 +108,7 @@ Future<ContactsApi> pumpContacts(
     tester.view.resetDevicePixelRatio();
   });
 
-  final ContactsApi api = ContactsApi();
+  final ContactsApi api = ContactsApi(includeAreaImage: includeAreaImage);
   await pumpScreen(
     tester,
     const ContactsListScreen(),
@@ -118,6 +128,25 @@ Future<void> _type(WidgetTester tester, String term) async {
 }
 
 void main() {
+  testWidgets('list shows the area icon even when the area has an image', (
+    WidgetTester tester,
+  ) async {
+    await pumpContacts(tester, includeAreaImage: true);
+
+    final Finder areaCard = find.ancestor(
+      of: find.text('Studierendenrat'),
+      matching: find.byType(Card),
+    );
+    expect(
+      find.descendant(
+        of: areaCard,
+        matching: find.byIcon(IconKeys.resolve('students-council')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(RemoteImage), findsNothing);
+  });
+
   testWidgets('the list stays the list until something is typed', (
     WidgetTester tester,
   ) async {
