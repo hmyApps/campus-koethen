@@ -14,6 +14,8 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/application/university_service_connector.dart';
 import '../application/mail_account_controller.dart';
 import '../application/mail_folders.dart';
 import '../application/mail_inbox_controller.dart';
@@ -59,7 +61,9 @@ class MailInboxScreen extends ConsumerWidget {
     );
     if (confirmed ?? false) {
       try {
-        await ref.read(mailAccountControllerProvider.notifier).signOut();
+        await ref
+            .read(universityServiceConnectorProvider)
+            .disconnect(DirectService.mail);
       } catch (error) {
         messenger.showSnackBar(
           SnackBar(content: Text(mailFailureMessage(l10n, error))),

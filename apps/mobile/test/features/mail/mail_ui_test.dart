@@ -382,6 +382,34 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.text('Verbindung wird geprüft …'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Verbindung wird geprüft …'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.ancestor(
+                of: find.byTooltip('Passwort anzeigen'),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText).at(2))
+            .focusNode
+            .hasFocus,
+        isFalse,
+      );
+      expect(
+        tester
+            .widgetList<PopScope>(find.byType(PopScope))
+            .any((PopScope scope) => !scope.canPop),
+        isTrue,
+      );
 
       gateway.verifyGate!.complete();
       await tester.pumpAndSettle();

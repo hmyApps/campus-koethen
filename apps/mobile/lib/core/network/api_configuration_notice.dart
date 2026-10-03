@@ -70,18 +70,22 @@ class ApiConfigurationNotice extends ConsumerWidget {
       ),
     };
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        context.metrics.screenPadding,
-        AppSpacing.sm,
-        context.metrics.screenPadding,
-        0,
-      ),
-      child: StatusBanner(
-        tone: StatusTone.warning,
-        icon: AppIcons.cloud_off_outlined,
-        title: title,
-        message: message,
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          context.metrics.screenPadding,
+          AppSpacing.sm,
+          context.metrics.screenPadding,
+          0,
+        ),
+        child: StatusBanner(
+          tone: StatusTone.warning,
+          icon: AppIcons.cloud_off_outlined,
+          title: title,
+          message: message,
+          liveRegion: true,
+        ),
       ),
     );
   }

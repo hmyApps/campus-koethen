@@ -18,7 +18,6 @@ import '../features/news/application/news_channel_feed_controller.dart';
 import '../features/news/application/news_feed_controller.dart';
 import '../features/news/application/news_providers.dart';
 import '../features/timetable/application/timetable_providers.dart';
-import '../features/timetable/application/timetable_week.dart';
 
 const Duration kNewsForegroundSyncInterval = Duration(minutes: 5);
 const Duration kCalendarForegroundSyncInterval = Duration(minutes: 10);
@@ -113,20 +112,7 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
   }
 
   Future<void> _refreshTimetable() async {
-    ref.invalidate(timetableGroupsProvider);
-    ref.invalidate(timetableWeekProvider);
-    await ref.read(timetableGroupsProvider.future);
-
-    final String? groupId = ref.read(selectedTimetableGroupIdProvider);
-    if (groupId == null) return;
-    await ref.read(
-      timetableWeekProvider(
-        TimetableWeekRequest(
-          groupId: groupId,
-          weekStart: TimetableWeek.startOf(DateTime.now()),
-        ),
-      ).future,
-    );
+    await ref.read(timetableForegroundRefreshProvider)();
   }
 
   Future<void> _refreshContacts() async {

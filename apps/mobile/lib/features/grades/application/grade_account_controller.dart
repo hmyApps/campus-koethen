@@ -201,23 +201,40 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
     GradeReport report, {
     bool replaceAccount = true,
   }) async {
-    await _sessions.invalidateAndWait();
-    if (replaceAccount) await _wipeLinkedPersonalData();
-    await _store.write(credentials);
-    await _portalStore.write(portal);
-    final DateTime now = _clock.now();
-    await _cache.writeReport(report);
-    await _cache.writeLastSuccessfulSync(now);
-    await _cache.writeLastAttemptedSync(now);
+    final bool wasSignedIn = state.value?.isSignedIn ?? false;
+    try {
+      await _sessions.invalidateAndWait();
+      if (replaceAccount) {
+        // Clear grades' own report before publishing or persisting the new
+        // account. Otherwise a failed write could leave account B paired with
+        // account A's last successful report on disk.
+        await _cache.clear();
+        await _wipeLinkedPersonalData();
+      }
+      await _store.write(credentials);
+      await _portalStore.write(portal);
+      final DateTime now = _clock.now();
+      await _cache.writeReport(report);
+      await _cache.writeLastSuccessfulSync(now);
+      await _cache.writeLastAttemptedSync(now);
 
-    _sessions.activate((username: credentials.username, portal: portal));
+      _sessions.activate((username: credentials.username, portal: portal));
 
-    // The grades controller watches this state, so publishing it rebuilds the
-    // overview onto the fresh cache — no manual invalidation needed.
-    state = AsyncData(
-      GradeAccountState(username: credentials.username, activePortal: portal),
-    );
-    return report;
+      // The grades controller watches this state, so publishing it rebuilds the
+      // overview onto the fresh cache — no manual invalidation needed.
+      state = AsyncData(
+        GradeAccountState(username: credentials.username, activePortal: portal),
+      );
+      return report;
+    } catch (error, stackTrace) {
+      if (wasSignedIn) {
+        // Once local replacement begins, any failure can leave the former
+        // credential/cache pair incomplete. Never present that old account as
+        // a successful connection under the new central identity.
+        state = AsyncError<GradeAccountState>(error, stackTrace);
+      }
+      rethrow;
+    }
   }
 
   /// Replaces the stored password after a portal-side password change.

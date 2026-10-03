@@ -59,6 +59,7 @@ class OnboardingStepView extends StatelessWidget {
     required this.onUniversityIdentifierChanged,
     required this.onUniversityPasswordChanged,
     required this.onUniversityStorageConsentChanged,
+    required this.onUniversityServicesBusyChanged,
     super.key,
   });
 
@@ -72,6 +73,7 @@ class OnboardingStepView extends StatelessWidget {
   final ValueChanged<String> onUniversityIdentifierChanged;
   final ValueChanged<String> onUniversityPasswordChanged;
   final ValueChanged<bool> onUniversityStorageConsentChanged;
+  final ValueChanged<bool> onUniversityServicesBusyChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +144,10 @@ class OnboardingStepView extends StatelessWidget {
         body: l10n.onboardingServicesBody,
         icon: AppIcons.link,
         children: <Widget>[
-          OnboardingUniversityServicesStep(identity: pendingUniversityIdentity),
+          OnboardingUniversityServicesStep(
+            identity: pendingUniversityIdentity,
+            onBusyChanged: onUniversityServicesBusyChanged,
+          ),
         ],
       ),
       OnboardingStep.notifications => _StepScaffold(
@@ -541,9 +546,15 @@ class _StepLoading extends StatelessWidget {
   const _StepLoading();
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-    child: Center(child: CircularProgressIndicator()),
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    label: context.l10n.commonLoadingSemanticLabel,
+    child: const ExcludeSemantics(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    ),
   );
 }
 

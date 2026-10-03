@@ -30,13 +30,14 @@ final Provider<List<DirectService>> connectedDirectServicesProvider =
       return connected;
     });
 
-/// Signs out of every currently connected direct service through that
-/// service's own canonical logout/credential-removal path — never a shortcut
-/// that touches its secure storage or cache directly.
+/// Signs out of every direct service through that service's own canonical
+/// logout/credential-removal path — never a shortcut that touches its secure
+/// storage or cache directly.
 ///
-/// A failure signing out of one service never rolls back or blocks another:
-/// each is attempted independently and reported on its own, so a partial
-/// result never reads as a full success.
+/// The connection snapshot is display-only and deliberately not trusted here:
+/// a controller can be loading or in error while credentials still exist. A
+/// failure signing out of one service never blocks another, and every outcome
+/// is reported so a partial result never reads as a full success.
 class SignOutEverywhereService {
   SignOutEverywhereService(this._ref);
 
@@ -57,9 +58,7 @@ class SignOutEverywhereService {
   Future<SignOutEverywhereResult> _signOutAllAfterPendingOperations() async {
     final List<DirectServiceSignOutOutcome> outcomes =
         <DirectServiceSignOutOutcome>[];
-    for (final DirectService service in _ref.read(
-      connectedDirectServicesProvider,
-    )) {
+    for (final DirectService service in DirectService.values) {
       final bool success = await _signOut(service);
       outcomes.add(
         DirectServiceSignOutOutcome(service: service, success: success),
@@ -97,23 +96,12 @@ class SignOutEverywhereService {
 
   Future<bool> _signOut(DirectService service) async {
     try {
-      switch (service) {
-        case DirectService.mail:
-          await _ref.read(mailAccountControllerProvider.notifier).signOut();
-        case DirectService.moodle:
-          await _ref
-              .read(moodleAccountControllerProvider.notifier)
-              .disconnect();
-        case DirectService.grades:
-          await _ref
-              .read(gradeAccountControllerProvider.notifier)
-              .deleteEverything();
-      }
+      await _ref.read(universityServiceAdapterProvider(service)).disconnect();
       return true;
     } catch (_) {
-      // Only the classification would ever be useful here, and each
-      // controller already keeps its own state signed-in on failure — that is
-      // exactly what lets a retry target just the services still connected.
+      // Only the classification is useful here. Every wipe is attempted on
+      // every run, so a retry also catches credentials a loading/error state
+      // could not advertise to the settings UI.
       return false;
     }
   }

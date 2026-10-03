@@ -147,16 +147,31 @@ Future<ProviderContainer> _pump(
 
 void main() {
   group('nobody signed in', () {
-    testWidgets('the tile is disabled and names no service', (
+    testWidgets('the recovery wipe remains available and is idempotent', (
       WidgetTester tester,
     ) async {
-      await _pump(tester, _Fixtures());
+      final _Fixtures fixtures = _Fixtures();
+      await _pump(tester, fixtures);
       await tester.pump();
 
       final ListTile tile = tester.widget(find.byType(ListTile));
-      expect(tile.enabled, isFalse);
-      expect(tile.onTap, isNull);
+      expect(tile.enabled, isTrue);
+      expect(tile.onTap, isNotNull);
       expect(find.text('Kein Hochschulzugang hinterlegt'), findsOneWidget);
+
+      await tester.tap(find.byType(ListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vollständig löschen'));
+      await tester.pumpAndSettle();
+
+      expect(fixtures.mailStore.clears, 1);
+      expect(fixtures.moodleStore.clears, 1);
+      expect(fixtures.gradeStore.clears, 1);
+      expect(fixtures.identityStore.clears, 1);
+      expect(
+        find.text('Hochschulzugang vollständig gelöscht.'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -231,7 +246,7 @@ void main() {
   });
 
   group('partial failure', () {
-    testWidgets('reports only the failed service and allows a scoped retry', (
+    testWidgets('reports only the failed service and retries every safe wipe', (
       WidgetTester tester,
     ) async {
       final _FlakyMoodleTokenStore flakyMoodle = _FlakyMoodleTokenStore(
@@ -349,6 +364,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(await fixtures.identityStore.read(), isNull);
+    expect(fixtures.mailStore.clears, 1);
+    expect(fixtures.moodleStore.clears, 1);
+    expect(fixtures.gradeStore.clears, 1);
   });
 
   testWidgets('identity clear failure is reported and identity remains', (

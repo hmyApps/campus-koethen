@@ -11,6 +11,8 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/application/university_service_connector.dart';
 import '../application/grade_account_controller.dart';
 import '../application/grades_controller.dart';
 import '../application/grades_providers.dart';
@@ -69,8 +71,8 @@ class _GradesOverviewScreenState extends ConsumerState<GradesOverviewScreen> {
       final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
       try {
         await ref
-            .read(gradeAccountControllerProvider.notifier)
-            .deleteEverything();
+            .read(universityServiceConnectorProvider)
+            .disconnect(DirectService.grades);
       } catch (_) {
         // A wipe that left the encrypted grades and their key on the device
         // must say so. Reporting "signed out" over a failed delete is the one

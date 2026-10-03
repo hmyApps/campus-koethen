@@ -19,9 +19,10 @@ class DirectServiceSignOutOutcome {
   final bool success;
 }
 
-/// The result of attempting to sign out of every currently connected direct
-/// service. Partial failure is a first-class case: successful sign-outs stay
-/// in effect and failed ones are reported so the user can retry just those.
+/// The result of attempting the canonical wipe for every direct service,
+/// regardless of its currently observable connection state. Partial failure
+/// is a first-class case: successful wipes stay in effect and failed ones are
+/// reported so the user can retry.
 class SignOutEverywhereResult {
   const SignOutEverywhereResult(
     this.outcomes, {

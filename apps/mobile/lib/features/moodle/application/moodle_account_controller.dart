@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/moodle_account.dart';
+import '../domain/moodle_failure.dart';
 import 'moodle_providers.dart';
 
 /// The publicly observable Moodle connection state.
@@ -23,9 +24,24 @@ class MoodleAccountController extends AsyncNotifier<MoodleAccount?> {
     required String username,
     required String password,
   }) async {
-    final MoodleAccount account = await ref
-        .read(moodleRepositoryProvider)
-        .connect(username: username, password: password);
+    final bool wasConnected = state.value != null;
+    final MoodleAccount account;
+    try {
+      account = await ref
+          .read(moodleRepositoryProvider)
+          .connect(username: username, password: password);
+    } catch (error, stackTrace) {
+      if (wasConnected &&
+          error is MoodleFailure &&
+          (error.kind == MoodleFailureKind.secureStorageUnavailable ||
+              error.kind == MoodleFailureKind.cacheUnavailable)) {
+        // Credential rejection happens before mutation and keeps the old
+        // account. These failures happen at the local replacement boundary,
+        // which must no longer be shown as a healthy old connection.
+        state = AsyncError<MoodleAccount?>(error, stackTrace);
+      }
+      rethrow;
+    }
     // A new account must not inherit anything the previous one left in
     // memory, even if disconnect() was never called in between.
     ref.read(moodleSessionGenerationProvider.notifier).advance();

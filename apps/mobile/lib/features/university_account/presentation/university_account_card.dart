@@ -28,6 +28,26 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
   final Set<DirectService> _busy = <DirectService>{};
   final Map<DirectService, String> _errors = <DirectService, String>{};
 
+  Future<void> _showSetup({
+    DirectService initialService = DirectService.mail,
+  }) async {
+    final UniversityServiceConnectionResult? result =
+        await showUniversityAccountSetupSheet(
+          context,
+          initialService: initialService,
+        );
+    if (!mounted || result == null) return;
+    final AppLocalizations l10n = context.l10n;
+    setState(() {
+      _errors.clear();
+      for (final DirectService service in result.failedReconnections) {
+        _errors[service] = l10n.universityAccountReconnectFailed(
+          universityServiceLabel(l10n, service),
+        );
+      }
+    });
+  }
+
   Future<void> _toggle(
     DirectService service, {
     required bool connected,
@@ -35,7 +55,7 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
   }) async {
     if (_busy.contains(service)) return;
     if (!connected && !hasIdentity) {
-      await showUniversityAccountSetupSheet(context, initialService: service);
+      await _showSetup(initialService: service);
       return;
     }
 
@@ -177,9 +197,7 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
               child: Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: TextButton.icon(
-                  onPressed: accountUnavailable
-                      ? null
-                      : () => showUniversityAccountSetupSheet(context),
+                  onPressed: accountUnavailable ? null : _showSetup,
                   icon: Icon(
                     hasIdentity
                         ? AppIcons.edit_outlined

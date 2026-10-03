@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/app/app_router.dart';
 import 'package:campus_koethen/core/cache/cache_providers.dart';
 import 'package:campus_koethen/core/cache/content_cache.dart';
@@ -52,6 +54,10 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
 }
 
 class _RecordingServiceAdapter implements UniversityServiceAdapter {
+  _RecordingServiceAdapter({this.connectGate, this.connectStarted});
+
+  final Completer<void>? connectGate;
+  final Completer<void>? connectStarted;
   UniversityIdentity? connectedWith;
   String? connectedWithDisplayName;
 
@@ -62,6 +68,10 @@ class _RecordingServiceAdapter implements UniversityServiceAdapter {
   }) async {
     connectedWith = identity;
     connectedWithDisplayName = displayName;
+    if (connectStarted != null && !connectStarted!.isCompleted) {
+      connectStarted!.complete();
+    }
+    await connectGate?.future;
   }
 
   @override
@@ -473,6 +483,106 @@ void main() {
 
     expect(mail.connectedWithDisplayName, 'Max Mustermensch');
     expect(moodle.connectedWithDisplayName, isNull);
+  });
+
+  testWidgets(
+    'an embedded connection locks every onboarding exit until it finishes',
+    (WidgetTester tester) async {
+      final Completer<void> connectGate = Completer<void>();
+      final Completer<void> connectStarted = Completer<void>();
+      final _RecordingServiceAdapter mail = _RecordingServiceAdapter(
+        connectGate: connectGate,
+        connectStarted: connectStarted,
+      );
+      await pumpApp(
+        tester,
+        serviceAdapters: <DirectService, UniversityServiceAdapter>{
+          DirectService.mail: mail,
+        },
+      );
+
+      for (int i = 0; i < 5; i++) {
+        await tester.tap(find.text('Weiter'));
+        await tester.pumpAndSettle();
+      }
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('onboarding-university-identifier')),
+        'student42',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('onboarding-university-password')),
+        'secret-password',
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Studentische E-Mail'));
+      await tester.pump();
+
+      await tester.tap(find.text('Ausgewählte Dienste verbinden'));
+      await connectStarted.future;
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, 'Alles überspringen'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Zurück'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Überspringen'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Weiter'))
+            .onPressed,
+        isNull,
+      );
+      expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
+      expect(
+        find.bySemanticsLabel('Ausgewählte Dienste werden verbunden'),
+        findsOneWidget,
+      );
+
+      connectGate.complete();
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Zurück'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
+    },
+  );
+
+  test('reuse consent explicitly covers secure storage and later use', () {
+    final String de = lookupAppLocalizations(
+      AppLocales.german,
+    ).universityAccountReuseConsent;
+    final String en = lookupAppLocalizations(
+      AppLocales.english,
+    ).universityAccountReuseConsent;
+
+    expect(de, contains('sicheren Gerätespeicher'));
+    expect(de, contains('später'));
+    expect(de, contains('dienstbezogen'));
+    expect(en, contains('secure device storage'));
+    expect(en, contains('later'));
+    expect(en, contains('per service'));
   });
 
   testWidgets('the notification step is eighth and enabled by default', (

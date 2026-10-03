@@ -36,6 +36,7 @@ class ScreenHeader extends StatelessWidget {
     this.eyebrow,
     this.actions,
     this.showBack,
+    this.backEnabled = true,
     this.singleLineTitle = false,
     this.rule = true,
     super.key,
@@ -53,6 +54,7 @@ class ScreenHeader extends StatelessWidget {
 
   /// Whether to offer a way back. Defaults to "whenever there is one".
   final bool? showBack;
+  final bool backEnabled;
 
   /// Keep names that must not break within a word on one ellipsized line.
   final bool singleLineTitle;
@@ -125,7 +127,7 @@ class ScreenHeader extends StatelessWidget {
                 if (back)
                   Padding(
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
-                    child: _BackButton(),
+                    child: _BackButton(enabled: backEnabled),
                   ),
                 const Spacer(),
                 ...trailing,
@@ -139,7 +141,7 @@ class ScreenHeader extends StatelessWidget {
                 // than the rule beneath it.
                 Padding(
                   padding: const EdgeInsets.only(right: AppSpacing.sm),
-                  child: _BackButton(),
+                  child: _BackButton(enabled: backEnabled),
                 ),
               Expanded(child: heading),
               if (!stacked && trailing.isNotEmpty) ...<Widget>[
@@ -187,10 +189,14 @@ bool _controlsFitBesideTitle(BuildContext context) =>
 
 /// The back control, in the app's own shape rather than the platform's.
 class _BackButton extends StatelessWidget {
+  const _BackButton({required this.enabled});
+
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      onPressed: () => Navigator.of(context).maybePop(),
+      onPressed: enabled ? () => Navigator.of(context).maybePop() : null,
       tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       icon: const Icon(AppIcons.arrow_back),
       padding: EdgeInsets.zero,
@@ -217,6 +223,7 @@ class ScreenScaffold extends StatelessWidget {
     this.eyebrow,
     this.actions,
     this.showBack,
+    this.backEnabled = true,
     this.singleLineTitle = false,
     this.controls,
     this.floatingActionButton,
@@ -227,6 +234,7 @@ class ScreenScaffold extends StatelessWidget {
   final String? eyebrow;
   final List<Widget>? actions;
   final bool? showBack;
+  final bool backEnabled;
   final bool singleLineTitle;
 
   /// Controls that stay put while the body scrolls — a view switcher, a day
@@ -258,6 +266,7 @@ class ScreenScaffold extends StatelessWidget {
               eyebrow: eyebrow,
               actions: actions,
               showBack: showBack,
+              backEnabled: backEnabled,
               singleLineTitle: singleLineTitle,
             ),
             ?controls,

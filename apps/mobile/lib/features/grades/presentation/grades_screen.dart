@@ -7,8 +7,6 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
-import '../../settings/domain/direct_service.dart';
-import '../../university_account/presentation/university_identity_auto_connect.dart';
 import '../application/grade_account_controller.dart';
 import 'grade_messages.dart';
 import 'grade_setup_screen.dart';
@@ -50,11 +48,7 @@ class GradesScreen extends ConsumerWidget {
       ),
       data: (GradeAccountState state) => state.isSignedIn
           ? const GradesOverviewScreen()
-          : UniversityIdentityAutoConnect(
-              service: DirectService.grades,
-              builder: (BuildContext context, Object? autoConnectError) =>
-                  GradeSetupScreen(autoConnectError: autoConnectError),
-            ),
+          : const GradeSetupScreen(),
     );
   }
 }

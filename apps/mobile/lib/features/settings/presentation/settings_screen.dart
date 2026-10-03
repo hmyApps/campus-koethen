@@ -51,18 +51,12 @@ class SettingsScreen extends ConsumerWidget {
             .map((Canteen canteen) => canteen.displayName)
             .firstOrNull ??
         l10n.settingsPreferredCanteenNone;
-    final List<TimetableGroup> timetableGroups =
-        ref.watch(timetableGroupsProvider).value?.value ??
-        const <TimetableGroup>[];
-    final String? timetableGroupId = ref.watch(
-      selectedTimetableGroupIdProvider,
-    );
+    final TimetableGroup? timetableGroup = ref
+        .watch(selectedTimetableGroupProvider)
+        .value
+        ?.value;
     final String timetableGroupName =
-        timetableGroups
-            .where((TimetableGroup group) => group.id == timetableGroupId)
-            .map((TimetableGroup group) => group.shortName)
-            .firstOrNull ??
-        l10n.settingsTimetableGroupNone;
+        timetableGroup?.shortName ?? l10n.settingsTimetableGroupNone;
 
     return ScreenScaffold(
       eyebrow: ModuleCategory.app.label(l10n),

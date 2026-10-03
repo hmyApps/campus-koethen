@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
@@ -307,6 +309,53 @@ void main() {
         findsNothing,
       );
     });
+  });
+
+  testWidgets('announces and locks the grade sign-in loading state', (
+    WidgetTester tester,
+  ) async {
+    _tall(tester);
+    final FakeGradesGateway gateway = FakeGradesGateway()
+      ..pendingReport = Completer<GradeReport>();
+    await pumpScreen(
+      tester,
+      const GradeSetupScreen(),
+      overrides: _grades(
+        gateway: gateway,
+        store: InMemoryGradeCredentialStore(),
+        cache: InMemoryGradeCacheStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'testuser');
+    await tester.enterText(find.byType(TextFormField).at(1), 'test-pw');
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.tap(find.text('Anmelden und Noten laden'));
+    await tester.pump();
+
+    expect(find.text('Noten werden geladen …'), findsOneWidget);
+    expect(find.bySemanticsLabel('Noten werden aktualisiert'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('Passwort anzeigen'),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widgetList<PopScope>(find.byType(PopScope))
+          .any((PopScope scope) => !scope.canPop),
+      isTrue,
+    );
+
+    gateway.pendingReport!.complete(sampleReport());
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a long report builds only the rows that are on screen', (

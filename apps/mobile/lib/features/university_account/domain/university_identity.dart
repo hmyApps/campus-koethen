@@ -52,6 +52,9 @@ enum UniversityAccountFailureKind {
   identityMissing,
   secureStorageUnavailable,
   operationBlocked,
+  connectionRollbackIncomplete,
+  accountChangeCleanupIncomplete,
+  accountChangeRollbackIncomplete,
 }
 
 /// Safe, deliberately detail-free failure at the university identity boundary.

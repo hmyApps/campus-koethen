@@ -13,14 +13,13 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../university_account/application/university_account_controller.dart';
+import '../../university_account/application/university_service_connector.dart';
 import '../../university_account/domain/university_identity.dart';
 import '../../university_account/presentation/university_account_setup_sheet.dart'
     show universityAccountErrorMessage;
-import '../application/mail_account_controller.dart';
 import '../application/mail_providers.dart';
 import '../domain/hsa_mail_profile.dart';
 import '../domain/mail_credentials.dart';
-import 'mail_error_messages.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../app/app_modules.dart';
 
@@ -31,14 +30,8 @@ import '../../../app/app_modules.dart';
 /// is typed, that the connection is direct and encrypted, that campus servers
 /// never receive the credentials or any mail, and that the credentials are kept
 /// only in the device's secure keystore.
-///
-/// Reached only once `UniversityIdentityAutoConnect` has already tried (and,
-/// if [autoConnectError] is set, failed) the central identity on its own —
-/// this form is never the FIRST thing shown to someone who already stored one.
 class MailSetupScreen extends ConsumerStatefulWidget {
-  const MailSetupScreen({this.autoConnectError, super.key});
-
-  final Object? autoConnectError;
+  const MailSetupScreen({super.key});
 
   @override
   ConsumerState<MailSetupScreen> createState() => _MailSetupScreenState();
@@ -103,47 +96,36 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
       await ref
-          .read(mailAccountControllerProvider.notifier)
-          .signIn(
-            email: _emailController.text,
-            password: _passwordController.text,
+          .read(universityServiceConnectorProvider)
+          .connectWithIdentity(
+            DirectService.mail,
+            UniversityIdentity(
+              identifier: _emailController.text,
+              password: _passwordController.text,
+            ),
             displayName: _nameController.text,
+            retainIdentity: _reuseForOtherServices,
           );
       // Lets the password manager offer to store what was just entered. Only
       // after a successful sign-in: offering to save a password that turned
       // out to be wrong is worse than not offering at all.
       TextInput.finishAutofillContext();
-      if (_reuseForOtherServices) {
-        try {
-          await ref
-              .read(universityAccountControllerProvider.notifier)
-              .retainVerified(
-                UniversityIdentity(
-                  identifier: _emailController.text,
-                  password: _passwordController.text,
-                ),
-              );
-        } catch (_) {
-          // The mail sign-in already succeeded; a failure to also retain the
-          // shared identity must not be reported as if mail itself failed.
-          if (mounted) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(l10n.universityAccountSecureStorageError)),
-            );
-          }
-        }
-      }
       // On success the gate rebuilds into the inbox; nothing else to do here.
     } catch (error) {
       // If the user already left this screen (back/cancel), a late failure
       // must not surface on whatever screen they navigated to next.
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(mailFailureMessage(l10n, error))),
+        SnackBar(
+          content: Text(
+            universityAccountErrorMessage(l10n, DirectService.mail, error),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -171,169 +153,174 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
         ref.watch(universityAccountControllerProvider).value?.hasIdentity ??
         false;
 
-    return ScreenScaffold(
-      eyebrow: ModuleCategory.study.label(l10n),
-      title: l10n.mailTitle,
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          // Without this a password manager has nothing to fill and nothing to
-          // save, so the university password gets typed by hand — or pasted
-          // through the clipboard, which is worse.
-          child: AutofillGroup(
-            child: ListView(
-              padding: EdgeInsets.all(context.metrics.screenPadding),
-              children: <Widget>[
-                Text(l10n.mailSetupHeadline, style: text.titleLarge),
-                const SizedBox(height: AppSpacing.md),
-                if (widget.autoConnectError != null) ...<Widget>[
+    return PopScope(
+      canPop: !_busy,
+      child: ScreenScaffold(
+        eyebrow: ModuleCategory.study.label(l10n),
+        title: l10n.mailTitle,
+        backEnabled: !_busy,
+        body: SafeArea(
+          child: Form(
+            key: _formKey,
+            // Without this a password manager has nothing to fill and nothing to
+            // save, so the university password gets typed by hand — or pasted
+            // through the clipboard, which is worse.
+            child: AutofillGroup(
+              child: ListView(
+                padding: EdgeInsets.all(context.metrics.screenPadding),
+                children: <Widget>[
+                  Text(l10n.mailSetupHeadline, style: text.titleLarge),
+                  const SizedBox(height: AppSpacing.md),
                   _InfoCard(
-                    icon: AppIcons.error_outline,
-                    child: Text(
-                      universityAccountErrorMessage(
-                        l10n,
-                        DirectService.mail,
-                        widget.autoConnectError!,
-                      ),
-                    ),
+                    icon: AppIcons.lock_outline,
+                    child: Text(l10n.mailSetupIntro),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                ],
-                _InfoCard(
-                  icon: AppIcons.lock_outline,
-                  child: Text(l10n.mailSetupIntro),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                _InfoCard(
-                  icon: AppIcons.shield_outlined,
-                  child: Text(l10n.mailSetupPrivacy),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                _InfoCard(
-                  icon: AppIcons.info_outline,
-                  child: Text(l10n.aboutIndependenceNotice),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextFormField(
-                  controller: _nameController,
-                  enabled: !_busy,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const <String>[AutofillHints.name],
-                  decoration: InputDecoration(
-                    labelText: l10n.mailSetupNameLabel,
-                    helperText: l10n.mailSetupNameHint,
-                    helperMaxLines: 2,
-                    prefixIcon: const Icon(AppIcons.badge_outlined),
+                  _InfoCard(
+                    icon: AppIcons.shield_outlined,
+                    child: Text(l10n.mailSetupPrivacy),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextFormField(
-                  controller: _emailController,
-                  focusNode: _emailFocus,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const <String>[
-                    AutofillHints.username,
-                    AutofillHints.email,
-                  ],
-                  decoration: InputDecoration(
-                    labelText: l10n.mailSetupEmailLabel,
-                    hintText: l10n.mailSetupEmailHint,
-                    prefixIcon: const Icon(AppIcons.alternate_email),
-                  ),
-                  validator: (String? value) =>
-                      isValidEmailAddress(normalizeEmailAddress(value ?? ''))
-                      ? null
-                      : l10n.mailSetupInvalidEmail,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextFormField(
-                  controller: _passwordController,
-                  focusNode: _passwordFocus,
-                  enabled: !_busy,
-                  obscureText: _obscurePassword,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const <String>[AutofillHints.password],
-                  onFieldSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    labelText: l10n.mailSetupPasswordLabel,
-                    prefixIcon: const Icon(AppIcons.password_outlined),
-                    suffixIcon: IconButton(
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                      // The one icon button on this screen that used to have no
-                      // name at all, on the field where getting it wrong costs
-                      // the most. The label states what the tap will do.
-                      tooltip: _obscurePassword
-                          ? l10n.mailShowPassword
-                          : l10n.mailHidePassword,
-                      icon: Icon(
-                        _obscurePassword
-                            ? AppIcons.visibility_outlined
-                            : AppIcons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                  validator: (String? value) => (value == null || value.isEmpty)
-                      ? l10n.mailSetupPasswordRequired
-                      : null,
-                ),
-                if (!hasCentralIdentity) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
-                  CheckboxListTile(
-                    value: _reuseForOtherServices,
+                  _InfoCard(
+                    icon: AppIcons.info_outline,
+                    child: Text(l10n.aboutIndependenceNotice),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  TextFormField(
+                    controller: _nameController,
                     enabled: !_busy,
-                    controlAffinity: ListTileControlAffinity.leading,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const <String>[AutofillHints.name],
+                    decoration: InputDecoration(
+                      labelText: l10n.mailSetupNameLabel,
+                      helperText: l10n.mailSetupNameHint,
+                      helperMaxLines: 2,
+                      prefixIcon: const Icon(AppIcons.badge_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextFormField(
+                    controller: _emailController,
+                    focusNode: _emailFocus,
+                    enabled: !_busy,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const <String>[
+                      AutofillHints.username,
+                      AutofillHints.email,
+                    ],
+                    decoration: InputDecoration(
+                      labelText: l10n.mailSetupEmailLabel,
+                      hintText: l10n.mailSetupEmailHint,
+                      prefixIcon: const Icon(AppIcons.alternate_email),
+                    ),
+                    validator: (String? value) =>
+                        isValidEmailAddress(normalizeEmailAddress(value ?? ''))
+                        ? null
+                        : l10n.mailSetupInvalidEmail,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextFormField(
+                    controller: _passwordController,
+                    focusNode: _passwordFocus,
+                    enabled: !_busy,
+                    obscureText: _obscurePassword,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const <String>[AutofillHints.password],
+                    onFieldSubmitted: (_) => _submit(),
+                    decoration: InputDecoration(
+                      labelText: l10n.mailSetupPasswordLabel,
+                      prefixIcon: const Icon(AppIcons.password_outlined),
+                      suffixIcon: IconButton(
+                        onPressed: _busy
+                            ? null
+                            : () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                        // The one icon button on this screen that used to have no
+                        // name at all, on the field where getting it wrong costs
+                        // the most. The label states what the tap will do.
+                        tooltip: _obscurePassword
+                            ? l10n.mailShowPassword
+                            : l10n.mailHidePassword,
+                        icon: Icon(
+                          _obscurePassword
+                              ? AppIcons.visibility_outlined
+                              : AppIcons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
+                    validator: (String? value) =>
+                        (value == null || value.isEmpty)
+                        ? l10n.mailSetupPasswordRequired
+                        : null,
+                  ),
+                  if (!hasCentralIdentity) ...<Widget>[
+                    const SizedBox(height: AppSpacing.sm),
+                    CheckboxListTile(
+                      value: _reuseForOtherServices,
+                      enabled: !_busy,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.universityAccountReuseConsent),
+                      onChanged: (bool? value) => setState(
+                        () => _reuseForOtherServices = value ?? false,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.universityAccountReuseConsent),
-                    onChanged: (bool? value) =>
-                        setState(() => _reuseForOtherServices = value ?? false),
+                    secondary: const Icon(AppIcons.download_outlined),
+                    title: Text(l10n.settingsMailDownloadAttachments),
+                    subtitle: Text(
+                      l10n.settingsMailDownloadAttachmentsSubtitle,
+                    ),
+                    value: settings.mailDownloadAttachments,
+                    onChanged: _busy
+                        ? null
+                        : (bool value) => ref
+                              .read(settingsProvider.notifier)
+                              .setMailDownloadAttachments(value),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    child: _busy
+                        ? Semantics(
+                            liveRegion: true,
+                            label: l10n.mailSetupChecking,
+                            excludeSemantics: true,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const SizedBox(
+                                  height: AppSizes.icon,
+                                  width: AppSizes.icon,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Text(l10n.mailSetupChecking),
+                              ],
+                            ),
+                          )
+                        : Text(l10n.mailSetupSubmit),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextButton.icon(
+                    onPressed: _busy ? null : _openWebmail,
+                    icon: const Icon(AppIcons.open_in_new),
+                    label: Text(l10n.mailSetupWebmailLink),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(AppIcons.download_outlined),
-                  title: Text(l10n.settingsMailDownloadAttachments),
-                  subtitle: Text(l10n.settingsMailDownloadAttachmentsSubtitle),
-                  value: settings.mailDownloadAttachments,
-                  onChanged: _busy
-                      ? null
-                      : (bool value) => ref
-                            .read(settingsProvider.notifier)
-                            .setMailDownloadAttachments(value),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                FilledButton(
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            const SizedBox(
-                              height: AppSizes.icon,
-                              width: AppSizes.icon,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(l10n.mailSetupChecking),
-                          ],
-                        )
-                      : Text(l10n.mailSetupSubmit),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                TextButton.icon(
-                  onPressed: _busy ? null : _openWebmail,
-                  icon: const Icon(AppIcons.open_in_new),
-                  label: Text(l10n.mailSetupWebmailLink),
-                ),
-              ],
+              ),
             ),
           ),
         ),

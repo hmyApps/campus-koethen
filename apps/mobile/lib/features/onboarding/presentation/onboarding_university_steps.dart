@@ -122,8 +122,10 @@ class _OnboardingUniversityAccessStepState
               labelText: l10n.universityAccountPasswordLabel,
               prefixIcon: const Icon(AppIcons.password_outlined),
               suffixIcon: IconButton(
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
+                onPressed: account.isLoading
+                    ? null
+                    : () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                 tooltip: _obscurePassword
                     ? l10n.mailShowPassword
                     : l10n.mailHidePassword,
@@ -141,6 +143,7 @@ class _OnboardingUniversityAccessStepState
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             value: widget.consent,
+            enabled: !account.isLoading,
             title: Text(l10n.universityAccountStorageConsent),
             onChanged: (bool? value) => widget.onConsentChanged(value ?? false),
           ),
@@ -170,9 +173,14 @@ class _OnboardingUniversityAccessStepState
 /// Lets the reader deliberately choose which protocol-specific services are
 /// connected with the one local credential draft.
 class OnboardingUniversityServicesStep extends ConsumerStatefulWidget {
-  const OnboardingUniversityServicesStep({required this.identity, super.key});
+  const OnboardingUniversityServicesStep({
+    required this.identity,
+    required this.onBusyChanged,
+    super.key,
+  });
 
   final UniversityIdentity? identity;
+  final ValueChanged<bool> onBusyChanged;
 
   @override
   ConsumerState<OnboardingUniversityServicesStep> createState() =>
@@ -208,49 +216,57 @@ class _OnboardingUniversityServicesStepState
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _busy = true;
       _generalError = null;
       _errors.clear();
     });
+    widget.onBusyChanged(true);
     final UniversityServiceConnector connector = ref.read(
       universityServiceConnectorProvider,
     );
-    for (final DirectService service in DirectService.values) {
-      if (!_selected.contains(service) || _connectedHere.contains(service)) {
-        continue;
-      }
-      final String? displayName = service == DirectService.mail
-          ? (_mailDisplayName.text.trim().isEmpty
-                ? null
-                : _mailDisplayName.text.trim())
-          : null;
-      try {
-        if (hasStoredIdentity) {
-          await connector.connect(service, displayName: displayName);
-        } else {
-          await connector.connectAndRetain(
-            service,
-            draft!,
-            displayName: displayName,
-          );
-          hasStoredIdentity = true;
-          TextInput.finishAutofillContext();
+    try {
+      for (final DirectService service in DirectService.values) {
+        if (!_selected.contains(service) || _connectedHere.contains(service)) {
+          continue;
         }
-        if (!mounted) return;
-        setState(() => _connectedHere.add(service));
-      } catch (error) {
-        if (!mounted) return;
-        setState(() {
-          _errors[service] = universityAccountErrorMessage(
-            context.l10n,
-            service,
-            error,
-          );
-        });
+        final String? displayName = service == DirectService.mail
+            ? (_mailDisplayName.text.trim().isEmpty
+                  ? null
+                  : _mailDisplayName.text.trim())
+            : null;
+        try {
+          if (hasStoredIdentity) {
+            await connector.connect(service, displayName: displayName);
+          } else {
+            await connector.connectAndRetain(
+              service,
+              draft!,
+              displayName: displayName,
+            );
+            hasStoredIdentity = true;
+            TextInput.finishAutofillContext();
+          }
+          if (!mounted) return;
+          setState(() => _connectedHere.add(service));
+        } catch (error) {
+          if (!mounted) return;
+          setState(() {
+            _errors[service] = universityAccountErrorMessage(
+              context.l10n,
+              service,
+              error,
+            );
+          });
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        widget.onBusyChanged(false);
       }
     }
-    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -280,10 +296,13 @@ class _OnboardingUniversityServicesStepState
             secondary: Icon(_serviceIcon(service)),
             title: Text(universityServiceLabel(l10n, service)),
             subtitle: _errors[service] != null
-                ? Text(
-                    _errors[service]!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                ? Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _errors[service]!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   )
                 : Text(
@@ -335,17 +354,27 @@ class _OnboardingUniversityServicesStepState
               ),
             ),
           ),
-        FilledButton.icon(
-          onPressed: _busy || _selected.isEmpty || !canUseIdentity
-              ? null
-              : _connectSelected,
-          icon: _busy
-              ? const SizedBox.square(
-                  dimension: AppSizes.iconSmall,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(AppIcons.link),
-          label: Text(l10n.onboardingUniversityConnectSelected),
+        Semantics(
+          liveRegion: _busy,
+          label: _busy ? l10n.onboardingUniversityConnecting : null,
+          child: FilledButton.icon(
+            onPressed: _busy || _selected.isEmpty || !canUseIdentity
+                ? null
+                : _connectSelected,
+            icon: _busy
+                ? const ExcludeSemantics(
+                    child: SizedBox.square(
+                      dimension: AppSizes.iconSmall,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : const Icon(AppIcons.link),
+            label: Text(
+              _busy
+                  ? l10n.onboardingUniversityConnecting
+                  : l10n.onboardingUniversityConnectSelected,
+            ),
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(

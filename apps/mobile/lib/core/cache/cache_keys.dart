@@ -105,8 +105,15 @@ abstract final class CacheKeys {
   static String canteenMenu(String locale, String slug) =>
       'canteen.menu.$locale.$slug';
 
-  /// Full study group list of the timetable.
+  /// Cached first page of the timetable group picker.
   static String timetableGroups(String locale) => 'timetable.groups.$locale';
+
+  /// One selected timetable group, independently available offline.
+  static String timetableGroup(String locale, String groupId) =>
+      'timetable.group.$locale.$groupId';
+
+  /// Small public timetable availability response.
+  static String timetableStatus(String locale) => 'timetable.status.$locale';
 
   /// Exact lesson information choices of one Campus study group.
   static String timetableLessonInfo(String locale, String groupId) =>

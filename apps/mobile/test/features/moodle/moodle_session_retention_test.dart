@@ -4,6 +4,7 @@
 import 'package:campus_koethen/features/moodle/application/moodle_account_controller.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_course_detail.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,6 +103,8 @@ void main() {
       await c.read(moodleCourseDetailProvider(courseId).future);
 
       final int generationBefore = c.read(moodleSessionGenerationProvider);
+      api.siteInfo = const MoodleSiteInfo(userId: 8, username: 'second');
+      final int clearsBefore = cache.clears;
       await c
           .read(moodleAccountControllerProvider.notifier)
           .connect(username: 'second', password: 'pw');
@@ -111,6 +114,8 @@ void main() {
         c.read(moodleSessionGenerationProvider),
         greaterThan(generationBefore),
       );
+      expect(cache.clears, clearsBefore + 1);
+      expect(cache.sections, isEmpty);
     },
   );
 }

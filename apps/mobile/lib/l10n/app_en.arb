@@ -255,6 +255,7 @@
   "timetableGroupSearchHint": "Short name, long name or department",
   "timetableGroupSearchEmptyTitle": "No matching course",
   "timetableGroupSearchEmptyMessage": "No course matches your search. Check the spelling or search for the department.",
+  "timetableGroupLoadMoreFailed": "Could not load more courses.",
   "timetableNoGroupsTitle": "No courses available",
   "timetableNoGroupsMessage": "No courses are listed at the moment.",
   "timetableNoSelectionTitle": "No course selected yet",
@@ -1292,7 +1293,7 @@
   "universityAccountPasswordRequired": "Enter your password",
   "universityAccountStorageConsent": "I want to store these credentials in this device's secure keystore.",
   "universityAccountStorageConsentRequired": "Please confirm local storage.",
-  "universityAccountReuseConsent": "Also use these credentials automatically for mail, Moodle and grades.",
+  "universityAccountReuseConsent": "Store these credentials in secure device storage and use them later, per service, for mail, Moodle and grades.",
   "universityAccountSetupSubmit": "Verify and store securely",
   "universityAccountSetupBusy": "Verifying access …",
   "universityAccountServiceMail": "Student email",
@@ -1310,6 +1311,15 @@
   "universityAccountIdentityMissing": "Store your university access first.",
   "universityAccountSecureStorageError": "The secure keystore is unavailable. No insecure fallback data was created.",
   "universityAccountDeletionInProgress": "The university access is currently being deleted completely. Wait a moment and try again.",
+  "universityAccountConnectionRollbackError": "The connection could not be rolled back completely after a storage failure. Delete the university access completely, then try again.",
+  "universityAccountChangeCleanupError": "The previous service connections could not be removed completely. The previous university access remains stored. Delete the university access completely, then try again.",
+  "universityAccountChangeRollbackError": "The account change could not be rolled back completely. Delete the university access completely before using a service again.",
+  "universityAccountReconnectFailed": "{service} could not be reconnected with the new credentials. The service remains disconnected; retry using the plus button.",
+  "@universityAccountReconnectFailed": {
+    "placeholders": {
+      "service": {"type": "String"}
+    }
+  },
   "universityAccountDeleteSubtitle": "Disconnects every service and deletes the central access last",
   "universityAccountDeleteConfirmNoServices": "The username/email address and password are deleted from this device's secure keystore. App settings, channel subscriptions, canteen favourites and tasks are kept.",
   "universityAccountDeleteConfirmAction": "Delete completely",
@@ -1357,6 +1367,7 @@
   "onboardingUniversityDraftHint": "The entry remains transient until sign-in succeeds and is never cached insecurely.",
   "onboardingUniversityMissingDraft": "Go back one step, enter valid credentials and consent to secure local storage.",
   "onboardingUniversityConnectSelected": "Connect selected services",
+  "onboardingUniversityConnecting": "Connecting selected services",
   "onboardingUniversitySeparateSessions": "The app reuses the same credentials, but signs in to each service separately and directly at the university. It does not create a shared SSO session.",
   "onboardingNotificationsTitle": "Notifications",
   "onboardingNotificationsBody": "Get timely reminders for your daily campus life.",

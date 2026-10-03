@@ -416,6 +416,8 @@
   "@timetableGroupSearchEmptyTitle": {},
   "timetableGroupSearchEmptyMessage": "Zu deiner Suche gibt es keinen Kurs. Prüfe die Schreibweise oder suche nach dem Bereich.",
   "@timetableGroupSearchEmptyMessage": {},
+  "timetableGroupLoadMoreFailed": "Weitere Kurse konnten nicht geladen werden.",
+  "@timetableGroupLoadMoreFailed": {},
   "timetableNoGroupsTitle": "Keine Kurse verfügbar",
   "@timetableNoGroupsTitle": {},
   "timetableNoGroupsMessage": "Zurzeit sind keine Kurse hinterlegt.",
@@ -2112,7 +2114,8 @@
   "universityAccountPasswordRequired": "Passwort eingeben",
   "universityAccountStorageConsent": "Ich möchte diese Zugangsdaten im sicheren Schlüsselspeicher dieses Geräts hinterlegen.",
   "universityAccountStorageConsentRequired": "Bitte bestätige die lokale Speicherung.",
-  "universityAccountReuseConsent": "Diese Zugangsdaten auch für Mail, Moodle und Noten automatisch verwenden.",
+  "universityAccountReuseConsent": "Diese Zugangsdaten im sicheren Gerätespeicher speichern und später dienstbezogen für Mail, Moodle und Noten verwenden.",
+  "@universityAccountReuseConsent": {},
   "universityAccountSetupSubmit": "Prüfen und sicher hinterlegen",
   "universityAccountSetupBusy": "Zugang wird geprüft …",
   "universityAccountServiceMail": "Studentische E-Mail",
@@ -2130,6 +2133,15 @@
   "universityAccountIdentityMissing": "Hinterlege zuerst deinen Hochschulzugang.",
   "universityAccountSecureStorageError": "Der sichere Schlüsselspeicher ist nicht verfügbar. Es wurden keine unsicheren Ersatzdaten angelegt.",
   "universityAccountDeletionInProgress": "Der Hochschulzugang wird gerade vollständig gelöscht. Warte kurz und versuche es danach erneut.",
+  "universityAccountConnectionRollbackError": "Die Verknüpfung konnte nach einem Speicherfehler nicht vollständig zurückgesetzt werden. Lösche den Hochschulzugang vollständig und versuche es danach erneut.",
+  "universityAccountChangeCleanupError": "Die bisherigen Dienstverbindungen konnten nicht vollständig entfernt werden. Der bisherige Hochschulzugang bleibt hinterlegt. Lösche den Hochschulzugang vollständig und versuche es erneut.",
+  "universityAccountChangeRollbackError": "Der Kontowechsel konnte nicht vollständig zurückgesetzt werden. Lösche den Hochschulzugang vollständig, bevor du einen Dienst erneut verwendest.",
+  "universityAccountReconnectFailed": "{service} konnte mit den neuen Zugangsdaten nicht erneut verbunden werden. Der Dienst bleibt getrennt; versuche es über Plus erneut.",
+  "@universityAccountReconnectFailed": {
+    "placeholders": {
+      "service": {"type": "String"}
+    }
+  },
   "universityAccountDeleteSubtitle": "Trennt alle Dienste und löscht den zentralen Zugang zuletzt",
   "universityAccountDeleteConfirmNoServices": "Benutzername/Mailadresse und Passwort werden aus dem sicheren Schlüsselspeicher dieses Geräts gelöscht. App-Einstellungen, Kanal-Abos, Mensafavoriten und Aufgaben bleiben erhalten.",
   "universityAccountDeleteConfirmAction": "Vollständig löschen",
@@ -2177,6 +2189,8 @@
   "onboardingUniversityDraftHint": "Die Eingabe bleibt bis zur erfolgreichen Anmeldung flüchtig und wird nicht unsicher zwischengespeichert.",
   "onboardingUniversityMissingDraft": "Geh einen Schritt zurück und gib gültige Zugangsdaten ein sowie die Zustimmung zur sicheren lokalen Speicherung.",
   "onboardingUniversityConnectSelected": "Ausgewählte Dienste verbinden",
+  "onboardingUniversityConnecting": "Ausgewählte Dienste werden verbunden",
+  "@onboardingUniversityConnecting": {},
   "onboardingUniversitySeparateSessions": "Die App verwendet dieselbe Kennung, meldet jeden Dienst aber separat und direkt bei der Hochschule an. Es entsteht keine gemeinsame SSO-Sitzung.",
   "onboardingNotificationsTitle": "Benachrichtigungen",
   "onboardingNotificationsBody": "Lass dich passend zu deinem Campus-Alltag erinnern.",

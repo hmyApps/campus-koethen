@@ -8,8 +8,6 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
-import '../../settings/domain/direct_service.dart';
-import '../../university_account/presentation/university_identity_auto_connect.dart';
 import '../application/mail_account_controller.dart';
 import 'mail_error_messages.dart';
 import 'mail_inbox_screen.dart';
@@ -49,13 +47,8 @@ class MailScreen extends ConsumerWidget {
           ),
         ),
       ),
-      data: (MailAccountState state) => state.isSignedIn
-          ? const MailInboxScreen()
-          : UniversityIdentityAutoConnect(
-              service: DirectService.mail,
-              builder: (BuildContext context, Object? autoConnectError) =>
-                  MailSetupScreen(autoConnectError: autoConnectError),
-            ),
+      data: (MailAccountState state) =>
+          state.isSignedIn ? const MailInboxScreen() : const MailSetupScreen(),
     );
   }
 }

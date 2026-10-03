@@ -27,6 +27,7 @@ class StatusBanner extends StatelessWidget {
     this.tone = StatusTone.info,
     this.icon,
     this.action,
+    this.liveRegion = false,
     super.key,
   });
 
@@ -37,6 +38,7 @@ class StatusBanner extends StatelessWidget {
 
   /// What to do about it, where there is something to do.
   final Widget? action;
+  final bool liveRegion;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +66,7 @@ class StatusBanner extends StatelessWidget {
 
     return Semantics(
       container: true,
+      liveRegion: liveRegion,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.surface,

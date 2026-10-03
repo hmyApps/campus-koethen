@@ -139,6 +139,66 @@ void main() {
       },
     );
 
+    test(
+      'switching accounts invalidates memory and wipes the old cache',
+      () async {
+        final gateway = FakeMailGateway();
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        final cache = MemoryMailCache();
+        await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        final controller = container.read(
+          mailAccountControllerProvider.notifier,
+        );
+        await container.read(mailAccountControllerProvider.future);
+        final int generationBefore = controller.sessionGeneration;
+
+        await controller.signIn(
+          email: 'other@hs-anhalt.de',
+          password: 'new-pw',
+        );
+
+        expect(controller.sessionGeneration, greaterThan(generationBefore));
+        expect(await cache.readHeaders(), isEmpty);
+        expect(store.lastWritten?.emailAddress, 'other@hs-anhalt.de');
+        expect(
+          container
+              .read(mailAccountControllerProvider)
+              .requireValue
+              .emailAddress,
+          'other@hs-anhalt.de',
+        );
+      },
+    );
+
+    test(
+      'a failed account-switch wipe never leaves the old mailbox shown as connected',
+      () async {
+        final store = InMemoryMailCredentialStore(clearAvailable: false)
+          ..write(_creds);
+        final container = _container(
+          gateway: FakeMailGateway(),
+          store: store,
+          cache: MemoryMailCache(),
+        );
+        final controller = container.read(
+          mailAccountControllerProvider.notifier,
+        );
+        await container.read(mailAccountControllerProvider.future);
+
+        await expectLater(
+          controller.signIn(email: 'other@hs-anhalt.de', password: 'new-pw'),
+          throwsA(isA<MailFailure>()),
+        );
+
+        expect(container.read(mailAccountControllerProvider).hasError, isTrue);
+      },
+    );
+
     test('rejects an invalid email without ever calling the server', () async {
       final gateway = FakeMailGateway();
       final store = InMemoryMailCredentialStore();

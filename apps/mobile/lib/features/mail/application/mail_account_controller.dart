@@ -92,9 +92,31 @@ class MailAccountController extends AsyncNotifier<MailAccountState> {
     } on TimeoutException {
       throw const MailFailure(MailFailureKind.timeout);
     }
-    await ref
-        .read(mailLocalDataCoordinatorProvider)
-        .writeCredentials(credentials);
+    final bool wasSignedIn = state.value?.isSignedIn ?? false;
+    try {
+      final coordinator = ref.read(mailLocalDataCoordinatorProvider);
+      final MailCredentials? previous = await coordinator.readCredentials();
+      if (previous?.emailAddress != address) {
+        // Record the wipe and invalidate every in-memory holder before the new
+        // account can become visible. This also clears artifacts left by an
+        // interrupted/legacy account even when no credential is present.
+        await coordinator.wipe(onIntentRecorded: _invalidateMailSession);
+      } else {
+        // A password refresh for the same mailbox may keep its encrypted
+        // cache, but outstanding requests still belong to the old
+        // authenticated session and must not write after the replacement.
+        _invalidateMailSession();
+      }
+      await coordinator.writeCredentials(credentials);
+    } catch (error, stackTrace) {
+      if (wasSignedIn) {
+        // Mutation has begun after successful remote verification. The old
+        // public account must no longer look usable when its local wipe or the
+        // replacement write could only be completed partially.
+        state = AsyncError<MailAccountState>(error, stackTrace);
+      }
+      rethrow;
+    }
     _removing = false;
 
     // The inbox watches this controller, so publishing the new account state is

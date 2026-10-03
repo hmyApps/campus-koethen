@@ -196,6 +196,29 @@ void main() {
       expect(back.height, greaterThanOrEqualTo(AppSizes.minTouchTarget));
     });
 
+    testWidgets('can visibly disable back navigation during an operation', (
+      WidgetTester tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        const Scaffold(
+          body: ScreenHeader(
+            title: 'Mensa',
+            showBack: true,
+            backEnabled: false,
+          ),
+        ),
+      );
+
+      final IconButton back = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(AppIcons.arrow_back),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(back.onPressed, isNull);
+    });
+
     testWidgets('sets the actions on the title line, not on a strip above it', (
       WidgetTester tester,
     ) async {

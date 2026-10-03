@@ -149,6 +149,64 @@ void main() {
       },
     );
 
+    test(
+      'switching accounts wipes the old report before publishing the new one',
+      () async {
+        final gateway = FakeGradesGateway(report: sampleReport('New account'));
+        final store = InMemoryGradeCredentialStore()..write(_creds);
+        final cache = InMemoryGradeCacheStore();
+        await cache.writeReport(sampleReport('Old account'));
+        final c = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+          clock: MutableClock(t0),
+        );
+        await c.read(gradeAccountControllerProvider.future);
+
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: 'other-user', password: 'new-pw');
+
+        expect(cache.clears, 1);
+        expect((await cache.readReport())!.entries.single.title, 'New account');
+        expect(store.lastWritten?.username, 'other-user');
+        expect(
+          c.read(gradeAccountControllerProvider).requireValue.username,
+          'other-user',
+        );
+      },
+    );
+
+    test(
+      'a failed account-switch cache wipe never leaves the old grades account shown as connected',
+      () async {
+        final gateway = FakeGradesGateway(report: sampleReport('New account'));
+        final store = InMemoryGradeCredentialStore()..write(_creds);
+        final cache = InMemoryGradeCacheStore();
+        await cache.writeReport(sampleReport('Old account'));
+        final c = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+          clock: MutableClock(t0),
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        cache.clearError = const GradeFailure(
+          GradeFailureKind.cacheUnavailable,
+        );
+
+        await expectLater(
+          c
+              .read(gradeAccountControllerProvider.notifier)
+              .signIn(username: 'other-user', password: 'new-password'),
+          throwsA(const GradeFailure(GradeFailureKind.cacheUnavailable)),
+        );
+
+        expect(c.read(gradeAccountControllerProvider).hasError, isTrue);
+      },
+    );
+
     test('does NOT store credentials when the portal rejects them', () async {
       final gateway = FakeGradesGateway(
         error: const GradeFailure(GradeFailureKind.invalidCredentials),
@@ -616,6 +674,7 @@ void main() {
             .read(gradeAccountControllerProvider.notifier)
             .signIn(username: _creds.username, password: _creds.password);
 
+        final int clearsBefore = cache.clears;
         cache.clearError = StateError('keystore unavailable');
         await expectLater(
           c.read(gradeAccountControllerProvider.notifier).deleteEverything(),
@@ -626,7 +685,7 @@ void main() {
         // the first error, so the portal choice is cleared regardless.
         expect(await store.read(), isNull);
         expect(portalStore.clears, 1);
-        expect(cache.clears, 1);
+        expect(cache.clears, clearsBefore + 1);
       },
     );
 

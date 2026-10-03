@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
 import 'package:campus_koethen/features/university_account/application/university_service_connector.dart';
@@ -41,12 +43,20 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
 }
 
 class _Adapter implements UniversityServiceAdapter {
+  _Adapter({this.connectGate, this.connectStarted});
+
+  final Completer<void>? connectGate;
+  final Completer<void>? connectStarted;
   UniversityIdentity? identity;
   int disconnects = 0;
   Object? connectError;
 
   @override
   Future<void> connect(UniversityIdentity value, {String? displayName}) async {
+    if (connectStarted != null && !connectStarted!.isCompleted) {
+      connectStarted!.complete();
+    }
+    await connectGate?.future;
     if (connectError != null) throw connectError!;
     identity = value;
   }
@@ -60,6 +70,9 @@ List<Override> _overrides({
   List<DirectService> connected = const <DirectService>[],
 }) => <Override>[
   connectedDirectServicesProvider.overrideWithValue(connected),
+  universityServiceConnectionSnapshotProvider.overrideWithValue(
+    UniversityServiceConnectionSnapshot(connected: connected.toSet()),
+  ),
   for (final MapEntry<DirectService, _Adapter> entry in adapters.entries)
     universityServiceAdapterProvider(entry.key).overrideWithValue(entry.value),
 ];
@@ -195,6 +208,116 @@ void main() {
     expect(find.textContaining('Verbindung fehlgeschlagen'), findsOneWidget);
     expect(store.value, isNull);
     expect(store.writes, 0);
+  });
+
+  testWidgets('setup sheet announces and locks credential verification', (
+    WidgetTester tester,
+  ) async {
+    final Completer<void> connectGate = Completer<void>();
+    final Completer<void> connectStarted = Completer<void>();
+    final _MemoryIdentityStore store = _MemoryIdentityStore();
+    final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
+      for (final DirectService service in DirectService.values)
+        service: service == DirectService.moodle
+            ? _Adapter(connectGate: connectGate, connectStarted: connectStarted)
+            : _Adapter(),
+    };
+    await _pump(tester, store: store, adapters: adapters);
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Moodle verbinden'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(
+        TextFormField,
+        'Hochschul-Benutzername oder -Mailadresse',
+      ),
+      'student@hs-anhalt.de',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Hochschul-Passwort'),
+      'secret',
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.ensureVisible(find.text('Prüfen und sicher hinterlegen'));
+    await tester.tap(find.text('Prüfen und sicher hinterlegen'));
+    await connectStarted.future;
+    await tester.pump();
+
+    expect(find.text('Zugang wird geprüft …'), findsOneWidget);
+    expect(find.bySemanticsLabel('Zugang wird geprüft …'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Abbrechen'))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widgetList<PopScope>(find.byType(PopScope))
+          .any((PopScope scope) => !scope.canPop),
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('Passwort anzeigen'),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    connectGate.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('account update reports a failed reconnect on its service row', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
+      for (final DirectService service in DirectService.values)
+        service: _Adapter(),
+    };
+    adapters[DirectService.moodle]!.connectError = StateError('rejected');
+    await _pump(
+      tester,
+      store: store,
+      adapters: adapters,
+      connected: const <DirectService>[
+        DirectService.mail,
+        DirectService.moodle,
+      ],
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Zugangsdaten aktualisieren'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(
+        TextFormField,
+        'Hochschul-Benutzername oder -Mailadresse',
+      ),
+      'replacement@hs-anhalt.de',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Hochschul-Passwort'),
+      'new-secret',
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.ensureVisible(find.text('Prüfen und sicher hinterlegen'));
+    await tester.tap(find.text('Prüfen und sicher hinterlegen'));
+    await tester.pumpAndSettle();
+
+    expect(store.value?.identifier, 'replacement@hs-anhalt.de');
+    expect(
+      find.textContaining('Moodle konnte mit den neuen Zugangsdaten'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('does not overflow at 320 dp and 200 percent text', (

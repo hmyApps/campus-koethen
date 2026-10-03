@@ -17,7 +17,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Empty by default: every service's own gate now reads the central identity
-/// on its way to its setup screen (`UniversityIdentityAutoConnect`), so
+/// on its way to its setup screen, so
 /// leaving this on the real, unmocked secure storage would hang a widget
 /// test's platform channel call instead of failing fast.
 class _InMemoryUniversityIdentityStore implements UniversityIdentityStore {

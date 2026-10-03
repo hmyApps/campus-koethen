@@ -51,7 +51,6 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
             value.value?.hasIdentity ?? false,
       ),
     );
-    final bool canDelete = connected.isNotEmpty || hasIdentity;
     final ColorScheme colors = Theme.of(context).colorScheme;
 
     return ListTile(
@@ -64,23 +63,18 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          : Icon(
-              AppIcons.delete_outline,
-              color: canDelete ? colors.error : null,
-            ),
+          : Icon(AppIcons.delete_outline, color: colors.error),
       title: Text(
         l10n.settingsSignOutEverywhere,
-        style: canDelete && !_busy ? TextStyle(color: colors.error) : null,
+        style: !_busy ? TextStyle(color: colors.error) : null,
       ),
       subtitle: Text(
         hasIdentity
             ? l10n.universityAccountDeleteSubtitle
             : l10n.settingsSignOutEverywhereSubtitle(connected.length),
       ),
-      enabled: canDelete && !_busy,
-      onTap: canDelete && !_busy
-          ? () => _confirmAndSignOut(context, ref, connected)
-          : null,
+      enabled: !_busy,
+      onTap: !_busy ? () => _confirmAndSignOut(context, ref, connected) : null,
     );
   }
 
@@ -133,8 +127,9 @@ class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
   }
 
   /// Runs the actual sign-out and reports the outcome. On a partial failure it
-  /// offers a retry that targets only the services still connected — already
-  /// signed-out ones are never asked to confirm again.
+  /// offers a retry. The service layer deliberately re-runs every idempotent
+  /// canonical wipe because controller error states are not proof that no
+  /// credentials remain.
   Future<void> _runSignOut(BuildContext context, WidgetRef ref) async {
     final AppLocalizations l10n = context.l10n;
     setState(() => _busy = true);

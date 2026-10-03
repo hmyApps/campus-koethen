@@ -47,6 +47,11 @@ class AppShell extends ConsumerWidget {
     final List<AppModule> tabs = config.tabs;
     final bool discloseUserTestData =
         ref.watch(appEnvironmentProvider).value?.value.userTestData ?? false;
+    final bool showApiConfigurationNotice = shouldShowApiConfigurationNotice(
+      ref.watch(apiConfigurationProblemProvider),
+    );
+    final bool topInsetConsumed =
+        discloseUserTestData || showApiConfigurationNotice;
 
     /// Branch index of each bar entry: the four modules, then More.
     int branchOf(int barIndex) =>
@@ -65,12 +70,19 @@ class AppShell extends ConsumerWidget {
           // A build with no (or a plaintext) Campus API address cannot load
           // anything. Said once at the top of the shell rather than as a
           // generic network error on every screen.
-          const ApiConfigurationNotice(),
+          if (showApiConfigurationNotice)
+            discloseUserTestData
+                ? MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: const ApiConfigurationNotice(),
+                  )
+                : const ApiConfigurationNotice(),
           // The notice has already spent the status bar inset on itself. Left
           // in place, every screen below it applies its own `SafeArea` to the
           // same inset and opens with a second empty strip.
           Expanded(
-            child: discloseUserTestData
+            child: topInsetConsumed
                 ? MediaQuery.removePadding(
                     context: context,
                     removeTop: true,

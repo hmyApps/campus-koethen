@@ -48,6 +48,10 @@ class FakeMoodleApiClient implements MoodleApiClient {
   /// Optional deterministic gate for logout-race tests.
   Completer<List<MoodleCourse>>? pendingCourses;
 
+  /// Optional deterministic gate for setup accessibility and race tests.
+  Completer<String>? pendingToken;
+  Completer<void>? tokenRequested;
+
   int courseCalls = 0;
   int deadlineCalls = 0;
   final List<int> statusRequestedFor = <int>[];
@@ -78,6 +82,10 @@ class FakeMoodleApiClient implements MoodleApiClient {
     required String username,
     required String password,
   }) async {
+    if (tokenRequested != null && !tokenRequested!.isCompleted) {
+      tokenRequested!.complete();
+    }
+    if (pendingToken != null) return pendingToken!.future;
     if (throwOnRequestToken != null) throw throwOnRequestToken!;
     return tokenToReturn;
   }

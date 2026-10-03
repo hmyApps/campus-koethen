@@ -80,7 +80,14 @@ class MoodleRepositoryImpl implements MoodleRepository {
       username: info.username ?? username,
       siteName: info.siteName,
     );
+    final MoodleToken? previous = await _tokens.read();
     await _sessions?.invalidateAndWait();
+    if (previous?.userId != token.userId) {
+      // The token has already been verified, but it is not made visible until
+      // every encrypted artifact belonging to the previous identity is gone.
+      // Null also clears orphaned cache from an interrupted old logout.
+      await _cache.clear();
+    }
     await _tokens.write(token);
     _sessions?.activate(token.userId);
     return token.toAccount();

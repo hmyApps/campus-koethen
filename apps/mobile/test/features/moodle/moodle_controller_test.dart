@@ -101,6 +101,35 @@ void main() {
     });
 
     test(
+      'a failed account-switch cache wipe never leaves the old Moodle account shown as connected',
+      () async {
+        final api = FakeMoodleApiClient()
+          ..siteInfo = const MoodleSiteInfo(userId: 8, username: 'second');
+        final tokens = InMemoryMoodleTokenStore()..token = _token;
+        final cache = InMemoryMoodleCacheStore()
+          ..clearError = const MoodleFailure(
+            MoodleFailureKind.cacheUnavailable,
+          );
+        final c = _container(
+          api: api,
+          tokens: tokens,
+          cache: cache,
+          clock: MutableClock(t0),
+        );
+        await c.read(moodleAccountControllerProvider.future);
+
+        await expectLater(
+          c
+              .read(moodleAccountControllerProvider.notifier)
+              .connect(username: 'second', password: 'pw'),
+          throwsA(const MoodleFailure(MoodleFailureKind.cacheUnavailable)),
+        );
+
+        expect(c.read(moodleAccountControllerProvider).hasError, isTrue);
+      },
+    );
+
+    test(
       'failed token deletion still attempts the cache wipe and stays connected',
       () async {
         final tokens = InMemoryMoodleTokenStore()

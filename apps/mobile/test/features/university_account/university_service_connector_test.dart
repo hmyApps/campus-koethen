@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
@@ -24,9 +25,15 @@ const UniversityIdentity _identity = UniversityIdentity(
   identifier: 'student@hs-anhalt.de',
   password: 'secret',
 );
+const UniversityIdentity _replacementIdentity = UniversityIdentity(
+  identifier: 'replacement@hs-anhalt.de',
+  password: 'new-secret',
+);
 
 class _MemoryIdentityStore implements UniversityIdentityStore {
   UniversityIdentity? value;
+  Object? writeError;
+  Object? nextWriteError;
   int writes = 0;
   int clears = 0;
 
@@ -35,6 +42,11 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
   @override
   Future<void> write(UniversityIdentity identity) async {
     writes++;
+    if (nextWriteError case final Object error) {
+      nextWriteError = null;
+      throw error;
+    }
+    if (writeError != null) throw writeError!;
     value = identity;
   }
 
@@ -48,16 +60,27 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
 class _RecordingAdapter implements UniversityServiceAdapter {
   UniversityIdentity? connectedWith;
   String? connectedWithDisplayName;
+  final List<UniversityIdentity> connections = <UniversityIdentity>[];
   int disconnects = 0;
   Object? connectError;
   Object? disconnectError;
+  final Set<String> rejectedIdentifiers = <String>{};
+  Completer<void>? connectStarted;
+  Completer<void>? connectGate;
 
   @override
   Future<void> connect(
     UniversityIdentity identity, {
     String? displayName,
   }) async {
-    if (connectError != null) throw connectError!;
+    connectStarted?.complete();
+    final Future<void>? pending = connectGate?.future;
+    if (pending != null) await pending;
+    if (connectError != null ||
+        rejectedIdentifiers.contains(identity.identifier)) {
+      throw connectError ?? StateError('rejected');
+    }
+    connections.add(identity);
     connectedWith = identity;
     connectedWithDisplayName = displayName;
   }
@@ -66,15 +89,20 @@ class _RecordingAdapter implements UniversityServiceAdapter {
   Future<void> disconnect() async {
     if (disconnectError != null) throw disconnectError!;
     disconnects++;
+    connectedWith = null;
+    connectedWithDisplayName = null;
   }
 }
 
 ProviderContainer _container(
   _MemoryIdentityStore store,
-  Map<DirectService, _RecordingAdapter> adapters,
-) => ProviderContainer(
+  Map<DirectService, _RecordingAdapter> adapters, {
+  UniversityServiceConnectionSnapshot? snapshot,
+}) => ProviderContainer(
   overrides: <Override>[
     universityIdentityStoreProvider.overrideWithValue(store),
+    if (snapshot != null)
+      universityServiceConnectionSnapshotProvider.overrideWithValue(snapshot),
     for (final MapEntry<DirectService, _RecordingAdapter> entry
         in adapters.entries)
       universityServiceAdapterProvider(
@@ -174,6 +202,358 @@ void main() {
       expect(store.writes, 1);
     },
   );
+
+  test('a supplied identity can connect without being retained', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore();
+    final _RecordingAdapter mail = _RecordingAdapter();
+    final ProviderContainer container = _container(
+      store,
+      <DirectService, _RecordingAdapter>{DirectService.mail: mail},
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(universityServiceConnectorProvider)
+        .connectWithIdentity(DirectService.mail, _identity);
+
+    expect(mail.connectedWith, _identity);
+    expect(store.value, isNull);
+    expect(store.writes, 0);
+  });
+
+  test(
+    'changing the retained identity wipes every service and reconnects the previously linked ones',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail, DirectService.moodle},
+          mailDisplayName: 'Max Mustermensch',
+        ),
+      );
+      addTearDown(container.dispose);
+
+      final UniversityServiceConnectionResult result = await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            _replacementIdentity,
+          );
+
+      expect(store.value, _replacementIdentity);
+      expect(result.identityChanged, isTrue);
+      expect(result.failedReconnections, isEmpty);
+      expect(result.reconnectedServices, <DirectService>{
+        DirectService.mail,
+        DirectService.moodle,
+      });
+      expect(adapters[DirectService.mail]!.disconnects, 1);
+      expect(adapters[DirectService.moodle]!.disconnects, 1);
+      expect(adapters[DirectService.grades]!.disconnects, 0);
+      expect(adapters[DirectService.grades]!.connections, <UniversityIdentity>[
+        _replacementIdentity,
+      ]);
+      expect(
+        adapters[DirectService.mail]!.connectedWithDisplayName,
+        'Max Mustermensch',
+      );
+      expect(adapters[DirectService.mail]!.connectedWith, _replacementIdentity);
+      expect(
+        adapters[DirectService.moodle]!.connectedWith,
+        _replacementIdentity,
+      );
+    },
+  );
+
+  test(
+    'a failed reconnect is returned per service and never revives its old connection',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      adapters[DirectService.moodle]!.rejectedIdentifiers.add(
+        _replacementIdentity.identifier,
+      );
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail, DirectService.moodle},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      final UniversityServiceConnectionResult result = await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            _replacementIdentity,
+          );
+
+      expect(store.value, _replacementIdentity);
+      expect(result.reconnectedServices, <DirectService>{DirectService.mail});
+      expect(result.failedReconnections, <DirectService>{DirectService.moodle});
+      expect(adapters[DirectService.moodle]!.connections, isEmpty);
+      expect(adapters[DirectService.moodle]!.connectedWith, isNull);
+      expect(adapters[DirectService.moodle]!.disconnects, 1);
+    },
+  );
+
+  test(
+    'revalidating the unchanged identity never wipes other services',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail, DirectService.moodle},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      final UniversityServiceConnectionResult result = await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(DirectService.grades, _identity);
+
+      expect(result.identityChanged, isFalse);
+      expect(store.writes, 0);
+      expect(adapters[DirectService.grades]!.connectedWith, _identity);
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    },
+  );
+
+  test(
+    'rejected replacement credentials leave the old identity and services untouched',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      adapters[DirectService.grades]!.rejectedIdentifiers.add(
+        _replacementIdentity.identifier,
+      );
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail, DirectService.moodle},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(
+              DirectService.grades,
+              _replacementIdentity,
+            ),
+        throwsStateError,
+      );
+
+      expect(store.value, _identity);
+      expect(store.writes, 0);
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    },
+  );
+
+  test(
+    'a cleanup failure restores the old service snapshot and keeps the old identity',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      adapters[DirectService.moodle]!.disconnectError = StateError(
+        'wipe failed',
+      );
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail, DirectService.moodle},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(
+              DirectService.grades,
+              _replacementIdentity,
+            ),
+        throwsA(
+          isA<UniversityAccountFailure>().having(
+            (UniversityAccountFailure failure) => failure.kind,
+            'kind',
+            UniversityAccountFailureKind.accountChangeCleanupIncomplete,
+          ),
+        ),
+      );
+
+      expect(store.value, _identity);
+      expect(adapters[DirectService.grades]!.disconnects, 1);
+      expect(adapters[DirectService.mail]!.connectedWith, _identity);
+      expect(adapters[DirectService.moodle]!.connectedWith, _identity);
+    },
+  );
+
+  test(
+    'a failed central replacement restores both central identity and old services',
+    () async {
+      final StateError retentionError = StateError('transient write failure');
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity
+        ..nextWriteError = retentionError;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            for (final DirectService service in DirectService.values)
+              service: _RecordingAdapter(),
+          };
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(
+              DirectService.grades,
+              _replacementIdentity,
+            ),
+        throwsA(same(retentionError)),
+      );
+
+      expect(store.value, _identity);
+      expect(store.writes, 2, reason: 'failed replacement plus old restore');
+      expect(adapters[DirectService.grades]!.disconnects, 1);
+      expect(adapters[DirectService.mail]!.connectedWith, _identity);
+    },
+  );
+
+  test(
+    'failed central retention compensates through the canonical disconnect',
+    () async {
+      final StateError retentionError = StateError('secure store unavailable');
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..writeError = retentionError;
+      final _RecordingAdapter mail = _RecordingAdapter();
+      final ProviderContainer container = _container(
+        store,
+        <DirectService, _RecordingAdapter>{DirectService.mail: mail},
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .connectAndRetain(DirectService.mail, _identity),
+        throwsA(same(retentionError)),
+      );
+
+      expect(mail.disconnects, 1);
+      expect(store.value, isNull);
+    },
+  );
+
+  test('a failed compensation is reported as an incomplete rollback', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..writeError = StateError('secure store unavailable');
+    final _RecordingAdapter mail = _RecordingAdapter()
+      ..disconnectError = StateError('wipe failed');
+    final ProviderContainer container = _container(
+      store,
+      <DirectService, _RecordingAdapter>{DirectService.mail: mail},
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container
+          .read(universityServiceConnectorProvider)
+          .connectAndRetain(DirectService.mail, _identity),
+      throwsA(
+        isA<UniversityAccountFailure>().having(
+          (UniversityAccountFailure failure) => failure.kind,
+          'kind',
+          UniversityAccountFailureKind.connectionRollbackIncomplete,
+        ),
+      ),
+    );
+  });
+
+  for (final DirectService service in DirectService.values) {
+    test(
+      'complete deletion waits for manual ${service.name} setup and wipes every service',
+      () async {
+        final Completer<void> connectStarted = Completer<void>();
+        final Completer<void> releaseConnect = Completer<void>();
+        final _MemoryIdentityStore store = _MemoryIdentityStore();
+        final Map<DirectService, _RecordingAdapter> adapters =
+            <DirectService, _RecordingAdapter>{
+              for (final DirectService candidate in DirectService.values)
+                candidate: _RecordingAdapter(),
+            };
+        adapters[service]!
+          ..connectStarted = connectStarted
+          ..connectGate = releaseConnect;
+        final ProviderContainer container = _container(store, adapters);
+        addTearDown(container.dispose);
+
+        final Future<void> connecting = container
+            .read(universityServiceConnectorProvider)
+            .connectAndRetain(service, _identity);
+        await connectStarted.future;
+        final Future<SignOutEverywhereResult> deleting = container
+            .read(signOutEverywhereServiceProvider)
+            .signOutAll();
+
+        releaseConnect.complete();
+        await connecting;
+        final SignOutEverywhereResult result = await deleting;
+
+        expect(result.isFullSuccess, isTrue);
+        expect(store.value, isNull);
+        for (final _RecordingAdapter adapter in adapters.values) {
+          expect(adapter.disconnects, 1);
+        }
+      },
+    );
+  }
 
   test('failed validation never stores the central password', () async {
     final _MemoryIdentityStore store = _MemoryIdentityStore();

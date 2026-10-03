@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_cache.dart';
@@ -137,6 +139,60 @@ void main() {
     // The connect gate is shown, not the overview.
     expect(find.text('Mit Moodle verbinden'), findsOneWidget);
     expect(find.text('Meine Kurse'), findsNothing);
+  });
+
+  testWidgets('announces and locks the Moodle connection state', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final FakeMoodleApiClient api = FakeMoodleApiClient()
+      ..pendingToken = Completer<String>()
+      ..tokenRequested = Completer<void>();
+    await pumpScreen(
+      tester,
+      const MoodleSetupScreen(),
+      overrides: _overrides(
+        api: api,
+        tokens: InMemoryMoodleTokenStore(),
+        cache: InMemoryMoodleCacheStore(),
+        clock: MutableClock(t0),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'student42');
+    await tester.enterText(find.byType(TextFormField).at(1), 'pw');
+    await tester.tap(find.text('Verbinden'));
+    await api.tokenRequested!.future;
+    await tester.pump();
+
+    expect(find.text('Verbindung wird hergestellt …'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Verbindung wird hergestellt …'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('Passwort anzeigen'),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widgetList<PopScope>(find.byType(PopScope))
+          .any((PopScope scope) => !scope.canPop),
+      isTrue,
+    );
+
+    api.pendingToken!.complete('tok-fake');
+    await tester.pumpAndSettle();
   });
 
   testWidgets('setup lock and shield follow the light and dark brand colour', (
