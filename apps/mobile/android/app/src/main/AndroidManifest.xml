@@ -57,6 +57,11 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="campuskoethen" android:host="calendar"/>
+            </intent-filter>
             <!-- Android-only system dispatch. The user's tap on the system
                  opening prompt is the explicit action that authorises the
                  immediate, one-shot balance read in Flutter. -->
@@ -68,6 +73,16 @@
                 android:name="android.nfc.action.TECH_DISCOVERED"
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
+        <receiver
+            android:name=".CalendarWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_info" />
+        </receiver>
         <!-- Zustellung der lokal vorausgeplanten Benachrichtigungen. Der erste
              Receiver zeigt einen fälligen Eintrag an, der zweite plant den
              gesamten Bestand nach einem Neustart oder einem App-Update neu

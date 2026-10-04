@@ -35,6 +35,7 @@ import '../features/requests/presentation/requests_screen.dart';
 import '../features/requests/presentation/submission_detail_screen.dart';
 import '../features/settings/presentation/channel_settings_screen.dart';
 import '../features/notifications/presentation/notification_settings_screen.dart';
+import '../features/calendar/home_widget/calendar_home_widget_settings_screen.dart';
 import '../features/settings/presentation/navigation_settings_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/todos/presentation/todos_screen.dart';
@@ -373,6 +374,11 @@ GoRouter createAppRouter({
                         path: 'notifications',
                         builder: (BuildContext _, GoRouterState _) =>
                             const NotificationSettingsScreen(),
+                      ),
+                      GoRoute(
+                        path: 'calendar-widget',
+                        builder: (BuildContext _, GoRouterState _) =>
+                            const CalendarHomeWidgetSettingsScreen(),
                       ),
                       GoRoute(
                         path: 'imprint',

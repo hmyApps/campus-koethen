@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="calendar_widget_background">#24151F</color>
+    <color name="calendar_widget_primary">#FFF3FA</color>
+    <color name="calendar_widget_secondary">#D5C1CD</color>
+</resources>

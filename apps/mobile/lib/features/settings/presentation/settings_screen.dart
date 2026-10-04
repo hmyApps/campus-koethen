@@ -87,6 +87,13 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(AppIcons.chevron_right),
             onTap: () => context.push(AppRoutes.settingsNotifications),
           ),
+          ListTile(
+            leading: const Icon(AppIcons.calendar_month_outlined),
+            title: Text(l10n.calendarHomeWidgetTitle),
+            subtitle: Text(l10n.calendarHomeWidgetSubtitle),
+            trailing: const Icon(AppIcons.chevron_right),
+            onTap: () => context.push(AppRoutes.settingsCalendarWidget),
+          ),
           SectionHeader(label: l10n.settingsSectionContent),
           ListTile(
             leading: const Icon(AppIcons.rss_feed_outlined),

@@ -1,0 +1,9 @@
+"widget.title" = "Kalender";
+"widget.description" = "Zeigt die naechsten Termine aus deinem lokalen Campus-Kalender.";
+"widget.disabled" = "In der App unter Einstellungen aktivieren.";
+"widget.empty" = "Keine anstehenden Termine";
+"widget.privateEvent" = "Termin";
+"widget.today" = "Heute";
+"widget.tomorrow" = "Morgen";
+"widget.allDay" = "Ganztags";
+"widget.updated" = "Stand %@";

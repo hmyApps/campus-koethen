@@ -166,6 +166,17 @@ abstract final class PreferenceKeys {
   static const String calendarShowFavouriteMeals =
       'calendar.favouriteMeals.enabled.v1';
 
+  /// `1` after the reader explicitly enables the native calendar home-screen
+  /// widget. No calendar payload is shared with the OS widget while absent.
+  static const String calendarHomeWidgetEnabled =
+      'calendar.homeWidget.enabled.v1';
+
+  /// `1` when event titles and locations may be copied to the private native
+  /// widget container. Off by default because a home screen may be visible
+  /// while the device is locked.
+  static const String calendarHomeWidgetShowDetails =
+      'calendar.homeWidget.showDetails.v1';
+
   // --- Local notifications (device-only, no registration) -----------------
   //
   // Four small scalars and nothing else. There is no token, no installation

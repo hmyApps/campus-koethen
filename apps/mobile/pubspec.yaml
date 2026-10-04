@@ -81,6 +81,9 @@ dependencies:
   timezone: ^0.11.1
   flutter_timezone: ^5.1.0
   app_settings: ^9.0.0
+  # Native Android/iOS home-screen widget bridge. The widget UI itself remains
+  # native; this only writes local payloads and requests a refresh.
+  home_widget: ^0.10.0
 
 dev_dependencies:
   flutter_test:

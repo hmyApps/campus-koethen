@@ -393,7 +393,21 @@ verschlüsselte und unverschlüsselte Textnachrichten lesen und senden, Geräte-
 sichtbar machen und vollständig abmelden/lokal wipen. Offline-, Retry- und Logout-Race-Tests sind
 grün.
 
-### Phase 14C – Anny: Freigabe, Mandant, SSO/OAuth und Profil
+### Phase 14C – Anny: Freigabe, Mandant, SSO/OAuth und Profil _(zurückgestellt)_
+
+**Planungsentscheidung vom 4. Oktober 2026:** Die Anny-Arbeitspakete 14C–E werden auf unbestimmte
+Zeit nach hinten gestellt. Sie sind weder das nächste Entwicklungspaket noch Bestandteil eines
+derzeit vorgesehenen Releases. Die Nummerierung bleibt ausschließlich zur Nachverfolgbarkeit des
+bereits beschriebenen Umfangs erhalten und legt keine Ausführungsreihenfolge fest. Andere geplante
+Erweiterungen dürfen unabhängig davon priorisiert und umgesetzt werden.
+
+Die Arbeit an Anny wird erst wieder aufgenommen, wenn alle unten aufgeführten externen Gates in
+einem dokumentierten Freigabe- und Konfigurationspaket vollständig geklärt sind und der Umfang
+anschließend erneut ausdrücklich zur Umsetzung freigegeben wurde. Bis dahin werden kein
+Anny-Modul, keine Route, kein Deep Link, kein OAuth-Callback, kein Datenfluss und keine
+Hintergrundarbeit implementiert. Auch `ANNY_SPORTS_ENABLED` wird nicht vorab als wirkungsloser
+Platzhalter eingeführt. Ein Link zum öffentlichen Hochschulsport-Bereich im externen Browser wäre
+keine Anny-Integration und begründet keine API-, SSO-, Buchungs- oder Datenweitergabefreigabe.
 
 | Problem                                                                                                                                   | Lösung                                                                                                                                                                                                                                                                                                                                                                       | Betroffene Dateien                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -409,7 +423,7 @@ kann weder durch fremde Origins noch Replay übernommen werden. „Profil vorhan
 „falscher Mandant", Abbruch, Ablauf, Offline und Logout-Race sind getestet; der normale
 Production-Build enthält keinen erreichbaren Anny-Codepfad.
 
-### Phase 14D – Hochschulsport-Katalog und Buchung
+### Phase 14D – Hochschulsport-Katalog und Buchung _(zurückgestellt)_
 
 | Problem                                                                                                                    | Lösung                                                                                                                                                                                                                                                                                                                                                                                                                          | Betroffene Dateien                                                                                                                                                                                 |
 | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -425,7 +439,7 @@ Doppel-Tap, Timeout-Reconciliation, ausgebucht, kostenpflichtig, Offline und vol
 gegen einen freigegebenen Testmandanten nachgewiesen. Automatisierte Tests erzeugen keine realen
 Produktivbuchungen.
 
-### Phase 14E – Markierte Kurse im Kalender und Buchungs-QR
+### Phase 14E – Markierte Kurse im Kalender und Buchungs-QR _(zurückgestellt)_
 
 | Problem                                                                                                                 | Lösung                                                                                                                                                                                                                                                                                                                                                                                                 | Betroffene Dateien                                                                                                                                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -439,7 +453,7 @@ Backend-Leak in den Kalender übernommen. Ein QR wird nur aus einer validierten 
 Ticketantwort für die angemeldete Buchung angezeigt und nach Trennung/Wipe nicht mehr gerendert.
 Android und iOS sind mit Testticket sowie einem Kurs ohne QR-Funktion geprüft.
 
-### Offene Gates vor dem Start von Phase 14C–E
+### Rückstellungs- und Wiederaufnahme-Gates für Phase 14C–E
 
 1. Welcher exakte Anny-Tenant, welche Organisations-/Community-ID und welche API-Origins gehören
    verbindlich zum Hochschulsport der Hochschule Anhalt?
@@ -455,8 +469,11 @@ Android und iOS sind mit Testticket sowie einem Kurs ohne QR-Funktion geprüft.
 6. Darf der öffentliche Kurskatalog serverseitig gecacht und über die Campus API weitergegeben
    werden? Falls nicht, bleibt ausschließlich ein externer Link statt einer nativen Integration.
 
-Diese Antworten sind Implementierungs- und teilweise Release-Gates. Es werden weder IDs, Scopes,
-URLs noch Rechte aus der öffentlichen Website erraten.
+Diese Antworten sind zwingende Wiederaufnahme-, Implementierungs- und teilweise Release-Gates.
+Ein Teilnachweis genügt nicht für den Start. Es werden weder IDs, Scopes, URLs noch Rechte aus der
+öffentlichen Website erraten. Sobald das vollständige Paket vorliegt, werden Aktualität und
+Gültigkeit der Anny-Verträge erneut geprüft und aus 14C–E ein eigener, neu zu bestätigender
+Ausführungsplan mit Zielrelease erstellt.
 
 ### Phase 14F – Nextcloud-Dateiexplorer
 

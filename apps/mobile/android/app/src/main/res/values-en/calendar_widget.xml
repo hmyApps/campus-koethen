@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_widget_title">Campus Calendar</string>
+    <string name="calendar_widget_description">Your next local calendar events</string>
+    <string name="calendar_widget_disabled">Enable in Campus Köthen</string>
+    <string name="calendar_widget_empty">No upcoming events</string>
+    <string name="calendar_widget_private_event">Event</string>
+    <string name="calendar_widget_today">Today</string>
+    <string name="calendar_widget_tomorrow">Tomorrow</string>
+    <string name="calendar_widget_all_day">all day</string>
+    <string name="calendar_widget_updated">Updated: %1$s</string>
+</resources>

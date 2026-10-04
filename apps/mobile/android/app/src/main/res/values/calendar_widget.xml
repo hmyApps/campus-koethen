@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="calendar_widget_background">#FFF7FB</color>
+    <color name="calendar_widget_primary">#32102A</color>
+    <color name="calendar_widget_secondary">#66515F</color>
+
+    <style name="CalendarWidgetRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <style name="CalendarWidgetTime">
+        <item name="android:layout_width">92dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/calendar_widget_secondary</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="CalendarWidgetEvent">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/calendar_widget_primary</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <string name="calendar_widget_title">Campus-Kalender</string>
+    <string name="calendar_widget_description">Die nächsten lokalen Kalendertermine</string>
+    <string name="calendar_widget_disabled">In Campus Köthen aktivieren</string>
+    <string name="calendar_widget_empty">Keine anstehenden Termine</string>
+    <string name="calendar_widget_private_event">Termin</string>
+    <string name="calendar_widget_today">Heute</string>
+    <string name="calendar_widget_tomorrow">Morgen</string>
+    <string name="calendar_widget_all_day">ganztägig</string>
+    <string name="calendar_widget_updated">Stand: %1$s</string>
+</resources>

@@ -132,4 +132,5 @@ abstract final class AppRoutes {
   /// Local notification settings — the global opt-in, the three category
   /// switches and the permission banner.
   static const String settingsNotifications = '/more/settings/notifications';
+  static const String settingsCalendarWidget = '/more/settings/calendar-widget';
 }

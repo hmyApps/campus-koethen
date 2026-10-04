@@ -1,0 +1,9 @@
+"widget.title" = "Calendar";
+"widget.description" = "Shows upcoming events from your local campus calendar.";
+"widget.disabled" = "Enable in the app settings.";
+"widget.empty" = "No upcoming events";
+"widget.privateEvent" = "Event";
+"widget.today" = "Today";
+"widget.tomorrow" = "Tomorrow";
+"widget.allDay" = "All day";
+"widget.updated" = "Updated %@";

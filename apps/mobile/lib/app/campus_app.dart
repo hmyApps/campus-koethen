@@ -11,6 +11,7 @@ import '../core/theme/appearance_preferences.dart';
 import '../core/theme/app_theme.dart';
 import '../features/campusmap/presentation/room_catalog_refresh_host.dart';
 import '../features/canteen/presentation/canteen_balance_launch_host.dart';
+import '../features/calendar/home_widget/calendar_home_widget_host.dart';
 import '../features/notifications/presentation/notification_host.dart';
 import '../l10n/l10n.dart';
 import 'app_router.dart';
@@ -57,16 +58,17 @@ class CampusApp extends ConsumerWidget {
       // The notification runtime needs a locale for the Android channel names
       // and a navigator for a tap to land in, so it wraps the router's output
       // rather than sitting above the MaterialApp.
-      builder: (BuildContext context, Widget? child) =>
-          CanteenBalanceLaunchHost(
-            child: NotificationHost(
-              child: AppSyncHost(
-                child: RoomCatalogRefreshHost(
-                  child: child ?? const SizedBox.shrink(),
-                ),
+      builder: (BuildContext context, Widget? child) => CalendarHomeWidgetHost(
+        child: CanteenBalanceLaunchHost(
+          child: NotificationHost(
+            child: AppSyncHost(
+              child: RoomCatalogRefreshHost(
+                child: child ?? const SizedBox.shrink(),
               ),
             ),
           ),
+        ),
+      ),
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(accentScheme: accentScheme, motion: motion),
       darkTheme: AppTheme.dark(accentScheme: accentScheme, motion: motion),

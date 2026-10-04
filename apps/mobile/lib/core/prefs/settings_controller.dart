@@ -248,6 +248,8 @@ class SettingsController extends Notifier<AppSettings> {
       PreferenceKeys.preferredTimetableGroup,
       PreferenceKeys.defaultBuilding,
       PreferenceKeys.mailDownloadAttachments,
+      PreferenceKeys.calendarHomeWidgetEnabled,
+      PreferenceKeys.calendarHomeWidgetShowDetails,
     ]) {
       // Each key on its own: a throw used to abandon the loop, leaving a half
       // reset behind a snack bar that said it was done — and the untouched
