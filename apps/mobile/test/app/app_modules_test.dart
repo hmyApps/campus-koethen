@@ -57,6 +57,7 @@ void main() {
         AppModule.grades,
         AppModule.studentService,
         AppModule.todos,
+        AppModule.hsaKi,
       ]);
       expect(AppModule.inCategory(ModuleCategory.campus), <AppModule>[
         AppModule.news,
@@ -86,7 +87,7 @@ void main() {
       expect(AppModule.settings.pinnable, isFalse);
       expect(AppModule.about.pinnable, isFalse);
       expect(AppModule.pinnableModules, isNot(contains(AppModule.settings)));
-      expect(AppModule.pinnableModules, hasLength(13));
+      expect(AppModule.pinnableModules, hasLength(14));
     });
 
     test('the pinnable modules are the leading values of the enum', () {
@@ -126,6 +127,7 @@ void main() {
         AppModule.grades,
         AppModule.studentService,
         AppModule.todos,
+        AppModule.hsaKi,
       ]);
       expect(modulesUnder(entries, ModuleCategory.campus), <AppModule>[
         AppModule.campusMap,

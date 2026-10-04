@@ -1,0 +1,222 @@
+// Campus Köthen App · AGPL-3.0-only
+// Copyright © 2026 Leviora Studio and Jona Loreen Sommer
+
+import 'package:cookie_jar/cookie_jar.dart';
+import 'package:dio/dio.dart';
+import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+
+import '../domain/hsa_ki_failure.dart';
+import '../domain/hsa_ki_profile.dart';
+import 'hawki_html_parser.dart';
+
+/// One short-lived HTTPS session against [HsaKiProfile.host] only.
+///
+/// Unlike the JSF-based HISinOne portal this app also talks to, HAWKI is a
+/// plain modern Laravel app: ordinary redirects, one CSRF convention
+/// (`X-CSRF-TOKEN` read fresh off the page being posted to, confirmed
+/// 2026-10-04 from the real login request), no multi-hop host allowlisting
+/// needed. The cookie jar is in-memory and lives only as long as this
+/// session.
+class HawkiSession {
+  HawkiSession({HttpClientAdapter? adapter}) {
+    _jar = CookieJar();
+    _dio = Dio(
+      BaseOptions(
+        connectTimeout: _timeout,
+        receiveTimeout: _timeout,
+        sendTimeout: _timeout,
+        validateStatus: (_) => true, // status handled explicitly below
+      ),
+    );
+    _dio.interceptors.add(CookieManager(_jar));
+    if (adapter != null) _dio.httpClientAdapter = adapter;
+  }
+
+  static const Duration _timeout = Duration(seconds: 15);
+  static const HsaKiProfile _profile = HsaKiProfile();
+
+  late final Dio _dio;
+  late final CookieJar _jar;
+
+  Uri _validated(Uri uri) {
+    if (!_profile.allows(uri)) {
+      throw const HsaKiFailure(HsaKiFailureKind.tlsOrHostRejected);
+    }
+    return uri;
+  }
+
+  /// Fetches a page's HTML, following ordinary redirects (Dio's default).
+  Future<String> fetchHtml(Uri uri) async {
+    final Response<dynamic> response = await _dio.getUri<dynamic>(
+      _validated(uri),
+      options: Options(responseType: ResponseType.plain),
+    );
+    _requireOk(response);
+    return response.data?.toString() ?? '';
+  }
+
+  /// `POST /req/login`: the real form submits `multipart/form-data`, not
+  /// JSON or url-encoded — confirmed 2026-10-04 from the real request.
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    final String loginPageHtml = await fetchHtml(_profile.loginPageUri);
+    final String? csrfToken = HawkiHtmlParser.loginFormToken(loginPageHtml);
+    if (csrfToken == null) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
+    final FormData body = FormData.fromMap(<String, dynamic>{
+      'account': username,
+      'password': password,
+    });
+    final Response<dynamic> response = await _dio.postUri<dynamic>(
+      _validated(_profile.loginUri),
+      data: body,
+      options: Options(
+        headers: <String, String>{
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+      ),
+    );
+    if (response.statusCode == 401 || response.statusCode == 422) {
+      throw const HsaKiFailure(HsaKiFailureKind.invalidCredentials);
+    }
+    _requireOk(response);
+    final dynamic json = response.data;
+    if (json is! Map<String, dynamic> || json['success'] != true) {
+      throw const HsaKiFailure(HsaKiFailureKind.invalidCredentials);
+    }
+    return json;
+  }
+
+  /// A JSON POST to an already-authenticated `/req/*` route, with a CSRF
+  /// token read fresh from [csrfSourcePage] — never reused across requests,
+  /// since Laravel rotates the session's token at points such as login.
+  Future<Map<String, dynamic>> postJsonWithFreshCsrf(
+    Uri target, {
+    required Uri csrfSourcePage,
+    required Map<String, dynamic> body,
+  }) async {
+    final String pageHtml = await fetchHtml(_validated(csrfSourcePage));
+    final String? csrfToken = HawkiHtmlParser.pageMetaToken(pageHtml);
+    if (csrfToken == null) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
+    final Response<dynamic> response = await _dio.postUri<dynamic>(
+      _validated(target),
+      data: body,
+      options: Options(
+        headers: <String, String>{
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    if (response.statusCode == 401) {
+      throw const HsaKiFailure(HsaKiFailureKind.notConnected);
+    }
+    _requireOk(response);
+    final dynamic json = response.data;
+    if (json is! Map<String, dynamic> || json['success'] != true) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
+    return json;
+  }
+
+  /// A bearer-token call against `/api/hawki/v1/*` — no cookies, no CSRF,
+  /// just `Authorization: Bearer <token>`, confirmed from the real
+  /// `StreamController::handleExternalRequest`/JSON:API route contract.
+  Future<Map<String, dynamic>> postBearerJson(
+    Uri target, {
+    required String token,
+    required Map<String, dynamic> body,
+  }) async {
+    final Response<dynamic> response = await _dio.postUri<dynamic>(
+      _validated(target),
+      data: body,
+      options: Options(
+        headers: <String, String>{
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    _mapBearerStatus(response.statusCode);
+    final dynamic json = response.data;
+    if (json is! Map<String, dynamic>) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
+    return json;
+  }
+
+  Future<Map<String, dynamic>> getBearerJson(
+    Uri target, {
+    required String token,
+  }) async {
+    final Response<dynamic> response = await _dio.getUri<dynamic>(
+      _validated(target),
+      options: Options(
+        headers: <String, String>{
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/vnd.api+json',
+        },
+      ),
+    );
+    _mapBearerStatus(response.statusCode);
+    final dynamic json = response.data;
+    if (json is! Map<String, dynamic>) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
+    return json;
+  }
+
+  void _mapBearerStatus(int? status) {
+    if (status == 401) {
+      throw const HsaKiFailure(HsaKiFailureKind.notConnected);
+    }
+    if (status == 403) {
+      throw const HsaKiFailure(HsaKiFailureKind.externalAccessDisabled);
+    }
+    if (status != null && status >= 200 && status < 300) return;
+    throw const HsaKiFailure(HsaKiFailureKind.portalUnavailable);
+  }
+
+  void _requireOk(Response<dynamic> response) {
+    final int status = response.statusCode ?? 0;
+    if (status >= 200 && status < 300) return;
+    if (status >= 500) {
+      throw const HsaKiFailure(HsaKiFailureKind.portalUnavailable);
+    }
+    throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+  }
+
+  static HsaKiFailure mapDioException(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
+        return const HsaKiFailure(HsaKiFailureKind.timeout);
+      case DioExceptionType.connectionError:
+        return const HsaKiFailure(HsaKiFailureKind.networkUnavailable);
+      case DioExceptionType.badCertificate:
+        return const HsaKiFailure(HsaKiFailureKind.tlsOrHostRejected);
+      case DioExceptionType.badResponse:
+        return const HsaKiFailure(HsaKiFailureKind.portalUnavailable);
+      case DioExceptionType.cancel:
+      case DioExceptionType.unknown:
+        final Object? inner = e.error;
+        if (inner is Exception &&
+            inner.runtimeType.toString().contains('Handshake')) {
+          return const HsaKiFailure(HsaKiFailureKind.tlsOrHostRejected);
+        }
+        return const HsaKiFailure(HsaKiFailureKind.networkUnavailable);
+    }
+  }
+
+  void close() => _dio.close(force: true);
+}

@@ -9,7 +9,8 @@ enum DirectService {
   mail,
   moodle,
   grades,
-  nextcloud;
+  nextcloud,
+  hsaKi;
 
   /// Nextcloud intentionally uses Login Flow v2 instead of receiving the
   /// centrally retained university password.
@@ -17,6 +18,16 @@ enum DirectService {
 
   static List<DirectService> get universityIdentityServices => values
       .where((DirectService service) => service.usesUniversityIdentity)
+      .toList(growable: false);
+
+  /// The services offered in the first-run, bulk-connect onboarding step.
+  ///
+  /// HSA-GPT deliberately has its own dedicated consent screen (what it is,
+  /// that it is a direct connection to Hochschule Anhalt's own AI service,
+  /// what is stored) rather than a plain checkbox in a list of unrelated
+  /// services — so it is never offered here, only from its own module.
+  static List<DirectService> get onboardingWizardServices => values
+      .where((DirectService service) => service != DirectService.hsaKi)
       .toList(growable: false);
 }
 

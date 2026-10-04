@@ -84,6 +84,10 @@ abstract final class AppRoutes {
   static const String todosPath = 'todos';
   static const String todos = '/more/todos';
 
+  /// HSA-GPT (HAWKI) chat, nested under More. Direct integration, see
+  /// `AGENTS.md` §2.
+  static const String hsaKi = '/more/hsa-ki';
+
   // Campus map, nested under More.
   static const String campusMapPath = 'campus-map';
   static const String campusMap = '/more/campus-map';

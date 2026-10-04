@@ -32,7 +32,7 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    **Eng begrenzte, ausdrücklich beschlossene Ausnahme (nur diese):** Persönliche, besonders
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
-   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau fünf**:
+   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau sechs**:
    - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP sowie
      ausschließlich nach ausdrücklichem Opt-in lesender Exchange-Kalenderzugriff über exakt
      `https://mail.hs-anhalt.de/EWS/Exchange.asmx`). EWS darf nur Betreff, Beginn, Ende,
@@ -114,6 +114,20 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      **ausschließlich** per `POST` mit dem Link im JSON-Body, nie über einen Query-Parameter.
      Entwürfe, Anhänge und Ergebnis bleiben auf dem Gerät.
      Details: [`docs/requests.md`](docs/requests.md).
+   - der **HSA-GPT-Chat** (HAWKI, der KI-Dienst der Hochschule Anhalt) → direkt und **nur** zu
+     `https://ki.hs-anhalt.de`. Anmeldung erfolgt mit denselben, bereits hinterlegten
+     Hochschulzugangsdaten; das Passwort wird dabei einmalig verwendet, um über HAWKIs eigene
+     Profilfunktion (`POST /req/profile/create-token`) ein persönliches, jederzeit über
+     `POST /req/profile/revoke-token` widerrufbares Sanctum-API-Token zu erzeugen. Gespeichert wird
+     ausschließlich dieses Token, **niemals** das Passwort. Jede weitere Aktion — Modell-Liste
+     (`GET /api/hawki/v1/ai-models`) und Chat-Anfrage (`POST /api/hawki/v1/ai-req`) — läuft
+     ausschließlich mit diesem Bearer-Token gegen HAWKIs eigene, zustandslose externe API; der
+     Chatverlauf besteht nur im Arbeitsspeicher der App, solange die Ansicht offen ist, und wird
+     nie an ein Campus-Köthen-Backend gesendet oder dort gespeichert. Kein Zugriff auf HAWKIs
+     interne SSE-Streaming-Route, kein E2EE-/Passkey-Schema dieses Diensts, keine Prompt- oder
+     Antwortinhalte in Logs. HSA-GPT bekommt einen eigenen, expliziten Zustimmungsbildschirm statt
+     einer Checkbox im allgemeinen Ersteinrichtungs-Assistenten, da die Verbindung direkt vom Gerät
+     erfolgt und die Antworten HAWKIs eigene sind, nicht die von Campus Köthen.
 
    Für diese Ausnahmen gilt: **kein** Backend-Proxy, **keine** serverseitige Speicherung, **kein**
    Analytics-/Logging-Umweg. Zugangsdaten nur im Keychain/Keystore, sensible Inhalte nur
@@ -121,13 +135,14 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    Drittanbieterzugriffe — jede weitere Ausnahme muss hier ausdrücklich ergänzt werden.
 
    Die optionale zentrale `UniversityIdentity` ist ausschließlich eine **lokale Eingabehilfe** für
-   Mail, Moodle und Noten — **keine** gemeinsame SSO-Sitzung und kein App-/Backend-Konto. Nextcloud
-   verwendet unabhängig davon ausschließlich den Browser-basierten Login Flow v2. Die Identität enthält
-   genau **eine Kennung** (Benutzername oder vollständige Mailadresse) und ein Passwort, wird erst
-   nach ausdrücklicher Bestätigung und erfolgreicher Prüfung durch mindestens einen Dienst
-   gespeichert und liegt nur im gerätegebundenen Keychain/Keystore. Ein reiner Benutzername wird
-   ausschließlich für Mail zu `<Kennung>@hs-anhalt.de` ergänzt; eine eingegebene Mailadresse bleibt
-   unverändert, Moodle und Noten erhalten die Kennung unverändert. Das frühere Drei-Feld-Schema wird
+   Mail, Moodle, Noten und HSA-GPT — **keine** gemeinsame SSO-Sitzung und kein App-/Backend-Konto.
+   Nextcloud verwendet unabhängig davon ausschließlich den Browser-basierten Login Flow v2. Die
+   Identität enthält genau **eine Kennung** (Benutzername oder vollständige Mailadresse) und ein
+   Passwort, wird erst nach ausdrücklicher Bestätigung und erfolgreicher Prüfung durch mindestens
+   einen Dienst gespeichert und liegt nur im gerätegebundenen Keychain/Keystore. Ein reiner
+   Benutzername wird ausschließlich für Mail zu `<Kennung>@hs-anhalt.de` ergänzt; eine eingegebene
+   Mailadresse bleibt unverändert, Moodle, Noten und HSA-GPT erhalten die Kennung unverändert. Das
+   frühere Drei-Feld-Schema wird
    beim Erkennen vollständig verworfen, nie still migriert. `+` erzeugt nach bewusster Nutzeraktion
    ausschließlich die dienstbezogene Session beziehungsweise Credential-Kopie; `−` wischt nur
    diesen Dienst und seinen

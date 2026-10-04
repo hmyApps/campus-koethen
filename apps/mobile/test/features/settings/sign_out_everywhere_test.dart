@@ -7,6 +7,8 @@ import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/features/grades/application/grade_account_controller.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
+import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_providers.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_account.dart';
 import 'package:campus_koethen/features/mail/application/mail_account_controller.dart';
 import 'package:campus_koethen/features/mail/application/mail_providers.dart';
 import 'package:campus_koethen/features/mail/data/mail_cache.dart';
@@ -89,6 +91,23 @@ class _FlakyMoodleTokenStore extends InMemoryMoodleTokenStore {
   }
 }
 
+class _MemoryHsaKiCredentialStore implements HsaKiCredentialStore {
+  HsaKiCredential? value;
+  int clears = 0;
+
+  @override
+  Future<HsaKiCredential?> read() async => value;
+
+  @override
+  Future<void> write(HsaKiCredential credential) async => value = credential;
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    value = null;
+  }
+}
+
 class _Fixtures {
   _Fixtures({
     InMemoryMailCredentialStore? mailStore,
@@ -109,6 +128,7 @@ class _Fixtures {
   final InMemoryNextcloudFavouriteStore nextcloudFavouriteStore =
       InMemoryNextcloudFavouriteStore();
   final FakeNextcloudGateway nextcloudGateway = FakeNextcloudGateway();
+  final _MemoryHsaKiCredentialStore hsaKiStore = _MemoryHsaKiCredentialStore();
   final _MemoryIdentityStore identityStore = _MemoryIdentityStore();
   final InMemoryGradeCacheStore gradeCache = InMemoryGradeCacheStore();
   final InMemoryGradePortalStore gradePortalStore = InMemoryGradePortalStore();
@@ -133,6 +153,7 @@ class _Fixtures {
     nextcloudCredentialStoreProvider.overrideWithValue(nextcloudStore),
     nextcloudFavouriteStoreProvider.overrideWithValue(nextcloudFavouriteStore),
     nextcloudGatewayProvider.overrideWithValue(nextcloudGateway),
+    hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
   ];
 
   Future<void> signInAll() async {
