@@ -184,11 +184,51 @@ class HisInOneSession {
     String url, {
     required bool Function(Uri uri) allowsTarget,
   }) async {
-    Uri target = _validatedWith(url, allowsTarget: allowsTarget);
-    Response<ResponseBody> current = await _dio.getUri<ResponseBody>(
+    final Uri target = _validatedWith(url, allowsTarget: allowsTarget);
+    final Response<ResponseBody> current = await _dio.getUri<ResponseBody>(
       target,
       options: Options(responseType: ResponseType.stream),
     );
+    return _followStream(current, allowsTarget: allowsTarget);
+  }
+
+  /// Submits a form and streams the binary result through every redirect
+  /// hop — the real printable-report buttons (confirmed 2026-10-04) are a
+  /// classic full, non-AJAX form POST whose result is itself a same-host
+  /// redirect chain ending at the document, never the document bytes
+  /// directly.
+  ///
+  /// Unlike [fetchStream], [url] itself is an ordinary page the session is
+  /// already allowed to reach (the form's own `action`, validated against
+  /// [allows] like [postForm]) — [allowsTarget] narrows only the REDIRECTS
+  /// that POST may answer with, never the page being posted to.
+  Future<Response<ResponseBody>> postFormStream(
+    String url,
+    Map<String, String> formData, {
+    required bool Function(Uri uri) allowsTarget,
+  }) async {
+    final Uri target = _validated(url);
+    final Response<ResponseBody> current = await _dio.postUri<ResponseBody>(
+      target,
+      data: formData,
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.stream,
+      ),
+    );
+    return _followStream(current, allowsTarget: allowsTarget);
+  }
+
+  /// Follows every further redirect hop of an already-started streamed
+  /// response — shared by [fetchStream] (GET-initiated) and
+  /// [postFormStream] (POST-initiated): once the initial request redirects,
+  /// every following hop is itself a plain GET regardless of how the chain
+  /// started.
+  Future<Response<ResponseBody>> _followStream(
+    Response<ResponseBody> initial, {
+    required bool Function(Uri uri) allowsTarget,
+  }) async {
+    Response<ResponseBody> current = initial;
     for (int hop = 0; hop < _maxHops; hop++) {
       final int code = current.statusCode ?? 0;
       if (code < 300 || code >= 400) return current;
@@ -198,7 +238,7 @@ class HisInOneSession {
           HisInOneSessionFailureKind.structureChanged,
         );
       }
-      target = _validatedWith(
+      final Uri target = _validatedWith(
         location,
         allowsTarget: allowsTarget,
         relativeTo: current.requestOptions.uri,

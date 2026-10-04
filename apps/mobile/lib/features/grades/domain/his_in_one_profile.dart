@@ -45,4 +45,22 @@ class HisInOneProfile implements GradePortalProfile {
 
   @override
   bool allows(Uri uri) => gradePortalAllows(uri, scheme: scheme, host: host);
+
+  /// A second, narrower allowlist for exactly one purpose: the one-time
+  /// link one of the exam overview's own print buttons resolves to — same
+  /// host as the portal itself, confirmed 2026-10-04, but kept as its own
+  /// check (never folded into [allows]) so a future real difference would
+  /// not require re-threading every session call site (AGENTS.md §2: "kein
+  /// gemeinsamer Pool"). Deliberately NOT shared with
+  /// `StudentServiceProfile.allowsDocumentDownload`, even though both
+  /// currently pin the same values — separate features, separate checks.
+  bool allowsDocumentDownload(Uri uri) {
+    final List<String>? states = uri.queryParametersAll['state'];
+    return gradePortalAllows(uri, scheme: scheme, host: host) &&
+        uri.path == '/qisserver/rds' &&
+        !uri.hasFragment &&
+        states != null &&
+        states.length == 1 &&
+        states.single == 'docdownload';
+  }
 }

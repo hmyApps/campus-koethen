@@ -42,4 +42,51 @@ void main() {
       expect(page.html, '<html>done</html>');
     },
   );
+
+  test(
+    'postFormStream follows the POST result through further GET redirects',
+    () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions options) {
+        if (options.uri.path == '/qisserver/report' &&
+            options.method == 'POST') {
+          return const FakeHtmlResponse.redirect(
+            '$_baseUrl/qisserver/rds?state=docdownload&docId=abc',
+          );
+        }
+        if (options.uri.path == '/qisserver/rds' &&
+            options.uri.queryParameters['docName'] == 'x.pdf') {
+          return const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          );
+        }
+        if (options.uri.path == '/qisserver/rds' &&
+            options.uri.queryParameters['state'] == 'docdownload' &&
+            options.uri.queryParameters['docId'] == 'abc') {
+          return const FakeHtmlResponse.redirect(
+            '$_baseUrl/qisserver/rds?state=docdownload&docId=abc&docName=x.pdf',
+          );
+        }
+        return const FakeHtmlResponse('wrong target', statusCode: 404);
+      });
+      final HisInOneSession session = HisInOneSession(
+        baseUrl: _baseUrl,
+        allows: _allows,
+        adapter: adapter,
+      );
+      addTearDown(() => session.close('$_baseUrl/qisserver/logout'));
+
+      final Response<ResponseBody> response = await session.postFormStream(
+        '$_baseUrl/qisserver/report',
+        <String, String>{'examsReadonly:printReport_0': ''},
+        allowsTarget: _allows,
+      );
+
+      expect(response.statusCode, 200);
+      expect(
+        response.headers.value('content-type'),
+        contains('application/pdf'),
+      );
+    },
+  );
 }

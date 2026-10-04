@@ -6,6 +6,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html;
 
 import '../domain/decimal_parsing.dart';
+import '../domain/exam_report.dart';
 import '../domain/grade.dart';
 import '../domain/grade_failure.dart';
 import 'qis_html_parser.dart';
@@ -74,6 +75,18 @@ class HisInOneExpandRequest {
     ...hiddenFields,
     buttonName: '',
   };
+}
+
+/// A full, non-AJAX form submission ready to POST: an `action` plus a
+/// complete `formData` body (hidden fields, the chosen button's own
+/// name/value, and any extra marker field such as `DISABLE_VALIDATION`).
+/// Unlike [HisInOneExpandRequest], the button value here is never an empty
+/// string — the real printable-report buttons submit their own label text.
+class HisInOneFullPostRequest {
+  const HisInOneFullPostRequest({required this.action, required this.formData});
+
+  final String action;
+  final Map<String, String> formData;
 }
 
 /// Parses HISinOne (JSF-MyFaces) HTML into domain objects using a real DOM
@@ -196,6 +209,68 @@ abstract final class HisInOneHtmlParser {
       if (id.endsWith(suffix)) return el.attributes['name'] ?? id;
     }
     return null;
+  }
+
+  /// Reads the exam-overview page's own fixed "Bescheinigungen" print
+  /// buttons, found by their stable `submit_print_pdf` class — confirmed
+  /// 2026-10-04 from the real page, never assumed to exist. An account or
+  /// portal build without this section yields an empty list, not an error:
+  /// it is a legitimate absence, exactly like [HisInOneOverviewKind.empty]
+  /// for the exam tree itself.
+  static Future<List<ExamReportOffer>> findExamReports(String htmlSource) =>
+      compute(_findExamReportsSync, htmlSource);
+
+  static List<ExamReportOffer> _findExamReportsSync(String htmlSource) {
+    final Document doc = html.parse(htmlSource);
+    final List<ExamReportOffer> offers = <ExamReportOffer>[];
+    for (final Element button in doc.querySelectorAll(
+      'button.submit_print_pdf',
+    )) {
+      final String? id = button.attributes['id'];
+      final String? label = button.attributes['value'];
+      if (id == null || id.isEmpty || label == null || label.isEmpty) {
+        continue;
+      }
+      offers.add(ExamReportOffer(buttonId: id, label: label));
+    }
+    return offers;
+  }
+
+  /// Builds the full, non-AJAX form submission for one chosen
+  /// [ExamReportOffer]: the `examsReadonly` form's own `action`, every
+  /// hidden field already on the page, the button's own name/value (read
+  /// fresh, never cached across page loads) and `DISABLE_VALIDATION=true` —
+  /// exactly what the real button's own `myfaces.oam.submitForm` call sends
+  /// (confirmed 2026-10-04). `null` when the form or the named button is not
+  /// there, so the caller reports `portalStructureChanged` rather than
+  /// guessing a request that cannot possibly land on the right report.
+  static Future<HisInOneFullPostRequest?> buildExamReportPostRequest(
+    String htmlSource,
+    String buttonId,
+  ) => compute(_buildExamReportPostRequestSync, (htmlSource, buttonId));
+
+  static HisInOneFullPostRequest? _buildExamReportPostRequestSync(
+    (String, String) args,
+  ) {
+    final (String htmlSource, String buttonId) = args;
+    final Document doc = html.parse(htmlSource);
+    final Element? form = _elementById(doc, 'examsReadonly');
+    if (form == null) return null;
+    final String? action = form.attributes['action'];
+    if (action == null || action.isEmpty) return null;
+    final Element? button = _elementById(doc, buttonId);
+    final String? buttonValue = button?.attributes['value'];
+    if (button == null || buttonValue == null) return null;
+
+    final Map<String, String> formData = <String, String>{};
+    for (final Element input in form.querySelectorAll('input[type="hidden"]')) {
+      final String? name = input.attributes['name'];
+      if (name == null || name.isEmpty) continue;
+      formData[name] = input.attributes['value'] ?? '';
+    }
+    formData[buttonId] = buttonValue;
+    formData['DISABLE_VALIDATION'] = 'true';
+    return HisInOneFullPostRequest(action: action, formData: formData);
   }
 
   /// Parses the expanded exam-tree page. Leaf rows (real exam results) only —

@@ -105,12 +105,13 @@ mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore
   Verfassen, Antworten und Allen antworten — reiner Text
 - **Notenspiegel** (HIS-QIS **und** HISinOne): Notenübersicht mit Detailansicht, verschlüsselter
   lokaler Cache, 24-Stunden-Regel mit manueller Übersteuerung. Auf HISinOne zusätzlich **nur
-  lesend**, eine Seite „Studienservice" mit mehreren per Voll-POST gewechselten Tabs:
-  Bescheinigungsübersicht, Personendaten (inkl. Hörerstatus) und Kontaktdaten,
+  lesend**: die drei festen Bescheinigungs-Druck-Buttons direkt auf der Notenübersichtsseite
+  (volle Formularabgabe, kein AJAX) sowie eine Seite „Studienservice" mit mehreren per Voll-POST
+  gewechselten Tabs: Bescheinigungsübersicht, Personendaten (inkl. Hörerstatus) und Kontaktdaten,
   Studiengangsübersicht, sowie ein aus den Zahlungen abgeleiteter Rückmeldehinweis — dieselben
-  Zugangsdaten, kein zweiter Login. Bescheinigungen werden vom selben Host über den eng begrenzten
-  Pfad `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` abgerufen; keine
-  Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
+  Zugangsdaten, kein zweiter Login. Bescheinigungen werden — aus beiden Quellen — vom selben Host
+  über den eng begrenzten Pfad `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload`
+  abgerufen; keine Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
   **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
 - **Zentraler Hochschulzugang**: optionale lokale Eingabehilfe für Mail, Moodle und Noten mit

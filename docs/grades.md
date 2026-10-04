@@ -140,6 +140,31 @@ Aktionen`) → `extras: Map<String,String>` mit dem **originalen Kopfzeilentext*
 - Die Spalte `Bonus` trägt Werte, die wie Credits aussehen — sie wird **nie** als ECTS
   umgedeutet oder umbenannt; Kopfzeilentext und Wert werden wörtlich übernommen.
 
+### Bescheinigungen auf der Notenübersichtsseite selbst (`ExamReportGateway`)
+
+Dieselbe Notenübersicht (Schritt 2 oben) bietet im Formular `id="examsReadonly"` zusätzlich einen
+eigenen Abschnitt mit bis zu drei festen Druck-Buttons (`class="submit_print_pdf"`, z. B.
+Leistungsübersicht bestandener Leistungen auf Deutsch und Englisch, Übersicht fehlender
+Leistungen). Anders als die Studienservice-Bescheinigung ist das **keine** AJAX-Auftrag/Polling-
+Kette, sondern eine normale **volle** Formularabgabe (`myfaces.oam.submitForm`): alle Hidden-Felder
+des Formulars plus der gedrückte Button plus `DISABLE_VALIDATION=true` werden an die Formular-
+`action` gepostet; die Antwort ist ein Redirect auf
+
+```
+https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=…
+```
+
+— derselbe Host und derselbe `state=docdownload`-Pfad wie beim Studienservice-Download, über eine
+eigene, separat benannte Prüfung (`HisInOneProfile.allowsDocumentDownload`, kein gemeinsamer Pool
+mit `StudentServiceProfile`). Die Liste der angebotenen Buttons (`ExamReportOffer`, Button-Id +
+Beschriftung) wird bei jedem Notenabruf frisch mitgelesen (`HisInOneHtmlParser.findExamReports`)
+und zusammen mit dem Bericht zwischengespeichert (`GradeReport.examReports`); vor dem Absenden wird
+sie **erneut** von einer frisch geladenen Seite gelesen — ein Button, der dort nicht mehr auftaucht,
+wird abgelehnt, statt eine veralterte Id zu posten. Zugangsdaten, Session- und Download-Mechanik
+sind identisch zum übrigen Notenspiegel-Ablauf (Login → Seite → Form-POST → Download → Logout im
+`finally`); es entsteht **kein** zweiter Login und **kein** eigener `+`/`−`-Eintrag. Ausgeschlossen
+bleibt jede andere Formularaktion auf dieser Seite — insbesondere Prüfungsanmeldung.
+
 ## Lesende HISinOne-Funktionen jenseits des Notenspiegels
 
 Dieselbe HISinOne-Verbindung (`sscportal.ssc.hs-anhalt.de`, **nicht** das HIS-QIS-Bestandsportal)
@@ -378,13 +403,15 @@ gesichertes Fenster setzt und iOS keinen Capture- oder App-Switcher-Überleger r
 ```
 features/grades/
   domain/         GradePortal, GradePortalProfile (Interface, je EIN Host pro Portal),
-                  LegacyQisProfile, HisInOneProfile, GradeCredentials, Grade/GradeEntry/
-                  ExamStatus (typsicher, inkl. path/module/extras), GradeReport, GradeFailure,
-                  Clock, decimal_parsing, Ports (Gateway, CredentialStore, PortalStore,
-                  CacheStore)
+                  LegacyQisProfile, HisInOneProfile (inkl. allowsDocumentDownload),
+                  GradeCredentials, Grade/GradeEntry/ExamStatus (typsicher, inkl.
+                  path/module/extras), GradeReport (inkl. examReports), ExamReportOffer/
+                  ExamReportDownloadResult, ExamReportGateway, GradeFailure, Clock,
+                  decimal_parsing, Ports (Gateway, CredentialStore, PortalStore, CacheStore)
   data/           QisHtmlParser / LegacyQisGradesGateway (HIS-QIS), HisInOneHtmlParser /
-                  HisInOneGradesGateway (HISinOne, Baum), SecureGradeCredentialStore,
-                  SecureGradePortalStore, EncryptedGradeCache (+ Codec, v2)
+                  HisInOneGradesGateway (HISinOne, Baum + ExamReportGateway-Implementierung),
+                  SecureGradeCredentialStore, SecureGradePortalStore,
+                  EncryptedGradeCache (+ Codec, v2, inkl. examReports)
   application/    Provider (inkl. Per-Portal-Gateways + aufgelöstes gradesGatewayProvider),
                   GradeAccountController (Portalwahl, Wechsel, Löschen), GradesController
                   (24h-Policy, Single-Flight)
@@ -442,4 +469,18 @@ flutter test test/features/grades/
   einen nicht leeren Cache nie (Cache und `lastSuccessfulSync` bleiben stehen), ohne
   vorhandenen Cache wird ein leerer Bericht normal übernommen.
 - `grade_ui_test.dart` — „Noten" unter Mehr, Setup/Consent-Validierung, Anmeldung enthüllt
-  Overview, Cache ohne Auto-Sync, Löschbestätigung.
+  Overview, Cache ohne Auto-Sync, Löschbestätigung; Bescheinigungen-Abschnitt erzeugt und öffnet
+  ein PDF auf HISinOne, ein abgelehntes Dokument zeigt den Diagnosecode.
+- `his_in_one_html_parser_test.dart` (zusätzlich) — `findExamReports` liest die
+  `submit_print_pdf`-Buttons (Id + Beschriftung), `buildExamReportPostRequest` baut den vollen
+  Formular-POST inkl. Hidden-Feldern und `DISABLE_VALIDATION=true`.
+- `his_in_one_grades_gateway_test.dart` (zusätzlich) — ein Abruf füllt `entries` **und**
+  `examReports` aus derselben Seite; `downloadExamReport` postet, folgt dem Redirect und prüft
+  die PDF-Magicbytes; ein Button, der auf einer frisch gelesenen Seite nicht mehr auftaucht, wird
+  vor jedem POST abgelehnt.
+- `his_in_one_profile_test.dart` — `allowsDocumentDownload` lässt nur `state=docdownload` unter
+  `/qisserver/rds` auf dem gepinnten Host zu und lehnt den früher erfundenen
+  `untrust-sscportal`-Host ab.
+- `grade_cache_migration_test.dart` (zusätzlich) — `examReports` übersteht einen Schreib-/
+  Lesedurchlauf; ein vor dieser Änderung zwischengespeicherter Bericht (reines Array statt
+  Wrapper-Objekt) liefert beim Lesen eine leere `examReports`-Liste statt eines Fehlers.

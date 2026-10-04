@@ -2,10 +2,14 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:campus_koethen/core/documents/document_viewer_screen.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
+import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
 import 'package:campus_koethen/features/grades/presentation/grade_tile.dart';
 import 'package:campus_koethen/features/grades/presentation/grades_screen.dart';
 import 'package:campus_koethen/features/grades/presentation/grade_setup_screen.dart';
@@ -46,14 +50,18 @@ List<Override> _grades({
   required FakeGradesGateway gateway,
   required InMemoryGradeCredentialStore store,
   required InMemoryGradeCacheStore cache,
+  InMemoryGradePortalStore? portalStore,
   MutableClock? clock,
 }) {
   return <Override>[
     legacyQisGatewayProvider.overrideWithValue(gateway),
     hisInOneGatewayProvider.overrideWithValue(gateway),
     gradesGatewayProvider.overrideWithValue(gateway),
+    examReportGatewayProvider.overrideWithValue(gateway),
     gradeCredentialStoreProvider.overrideWithValue(store),
-    gradePortalStoreProvider.overrideWithValue(InMemoryGradePortalStore()),
+    gradePortalStoreProvider.overrideWithValue(
+      portalStore ?? InMemoryGradePortalStore(),
+    ),
     gradeCacheStoreProvider.overrideWithValue(cache),
     gradeClockProvider.overrideWithValue(clock ?? MutableClock(_t0)),
   ];
@@ -213,6 +221,113 @@ void main() {
 
     expect(find.text('Grundlagen'), findsOneWidget);
     expect(gateway.fetchCalls, 0, reason: 'the 24h gate blocks the auto sync');
+  });
+
+  testWidgets('exam reports section generates and opens a PDF on HISinOne', (
+    WidgetTester tester,
+  ) async {
+    _tall(tester);
+    const ExamReportOffer offer = ExamReportOffer(
+      buttonId: 'examsReadonly:exaReports:fieldset_exaReports:print_0',
+      label: 'Bescheinigung über bestandene Prüfungen',
+    );
+    final gateway =
+        FakeGradesGateway(
+            report: GradeReport(
+              <GradeEntry>[
+                GradeEntry(
+                  examNumber: '1',
+                  title: 'Grundlagen',
+                  grade: const Grade.graded(1.7),
+                  status: ExamStatus.passed,
+                  statusText: 'bestanden',
+                  examDate: DateTime(2026, 2, 12),
+                ),
+              ],
+              examReports: const <ExamReportOffer>[offer],
+            ),
+          )
+          ..examReportResult = ExamReportDownloadLoaded(
+            bytes: Uint8List.fromList(<int>[0x25, 0x50, 0x44, 0x46]),
+            filename: 'bescheinigung.pdf',
+          );
+    final store = InMemoryGradeCredentialStore()..write(_creds);
+    final cache = InMemoryGradeCacheStore();
+    await cache.writeReport(gateway.report!);
+    await cache.writeLastSuccessfulSync(_t0);
+    await cache.writeLastAttemptedSync(_t0);
+
+    await pumpScreen(
+      tester,
+      const GradesScreen(),
+      overrides: _grades(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+        portalStore: InMemoryGradePortalStore()..write(GradePortal.hisInOne),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bescheinigungen'), findsOneWidget);
+    expect(
+      find.text('Bescheinigung über bestandene Prüfungen'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('PDF erstellen'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.downloadExamReportCalls, 1);
+    expect(gateway.lastRequestedOffer, offer);
+    expect(find.byType(DocumentViewerScreen), findsOneWidget);
+  });
+
+  testWidgets('exam reports section surfaces the diagnostic code on failure', (
+    WidgetTester tester,
+  ) async {
+    _tall(tester);
+    const ExamReportOffer offer = ExamReportOffer(
+      buttonId: 'examsReadonly:exaReports:fieldset_exaReports:print_0',
+      label: 'Bescheinigung über bestandene Prüfungen',
+    );
+    final gateway = FakeGradesGateway(
+      report: GradeReport(
+        <GradeEntry>[
+          GradeEntry(
+            examNumber: '1',
+            title: 'Grundlagen',
+            grade: const Grade.graded(1.7),
+            status: ExamStatus.passed,
+            statusText: 'bestanden',
+            examDate: DateTime(2026, 2, 12),
+          ),
+        ],
+        examReports: const <ExamReportOffer>[offer],
+      ),
+    )..examReportResult = const ExamReportUnavailable('job-not-finished');
+    final store = InMemoryGradeCredentialStore()..write(_creds);
+    final cache = InMemoryGradeCacheStore();
+    await cache.writeReport(gateway.report!);
+    await cache.writeLastSuccessfulSync(_t0);
+    await cache.writeLastAttemptedSync(_t0);
+
+    await pumpScreen(
+      tester,
+      const GradesScreen(),
+      overrides: _grades(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+        portalStore: InMemoryGradePortalStore()..write(GradePortal.hisInOne),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('PDF erstellen'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('job-not-finished'), findsOneWidget);
   });
 
   testWidgets('delete asks for confirmation and returns to setup', (

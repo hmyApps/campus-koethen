@@ -10,6 +10,7 @@ import '../data/legacy_qis_gateway.dart';
 import '../data/secure_grade_credential_store.dart';
 import '../data/secure_grade_portal_store.dart';
 import '../domain/clock.dart';
+import '../domain/exam_report_gateway.dart';
 import '../domain/grade_cache_store.dart';
 import '../domain/grade_credential_store.dart';
 import '../domain/grade_portal.dart';
@@ -60,6 +61,15 @@ final Provider<GradesGateway> legacyQisGatewayProvider =
 final Provider<GradesGateway> hisInOneGatewayProvider = Provider<GradesGateway>(
   (Ref ref) => HisInOneGradesGateway(ref.watch(hisInOneProfileProvider)),
 );
+
+/// The exam-overview page's own "Bescheinigungen" print buttons — HISinOne
+/// only, exactly like `studentServiceGatewayProvider` is HISinOne only. The
+/// UI gates on `GradeAccountState.activePortal == GradePortal.hisInOne`
+/// before ever using this, the same way it gates student-service.
+final Provider<ExamReportGateway> examReportGatewayProvider =
+    Provider<ExamReportGateway>(
+      (Ref ref) => HisInOneGradesGateway(ref.watch(hisInOneProfileProvider)),
+    );
 
 /// The gateway for the account's ACTIVE portal (falls back to the legacy
 /// portal while no choice has been persisted, e.g. before the first sign-in).

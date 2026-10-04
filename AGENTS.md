@@ -48,15 +48,21 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      Voll-POST): Bescheinigungsübersicht, Personendaten und Kontaktdaten, Studiengangsübersicht
      sowie die nur über die Zahlungsübersicht ableitbaren Status-Hinweise (Hörerstatus unter
      Personendaten; ein Rückmeldestatus existiert nicht als eigenes Feld, nur indirekt über
-     offene/keine offenen Zahlungen). Diese Funktionen nutzen dieselben, bereits für
-     den Notenspiegel hinterlegten Zugangsdaten wieder — kein zweiter Login, kein separater
-     `+`/`−`-Dienst. Der erzeugte Bescheinigungsabruf darf zusätzlich ausschließlich per `GET`
-     an `https://sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
-     `state=docdownload` gehen; Ziel und Einweg-Token müssen aus der aktuellen AJAX-Antwort
-     stammen, und diese enge Pfad-/Parameter-Prüfung ist **keine** gemeinsame oder allgemeine
-     Allowlist für den Host.
-     Erlaubte Formularaktionen sind nur Login, Studienservice-Tabwechsel sowie Start und Polling
-     der vom Nutzer gewählten Bescheinigung. **Ausdrücklich ausgeschlossen** bleibt jede Änderung
+     offene/keine offenen Zahlungen); zusätzlich um den Abruf der auf der Notenübersichtsseite
+     selbst angebotenen drei festen Bescheinigungen (Leistungsübersicht bestandener Leistungen
+     auf Deutsch und Englisch, Übersicht fehlender Leistungen) über deren eigene Druck-Buttons —
+     eine normale volle Formularabgabe, kein AJAX-Auftrag, kein Polling. Diese Funktionen nutzen
+     dieselben, bereits für den Notenspiegel hinterlegten Zugangsdaten wieder — kein zweiter
+     Login, kein separater `+`/`−`-Dienst. Der erzeugte Bescheinigungsabruf — ob aus dem
+     Studienservice-Auftrag oder aus einem Notenübersicht-Druck-Button — darf zusätzlich
+     ausschließlich per `GET` an `https://sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
+     `state=docdownload` gehen; Ziel und Einweg-Token müssen aus der jeweils aktuellen
+     AJAX-Antwort beziehungsweise dem Formular-Redirect stammen, und diese enge
+     Pfad-/Parameter-Prüfung ist **keine** gemeinsame oder allgemeine Allowlist für den Host.
+     Erlaubte Formularaktionen sind nur Login, Studienservice-Tabwechsel, Start und Polling der
+     vom Nutzer gewählten Studienservice-Bescheinigung, sowie das Absenden genau eines der drei
+     festen Bescheinigungs-Buttons auf der Notenübersichtsseite. **Ausdrücklich ausgeschlossen**
+     bleibt jede Änderung
      des Hochschul-Datensatzes: keine Prüfungsanmeldung, keine Adressänderung und kein Antrag.
      Eine unbekannte oder unerwartete Seitenstruktur erhält einen klassifizierten Fehler und wird
      **nie** geraten geparst;

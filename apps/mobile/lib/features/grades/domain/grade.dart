@@ -3,6 +3,8 @@
 
 import 'package:meta/meta.dart';
 
+import 'exam_report.dart';
+
 /// What a grade cell means, kept type-safe instead of a raw string.
 enum GradeKind {
   /// A real numeric grade (German 1.0 … 5.0).
@@ -166,12 +168,18 @@ bool _mapEquals(Map<String, String> a, Map<String, String> b) {
   return true;
 }
 
-/// A whole Notenspiegel — the ordered exam rows.
+/// A whole Notenspiegel — the ordered exam rows, plus any of the exam
+/// overview's own fixed "Bescheinigungen" print buttons (HISinOne only;
+/// always empty on the legacy portal, which has no such section).
 @immutable
 class GradeReport {
-  const GradeReport(this.entries);
+  const GradeReport(
+    this.entries, {
+    this.examReports = const <ExamReportOffer>[],
+  });
 
   final List<GradeEntry> entries;
+  final List<ExamReportOffer> examReports;
 
   bool get isEmpty => entries.isEmpty;
 }

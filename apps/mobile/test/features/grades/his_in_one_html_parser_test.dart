@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:campus_koethen/features/grades/data/his_in_one_html_parser.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/domain/grade_failure.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +58,77 @@ void main() {
     test('returns null when the examsReadonly form is missing', () async {
       expect(
         await HisInOneHtmlParser.findExpandRequest(hisInOneNoFormHtml),
+        isNull,
+      );
+    });
+  });
+
+  group('findExamReports', () {
+    test('reads all three print buttons by their stable class', () async {
+      final List<ExamReportOffer> offers =
+          await HisInOneHtmlParser.findExamReports(hisInOneExamReportsHtml);
+
+      expect(offers, hasLength(3));
+      expect(
+        offers[0].buttonId,
+        'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
+      );
+      expect(
+        offers[0].label,
+        'Leistungsübersicht (bestandene Leistungen) / '
+        'List of passed exam (german) [PDF]',
+      );
+      expect(
+        offers[2].buttonId,
+        'examsReadonly:exaReports:fieldset_exaReports:printReport_2',
+      );
+    });
+
+    test('an overview with no Bescheinigungen section yields an empty list, '
+        'never an error', () async {
+      expect(
+        await HisInOneHtmlParser.findExamReports(hisInOneNoExamReportsHtml),
+        isEmpty,
+      );
+    });
+  });
+
+  group('buildExamReportPostRequest', () {
+    test(
+      'submits the real full-POST shape: the form action, every hidden '
+      'field, the chosen button\'s own name/value and DISABLE_VALIDATION',
+      () async {
+        final HisInOneFullPostRequest? request =
+            await HisInOneHtmlParser.buildExamReportPostRequest(
+              hisInOneExamReportsHtml,
+              'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
+            );
+
+        expect(request, isNotNull);
+        expect(
+          request!.action,
+          '/qisserver/pages/sul/examAssessment/personExamsReadonly.xhtml'
+          '?_flowId=examsOverviewForPerson-flow&_flowExecutionKey=e8s1',
+        );
+        expect(request.formData['authenticity_token'], 'TOKEN-XYZ');
+        expect(request.formData['javax.faces.ViewState'], 'e8s1');
+        expect(request.formData['examsReadonly_SUBMIT'], '1');
+        expect(
+          request
+              .formData['examsReadonly:exaReports:fieldset_exaReports:printReport_0'],
+          'Leistungsübersicht (bestandene Leistungen) / '
+          'List of passed exam (german) [PDF]',
+        );
+        expect(request.formData['DISABLE_VALIDATION'], 'true');
+      },
+    );
+
+    test('a button id not on the page yields null, never a guess', () async {
+      expect(
+        await HisInOneHtmlParser.buildExamReportPostRequest(
+          hisInOneExamReportsHtml,
+          'examsReadonly:exaReports:fieldset_exaReports:printReport_9',
+        ),
         isNull,
       );
     });

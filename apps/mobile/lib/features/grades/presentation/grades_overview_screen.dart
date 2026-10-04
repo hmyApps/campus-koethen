@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
 
+import '../../../core/documents/app_document.dart';
+import '../../../core/documents/document_viewer_screen.dart';
 import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/locale/formatters.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -16,6 +18,7 @@ import '../../university_account/application/university_service_connector.dart';
 import '../application/grade_account_controller.dart';
 import '../application/grades_controller.dart';
 import '../application/grades_providers.dart';
+import '../domain/exam_report.dart';
 import '../domain/grade.dart';
 import '../domain/grade_portal.dart';
 import '../domain/grade_projection.dart';
@@ -305,6 +308,8 @@ class _GradesOverviewScreenState extends ConsumerState<GradesOverviewScreen> {
     final List<_GradesRow> rows = _gradesRows(
       leading: <Widget>[
         _Header(view: view, locale: locale, activeHost: activeHost),
+        if (view.report!.examReports.isNotEmpty)
+          _ExamReportsSection(offers: view.report!.examReports),
         if (projection.hasAverage) _AverageTile(average: projection.average!),
         if (view.error != null)
           Padding(
@@ -469,6 +474,142 @@ class _Header extends StatelessWidget {
               l10n.gradesActivePortal(activeHost!),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The exam overview's own fixed "Bescheinigungen" print buttons — shown
+/// near the top because this is why most readers who tap this section open
+/// it at all, not the rows below. HISinOne only: always empty, so never
+/// rendered, on the legacy portal.
+class _ExamReportsSection extends StatelessWidget {
+  const _ExamReportsSection({required this.offers});
+
+  final List<ExamReportOffer> offers;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.gradeExamReportsHeading,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final ExamReportOffer offer in offers)
+            _ExamReportRow(offer: offer),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamReportRow extends ConsumerStatefulWidget {
+  const _ExamReportRow({required this.offer});
+
+  final ExamReportOffer offer;
+
+  @override
+  ConsumerState<_ExamReportRow> createState() => _ExamReportRowState();
+}
+
+class _ExamReportRowState extends ConsumerState<_ExamReportRow> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _generate() async {
+    final NavigatorState navigator = Navigator.of(context);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final ExamReportDownloadResult result = await ref
+          .read(gradesControllerProvider.notifier)
+          .downloadExamReport(widget.offer);
+      if (!mounted) return;
+      final AppLocalizations l10n = context.l10n;
+      switch (result) {
+        case ExamReportDownloadLoaded(:final bytes, :final filename):
+          await navigator.push(
+            MaterialPageRoute<void>(
+              builder: (BuildContext _) => DocumentViewerScreen(
+                document: AppDocument(
+                  filename: filename,
+                  mediaType: 'application/pdf',
+                  bytes: bytes,
+                  sizeBytes: bytes.length,
+                ),
+              ),
+            ),
+          );
+        case ExamReportTooLarge():
+          setState(() => _error = l10n.gradeExamReportErrorTooLarge);
+        case ExamReportUnavailable(:final reason):
+          // `reason` is a short, fixed technical label (never a URL, token
+          // or portal HTML) — safe to show so a real failure can be
+          // reported with the exact cause instead of just "didn't work".
+          setState(
+            () => _error =
+                '${l10n.gradeExamReportErrorUnavailable} '
+                '${l10n.gradeExamReportDiagnosticHint(reason)}',
+          );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = gradeFailureMessage(context.l10n, error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(child: Text(widget.offer.label)),
+              const SizedBox(width: AppSpacing.sm),
+              _busy
+                  ? const SizedBox.square(
+                      dimension: AppSizes.icon,
+                      child: CircularProgressIndicator(
+                        strokeWidth: AppSizes.rule,
+                      ),
+                    )
+                  : TextButton(
+                      onPressed: _generate,
+                      child: Text(l10n.gradeExamReportGenerate),
+                    ),
+            ],
+          ),
+          if (_error != null)
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
         ],

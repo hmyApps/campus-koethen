@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/security/session_guard.dart';
+import '../domain/exam_report.dart';
 import '../domain/grade.dart';
 import '../domain/grade_cache_store.dart';
 import '../domain/grade_failure.dart';
@@ -181,6 +182,43 @@ class GradesController extends AsyncNotifier<GradesViewState> {
         (state.value ?? current).copyWith(isSyncing: false, error: failure),
       );
     }
+  }
+
+  /// Generates and fetches one of the exam overview's own fixed
+  /// "Bescheinigungen" print buttons (HISinOne only). Not cached and not
+  /// retried automatically — a one-shot action the reader explicitly
+  /// triggered, exactly like `StudentServiceController.downloadCertificate`.
+  Future<ExamReportDownloadResult> downloadExamReport(
+    ExamReportOffer offer,
+  ) async {
+    final GradeAccountState? account = ref
+        .read(gradeAccountControllerProvider)
+        .value;
+    final String? username = account?.username;
+    final GradePortal? portal = account?.activePortal;
+    if (username == null || portal == null || portal != GradePortal.hisInOne) {
+      throw const GradeFailure(GradeFailureKind.unknown);
+    }
+    final SessionLease<({String username, GradePortal portal})>? lease =
+        _sessions.capture((username: username, portal: portal));
+    if (lease == null) {
+      throw const GradeFailure(GradeFailureKind.unknown);
+    }
+    return _sessions.track<ExamReportDownloadResult>(lease, () async {
+      final credentials = await ref
+          .read(gradeAccountControllerProvider.notifier)
+          .requireCredentials();
+      if (!_sessions.isCurrent(lease)) {
+        throw const GradeFailure(GradeFailureKind.unknown);
+      }
+      final ExamReportDownloadResult result = await ref
+          .read(examReportGatewayProvider)
+          .downloadExamReport(credentials, offer);
+      if (!_sessions.isCurrent(lease)) {
+        throw const GradeFailure(GradeFailureKind.unknown);
+      }
+      return result;
+    });
   }
 }
 

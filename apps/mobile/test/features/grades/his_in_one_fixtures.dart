@@ -48,6 +48,60 @@ const String hisInOneNoFormHtml = '''
   <p>Keine Übersicht verfügbar.</p>
 </body></html>''';
 
+/// The "Bescheinigungen" section of the real exam-overview page (confirmed
+/// 2026-10-04): three fixed print buttons, found by their stable
+/// `submit_print_pdf` class, each a classic full form POST
+/// (`myfaces.oam.submitForm`) rather than an AJAX request — no job, no
+/// polling. Labels and ids are real portal chrome, not personal data.
+const String hisInOneExamReportsHtml = '''
+<html><head><title>Leistungen</title></head><body>
+  <form id="examsReadonly" method="post" action="/qisserver/pages/sul/examAssessment/personExamsReadonly.xhtml?_flowId=examsOverviewForPerson-flow&_flowExecutionKey=e8s1">
+    <input type="hidden" name="authenticity_token" value="TOKEN-XYZ" />
+    <input type="hidden" name="javax.faces.ViewState" value="e8s1" />
+    <div id="examsReadonly:exaReports:fieldset_exaReports">
+      <h2>Bescheinigungen</h2>
+      <ul class="buttons_vertical">
+        <li><button id="examsReadonly:exaReports:fieldset_exaReports:printReport_0"
+                    name="examsReadonly:exaReports:fieldset_exaReports:printReport_0"
+                    type="submit"
+                    value="Leistungsübersicht (bestandene Leistungen) / List of passed exam (german) [PDF]"
+                    onclick="return myfaces.oam.submitForm('examsReadonly','examsReadonly:exaReports:fieldset_exaReports:printReport_0',null,[['DISABLE_VALIDATION','true']]);"
+                    class="submit_print_pdf immediate">
+          <span>Leistungsübersicht (bestandene Leistungen) / List of passed exam (german) [PDF]</span>
+        </button></li>
+        <li><button id="examsReadonly:exaReports:fieldset_exaReports:printReport_1"
+                    name="examsReadonly:exaReports:fieldset_exaReports:printReport_1"
+                    type="submit"
+                    value="Leistungsübersicht bestandene Leistungen (englisch) / List of passed exams (english) [PDF]"
+                    onclick="return myfaces.oam.submitForm('examsReadonly','examsReadonly:exaReports:fieldset_exaReports:printReport_1',null,[['DISABLE_VALIDATION','true']]);"
+                    class="submit_print_pdf immediate">
+          <span>Leistungsübersicht bestandene Leistungen (englisch) / List of passed exams (english) [PDF]</span>
+        </button></li>
+        <li><button id="examsReadonly:exaReports:fieldset_exaReports:printReport_2"
+                    name="examsReadonly:exaReports:fieldset_exaReports:printReport_2"
+                    type="submit"
+                    value="Leistungsübersicht fehlende Leistungen / Overview of missing exam [PDF]"
+                    onclick="return myfaces.oam.submitForm('examsReadonly','examsReadonly:exaReports:fieldset_exaReports:printReport_2',null,[['DISABLE_VALIDATION','true']]);"
+                    class="submit_print_pdf immediate">
+          <span>Leistungsübersicht fehlende Leistungen / Overview of missing exam [PDF]</span>
+        </button></li>
+      </ul>
+    </div>
+    <input type="hidden" name="examsReadonly_SUBMIT" value="1" />
+  </form>
+</body></html>''';
+
+/// The exam-overview page with no "Bescheinigungen" section at all — a
+/// legitimate state (not every account/portal build offers one), never a
+/// structure-change error.
+const String hisInOneNoExamReportsHtml = '''
+<html><head><title>Leistungen</title></head><body>
+  <form id="examsReadonly" method="post" action="/qisserver/pages/sul/examAssessment/personExamsReadonly.xhtml">
+    <input type="hidden" name="authenticity_token" value="TOKEN-XYZ" />
+    <input type="hidden" name="javax.faces.ViewState" value="e1s1" />
+  </form>
+</body></html>''';
+
 /// An authenticated HISinOne page: a logout link (the actual login-success
 /// signal), PLUS the hidden `sessionTimeoutLoginForm` that HISinOne renders
 /// on every page, logged in or not, with the very same `asdf`/`fdsa` fields
@@ -207,6 +261,43 @@ final String hisInOneRenderedTreeNoExpandAllHtml =
           ${_row('1.1.1', 3, 'Mathematik I', nummer: '11111', versuch: '1', bewertung: '1.7', status: 'BE')}
         </table>
       </div>
+    </div>
+    <input type="hidden" name="examsReadonly_SUBMIT" value="1" />
+    <input type="hidden" name="javax.faces.ViewState" value="e1s1" />
+  </form>
+</body></html>''';
+
+/// [hisInOneRenderedTreeNoExpandAllHtml] plus the real "Bescheinigungen"
+/// print buttons, for gateway tests exercising both the grade tree and the
+/// exam-report offers from one fetch.
+final String hisInOneRenderedTreeWithExamReportsHtml =
+    '''
+<html><head><title>Leistungen</title></head><body>
+  <a href="/qisserver/rds?state=user&type=3&category=auth.logout">Abmelden</a>
+  <form id="examsReadonly" method="post" action="/qisserver/pages/sul/examAssessment/personExamsReadonly.xhtml">
+    <input type="hidden" name="authenticity_token" value="TOKEN-XYZ" />
+    $_decoyStudienverlaufHtml
+    <div id="examsReadonly:overviewAsTreeReadonly">
+      <div id="examsReadonly:overviewAsTreeReadonly:examTree">
+        <table class="treeTableWithIcons">
+          $_headerRow
+          ${_row('1', 1, 'Bachelor Angewandte Informatik')}
+          ${_row('1.1', 2, 'Modul Mathematik')}
+          ${_row('1.1.1', 3, 'Mathematik I', nummer: '11111', versuch: '1', bewertung: '1.7', status: 'BE')}
+        </table>
+      </div>
+    </div>
+    <div id="examsReadonly:exaReports:fieldset_exaReports">
+      <h2>Bescheinigungen</h2>
+      <ul class="buttons_vertical">
+        <li><button id="examsReadonly:exaReports:fieldset_exaReports:printReport_0"
+                    name="examsReadonly:exaReports:fieldset_exaReports:printReport_0"
+                    type="submit"
+                    value="Leistungsübersicht (bestandene Leistungen) / List of passed exam (german) [PDF]"
+                    class="submit_print_pdf immediate">
+          <span>Leistungsübersicht (bestandene Leistungen) / List of passed exam (german) [PDF]</span>
+        </button></li>
+      </ul>
     </div>
     <input type="hidden" name="examsReadonly_SUBMIT" value="1" />
     <input type="hidden" name="javax.faces.ViewState" value="e1s1" />

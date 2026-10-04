@@ -1,6 +1,7 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import '../domain/exam_report.dart';
 import '../domain/grade.dart';
 
 /// JSON mappers for the encrypted grade cache. Kept out of the domain so the
@@ -42,17 +43,48 @@ abstract final class GradeCacheCodec {
     isLeaf: (j['isLeaf'] as bool?) ?? true,
   );
 
-  static List<Map<String, dynamic>> report(GradeReport r) =>
-      r.entries.map(entry).toList();
+  static Map<String, dynamic> examReportOffer(ExamReportOffer o) =>
+      <String, dynamic>{'buttonId': o.buttonId, 'label': o.label};
+
+  static ExamReportOffer examReportOfferFrom(Map<String, dynamic> j) =>
+      ExamReportOffer(
+        buttonId: (j['buttonId'] as String?) ?? '',
+        label: (j['label'] as String?) ?? '',
+      );
+
+  /// A wrapper object, not a bare array: [reportFrom] still reads the
+  /// earlier bare-array shape (cached before exam-report offers existed) as
+  /// entries with no offers, never throwing on old content.
+  static Map<String, dynamic> report(GradeReport r) => <String, dynamic>{
+    'entries': r.entries.map(entry).toList(),
+    'examReports': r.examReports.map(examReportOffer).toList(),
+  };
 
   static GradeReport reportFrom(Object? decoded) {
-    if (decoded is! List) return const GradeReport(<GradeEntry>[]);
+    if (decoded is List) {
+      return GradeReport(_entriesFrom(decoded));
+    }
+    if (decoded is! Map) return const GradeReport(<GradeEntry>[]);
     return GradeReport(
-      decoded
-          .whereType<Map>()
-          .map((Map m) => entryFrom(Map<String, dynamic>.from(m)))
-          .toList(),
+      _entriesFrom(decoded['entries']),
+      examReports: _examReportsFrom(decoded['examReports']),
     );
+  }
+
+  static List<GradeEntry> _entriesFrom(Object? decoded) {
+    if (decoded is! List) return <GradeEntry>[];
+    return decoded
+        .whereType<Map>()
+        .map((Map m) => entryFrom(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  static List<ExamReportOffer> _examReportsFrom(Object? decoded) {
+    if (decoded is! List) return <ExamReportOffer>[];
+    return decoded
+        .whereType<Map>()
+        .map((Map m) => examReportOfferFrom(Map<String, dynamic>.from(m)))
+        .toList();
   }
 
   static Grade _grade(String? kind, Object? value) {

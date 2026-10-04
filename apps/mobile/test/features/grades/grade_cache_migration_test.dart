@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:campus_koethen/core/cache/encrypted_box.dart';
 import 'package:campus_koethen/features/grades/data/encrypted_grade_cache.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -100,4 +101,68 @@ void main() {
       expect(read, isNull);
     },
   );
+
+  test('writeReport/readReport round-trips the exam-report offers alongside '
+      'the entries', () async {
+    final cache = EncryptedGradeCache(
+      boxNamed('campus_grades_cache_v2', 'grades.cache.key.v2'),
+    );
+    final report = GradeReport(
+      <GradeEntry>[
+        const GradeEntry(
+          examNumber: '1',
+          title: 'Analysis I',
+          grade: Grade.graded(1.7),
+          status: ExamStatus.passed,
+          statusText: 'bestanden',
+        ),
+      ],
+      examReports: const <ExamReportOffer>[
+        ExamReportOffer(
+          buttonId:
+              'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
+          label: 'Leistungsübersicht [PDF]',
+        ),
+      ],
+    );
+    await cache.writeReport(report);
+
+    final GradeReport? read = await cache.readReport();
+    expect(read, isNotNull);
+    expect(read!.entries.single.title, 'Analysis I');
+    expect(read.examReports, hasLength(1));
+    expect(
+      read.examReports.single.buttonId,
+      'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
+    );
+  });
+
+  test('a report cached before examReports existed (a bare entries array, no '
+      'wrapper) still reads correctly, with no exam reports rather than a '
+      'thrown error', () async {
+    final EncryptedBox box = boxNamed(
+      'campus_grades_cache_v2',
+      'grades.cache.key.v2',
+    );
+    await box.write(
+      'report',
+      jsonEncode(<Map<String, dynamic>>[
+        <String, dynamic>{
+          'examNumber': '1',
+          'title': 'Vor der Bescheinigungs-Funktion',
+          'gradeKind': 'graded',
+          'gradeValue': 1.0,
+          'status': 'passed',
+          'statusText': 'bestanden',
+        },
+      ]),
+    );
+    final cache = EncryptedGradeCache(box);
+
+    final GradeReport? read = await cache.readReport();
+
+    expect(read, isNotNull);
+    expect(read!.entries.single.title, 'Vor der Bescheinigungs-Funktion');
+    expect(read.examReports, isEmpty);
+  });
 }

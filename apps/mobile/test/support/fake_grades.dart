@@ -4,6 +4,8 @@
 import 'dart:async';
 
 import 'package:campus_koethen/features/grades/domain/clock.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report_gateway.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/domain/grade_cache_store.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credential_store.dart';
@@ -130,7 +132,7 @@ class InMemoryGradeCacheStore implements GradeCacheStore {
 }
 
 /// Scriptable gateway. Records how often the portal was hit.
-class FakeGradesGateway implements GradesGateway {
+class FakeGradesGateway implements GradesGateway, ExamReportGateway {
   FakeGradesGateway({this.report, this.error, this.delay});
 
   GradeReport? report;
@@ -151,6 +153,21 @@ class FakeGradesGateway implements GradesGateway {
     if (delay != null) await Future<void>.delayed(delay!);
     if (error != null) throw error!;
     return report ?? const GradeReport(<GradeEntry>[]);
+  }
+
+  /// Scripted answer for `downloadExamReport`.
+  ExamReportDownloadResult? examReportResult;
+  int downloadExamReportCalls = 0;
+  ExamReportOffer? lastRequestedOffer;
+
+  @override
+  Future<ExamReportDownloadResult> downloadExamReport(
+    GradeCredentials credentials,
+    ExamReportOffer offer,
+  ) async {
+    downloadExamReportCalls++;
+    lastRequestedOffer = offer;
+    return examReportResult ?? const ExamReportUnavailable('not-scripted');
   }
 }
 

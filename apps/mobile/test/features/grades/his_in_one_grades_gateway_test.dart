@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:campus_koethen/features/grades/data/his_in_one_grades_gateway.dart';
+import 'package:campus_koethen/features/grades/domain/exam_report.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
 import 'package:campus_koethen/features/grades/domain/grade_failure.dart';
@@ -293,6 +294,94 @@ void main() {
       );
     },
   );
+
+  group('downloadExamReport', () {
+    final ExamReportOffer offer = const ExamReportOffer(
+      buttonId: 'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
+      label:
+          'Leistungsübersicht (bestandene Leistungen) / '
+          'List of passed exam (german) [PDF]',
+    );
+
+    FakeHtmlResponse scriptWithReports(RequestOptions o) {
+      final String url = o.uri.toString();
+      if (url.contains('auth.login')) {
+        return const FakeHtmlResponse.redirect(_landingUrl);
+      }
+      if (url == _landingUrl) {
+        return const FakeHtmlResponse(hisInOneAuthenticatedLandingHtml);
+      }
+      if (url.contains('auth.logout')) return const FakeHtmlResponse('bye');
+      if (url.contains('personExamsReadonly.xhtml') && o.method == 'GET') {
+        return FakeHtmlResponse(hisInOneRenderedTreeWithExamReportsHtml);
+      }
+      return const FakeHtmlResponse('not found', statusCode: 404);
+    }
+
+    test(
+      'submits the real full-POST shape and returns the verified PDF',
+      () async {
+        final adapter = FakeHtmlAdapter((RequestOptions o) {
+          final String url = o.uri.toString();
+          if (o.uri.queryParameters['state'] == 'docdownload') {
+            return const FakeHtmlResponse(
+              '%PDF-1.7\nfixture',
+              contentType: 'application/pdf',
+            );
+          }
+          if (url.contains('personExamsReadonly.xhtml') && o.method == 'POST') {
+            expect(
+              o.data,
+              isA<Map>().having(
+                (Map m) => m[offer.buttonId],
+                'button field',
+                offer.label,
+              ),
+            );
+            expect((o.data as Map)['DISABLE_VALIDATION'], 'true');
+            return const FakeHtmlResponse.redirect(
+              'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
+              '?state=docdownload&docId=abc',
+            );
+          }
+          return scriptWithReports(o);
+        });
+
+        final ExamReportDownloadResult result = await HisInOneGradesGateway(
+          const HisInOneProfile(),
+          adapter,
+        ).downloadExamReport(_creds, offer);
+
+        expect(result, isA<ExamReportDownloadLoaded>());
+        final ExamReportDownloadLoaded loaded =
+            result as ExamReportDownloadLoaded;
+        expect(
+          loaded.bytes.take(5),
+          orderedEquals(<int>[0x25, 0x50, 0x44, 0x46, 0x2d]),
+        );
+      },
+    );
+
+    test('an offer no longer listed on a fresh read is rejected before any '
+        'POST', () async {
+      final adapter = FakeHtmlAdapter(scriptWithReports);
+      const ExamReportOffer stale = ExamReportOffer(
+        buttonId: 'examsReadonly:exaReports:fieldset_exaReports:printReport_9',
+        label: 'Veraltetes Angebot',
+      );
+
+      final ExamReportDownloadResult result = await HisInOneGradesGateway(
+        const HisInOneProfile(),
+        adapter,
+      ).downloadExamReport(_creds, stale);
+
+      expect(result, isA<ExamReportUnavailable>());
+      expect(
+        (result as ExamReportUnavailable).reason,
+        'offer-no-longer-listed',
+      );
+    });
+  });
 }
 
 /// Regression group for LEVIORA-154, reproduced against the live portal:
@@ -361,6 +450,25 @@ void _deployedPortalBuildTests() {
             o.uri.toString().contains('personExamsReadonly.xhtml'),
       ),
       isFalse,
+    );
+  });
+
+  test('a rendered tree with Bescheinigungen populates both entries and '
+      'examReports from the one fetch', () async {
+    final adapter = FakeHtmlAdapter(
+      (RequestOptions o) => script(hisInOneRenderedTreeWithExamReportsHtml, o),
+    );
+
+    final GradeReport report = await HisInOneGradesGateway(
+      const HisInOneProfile(),
+      adapter,
+    ).fetchGrades(_creds);
+
+    expect(report.entries, hasLength(3));
+    expect(report.examReports, hasLength(1));
+    expect(
+      report.examReports.single.buttonId,
+      'examsReadonly:exaReports:fieldset_exaReports:printReport_0',
     );
   });
 }

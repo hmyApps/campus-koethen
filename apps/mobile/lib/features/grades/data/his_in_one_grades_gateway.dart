@@ -1,13 +1,18 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
+import '../../../core/documents/app_document.dart';
+import '../domain/exam_report.dart';
+import '../domain/exam_report_gateway.dart';
 import '../domain/grade.dart';
 import '../domain/grade_credentials.dart';
 import '../domain/grade_failure.dart';
-import '../domain/grade_portal_profile.dart';
 import '../domain/grades_gateway.dart';
+import '../domain/his_in_one_profile.dart';
 import 'his_in_one_html_parser.dart';
 import 'his_in_one_session.dart';
 
@@ -27,10 +32,10 @@ import 'his_in_one_session.dart';
 /// "expand all" (POST, with every hidden field taken from the loaded page —
 /// nothing hard-coded, and only when that control exists in this portal
 /// build), and logout (GET, `finally`).
-class HisInOneGradesGateway implements GradesGateway {
+class HisInOneGradesGateway implements GradesGateway, ExamReportGateway {
   HisInOneGradesGateway(this._profile, [this._adapter]);
 
-  final GradePortalProfile _profile;
+  final HisInOneProfile _profile;
   final HttpClientAdapter? _adapter;
 
   @override
@@ -76,7 +81,10 @@ class HisInOneGradesGateway implements GradesGateway {
           return const GradeReport(<GradeEntry>[]);
         case HisInOneOverviewKind.rendered:
           // No expand-all control in this portal build — parse as rendered.
-          return await HisInOneHtmlParser.parseGradeReport(overview.html);
+          // The "Bescheinigungen" print buttons, if any, live on this SAME
+          // page — read them from the one fetch already in hand rather
+          // than fetching the page again.
+          return await _withExamReports(overview.html);
         case HisInOneOverviewKind.expandable:
           break;
       }
@@ -96,7 +104,7 @@ class HisInOneGradesGateway implements GradesGateway {
       if (afterExpand.kind == HisInOneOverviewKind.empty) {
         return const GradeReport(<GradeEntry>[]);
       }
-      return await HisInOneHtmlParser.parseGradeReport(expanded.html);
+      return await _withExamReports(expanded.html);
     } on GradeFailure {
       rethrow;
     } on HisInOneSessionFailure catch (e) {
@@ -110,6 +118,136 @@ class HisInOneGradesGateway implements GradesGateway {
       await session.close(_profile.logoutUrl);
     }
   }
+
+  Future<GradeReport> _withExamReports(String html) async {
+    final GradeReport report = await HisInOneHtmlParser.parseGradeReport(html);
+    final List<ExamReportOffer> offers =
+        await HisInOneHtmlParser.findExamReports(html);
+    return GradeReport(report.entries, examReports: offers);
+  }
+
+  @override
+  Future<ExamReportDownloadResult> downloadExamReport(
+    GradeCredentials credentials,
+    ExamReportOffer offer,
+  ) async {
+    final HisInOneSession session = HisInOneSession(
+      baseUrl: _profile.baseUrl,
+      allows: _profile.allows,
+      adapter: _adapter,
+    );
+    try {
+      await session.login(
+        loginUrl: _profile.loginUrl,
+        username: credentials.username,
+        password: credentials.password,
+        successSignal: 'category=menu.browse',
+        failureSignal: 'hisinoneStartPage.faces',
+        isAuthenticated: HisInOneHtmlParser.isAuthenticated,
+      );
+      final HisInOnePage overview = await session.fetchPage(_examOverviewUrl());
+
+      // The button's own id is scoped to THIS render's `_flowExecutionKey`
+      // — re-read it fresh rather than trusting the caller's (possibly
+      // older) offer, and refuse if it no longer matches what is actually
+      // on screen now.
+      final List<ExamReportOffer> current =
+          await HisInOneHtmlParser.findExamReports(overview.html);
+      final bool stillOffered = current.any(
+        (ExamReportOffer o) => o.buttonId == offer.buttonId,
+      );
+      if (!stillOffered) {
+        return const ExamReportUnavailable('offer-no-longer-listed');
+      }
+
+      final HisInOneFullPostRequest? request =
+          await HisInOneHtmlParser.buildExamReportPostRequest(
+            overview.html,
+            offer.buttonId,
+          );
+      if (request == null) {
+        throw const GradeFailure(GradeFailureKind.portalStructureChanged);
+      }
+
+      return await _fetchReportDocument(session, request, offer.label);
+    } on GradeFailure {
+      rethrow;
+    } on HisInOneSessionFailure catch (e) {
+      throw _mapSessionFailure(e);
+    } on DioException catch (e) {
+      throw _mapSessionFailure(HisInOneSession.mapDioException(e));
+    } catch (_) {
+      throw const GradeFailure(GradeFailureKind.unknown);
+    } finally {
+      await session.close(_profile.logoutUrl);
+    }
+  }
+
+  /// Submits the full-POST [request] and streams the result through every
+  /// same-host redirect hop (the real portal's one-time download, confirmed
+  /// 2026-10-04) — the same verified-document contract as
+  /// `HisInOneStudentServiceGateway._fetchDocument`: exact content-type,
+  /// a size budget enforced while streaming (never after fully buffering),
+  /// and a real PDF-magic check on the bytes that actually arrived.
+  Future<ExamReportDownloadResult> _fetchReportDocument(
+    HisInOneSession session,
+    HisInOneFullPostRequest request,
+    String fallbackName,
+  ) async {
+    final Response<ResponseBody> response = await session.postFormStream(
+      request.action,
+      request.formData,
+      allowsTarget: _profile.allowsDocumentDownload,
+    );
+    if ((response.statusCode ?? 0) != 200) {
+      return ExamReportUnavailable('http-${response.statusCode}');
+    }
+    final String mediaType =
+        response.headers
+            .value(Headers.contentTypeHeader)
+            ?.split(';')
+            .first
+            .trim()
+            .toLowerCase() ??
+        '';
+    if (mediaType.isNotEmpty &&
+        mediaType != 'application/pdf' &&
+        mediaType != 'application/octet-stream') {
+      return const ExamReportUnavailable('not-a-pdf');
+    }
+    final int? declaredLength = int.tryParse(
+      response.headers.value(Headers.contentLengthHeader) ?? '',
+    );
+    if (declaredLength != null && declaredLength > kMaxInMemoryPreviewBytes) {
+      return const ExamReportTooLarge();
+    }
+    final BytesBuilder builder = BytesBuilder(copy: false);
+    final ResponseBody? body = response.data;
+    if (body == null) return const ExamReportUnavailable('empty-body');
+    await for (final Uint8List chunk in body.stream) {
+      if (builder.length + chunk.length > kMaxInMemoryPreviewBytes) {
+        return const ExamReportTooLarge();
+      }
+      builder.add(chunk);
+    }
+    final Uint8List bytes = builder.takeBytes();
+    if (bytes.isEmpty) return const ExamReportUnavailable('empty-body');
+    if (!_hasPdfMagic(bytes)) {
+      return const ExamReportUnavailable('not-a-pdf');
+    }
+    return ExamReportDownloadLoaded(
+      bytes: bytes,
+      filename: safeDocumentFilename('$fallbackName.pdf'),
+    );
+  }
+
+  static bool _hasPdfMagic(Uint8List bytes) =>
+      bytes.length >= 5 &&
+      bytes[0] == 0x25 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x44 &&
+      bytes[3] == 0x46 &&
+      bytes[4] == 0x2d;
 
   String _examOverviewUrl() =>
       '${_profile.baseUrl}/qisserver/pages/sul/examAssessment/'
