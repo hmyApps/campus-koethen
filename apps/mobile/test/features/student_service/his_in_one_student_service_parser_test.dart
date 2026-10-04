@@ -218,6 +218,57 @@ void main() {
     });
   });
 
+  group('buildJobConfigurationSubmitRequest', () {
+    test('builds the full, non-AJAX submission with the pre-selected semester', () {
+      const TabSwitchRequest base = TabSwitchRequest(
+        action:
+            '/qisserver/pages/cm/stu/studyService/start.xhtml'
+            '?_flowId=studyservice-flow&_flowExecutionKey=e1s2',
+        formData: <String, String>{
+          'authenticity_token': 'auth-token',
+          'javax.faces.ViewState': 'e1s2',
+        },
+      );
+      final TabSwitchRequest? request =
+          HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+            partialResponseNeedsConfiguration(),
+            base,
+          );
+
+      expect(request, isNotNull);
+      expect(request!.action, base.action);
+      // Every hidden field from the original page is carried through.
+      expect(request.formData['authenticity_token'], 'auth-token');
+      // The portal's own pre-selected option (the current semester) is
+      // submitted unchanged — never a guessed or hard-coded semester.
+      expect(
+        request
+            .formData['studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_0:setting_focus'],
+        '284',
+      );
+      const String startJobId =
+          'studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:navigationBottom:startJob';
+      expect(request.formData[startJobId], 'PDF erstellen');
+      expect(request.formData['activePageElementId'], startJobId);
+    });
+
+    test(
+      'a job that starts directly (no configuration overlay) yields null',
+      () {
+        const TabSwitchRequest base = TabSwitchRequest(
+          action: '/qisserver/pages/cm/stu/studyService/start.xhtml',
+          formData: <String, String>{},
+        );
+        final TabSwitchRequest? request =
+            HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+              partialResponseFinished(),
+              base,
+            );
+        expect(request, isNull);
+      },
+    );
+  });
+
   group('extractDownloadUrlFromPartialResponse', () {
     test('finds the one-time download link and unescapes its query string', () {
       final String? url =

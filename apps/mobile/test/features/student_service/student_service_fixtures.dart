@@ -193,6 +193,33 @@ String partialResponseFinished({String docId = 'abc-123'}) =>
 </changes></partial-response>
 ''';
 
+/// A JSF partial-response for a job that needs configuration before it can
+/// start — confirmed 2026-10-04 from a real captured job click:
+/// "Studienverlaufsbescheinigung" does not start directly; its button opens
+/// this overlay instead, asking which semester, with the current semester
+/// pre-selected (`selected="selected"`). Only the overlay's own "PDF
+/// erstellen" button (`…:navigationBottom:startJob`) actually starts the
+/// job, via a full page POST — unlike every other button in this response,
+/// its real onclick carries no `jsf.ajax.request` call at all.
+String partialResponseNeedsConfiguration({String viewState = 'e1s2'}) =>
+    '''
+<?xml version='1.0' encoding='UTF-8'?>
+<partial-response><changes>
+<update id="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay"><![CDATA[
+<div id="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:overlay" class="overlay modal cm_stu_bs_Studienverlauf"><h2>'Studienverlaufsbescheinigung' anpassen</h2>
+<label for="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_0:setting_focus">Semester</label>
+<select id="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_0:setting_focus" name="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_0:setting_focus">
+<option value="" data-title="&#160;">&#160;</option>
+<option value="284" selected="selected" data-title="Winter 2026/27">Winter 2026/27</option>
+<option value="285" data-title="Sommer 2026">Sommer 2026</option>
+</select>
+<button id="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:navigationBottom:startJob" name="studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:navigationBottom:startJob" type="submit" value="PDF erstellen"><span>PDF erstellen</span></button>
+</div>
+]]></update>
+<update id="j_id__v_7:javax.faces.ViewState:1"><![CDATA[$viewState]]></update>
+</changes></partial-response>
+''';
+
 /// The SEPARATE-host redirect target the entry link above actually resolves
 /// to once followed — confirmed 2026-10-04 from a real completed download's
 /// `Location` header, independently corroborated by the portal's own

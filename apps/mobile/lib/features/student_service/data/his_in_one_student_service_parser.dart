@@ -316,6 +316,70 @@ abstract final class HisInOneStudentServiceParser {
     r'''(?:href|window\.location)\s*=\s*['"]([^'"]*state=docdownload[^'"]*)['"]''',
   );
 
+  /// Builds the full, NON-AJAX form submission that actually starts a job
+  /// requiring configuration — confirmed 2026-10-04: not every certificate
+  /// starts directly from the job button's own AJAX click. "Studienverlaufs-
+  /// bescheinigung" first opens a configuration overlay asking which
+  /// semester; only THAT overlay's own "PDF erstellen" button starts the
+  /// job, and its onclick has no `jsf.ajax.request` at all — it is a plain
+  /// `type="submit"` that does a full page POST/redirect/GET, exactly like
+  /// the grades feature's print buttons. [base] is the same request the
+  /// caller already built for the job button's own AJAX click (same action,
+  /// same hidden fields, ViewState already rotated to this response).
+  ///
+  /// Returns `null` when [partialResponseXml] does not contain this overlay
+  /// at all, which is the caller's cue that the job already started directly
+  /// and it should go straight to polling instead of guessing a submission
+  /// that cannot possibly exist.
+  ///
+  /// Only one configuration field is handled — the semester `<select>` — the
+  /// only one any real job has offered so far; its CURRENTLY selected option
+  /// (confirmed real behaviour: the portal pre-selects the current semester)
+  /// is submitted unchanged rather than inventing a choice.
+  static TabSwitchRequest? buildJobConfigurationSubmitRequest(
+    String partialResponseXml,
+    TabSwitchRequest base,
+  ) {
+    final RegExpMatch? startJob = _startJobButtonPattern.firstMatch(
+      partialResponseXml,
+    );
+    if (startJob == null) return null;
+    final String startJobId = startJob.group(1)!;
+    final String startJobValue = startJob.group(2)!;
+
+    final RegExpMatch? select = _configurationSelectPattern.firstMatch(
+      partialResponseXml,
+    );
+    if (select == null) return null;
+    final String selectName = select.group(1)!;
+
+    final RegExpMatch? selected = _selectedOptionPattern.firstMatch(
+      partialResponseXml,
+    );
+    if (selected == null) return null;
+    final String selectValue = selected.group(1)!;
+
+    final Map<String, String> formData = Map<String, String>.of(base.formData)
+      ..addAll(<String, String>{
+        'activePageElementId': startJobId,
+        selectName: selectValue,
+        startJobId: startJobValue,
+      });
+    return TabSwitchRequest(action: base.action, formData: formData);
+  }
+
+  static final RegExp _startJobButtonPattern = RegExp(
+    r'''<button id="([^"]*:navigationBottom:startJob)"[^>]*value="([^"]*)"''',
+  );
+
+  static final RegExp _configurationSelectPattern = RegExp(
+    r'''<select id="[^"]*" name="([^"]*)"''',
+  );
+
+  static final RegExp _selectedOptionPattern = RegExp(
+    r'''<option value="([^"]*)" selected="selected"''',
+  );
+
   static String _normalized(String value) =>
       value.replaceAll(_whitespacePattern, ' ').trim();
 

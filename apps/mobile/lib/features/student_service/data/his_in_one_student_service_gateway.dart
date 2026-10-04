@@ -16,6 +16,11 @@ import '../domain/student_service_overview.dart';
 import '../domain/student_service_profile.dart';
 import 'his_in_one_student_service_parser.dart';
 
+/// The "Studienservice" form's own id — also the client id jsf.js adds as
+/// its own `id=id` parameter on every AJAX request it builds for a
+/// component inside this form (confirmed 2026-10-04 from a real request).
+const String _formId = 'studyserviceForm';
+
 /// Tab button ids of the "Studienservice" form, as read from the live
 /// portal on 2026-10-01.
 abstract final class _Tabs {
@@ -164,14 +169,15 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         return const CertificateUnavailable('offer-no-longer-listed');
       }
 
-      final TabSwitchRequest? ajaxForm =
+      final TabSwitchRequest? initialAjaxForm =
           HisInOneStudentServiceParser.buildAjaxFormRequest(reportPage.html);
-      if (ajaxForm == null) {
+      if (initialAjaxForm == null) {
         throw const StudentServiceFailure(
           StudentServiceFailureKind.portalStructureChanged,
           stage: 'ajaxForm',
         );
       }
+      TabSwitchRequest ajaxForm = initialAjaxForm;
 
       // Job generation is a JSF/MyFaces AJAX round trip built from the real
       // page's form/source anchors and the standard partial-response contract.
@@ -201,6 +207,42 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
           HisInOneStudentServiceParser.extractDownloadUrlFromPartialResponse(
             started.raw,
           );
+
+      // Not every job starts directly from the button's own AJAX click —
+      // confirmed 2026-10-04: "Studienverlaufsbescheinigung" first opens a
+      // configuration overlay (asking which semester) instead of starting.
+      // Only that overlay's own "PDF erstellen" button — a plain
+      // `type="submit"` with no AJAX at all — actually starts the job, via a
+      // full page POST/redirect/GET exactly like the grades feature's print
+      // buttons. `buildJobConfigurationSubmitRequest` returns `null` when no
+      // such overlay is present, which is the normal case for a job that
+      // starts right away (e.g. "Gebührenbescheinigung").
+      if (downloadUrl == null) {
+        final TabSwitchRequest? configSubmit =
+            HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+              started.raw,
+              ajaxForm,
+            );
+        if (configSubmit != null) {
+          final HisInOnePage submitted = await session.postForm(
+            configSubmit.action,
+            configSubmit.formData,
+          );
+          downloadUrl =
+              HisInOneStudentServiceParser.extractDownloadUrlFromPartialResponse(
+                submitted.html,
+              );
+          // The job may still be generating after the full submit — rebuild
+          // the AJAX base from the page actually reached (fresh hidden
+          // fields, fresh ViewState) so a subsequent poll targets the right
+          // render, same as the already-verified direct-start path.
+          final TabSwitchRequest? freshAjaxForm =
+              HisInOneStudentServiceParser.buildAjaxFormRequest(submitted.html);
+          if (freshAjaxForm != null) {
+            ajaxForm = freshAjaxForm;
+          }
+        }
+      }
 
       if (downloadUrl == null) {
         // The real `<p:poll>` widget's own client id and render target
@@ -330,12 +372,29 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         stage: 'ajaxRequestParams',
       );
     }
+    // `javax.faces.behavior.event` and `javax.faces.partial.event` are NOT
+    // optional bookkeeping: confirmed 2026-10-04 from a real captured job
+    // run, omitting them makes the server accept the request (200, a normal
+    // partial-response) but never actually run the job — the poll widget's
+    // own `data-stop` stays "true" forever and no download link ever
+    // appears, the exact failure this was debugging. The real button's own
+    // `jsf.ajax.request` call embeds `'javax.faces.behavior.event':'action'`
+    // literally in its onclick (both the job button and the poll button);
+    // `javax.faces.partial.event` is the real DOM event type jsf.js adds
+    // automatically for a genuine click, which a scripted POST has to supply
+    // by hand since there is no browser event to read it from.
     final Map<String, String> formData = Map<String, String>.of(base.formData)
       ..addAll(<String, String>{
         'javax.faces.partial.ajax': 'true',
         'javax.faces.source': sourceId,
         'javax.faces.partial.execute': executeId,
         'javax.faces.partial.render': renderId,
+        'javax.faces.behavior.event': 'action',
+        'javax.faces.partial.event': 'click',
+        // jsf.js's own ajax request always adds the enclosing form's own
+        // id=id pair on top of the form's hidden fields — also confirmed
+        // 2026-10-04 from the real request body.
+        _formId: _formId,
       });
     final HisInOnePage raw = await session.postForm(base.action, formData);
     final String? nextViewState =
