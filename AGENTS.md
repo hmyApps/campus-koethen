@@ -32,7 +32,7 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    **Eng begrenzte, ausdrücklich beschlossene Ausnahme (nur diese):** Persönliche, besonders
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
-   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau vier**:
+   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau fünf**:
    - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP);
    - der **Notenspiegel** → direkt und **nur** zu genau dem Host des Portals, auf dem das
      jeweilige Konto eingerichtet wurde. Die Hochschule Anhalt betreibt zwei Prüfungsportale
@@ -64,6 +64,18 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      Aufgaben-, Abgabe-, Ankündigungs- oder Deadline-Daten dürfen ein Campus-Köthen-Backend
      erreichen. Der quellenübergreifende Kalender führt Stundenplan (Campus API) und
      Moodle-Deadlines **ausschließlich lokal auf dem Gerät** zusammen.
+   - der **Nextcloud-Dateiexplorer** → direkt und **nur** zur exakten Origin
+     `https://cloud.hs-anhalt.de`. Die Anmeldung erfolgt ausschließlich über Nextcloud Login Flow
+     v2 im Systembrowser; Campus Köthen erhält und übermittelt dabei nie das zentrale
+     Hochschulpasswort. Das ausgegebene App-Passwort, `loginName` und die für WebDAV ermittelte
+     Nutzer-ID liegen ausschließlich im gerätegebundenen Keychain/Keystore. Verzeichnislisten und
+     geladene Dateien bleiben flüchtig im Arbeitsspeicher und werden nicht in Hive,
+     SharedPreferences oder einem Campus-Backend gespeichert. Erlaubt sind nur Login Flow v2,
+     die OCS-Abfrage des eigenen Benutzerprofils, der Widerruf des eigenen App-Passworts sowie
+     lesende WebDAV-Aufrufe unter `/remote.php/dav/files/{eigene Nutzer-ID}`. Keine Uploads,
+     Änderungen, Freigabelinks oder frei konfigurierbaren Nextcloud-Server. `−` versucht den
+     serverseitigen Widerruf und löscht die lokale Berechtigung auch dann verifiziert, wenn der
+     Server nicht erreichbar ist. Details: [`docs/nextcloud.md`](docs/nextcloud.md).
    - die **Antragstellung und das Feedback** (Finanzanträge und Rückmeldungen an das Gremiensystem
      des Studierendenrats) → direkt an dessen öffentliche API. Anders als die drei anderen ist
      dieser Dienst **nicht** nutzerauthentifiziert; ausschlaggebend ist der Inhalt: Eine
@@ -88,7 +100,8 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    Drittanbieterzugriffe — jede weitere Ausnahme muss hier ausdrücklich ergänzt werden.
 
    Die optionale zentrale `UniversityIdentity` ist ausschließlich eine **lokale Eingabehilfe** für
-   Mail, Moodle und Noten — **keine** gemeinsame SSO-Sitzung und kein App-/Backend-Konto. Sie enthält
+   Mail, Moodle und Noten — **keine** gemeinsame SSO-Sitzung und kein App-/Backend-Konto. Nextcloud
+   verwendet unabhängig davon ausschließlich den Browser-basierten Login Flow v2. Die Identität enthält
    genau **eine Kennung** (Benutzername oder vollständige Mailadresse) und ein Passwort, wird erst
    nach ausdrücklicher Bestätigung und erfolgreicher Prüfung durch mindestens einen Dienst
    gespeichert und liegt nur im gerätegebundenen Keychain/Keystore. Ein reiner Benutzername wird

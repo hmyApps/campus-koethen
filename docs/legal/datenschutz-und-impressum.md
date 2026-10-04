@@ -1,6 +1,6 @@
 # Campus Köthen – Datenschutzerklärung und Impressum
 
-Stand der Datenschutzerklärung: 2. Oktober 2026 · Stand des Impressums: 24. September 2026
+Stand der Datenschutzerklärung: 4. Oktober 2026 · Stand des Impressums: 24. September 2026
 
 ## Datenschutzerklärung
 
@@ -38,6 +38,8 @@ Wenn du „Guthaben prüfen“ auswählst, liest die App über NFC ausschließli
 
 Optional kannst du genau eine Hochschulkennung — Benutzername oder vollständige Hochschul-Mailadresse — und ein Passwort zentral hinterlegen. Die Speicherung erfolgt erst nach deiner ausdrücklichen Bestätigung und nachdem mindestens einer der Dienste E-Mail, Moodle oder Noten die Daten akzeptiert hat. Beide Werte liegen ausschließlich im gerätegebundenen sicheren Schlüsselspeicher. Für die E-Mail-Verbindung ergänzt die App einen Benutzernamen ohne `@` lokal zu `<Kennung>@hs-anhalt.de`; eine vollständige Mailadresse bleibt unverändert. Moodle und Noten erhalten die Kennung unverändert. Ein erkanntes früheres Drei-Feld-Schema wird vollständig gelöscht und nicht automatisch migriert. Die Werte werden weder an Campus-Backend, Strapi oder Worker übertragen noch in Einstellungen, Cache, Logs oder öffentlichem App-State abgelegt. Der zentrale Zugang ist nur eine lokale Eingabehilfe und keine gemeinsame SSO-Sitzung: Erst dein Tippen auf `+` meldet den ausgewählten Dienst separat und direkt beim jeweiligen Hochschulsystem an. `−` löscht nur die dienstbezogene Session und deren lokale Daten; der zentrale Zugang bleibt für andere Dienste erhalten. „Hochschulzugang vollständig löschen“ trennt zuerst alle Dienste und löscht den zentralen Zugang zuletzt. Scheitert ein Dienst, bleibt der zentrale Zugang für einen erneuten Versuch erhalten. Bei einem Passwortwechsel kannst du die Daten unter „Zugangsdaten aktualisieren“ erneut durch einen gewählten Dienst prüfen und ersetzen.
 
+Nextcloud erhält diese zentrale Identität nie und verwendet stattdessen den Browser-basierten Login Flow v2.
+
 ### Studentische E-Mail
 
 Wenn du die studentische E-Mail nutzt, verbindet sich dein Gerät über eine TLS-geschützte Verbindung direkt mit dem Mailserver der Hochschule Anhalt (`mail.hs-anhalt.de`). Campus-API, Strapi und Worker sind nicht beteiligt und erhalten weder deine Zugangsdaten noch deine E-Mails. Die dienstbezogene E-Mail-Adresse und das Passwort werden ausschließlich im sicheren Schlüsselspeicher deines Geräts abgelegt. Für die Offline-Nutzung speichert die App E-Mail-Kopfzeilen, Nachrichteninhalte, beteiligte Adressen und – falls aktiviert – Anhänge in einem verschlüsselten Cache auf diesem Gerät. Nach erfolgreichem „E-Mail-Verbindung und lokale Daten löschen“ sind die dienstbezogenen Zugangsdaten, der lokale Cache und dessen Verschlüsselungsschlüssel entfernt; ein optional hinterlegter zentraler Hochschulzugang bleibt erhalten. Deine E-Mails auf dem Hochschulserver bleiben unverändert.
@@ -52,6 +54,10 @@ Ist dein Konto auf HISinOne eingerichtet, bietet die App im Modul „HISinOne" z
 
 Wenn du Moodle verbindest, kommuniziert die App direkt und verschlüsselt mit `moodle.hs-anhalt.de`. Der Moodle-Anmeldevorgang speichert dein Passwort nicht im Moodle-Konto; optional kann dasselbe Passwort nach deiner ausdrücklichen Bestätigung getrennt im zentralen Hochschulzugang liegen. Das von Moodle ausgestellte Sitzungstoken, deine Moodle-Nutzerkennung sowie Kurse, Materialien, Aufgaben, Ankündigungen und Fristen werden sicher beziehungsweise verschlüsselt auf deinem Gerät gespeichert. Campus-Backend und Hostinger erhalten diese Daten nicht. Mit „Moodle-Verbindung und lokale Daten löschen“ werden Token, Nutzerkennung, Cache und zugehörige lokale Synchronisationsdaten gelöscht; ein optional hinterlegter zentraler Hochschulzugang bleibt erhalten. Für die Verarbeitung auf Moodle ist die Hochschule Anhalt verantwortlich.
 
+### Nextcloud
+
+Wenn du Nextcloud verbindest, startet die App den offiziellen Login Flow v2 von `cloud.hs-anhalt.de` im Systembrowser. Dein Hochschulpasswort wird nur dort eingegeben und gelangt nicht an Campus Köthen. Nextcloud stellt der App ein widerrufbares App-Passwort aus; dieses sowie Loginname und Nutzer-ID liegen ausschließlich im gerätegebundenen sicheren Schlüsselspeicher. Die App liest Ordner und von dir ausgewählte Dateien direkt und verschlüsselt per WebDAV unter deiner eigenen Nutzerwurzel. Verzeichnislisten, Dateimetadaten und geladene Dateien werden nicht dauerhaft zwischengespeichert, sondern nur vorübergehend im Arbeitsspeicher gehalten. Erst eine bewusste Teilen-/Speichern-Aktion übergibt eine Datei an das Betriebssystem. Beim Trennen versucht die App, das App-Passwort bei Nextcloud zu widerrufen, und löscht die lokale Berechtigung auch bei einem Serverfehler. Campus-Backend, Strapi und Hostinger erhalten diese Daten nicht. Für die serverseitige Verarbeitung in Nextcloud ist die Hochschule Anhalt verantwortlich.
+
 ### Finanzanträge und Feedback
 
 Wenn du einen Finanzantrag oder Feedback absendest, übermittelt die App die Angaben direkt und verschlüsselt an das Antragsportal der Studierendenschaft unter [https://antrag.sturahsa.de](https://antrag.sturahsa.de). Bei Finanzanträgen sind dies insbesondere Standort, Titel, Name der antragstellenden Person, Antragsdokument, Kopie des Studierendenausweises und optionale Anlagen; bei Feedback der gewählte Bereich, der Text und – nur wenn angegeben – der Name. Die Campus-API ist an dieser Übermittlung nicht beteiligt und erhält diese Daten nicht. Entwürfe, Anlagen, Idempotenzdaten und die geheimen Status- und Dokumentlinks werden verschlüsselt auf dem Gerät gespeichert. Nach erfolgreicher Übermittlung werden lokale Entwurfsanlagen entfernt; eingereichte Vorgänge bleiben lokal erhalten, bis du sie löschst. Für Bearbeitung, serverseitige Speicherung und Löschung der eingereichten Daten gelten die Datenschutzhinweise des Antragsportals. Die Studierendenschaft ist hierfür verantwortlich.
@@ -62,11 +68,11 @@ Benachrichtigungen werden ausschließlich auf diesem Gerät geplant. Die App fra
 
 ### Direkte Dienste und externe Links
 
-Bei studentischer E-Mail, Noten und Moodle stellt die App lediglich die direkte Verbindung zu den Systemen der Hochschule Anhalt her; für die dortige serverseitige Verarbeitung ist die Hochschule Anhalt verantwortlich. Externe Webseiten, Telefon- oder E-Mail-Links werden erst nach deiner Auswahl an das Betriebssystem übergeben. Für deren Verarbeitung gelten die Hinweise des jeweiligen Anbieters. Die App enthält keine Analyse-, Werbe- oder Crash-Reporting-SDKs. Apple und Google können beim Download und bei Nutzung ihrer App Stores Daten in eigener Verantwortung verarbeiten.
+Bei studentischer E-Mail, Noten, Moodle und Nextcloud stellt die App lediglich die direkte Verbindung zu den Systemen der Hochschule Anhalt her; für die dortige serverseitige Verarbeitung ist die Hochschule Anhalt verantwortlich. Externe Webseiten, Telefon- oder E-Mail-Links werden erst nach deiner Auswahl an das Betriebssystem übergeben. Für deren Verarbeitung gelten die Hinweise des jeweiligen Anbieters. Die App enthält keine Analyse-, Werbe- oder Crash-Reporting-SDKs. Apple und Google können beim Download und bei Nutzung ihrer App Stores Daten in eigener Verantwortung verarbeiten.
 
 ### Erforderlichkeit der Angaben
 
-Für öffentliche Inhalte ist keine Registrierung erforderlich. Die technisch anfallenden Verbindungsdaten sind für einen Online-Abruf unvermeidbar. Zugangsdaten und sonstige Angaben für E-Mail, Noten, Moodle, Finanzanträge oder Feedback stellst du freiwillig bereit; ohne sie kann die jeweils gewählte Funktion nicht oder nur eingeschränkt genutzt werden. Es findet keine automatisierte Entscheidungsfindung und kein Profiling statt.
+Für öffentliche Inhalte ist keine Registrierung erforderlich. Die technisch anfallenden Verbindungsdaten sind für einen Online-Abruf unvermeidbar. Zugangsdaten und sonstige Angaben für E-Mail, Noten, Moodle, Nextcloud, Finanzanträge oder Feedback stellst du freiwillig bereit; ohne sie kann die jeweils gewählte Funktion nicht oder nur eingeschränkt genutzt werden. Es findet keine automatisierte Entscheidungsfindung und kein Profiling statt.
 
 ### Deine Rechte
 

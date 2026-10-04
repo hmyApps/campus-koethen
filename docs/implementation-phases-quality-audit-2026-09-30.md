@@ -458,6 +458,24 @@ Android und iOS sind mit Testticket sowie einem Kurs ohne QR-Funktion geprüft.
 Diese Antworten sind Implementierungs- und teilweise Release-Gates. Es werden weder IDs, Scopes,
 URLs noch Rechte aus der öffentlichen Website erraten.
 
+### Phase 14F – Nextcloud-Dateiexplorer
+
+**Status 4. Oktober 2026:** Der lesende erste Umfang ist implementiert. Die zuvor offene
+Instanzfrage ist mit der festen Hochschul-Origin `https://cloud.hs-anhalt.de` geklärt; die
+Integration verwendet die offiziellen, clientseitig vorgesehenen Nextcloud-Verträge Login Flow v2,
+OCS und WebDAV. Es gibt keinen frei konfigurierbaren Drittanbieterzugriff.
+
+| Problem | Lösung | Betroffene Dateien |
+| ------- | ------ | ------------------ |
+| **Anmeldung ohne Weitergabe des zentralen Passworts** | Login Flow v2 im Systembrowser; Login- und Poll-URL auf die exakte Origin begrenzen; tatsächliche DAV-Nutzer-ID per OCS ermitteln; App-Passwort nur verifiziert im Keychain/Keystore speichern. | `apps/mobile/lib/features/nextcloud/domain/`; `data/nextcloud_dav_gateway.dart`; `data/secure_nextcloud_credential_store.dart`; Account-Controller und Tests |
+| **Dateiexplorer ohne Datenabfluss oder unkontrollierte Schreibrechte** | `PROPFIND Depth: 1` und `GET` nur unter der eigenen DAV-Wurzel; jeden `href` erneut validieren; Ordnernavigation und vorhandenen Dokumentbetrachter verwenden; 25-MiB-Limit; kein persistenter Datei-/Metadatencache; keine Upload-, Änderungs-, Lösch- oder Share-Link-API. | Nextcloud-Gateway, Provider und `presentation/nextcloud_screen.dart`; `core/documents/`; Parser-, Größen- und Widgettests |
+| **`+`/`−`, Kontowechsel und vollständige Löschung** | Nextcloud als eigener Dienst im Hochschulzugang, jedoch nicht in der Passwort-Reconnect-Liste. `−` versucht Remote-Widerruf und wischt lokal auch bei Serverausfall. Laufenden Browserflow vor vollständiger Löschung abbrechen; Generation verhindert verspätetes Wiederherstellen. | `direct_service.dart`; Hochschulzugang-Card/Connector; globaler Sign-out; Race-Tests |
+| **Navigation, WCAG und Datenschutz** | Eigenes anheftbares Studienmodul mit Breadcrumbs, Pull-to-refresh, Live-Regionen, 48-dp-Zielen und DE/EN; Architektur-, Datenquellen-, Produkt- und Rechtstexte aktualisieren. | App-Modulkatalog/Router; ARB und Legal-Screen; `AGENTS.md`; `README.md`; `docs/nextcloud.md`; Architektur-/Produkt-/Datenschutzdokumente |
+
+**Noch offenes Abnahme-Gate:** Login/SSO, Browserrückkehr, reale DAV-Daten, Offline-Widerruf und
+App-Passwort-Löschung müssen auf Android und iOS mit einem freigegebenen Testkonto geprüft werden.
+Die aktualisierten Datenschutzhinweise brauchen die organisatorische Freigabe vor dem Store-Release.
+
 ### Weitere Erweiterungskandidaten ohne Umsetzungsfreigabe
 
 | Kandidat                                          | Aktueller Stand / offene Entscheidung                                                                                                                                                                                                                                          |
@@ -465,7 +483,6 @@ URLs noch Rechte aus der öffentlichen Website erraten.
 | **Kalender-Homescreen-Widget und Live-Abo**       | Der einmalige lokale ICS-Export ist bereits umgesetzt. Ein dauerhaft abonnierbarer Feed würde personenbezogene lokale Quellen betreffen und braucht ein separates Datenschutz-, Authentifizierungs- und Hostingkonzept; er ist nicht Bestandteil der Anny-Kalenderintegration. |
 | **Weitere Widgets**                               | Noch nicht fachlich ausgearbeitet; jedes Widget braucht Datenminimierung, Updatebudget, Offlineverhalten und WCAG-Konzept.                                                                                                                                                     |
 | **Semesterticket aus Movemix**                    | Offizielle dokumentierte Schnittstelle, Vertragspartner, Datenschutz und Systemgrenze sind ungeklärt. Bis dahin keine native Integration.                                                                                                                                      |
-| **Nextcloud-Anbindung**                           | Existenz und Freigabe einer Hochschulinstanz, APIs/Berechtigungen und konkreter Mehrwert gegenüber Browser beziehungsweise Nextcloud-App sind ungeklärt.                                                                                                                       |
 | **Copyright-Erweiterung um „hmyApps by Haaremy"** | Umfang, genaue Schreibweise und betroffene kanonische Stellen müssen vor einer Änderung ausdrücklich entschieden werden.                                                                                                                                                       |
 
 ## Phase 15 – Plattformübergreifende Gesamtabnahme und Release-Gates

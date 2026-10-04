@@ -10,12 +10,14 @@ import '../../../l10n/l10n.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../settings/presentation/sign_out_everywhere_tile.dart';
+import '../../nextcloud/application/nextcloud_account_controller.dart';
+import '../../nextcloud/domain/nextcloud_account.dart';
 import '../application/university_account_controller.dart';
 import '../application/university_service_connector.dart';
 import 'university_account_setup_sheet.dart';
 
 /// Settings card for the optional locally retained university identity and its
-/// three deliberately separate service connections.
+/// deliberately separate service connections.
 class UniversityAccountCard extends ConsumerStatefulWidget {
   const UniversityAccountCard({super.key});
 
@@ -54,6 +56,10 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     required bool hasIdentity,
   }) async {
     if (_busy.contains(service)) return;
+    if (service == DirectService.nextcloud) {
+      await _toggleNextcloud(connected: connected);
+      return;
+    }
     if (!connected && !hasIdentity) {
       await _showSetup(initialService: service);
       return;
@@ -84,6 +90,35 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     }
   }
 
+  Future<void> _toggleNextcloud({required bool connected}) async {
+    const DirectService service = DirectService.nextcloud;
+    setState(() {
+      _busy.add(service);
+      _errors.remove(service);
+    });
+    try {
+      final NextcloudAccountController controller = ref.read(
+        nextcloudAccountControllerProvider.notifier,
+      );
+      if (connected) {
+        await ref.read(universityServiceConnectorProvider).disconnect(service);
+      } else {
+        await controller.connect();
+        final AsyncValue state = ref.read(nextcloudAccountControllerProvider);
+        if (state.hasError) throw state.error!;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errors[service] = connected
+            ? context.l10n.universityAccountDisconnectFailed
+            : universityAccountErrorMessage(context.l10n, service, error);
+      });
+    } finally {
+      if (mounted) setState(() => _busy.remove(service));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
@@ -96,6 +131,9 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     final Set<DirectService> connected = ref
         .watch(connectedDirectServicesProvider)
         .toSet();
+    final AsyncValue<NextcloudAccount?> nextcloudAccount = ref.watch(
+      nextcloudAccountControllerProvider,
+    );
 
     return Card(
       margin: const EdgeInsets.symmetric(
@@ -182,10 +220,28 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
               _UniversityServiceRow(
                 service: service,
                 connected: connected.contains(service),
-                busy: _busy.contains(service),
-                error: _errors[service],
+                busy:
+                    _busy.contains(service) ||
+                    (service == DirectService.nextcloud &&
+                        nextcloudAccount.isLoading),
+                error:
+                    _errors[service] ??
+                    (service == DirectService.nextcloud &&
+                            nextcloudAccount.hasError
+                        ? universityAccountErrorMessage(
+                            l10n,
+                            service,
+                            nextcloudAccount.error!,
+                          )
+                        : null),
                 onPressed: accountUnavailable
-                    ? null
+                    ? (service == DirectService.nextcloud
+                          ? () => _toggle(
+                              service,
+                              connected: connected.contains(service),
+                              hasIdentity: hasIdentity,
+                            )
+                          : null)
                     : () => _toggle(
                         service,
                         connected: connected.contains(service),
@@ -244,6 +300,7 @@ class _UniversityServiceRow extends StatelessWidget {
       DirectService.mail => AppIcons.mail_outline,
       DirectService.moodle => AppIcons.school_outlined,
       DirectService.grades => AppIcons.grade_outlined,
+      DirectService.nextcloud => AppIcons.cloud_outlined,
     };
     final String actionLabel = connected
         ? l10n.universityAccountDisconnectService(label)

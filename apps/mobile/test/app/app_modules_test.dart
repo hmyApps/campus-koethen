@@ -40,6 +40,7 @@ void main() {
     test('the requested modules use their exact Tabler glyphs', () {
       expect(AppModule.moodle.icon, AppIcons.book_outlined);
       expect(AppModule.moodle.selectedIcon, AppIcons.book_outlined);
+      expect(AppModule.nextcloud.icon, AppIcons.cloud_outlined);
       expect(AppModule.grades.icon, AppIcons.grade_outlined);
       expect(AppModule.grades.selectedIcon, AppIcons.grade_outlined);
       expect(AppModule.requests.icon, AppIcons.file_pencil);
@@ -52,6 +53,7 @@ void main() {
         AppModule.timetable,
         AppModule.mail,
         AppModule.moodle,
+        AppModule.nextcloud,
         AppModule.grades,
         AppModule.studentService,
         AppModule.todos,
@@ -84,7 +86,7 @@ void main() {
       expect(AppModule.settings.pinnable, isFalse);
       expect(AppModule.about.pinnable, isFalse);
       expect(AppModule.pinnableModules, isNot(contains(AppModule.settings)));
-      expect(AppModule.pinnableModules, hasLength(12));
+      expect(AppModule.pinnableModules, hasLength(13));
     });
 
     test('the pinnable modules are the leading values of the enum', () {
@@ -120,6 +122,7 @@ void main() {
       expect(modulesUnder(entries, ModuleCategory.study), <AppModule>[
         AppModule.timetable,
         AppModule.moodle,
+        AppModule.nextcloud,
         AppModule.grades,
         AppModule.studentService,
         AppModule.todos,

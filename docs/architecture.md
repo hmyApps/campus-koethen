@@ -51,14 +51,15 @@ Sensibilität der Daten.
 │ apps/mobile    │──HTTPS─────────────► service.ssc.hs-anhalt.de    HIS-QIS-Notenspiegel
 │                │──HTTPS─────────────► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel
 │                │──HTTPS─────────────► moodle.hs-anhalt.de         Moodle-Webservice (lesend)
+│                │──HTTPS─────────────► cloud.hs-anhalt.de          Nextcloud Login Flow / WebDAV (lesend)
 │                │──HTTPS─────────────► REQUESTS_BASE_URL           Gremiensystem (Anträge/Feedback)
 └────────────────┘
         │
         └── Zugangsdaten/Token: Keychain / Keystore · Inhalte: verschlüsselter lokaler Cache
 ```
 
-Diese vier Dienste laufen **bewusst am Backend vorbei**, damit weder Campus API noch Strapi noch
-Worker jemals Zugangsdaten oder persönliche Inhalte erhalten. Es sind **genau vier** ausdrücklich
+Diese fünf Dienste laufen **bewusst am Backend vorbei**, damit weder Campus API noch Strapi noch
+Worker jemals Zugangsdaten oder persönliche Inhalte erhalten. Es sind **genau fünf** ausdrücklich
 beschlossene Ausnahmen — jede weitere muss in [`../AGENTS.md`](../AGENTS.md) §2 ergänzt werden.
 
 Zwei Besonderheiten, die aus dem Diagramm allein nicht hervorgehen:
@@ -67,15 +68,20 @@ Zwei Besonderheiten, die aus dem Diagramm allein nicht hervorgehen:
   Jedes hat seine **eigene, getrennte** Host-Allowlist — es gibt keinen gemeinsamen Pool. Welches
   Portal ein Konto nutzt, wird bei der Einrichtung einmalig ermittelt und lokal gespeichert
   ([grades.md](grades.md), „Portalwahl").
-- Die **Antragstellung** ist als einzige der vier **nicht nutzerauthentifiziert**. Ausschlaggebend
+- Die **Antragstellung** ist als einzige der fünf **nicht nutzerauthentifiziert**. Ausschlaggebend
   ist hier der Inhalt statt der Anmeldung: eine Einreichung trägt den Namen der antragstellenden
   Person und eine **Kopie des Studierendenausweises**. Der zurückgegebene **Statuslink ist ein
   Geheimnis** und der einzige Zugang zum Vorgang ([requests.md](requests.md)).
+- **Nextcloud** übernimmt das zentrale Hochschulpasswort nicht. Die App startet Login Flow v2 im
+  Systembrowser und speichert nur das danach ausgegebene, widerrufbare App-Passwort im
+  Keychain/Keystore. Dateien und Verzeichnislisten bleiben ohne Offline-Cache im Arbeitsspeicher
+  ([nextcloud.md](nextcloud.md)).
 
 Die optionale `UniversityIdentity` verbindet diese Netze **nicht** zu einer technischen SSO-
 Sitzung. Sie ist eine lokale Eingabehilfe mit genau **einer** Kennung (Hochschul-Benutzername
 oder -Mailadresse, je nachdem was eingegeben wurde) und einem Passwort — das spiegelt, dass die
-Hochschule dieselbe Kennung und dasselbe Passwort für alle drei Dienste akzeptiert. Der öffentliche
+Hochschule dieselbe Kennung und dasselbe Passwort für Mail, Moodle und Noten akzeptiert. Nextcloud
+ist davon getrennt und verwendet ausschließlich den Browserflow. Der öffentliche
 Controller-State enthält nur diese Kennung; das Passwort wird für
 eine ausdrücklich ausgelöste `+`-Aktion just in time aus dem gerätegebundenen Keychain/Keystore
 gelesen. Moodle und Noten erhalten sie unverändert im Benutzername-Feld. Der Mail-Adapter ergänzt
@@ -105,7 +111,7 @@ Verstöße gegen diese Regeln sind Blocker, keine Stilfragen.
 | G7  | Umgebungsunterschiede entstehen **nur** durch Environment/Secrets, nie durch Quellcode oder Branches.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | G8  | Öffentliche DTOs leaken keine Strapi-Internas (`data`, `attributes`, `documentId`, `meta.pagination` der Quelle) und keine Fremd-IDs (WebUntis-IDs, `location_id`, Google-Kalender-ID).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | G9  | PostgreSQL wird nie öffentlich gebunden.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| G10 | Persönliche Dienste laufen **direkt** vom Gerät zum offiziellen Anbieter: Mail, Notenspiegel (HIS-QIS **und** HISinOne), Moodle, Anträge/Feedback. **Kein** Backend-Proxy, **keine** serverseitige Speicherung, **kein** Logging-Umweg.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| G10 | Persönliche Dienste laufen **direkt** vom Gerät zum offiziellen Anbieter: Mail, Notenspiegel (HIS-QIS **und** HISinOne), Moodle, Nextcloud, Anträge/Feedback. **Kein** Backend-Proxy, **keine** serverseitige Speicherung, **kein** Logging-Umweg.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | G11 | Für die Direktdienste gilt: nur HTTPS bzw. implizites TLS, feste Host-Allowlist **je Dienst und je Prüfungsportal** (kein gemeinsamer Pool), Redirects auf fremde Hosts werden abgelehnt, Zertifikatsprüfung nie deaktiviert, kein Certificate-Pinning. Die Origin-Prüfung umfasst Schema, Host, Port und schließt `userInfo` aus.                                                                                                                                                                                                                                                                                                                                                                                      |
 | G12 | Zugangsdaten, Token und der Statuslink der Anträge liegen **ausschließlich** im Keychain/Keystore beziehungsweise verschlüsselt lokal; persönliche Inhalte einschließlich hochgeladener Nachweise nur **verschlüsselt** lokal. Nie in `SharedPreferences` oder einer unverschlüsselten Box.                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | G13 | Quellenübergreifende Zusammenführung im Kalender geschieht **ausschließlich lokal** in Flutter. Kein Server sieht die kombinierte Ansicht.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -273,7 +279,7 @@ zwischen Backend und Flutter und wird in CI gegen den Code geprüft.
 
 ### 3.6 Direktintegrationen (Pfad 2)
 
-Vier geräteseitige Integrationen ohne jede Backend-Beteiligung. Jede hat ein eigenes Dokument mit
+Fünf geräteseitige Integrationen ohne jede Backend-Beteiligung. Jede hat ein eigenes Dokument mit
 Bedrohungsmodell, Sicherheitszusagen und manueller Testcheckliste.
 
 | Dienst           | Ziel                                                                                                                                                                                                                          | Transport                                       | Umfang                                                                                                                                                                                                                                                                                      | Doku                               |
@@ -281,10 +287,11 @@ Bedrohungsmodell, Sicherheitszusagen und manueller Testcheckliste.
 | Studenten-Mail   | `mail.hs-anhalt.de`                                                                                                                                                                                                           | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS        | lesen, suchen, antworten, senden; Ordner wechseln; Anhänge anzeigen                                                                                                                                                                                                                         | [student-mail.md](student-mail.md) |
 | Notenspiegel     | `service.ssc.hs-anhalt.de` **oder** `sscportal.ssc.hs-anhalt.de` — nie beide, getrennte Allowlists; für einen erzeugten HISinOne-Nachweis zusätzlich nur `untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload` | HTTPS, HTML-/JSF-Parsing (keine offizielle API) | Notenspiegel lesen; 24-Stunden-Regel; Portalwahl bei der Einrichtung. Auf HISinOne zusätzlich **nur lesend**, eine Seite „Studienservice" mit mehreren Tabs: Bescheinigungsübersicht/-abruf, Personendaten/Kontaktdaten, Studiengangsübersicht — dieselben Zugangsdaten, kein zweiter Login | [grades.md](grades.md)             |
 | Moodle           | `moodle.hs-anhalt.de`                                                                                                                                                                                                         | HTTPS, Moodle-Webservice (REST)                 | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                                                                                                                                                                                     | [moodle.md](moodle.md)             |
+| Nextcloud        | `cloud.hs-anhalt.de`                                                                                                                                                                                                          | HTTPS, Login Flow v2, OCS und WebDAV            | Browser-Anmeldung mit widerrufbarem App-Passwort; Ordner und Dateien **nur lesend**, kein persistenter Dateicache                                                                                                                                                                            | [nextcloud.md](nextcloud.md)       |
 | Anträge/Feedback | `REQUESTS_BASE_URL` (Build-Environment, **nie** Quellcode-Konstante, **muss** HTTPS sein)                                                                                                                                     | HTTPS, öffentliche JSON-API, Multipart-Upload   | Finanzanträge und Rückmeldungen einreichen; Vorgangsstatus per `POST` abfragen; Entwürfe, Nachweise und Statuslink bleiben auf dem Gerät                                                                                                                                                    | [requests.md](requests.md)         |
 
 Der Antragsdienst ist **nicht nutzerauthentifiziert**. Er steht hier trotzdem, weil die Begründung
-dieselbe ist wie bei den übrigen drei: die Einreichung trägt den Namen der antragstellenden Person
+dieselbe ist wie bei den übrigen Direktdiensten: die Einreichung trägt den Namen der antragstellenden Person
 und eine Kopie des Studierendenausweises, und genau solche Daten sollen kein Campus-Köthen-Backend
 erreichen. Es gibt hier keine Sitzung zum Beenden — der entsprechende Weg heißt daher „lokale Daten
 löschen" und nicht „abmelden".
@@ -412,10 +419,11 @@ Durchgehende Regeln:
 
 | Daten                                                                      | Speicher                                                                                             |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Zugangsdaten Mail, Notenspiegel · Moodle-Token                             | `flutter_secure_storage` (Keychain/Keystore)                                                         |
+| Zugangsdaten Mail, Notenspiegel · Moodle-Token · Nextcloud-App-Passwort    | `flutter_secure_storage` (Keychain/Keystore)                                                         |
 | Gewähltes Prüfungsportal des Notenkontos                                   | `flutter_secure_storage`                                                                             |
 | Schlüssel der verschlüsselten Boxen (256 Bit, CSPRNG)                      | `flutter_secure_storage`                                                                             |
 | Noten, Moodle-Inhalte                                                      | verschlüsselte `hive_ce`-Box                                                                         |
+| Nextcloud-Verzeichnislisten und bewusst geladene Dateien                   | nur flüchtig im Arbeitsspeicher; kein persistenter Cache                                              |
 | E-Mail-Kopfzeilen, begrenzte Inhalte, Adress-/Suchindex, optionale Anhänge | verschlüsselte `hive_ce`-Box (Retention: 500 Header, 200 Bodies, 100 MiB)                            |
 | Antragsentwürfe, eingereichte Vorgänge, **Statuslinks**                    | verschlüsselte `hive_ce`-Box `campus_requests_secure_v1` (Schlüssel `campus_requests_secure_key_v1`) |
 | Hochgeladene Nachweise inkl. **Kopie des Studierendenausweises**           | verschlüsselte `hive_ce`-Box `campus_request_files_v1` (Schlüssel `campus_request_files_key_v1`)     |
@@ -637,7 +645,7 @@ bewusst auf dem VPS installiert, geprüft und neu geladen.
 | WebUntis-Stundenplan                            | vollständig umgesetzt, aber `WEBUNTIS_ENABLED=false` bis zur organisatorischen Freigabe                                                                                                                                                                              |
 | Öffentliche Kalender                            | vollständig umgesetzt, aber `PUBLIC_CALENDAR_ENABLED=false` bis Kalender in Strapi gepflegt sind                                                                                                                                                                     |
 | Google API Key / OAuth / SDK                    | dauerhaft ausgeschlossen — der Worker liest ausschließlich den öffentlichen ICS-Feed                                                                                                                                                                                 |
-| Backend-Proxy für Mail, Noten, Moodle           | dauerhaft ausgeschlossen — genau deshalb laufen diese Dienste direkt vom Gerät                                                                                                                                                                                       |
+| Backend-Proxy für Mail, Noten, Moodle, Nextcloud | dauerhaft ausgeschlossen — genau deshalb laufen diese Dienste direkt vom Gerät                                                                                                                                                                                      |
 | Hintergrund-Sync bei geschlossener App          | ausgeschlossen — bräuchte WorkManager/BGTaskScheduler; Sync läuft, solange die App läuft, plus beim Start. Die lokale Benachrichtigungsplanung berührt das **nicht**: Sie meldet die Termine im Voraus beim Betriebssystem an, es läuft kein App-Code im Hintergrund |
 | Push über einen externen Dienst (FCM/APNs)      | ausgeschlossen — Benachrichtigungen werden lokal aus vorhandenen Gerätedaten geplant, siehe [adr/0001](adr/0001-push-benachrichtigungen.md). Die Grundlage (Planer, Scheduler, Berechtigung, Einstellungen) ist umgesetzt; die fachlichen Kategorien folgen getrennt |
 | Schreibzugriffe auf Moodle                      | ausgeschlossen — nur eine feste, rein lesende Whitelist von `wsfunction`s                                                                                                                                                                                            |

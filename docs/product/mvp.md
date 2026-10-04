@@ -49,7 +49,7 @@ Studierende am Campus Köthen erhalten in einer App:
 3. **Mensapläne** beider Köthener Mensen mit fester Filtertaxonomie für Ernährungsweise und
    Allergene.
 4. **Kontakte** zu Anlaufstellen, funktional statt personenzentriert.
-5. **Persönliche Dienste** — Studentenpostfach, Notenspiegel und Moodle — jeweils direkt vom Gerät
+5. **Persönliche Dienste** — Studentenpostfach, Notenspiegel, Moodle und Nextcloud — jeweils direkt vom Gerät
    zum offiziellen Anbieter, ohne dass ein Server dieses Projekts beteiligt ist.
 
 Die App funktioniert **ohne Nutzerkonto bei diesem Projekt**. Alle Präferenzen bleiben auf dem
@@ -60,6 +60,8 @@ Optional kann eine zentrale lokale Hochschulidentität hinterlegt werden. Sie is
 keine gemeinsame SSO-Sitzung, sondern erspart nach einem bewussten `+` die erneute Passworteingabe
 für Mail, Moodle oder Noten. Gespeichert wird erst nach Einwilligung und erfolgreicher Prüfung
 mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore.
+Nextcloud ist davon technisch getrennt: `+` startet den offiziellen Login Flow v2 im Systembrowser,
+damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Passwort speichert.
 
 ## 3. Umfang
 
@@ -113,6 +115,9 @@ mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore
   Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
   **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
+- **Nextcloud-Dateiexplorer** (`cloud.hs-anhalt.de`): Login Flow v2 im Systembrowser, Ordnernavigation
+  und bewusstes Laden von Dateien bis 25 MiB über WebDAV — **ausschließlich lesend**, ohne
+  persistenten Datei- oder Metadatencache. Das App-Passwort liegt nur im Keychain/Keystore.
 - **Zentraler Hochschulzugang**: optionale lokale Eingabehilfe für Mail, Moodle und Noten mit
   getrennten `+`-/`−`-Aktionen; keine gemeinsame Sitzung und kein Campus-Backend-Konto
 - **Ersteinrichtung**: eigener Kalender-Schritt für Stundenplan, Moodle-Fristen, gemerkte Events,
@@ -121,7 +126,7 @@ mindestens eines Diensts, ausschließlich im gerätegebundenen Keychain/Keystore
   werden. Die Eingabe bleibt bis zur erfolgreichen Prüfung mindestens eines gewählten Diensts
   flüchtig; erst danach wird sie mit Einwilligung im Keychain/Keystore gespeichert.
 - **Anträge & Feedback**: Finanzanträge **und** Feedback gehen **direkt** an die öffentliche API
-  des Gremiensystems des Studierendenrats. Der Dienst ist als einziger der vier nicht
+  des Gremiensystems des Studierendenrats. Der Dienst ist als einziger der fünf nicht
   nutzerauthentifiziert; ausschlaggebend ist der Inhalt — eine Einreichung trägt den Namen der
   antragstellenden Person und eine Kopie des Studierendenausweises.
   - Der Antrag fragt genau das, was die Schnittstelle nimmt: Standort, Antragsgegenstand,
@@ -177,12 +182,15 @@ Abwesenheiten und Hausaufgaben
 **Moodle:** jeder Schreibzugriff — keine Abgaben, keine Forenbeiträge, keine generische
 „beliebige Funktion aufrufen"-Schnittstelle
 
+**Nextcloud:** Upload, Umbenennen, Verschieben, Löschen, Freigabelinks, frei konfigurierbare
+Server und Hintergrundsynchronisation
+
 **Kalender:** Google API Key · Google-OAuth · Google-SDK · Anbindung persönlicher Google-Konten ·
 automatisches Hinzufügen von Terminen zum persönlichen Google-Konto
 
 **Technisch:** Analytics/Tracking · Sentry oder externes Crash-Reporting · Redis · SMTP ·
 automatisches Deployment · Hintergrund-Sync bei vollständig geschlossener App · IMAP IDLE ·
-Backend-Proxy für E-Mail, Noten oder Moodle
+Backend-Proxy für E-Mail, Noten, Moodle oder Nextcloud
 
 Die Architektur muss diese Erweiterungen ermöglichen, es wird dafür aber **kein ungenutzter Code**
 gebaut.
@@ -282,7 +290,7 @@ gebaut.
 
 ### 4.5 Persönliche Dienste (direkt vom Gerät)
 
-Gemeinsame, nicht verhandelbare Regeln für E-Mail, Noten und Moodle:
+Gemeinsame, nicht verhandelbare Regeln für E-Mail, Noten, Moodle und Nextcloud:
 
 - Die App spricht **direkt** mit dem offiziellen Anbieter. Campus API, Strapi und Worker sind
   **nie** beteiligt und erhalten **weder Zugangsdaten noch persönliche Inhalte**.
@@ -300,6 +308,9 @@ Gemeinsame, nicht verhandelbare Regeln für E-Mail, Noten und Moodle:
   nie im öffentlichen State. `+` erstellt
   nur die gewählte Dienstverbindung; `−` löscht deren Credential-Kopie/Token und Cache, behält aber
   die zentrale Identität.
+- Nextcloud erhält die zentrale Identität nie. Die Anmeldung läuft im Systembrowser; nur das
+  ausgegebene App-Passwort wird sicher gespeichert. Ein Abbruch oder eine vollständige Löschung
+  verhindert generation-sicher, dass eine verspätete Poll-Antwort es erneut schreibt.
 - Persönliche Inhalte liegen nur **verschlüsselt** lokal. Der Mailcache umfasst Kopfzeilen,
   Inhalte, den Adressindex und optional Anhangbytes; das Passwort liegt **nie** im Cache.
 - Nichts davon erscheint in Logs, Exceptions, `toString()` oder Fehlermeldungen.
@@ -321,6 +332,7 @@ Dienstspezifisch:
 | E-Mail | Adresse + Passwort, sonst nichts | App-Start, Anmeldung, alle 10 Minuten, manuell             | lesen, suchen (IMAP SEARCH), Ordner wechseln, Anhänge, antworten, senden |
 | Noten  | Benutzername + Passwort          | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Notenspiegel mit Detailansicht                                           |
 | Moodle | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**  |
+| Nextcloud | Login Flow v2 → App-Passwort | nur beim Öffnen/Navigation, manuell | Ordner und Dateien über WebDAV — **nur lesend**, kein persistenter Cache |
 
 Kein Hintergrund-Polling, kein Timer, kein Backend-Cron. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
@@ -370,6 +382,7 @@ Lokal gespeichert werden:
 | Aufgabenliste                                                 | `hive_ce`, rein lokal                        |
 | E-Mail-Kopfzeilen, -Inhalte, Adressindex, optional Anhänge    | **verschlüsselte** `hive_ce`-Box             |
 | Noten, Moodle-Inhalte                                         | **verschlüsselte** `hive_ce`-Box             |
+| Nextcloud-Verzeichnislisten und geladene Dateien              | nur flüchtig im Arbeitsspeicher               |
 | Zugangsdaten, Token, Schlüssel der verschlüsselten Boxen      | `flutter_secure_storage` (Keychain/Keystore) |
 
 Gecachte Daten werden klar als offline bzw. veraltet gekennzeichnet. **Ein Cachefehler darf nie zum
@@ -415,7 +428,7 @@ Touch-Ziele >= 48dp · keine reine Farbcodierung · Light/Dark/System-Theme.
 | A22  | Keine Kalenderauswahl ⇒ keine öffentlichen Termine, niemals „alle".                                           |
 | A23  | Google-Kalender-ID, Feed-URL und ETag erscheinen in keiner API-Antwort.                                       |
 | A24  | Ein Fehler einer Kalenderquelle blendet die übrigen Quellen nicht aus.                                        |
-| A25  | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten- oder Moodle-Daten.                  |
+| A25  | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten-, Moodle- oder Nextcloud-Daten.       |
 | A26  | Mailcache ist verschlüsselt; Zugangsdaten, Token und Cache-Schlüssel liegen nur im Keychain/Keystore.         |
 | A27  | Ein Redirect auf einen fremden Host oder auf Klartext bricht den Aufruf ab, ohne Token weiterzugeben.         |
 | A28  | Eine leere oder fehlgeschlagene Antwort überschreibt bei keiner Quelle den letzten guten Stand.               |
@@ -429,6 +442,7 @@ Touch-Ziele >= 48dp · keine reine Farbcodierung · Light/Dark/System-Theme.
 | A36  | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.                     |
 | A37  | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten.       |
 | A38  | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                                    |
+| A39  | Nextcloud nutzt nur `cloud.hs-anhalt.de`, speichert nur das App-Passwort sicher und liest DAV ohne Offline-Cache. |
 
 ## 6. Offene Release-Gates
 
@@ -457,3 +471,6 @@ werden:
 9. **Reale Gebäudepläne** — Herkunft, Bearbeitungs- und Veröffentlichungsrecht, Ausschluss
    sicherheitsrelevanter Pläne (Flucht-, Rettungs- und Schließpläne), Personenbezug bei Büros und
    ein Pflegeprozess für Umbauten. Bis dahin bleibt es beim fiktiven Demo-Plan.
+10. **Nextcloud-Abnahme** — realer Login Flow v2, SSO-Rückkehr, DAV-Zugriff, Offline-Widerruf und
+    App-Passwort-Löschung auf Android und iOS mit einem freigegebenen Testkonto prüfen; aktualisierte
+    Datenschutzhinweise vor Veröffentlichung organisatorisch freigeben.

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../grades/application/grade_account_controller.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
+import '../../nextcloud/application/nextcloud_account_controller.dart';
 import '../../university_account/application/university_account_controller.dart';
 import '../../university_account/application/university_service_connector.dart';
 import '../domain/direct_service.dart';
@@ -27,6 +28,9 @@ final Provider<List<DirectService>> connectedDirectServicesProvider =
           false) {
         connected.add(DirectService.grades);
       }
+      if (ref.watch(nextcloudAccountControllerProvider).value != null) {
+        connected.add(DirectService.nextcloud);
+      }
       return connected;
     });
 
@@ -44,6 +48,10 @@ class SignOutEverywhereService {
   final Ref _ref;
 
   Future<SignOutEverywhereResult> signOutAll() async {
+    // A Login Flow may otherwise keep the gate active for up to 20 minutes.
+    // Cancel it before waiting, and let its generation guard reject any late
+    // poll callback before the credential store can be written.
+    _ref.read(nextcloudAccountControllerProvider.notifier).cancelPendingLogin();
     final UniversityServiceOperationGate gate = _ref.read(
       universityServiceOperationGateProvider,
     );

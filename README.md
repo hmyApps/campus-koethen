@@ -3,7 +3,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 Monorepo für die **Campus Köthen** App — News, Kalender, Mensapläne, Kontakte sowie direkt
-angebundene persönliche Dienste (Studenten-E-Mail, Notenspiegel, Moodle) für den Campus Köthen.
+angebundene persönliche Dienste (Studenten-E-Mail, Notenspiegel, Moodle, Nextcloud) für den Campus Köthen.
 
 ---
 
@@ -38,6 +38,7 @@ Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsystem
 | Studenten-E-Mail (IMAP/SMTP, direkt vom Gerät)                                                                                                               | Automatisches Deployment                        |
 | Notenspiegel HIS-QIS **und** HISinOne, auf HISinOne zusätzlich nur lesend: Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht (direkt vom Gerät) | Globale Volltextsuche                           |
 | Moodle: Kurse, Materialien, Aufgaben, Ankündigungen                                                                                                          | Schreibzugriffe auf Moodle                      |
+| Nextcloud-Dateiexplorer: Browser-Login, Ordner und Dateien (nur lesend)                                                                                      | Uploads oder Freigabelinks in Nextcloud         |
 | Optionaler zentraler Hochschulzugang, nur lokal                                                                                                              | Gemeinsame SSO-Sitzung oder App-Konto           |
 | Lokale Aufgabenliste (rein auf dem Gerät)                                                                                                                    | Serverseitige Synchronisierung der Aufgaben     |
 | Anträge & Feedback (direkt an das Gremiensystem)                                                                                                             | Serverseitige Ablage von Anträgen               |
@@ -82,6 +83,7 @@ Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISi
                  │    └► untrust-sscportal.ssc.hs-anhalt.de
                  │       einmaliger Bescheinigungs-GET (`/qisserver/rds?state=docdownload`)
                  ├──► moodle.hs-anhalt.de         Moodle-Webservice (nur lesend)
+                 ├──► cloud.hs-anhalt.de          Nextcloud Login Flow / WebDAV (nur lesend)
                  └──► REQUESTS_BASE_URL           Anträge und Feedback (HTTPS)
 ```
 
@@ -90,7 +92,7 @@ Einrichtung ermittelt (`docs/grades.md`).
 
 Damit erhalten weder Campus API, Strapi noch Worker jemals Zugangsdaten oder persönliche Inhalte.
 Zugangsdaten liegen ausschließlich im Keychain/Keystore, zwischengespeicherte Inhalte nur
-verschlüsselt auf dem Gerät. Dies sind **genau vier** ausdrücklich beschlossene Ausnahmen — keine
+verschlüsselt auf dem Gerät. Dies sind **genau fünf** ausdrücklich beschlossene Ausnahmen — keine
 allgemeine Erlaubnis für beliebige Direktzugriffe (siehe [AGENTS.md](AGENTS.md) §2).
 
 Der optionale zentrale Hochschulzugang speichert genau eine Kennung (Benutzername oder vollständige
@@ -103,6 +105,9 @@ eine vollständige Mailadresse sowie die Kennung für Moodle und Noten bleiben u
 vorhandenes altes Drei-Feld-Schema wird beim Upgrade vollständig verworfen. Die Komplettlöschung
 trennt alle Dienste und entfernt die zentrale
 Identität zuletzt. Bei einem Teilfehler bleibt sie für einen sichtbaren Retry erhalten.
+Nextcloud verwendet unabhängig davon den offiziellen Login Flow v2 im Systembrowser; Campus
+Köthen erhält dabei nie das Hochschulpasswort und speichert nur das widerrufbare App-Passwort im
+Keychain/Keystore.
 
 Der verschlüsselte Mailcache umfasst Kopfzeilen, Inhalte, den Adressindex und optional
 Anhangbytes; sein gerätegebundener Schlüssel liegt im Keychain/Keystore. Ein vorhandener
@@ -116,7 +121,7 @@ Harte Systemgrenzen:
 
 - Flutter spricht für alle öffentlichen und redaktionellen Daten **ausschließlich** mit der versionierten Campus API unter `/v1` — niemals direkt mit Strapi, meine-mensa.de, WebUntis oder dem Google-ICS-Feed.
 - Das Backend liest Strapi **ausschließlich** über dessen REST-API mit einem serverseitigen Read-only-Token — niemals direkt aus Strapi-Tabellen.
-- Für Mail, Noten, Moodle sowie Anträge und Feedback gibt es **keinen** Backend-Proxy, **keine** serverseitige Speicherung und **keinen** Analytics-/Logging-Umweg. Das gilt auch für den optionalen zentralen Hochschulzugang.
+- Für Mail, Noten, Moodle, Nextcloud sowie Anträge und Feedback gibt es **keinen** Backend-Proxy, **keine** serverseitige Speicherung und **keinen** Analytics-/Logging-Umweg. Das gilt auch für den optionalen zentralen Hochschulzugang.
 - Der Kalender führt Stundenplan, öffentliche Kalender und Moodle-Deadlines **ausschließlich lokal auf dem Gerät** zusammen.
 - CMS und operative Daten nutzen **getrennte Datenbanken und Rollen**.
 - Umgebungsunterschiede entstehen ausschließlich durch Environment/Secrets, nicht durch Quellcode.
@@ -153,6 +158,7 @@ docs/                          Produkt-, Architektur- und Betriebsdokumentation
 | [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail-Client (IMAP/SMTP, direkt vom Gerät)      |
 | [grades.md](docs/grades.md)                                       | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät)   |
 | [moodle.md](docs/moodle.md)                                       | Moodle-Integration und quellenübergreifender Kalender      |
+| [nextcloud.md](docs/nextcloud.md)                                 | Nextcloud Login Flow v2 und lesender WebDAV-Dateiexplorer  |
 | [requests.md](docs/requests.md)                                   | Anträge und Feedback ans Gremiensystem (direkt vom Gerät)  |
 | [local-development.md](docs/local-development.md)                 | Lokaler Stack, Schritt für Schritt                         |
 | [content-editor-guide.md](docs/content-editor-guide.md)           | Handbuch für die Redaktion in Strapi                       |

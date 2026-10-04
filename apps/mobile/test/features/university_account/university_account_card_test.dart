@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
+import 'package:campus_koethen/features/nextcloud/application/nextcloud_providers.dart';
 import 'package:campus_koethen/features/university_account/application/university_service_connector.dart';
 import 'package:campus_koethen/features/university_account/domain/university_identity.dart';
 import 'package:campus_koethen/features/university_account/domain/university_identity_store.dart';
@@ -15,6 +16,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/pump_app.dart';
+import '../../support/fake_nextcloud.dart';
 
 const UniversityIdentity _identity = UniversityIdentity(
   identifier: 'student@hs-anhalt.de',
@@ -69,6 +71,9 @@ List<Override> _overrides({
   required Map<DirectService, _Adapter> adapters,
   List<DirectService> connected = const <DirectService>[],
 }) => <Override>[
+  nextcloudCredentialStoreProvider.overrideWithValue(
+    InMemoryNextcloudCredentialStore(),
+  ),
   connectedDirectServicesProvider.overrideWithValue(connected),
   universityServiceConnectionSnapshotProvider.overrideWithValue(
     UniversityServiceConnectionSnapshot(connected: connected.toSet()),
@@ -116,7 +121,7 @@ void main() {
     expect(find.text('Hochschulzugang'), findsOneWidget);
     expect(find.textContaining('student@hs-anhalt.de'), findsOneWidget);
     expect(find.text('Verbunden'), findsOneWidget);
-    expect(find.text('Nicht verbunden'), findsNWidgets(2));
+    expect(find.text('Nicht verbunden'), findsNWidgets(3));
     expect(find.byTooltip('Studentische E-Mail trennen'), findsOneWidget);
     expect(find.byTooltip('Moodle verbinden'), findsOneWidget);
 
@@ -295,6 +300,7 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.text('Zugangsdaten aktualisieren'));
     await tester.tap(find.text('Zugangsdaten aktualisieren'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -365,16 +371,28 @@ void main() {
         find.textContaining('sichere Schlüsselspeicher ist nicht verfügbar'),
         findsOneWidget,
       );
-      final Iterable<IconButton> actions = tester
+      final Iterable<IconButton> centralActions = tester
           .widgetList<IconButton>(find.byType(IconButton))
           .where(
             (IconButton button) =>
-                button.tooltip?.contains('verbinden') ?? false,
+                button.tooltip?.contains('verbinden') == true &&
+                button.tooltip != 'Nextcloud verbinden',
           );
-      expect(actions, isNotEmpty);
+      expect(centralActions, isNotEmpty);
       expect(
-        actions.every((IconButton button) => button.onPressed == null),
+        centralActions.every((IconButton button) => button.onPressed == null),
         isTrue,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.ancestor(
+                of: find.byTooltip('Nextcloud verbinden'),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .onPressed,
+        isNotNull,
       );
     },
   );

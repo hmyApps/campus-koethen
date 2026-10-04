@@ -1,6 +1,6 @@
 # Legal notice
 
-Last updated: 2 October 2026
+Last updated: 4 October 2026
 
 ## Provider of the mobile app
 
@@ -87,6 +87,8 @@ When you select “Check balance”, the app uses NFC solely to read the balance
 
 You can optionally store exactly one university identifier — a username or full university email address — and one password centrally. They are stored only after your explicit confirmation and after at least one of email, Moodle or grades has accepted them. Both values remain exclusively in the device-bound secure keystore. For email, the app locally expands an identifier without `@` to `<identifier>@hs-anhalt.de`; a full email address remains unchanged. Moodle and grades receive the identifier unchanged. If the retired three-field schema is detected, it is wiped completely and is not migrated automatically. The values are never sent to the Campus backend, Strapi or worker and are never placed in settings, caches, logs or public app state. The central access is only a local input aid, not a shared SSO session: only tapping `+` signs the selected service in separately and directly with the respective university system. `−` deletes only that service's session and local data; the central access remains available to other services. “Delete university access completely” disconnects every service first and deletes the central access last. If a service fails, the central access is retained for a retry. After a password change, “Update credentials” verifies the new values with a selected service before replacing the stored identity.
 
+Nextcloud never receives this central identity and uses the browser-based Login Flow v2 instead.
+
 ## Student email
 
 When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. The service-specific email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. After a successful “Delete email connection and local data”, the service-specific credentials, local cache and its encryption key are removed; an optional central university access is retained. Your email on the university server remains unchanged.
@@ -101,6 +103,10 @@ If your account is set up on HISinOne, the app's "HISinOne" module additionally 
 
 When you connect Moodle, the app communicates directly and securely with moodle.hs-anhalt.de. The Moodle sign-in does not store your password in the Moodle account; after your explicit confirmation, the same password may optionally be stored separately in the central university access. The session token issued by Moodle, your Moodle user ID, courses, materials, assignments, announcements and deadlines are stored securely or encrypted on your device. The Campus backend and Hostinger do not receive this data. “Delete Moodle connection and local data” deletes the token, user ID, cache and associated local synchronisation data; an optional central university access is retained. Hochschule Anhalt is responsible for processing on Moodle.
 
+## Nextcloud
+
+When you connect Nextcloud, the app starts the official Login Flow v2 for `cloud.hs-anhalt.de` in the system browser. Your university password is entered only there and is not received by Campus Köthen. Nextcloud issues the app with a revocable app password; it, the login name and user ID remain exclusively in the device-bound secure keystore. The app reads folders and files you select directly over encrypted WebDAV below your own user root. Folder listings, file metadata and downloaded files are not cached permanently and are held only temporarily in memory. A file is passed to the operating system only after an explicit share/save action. When disconnecting, the app attempts to revoke the app password in Nextcloud and removes the local credential even if the server fails. The Campus backend, Strapi and Hostinger do not receive these data. Hochschule Anhalt is responsible for server-side processing in Nextcloud.
+
 ## Funding applications and feedback
 
 When you submit a funding application or feedback, the app sends the information directly and securely to the student body's application portal at https://antrag.sturahsa.de. Funding applications include in particular the location, title, applicant's name, application document, a copy of the student ID and optional attachments; feedback includes the selected area, the text and—only if supplied—the name. The Campus API is not involved in this transfer and does not receive this data. Drafts, attachments, idempotency data and secret status and document links are encrypted on the device. Local draft attachments are removed after a successful submission; submitted cases remain locally until you delete them. The portal's privacy information governs the processing, server-side retention and deletion of submitted data. The student body is responsible for that processing.
@@ -111,11 +117,11 @@ Notifications are scheduled entirely on this device. The app asks for the operat
 
 ## Direct services and external links
 
-For student email, grades and Moodle, the app only establishes the direct connection to Hochschule Anhalt systems; Hochschule Anhalt is responsible for server-side processing there. External websites, telephone links or email links are passed to the operating system only after you select them. The respective provider's information applies to its processing. The app contains no analytics, advertising or crash-reporting SDKs. Apple and Google may process data on their own responsibility when you download the app or use their app stores.
+For student email, grades, Moodle and Nextcloud, the app only establishes the direct connection to Hochschule Anhalt systems; Hochschule Anhalt is responsible for server-side processing there. External websites, telephone links or email links are passed to the operating system only after you select them. The respective provider's information applies to its processing. The app contains no analytics, advertising or crash-reporting SDKs. Apple and Google may process data on their own responsibility when you download the app or use their app stores.
 
 ## Whether data is required
 
-No registration is required for public content. Technical connection data is unavoidable for an online request. You provide credentials and other information for email, grades, Moodle, funding applications or feedback voluntarily; without it, the selected feature cannot be used or can be used only to a limited extent. There is no automated decision-making or profiling.
+No registration is required for public content. Technical connection data is unavoidable for an online request. You provide credentials and other information for email, grades, Moodle, Nextcloud, funding applications or feedback voluntarily; without it, the selected feature cannot be used or can be used only to a limited extent. There is no automated decision-making or profiling.
 
 ## Your rights
 

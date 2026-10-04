@@ -308,6 +308,11 @@ void main() {
     await tester.pumpAndSettle();
 
     // The hub uses the module's full title; "Lageplan" alone is the short one.
+    await tester.scrollUntilVisible(
+      find.text('Lageplan & Räume'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Lageplan & Räume'), findsOneWidget);
     expect(
       find.text('Gebäudepläne mit interaktiver Raumsuche'),

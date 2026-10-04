@@ -49,6 +49,7 @@ abstract final class AppIcons {
   static const IconData clear = TablerIcons.x;
   static const IconData close = TablerIcons.x;
   static const IconData cloud_off_outlined = TablerIcons.cloud_off;
+  static const IconData cloud_outlined = TablerIcons.cloud;
   static const IconData construction_outlined = TablerIcons.tools;
   static const IconData contact_support = TablerIcons.help_circle_filled;
   static const IconData contact_support_outlined = TablerIcons.help_circle;

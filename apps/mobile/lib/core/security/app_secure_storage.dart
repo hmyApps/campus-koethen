@@ -6,10 +6,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// The one secure-storage configuration of this app.
 ///
 /// Every credential the app holds — the optional central university identity,
-/// the mail password, the exam-portal password, the Moodle web-service token —
-/// and the key of every encrypted
-/// local cache goes through here. It is a single definition on purpose: the
-/// same options spelled out at four call sites is how three of them ended up
+/// the mail password, the exam-portal password, the Moodle web-service token,
+/// the Nextcloud app password — and the key of every encrypted local cache
+/// goes through here. It is a single definition on purpose: the same options
+/// repeated at several call sites is how configurations end up
 /// on a backup-able keychain class without anyone noticing.
 ///
 /// ## Why `first_unlock_this_device`
