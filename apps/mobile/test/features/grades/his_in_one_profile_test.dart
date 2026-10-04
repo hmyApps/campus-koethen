@@ -20,6 +20,22 @@ void main() {
       );
     });
 
+    test('allows the exam-overview page itself — the real chain bounces '
+        'back through it (a standard POST/redirect/GET) before that page '
+        'redirects to the actual download, confirmed 2026-10-04 on the '
+        'real device', () {
+      expect(
+        profile.allowsDocumentDownload(
+          Uri.parse(
+            'https://sscportal.ssc.hs-anhalt.de/qisserver/pages/sul/'
+            'examAssessment/personExamsReadonly.xhtml'
+            '?_flowId=examsOverviewForPerson-flow&_flowExecutionKey=e1s2',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
     test('allows the second-hop redirect target on the separate untrust- '
         'host — the same document-download mechanism used by Studienservice, '
         'confirmed 2026-10-04 from a real Location header there', () {

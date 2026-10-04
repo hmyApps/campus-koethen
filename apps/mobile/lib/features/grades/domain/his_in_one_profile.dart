@@ -38,10 +38,13 @@ class HisInOneProfile implements GradePortalProfile {
       'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
       '?state=user&type=3&category=auth.logout';
 
+  static const String _examOverviewPath =
+      '/qisserver/pages/sul/examAssessment/personExamsReadonly.xhtml';
+
   /// The exam overview page (tree, collapsed on load).
   String get examOverviewUrl =>
-      'https://sscportal.ssc.hs-anhalt.de/qisserver/pages/sul/examAssessment/'
-      'personExamsReadonly.xhtml?_flowId=examsOverviewForPerson-flow';
+      'https://sscportal.ssc.hs-anhalt.de$_examOverviewPath'
+      '?_flowId=examsOverviewForPerson-flow';
 
   @override
   bool allows(Uri uri) => gradePortalAllows(uri, scheme: scheme, host: host);
@@ -57,19 +60,34 @@ class HisInOneProfile implements GradePortalProfile {
   static const String documentDownloadHost =
       'untrust-sscportal.ssc.hs-anhalt.de';
 
-  /// A second, narrower allowlist for exactly one purpose: the one-time
-  /// link one of the exam overview's own print buttons resolves to, and the
-  /// redirect it leads to — kept as its own check (never folded into
-  /// [allows]) so a future real difference would not require re-threading
-  /// every session call site (AGENTS.md §2: "kein gemeinsamer Pool").
-  /// Deliberately NOT shared with
+  /// A second, narrower allowlist for exactly one purpose: every redirect
+  /// hop a print button's POST can lead through, down to the one-time
+  /// document itself — kept as its own check (never folded into [allows]
+  /// by reference) so a future real difference would not require
+  /// re-threading every session call site (AGENTS.md §2: "kein gemeinsamer
+  /// Pool"). Deliberately NOT shared with
   /// `StudentServiceProfile.allowsDocumentDownload`, even though both
   /// currently pin the same two hosts — separate features, separate checks.
+  ///
+  /// The real chain, confirmed 2026-10-04 from the device: the POST's own
+  /// redirect bounces back through the exam-overview page itself on [host]
+  /// (a standard POST/redirect/GET) — THAT page's own response is what then
+  /// redirects to `/qisserver/rds?state=docdownload`, which in turn
+  /// redirects to [documentDownloadHost]. So exactly two shapes are
+  /// allowed: the exam-overview page's own path on [host] (the bounce,
+  /// nothing more — not an arbitrary other page), and the
+  /// `state=docdownload` path on either host.
   bool allowsDocumentDownload(Uri uri) {
-    final List<String>? states = uri.queryParametersAll['state'];
+    if (_isDocDownloadRequest(uri)) return true;
+    return gradePortalAllows(uri, scheme: scheme, host: host) &&
+        uri.path == _examOverviewPath;
+  }
+
+  bool _isDocDownloadRequest(Uri uri) {
     final bool hostAllowed =
         gradePortalAllows(uri, scheme: scheme, host: host) ||
         gradePortalAllows(uri, scheme: scheme, host: documentDownloadHost);
+    final List<String>? states = uri.queryParametersAll['state'];
     return hostAllowed &&
         uri.path == '/qisserver/rds' &&
         !uri.hasFragment &&
