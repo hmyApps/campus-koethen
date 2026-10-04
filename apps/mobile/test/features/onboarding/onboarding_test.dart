@@ -398,6 +398,8 @@ void main() {
     expect(find.text('Schritt 5 von 8'), findsOneWidget);
     expect(find.text('Dein Kalender'), findsOneWidget);
     expect(find.text('Stundenplan'), findsOneWidget);
+    expect(find.text('Exchange-Termine'), findsOneWidget);
+    expect(find.text('Events'), findsOneWidget);
     expect(find.text('Lieblingsspeisen im Kalender'), findsOneWidget);
     expect(find.text('Öffentliche Kalender wählen'), findsOneWidget);
   });

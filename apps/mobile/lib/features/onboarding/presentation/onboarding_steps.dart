@@ -420,6 +420,11 @@ class _CalendarStep extends StatelessWidget {
           source: CalendarSource.moodle,
           sourceAsTitle: true,
         ),
+        const CalendarSourceVisibilitySwitch(
+          source: CalendarSource.publicCalendar,
+          sourceAsTitle: true,
+        ),
+        const ExchangeCalendarSwitch(),
         const SavedEventsCalendarSwitch(),
         const CanteenFavouriteMealsSwitch(),
         const SizedBox(height: AppSpacing.lg),

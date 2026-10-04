@@ -101,6 +101,26 @@ class MoodleCalendarDetails extends CalendarEntryDetails {
   int get hashCode => Object.hash(courseName, moduleName, eventType);
 }
 
+/// A personal appointment from the university Exchange calendar. Location is
+/// user-authored prose, not a trusted room field: a value such as "202" must
+/// not unexpectedly turn into a campus-map link.
+@immutable
+class ExchangeCalendarDetails extends CalendarEntryDetails {
+  const ExchangeCalendarDetails({this.location});
+
+  final String? location;
+
+  @override
+  List<String> get roomProse => <String>[?location];
+
+  @override
+  bool operator ==(Object other) =>
+      other is ExchangeCalendarDetails && other.location == location;
+
+  @override
+  int get hashCode => location.hashCode;
+}
+
 /// An event from a public calendar — written by whoever maintains that calendar.
 @immutable
 class PublicCalendarDetails extends CalendarEntryDetails {

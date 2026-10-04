@@ -97,7 +97,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // "Not everything is showing" has to be visible from the outside, or a
     // missing appointment looks like a bug rather than like a setting.
     final bool everythingVisible =
-        data.enabledSources.length == kMergeableCalendarSources.length &&
+        kMergeableCalendarSources.every(data.enabledSources.contains) &&
         lessonInfoFilter.disabledValues.isEmpty &&
         !lessonInfoFilter.hideWithoutInfo;
 
@@ -130,14 +130,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 /// Phase 14 §1, flags what a live feed would need and deliberately leaves it
 /// open; this sidesteps that question rather than answering it).
 ///
-/// Reads the same wide-horizon source the list view already populates
-/// (`calendarListDataProvider`) rather than only the current day/week/month —
-/// an export limited to whatever view happens to be open would silently
-/// leave most of the semester out. That source is only READ on a tap, never
-/// watched continuously: subscribing the masthead to the list's full
-/// timetable/Moodle/public-calendar fan-out on every visit, regardless of
-/// which view is open or whether export is ever used, would make exporting
-/// cost everyone the list view's background work just for the icon to exist.
+/// Reads a dedicated aggregation over each source's complete known range
+/// rather than only the current day/week/month or the list view's rolling
+/// future window. It is subscribed only while this action runs: merely opening
+/// the calendar must not fetch historic backend ranges or personal Exchange
+/// appointments just because the export icon exists.
 class _ExportCalendarAction extends ConsumerStatefulWidget {
   const _ExportCalendarAction({required this.shareService});
 
@@ -171,18 +168,58 @@ class _ExportCalendarActionState extends ConsumerState<_ExportCalendarAction> {
     final AppLocalizations l10n = context.l10n;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
+    ProviderSubscription<CalendarData>? exportSubscription;
 
     try {
-      final DateTime today = DateTime.now();
-      CalendarData data = ref.read(calendarListDataProvider(today));
-      // Bounded: a source stuck offline must not hang the export forever —
-      // it exports whatever did load once the budget runs out.
-      final DateTime deadline = DateTime.now().add(const Duration(seconds: 10));
+      // Keep the auto-disposed export aggregation alive only for this user
+      // action. Merely opening the calendar must not fetch every historic
+      // backend range or personal Exchange appointment.
+      exportSubscription = ref.listenManual<CalendarData>(
+        calendarExportDataProvider,
+        (_, _) {},
+      );
+      CalendarData data = exportSubscription.read();
+      final DateTime deadline = DateTime.now().add(const Duration(seconds: 30));
       while (data.isLoading && DateTime.now().isBefore(deadline) && mounted) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
-        data = ref.read(calendarListDataProvider(today));
+        data = exportSubscription.read();
       }
       if (!mounted) return;
+
+      final bool incomplete =
+          data.isLoading ||
+          data.hasTimetableError ||
+          data.hasMoodleError ||
+          data.hasPublicCalendarError ||
+          data.hasExchangeCalendarError ||
+          (data.enabledSources.contains(CalendarSource.moodle) &&
+              !data.moodleConnected) ||
+          (data.enabledSources.contains(CalendarSource.exchangeCalendar) &&
+              !data.exchangeCalendarConnected) ||
+          (data.timetableState != CalendarTimetableState.hidden &&
+              data.timetableState != CalendarTimetableState.ready);
+      if (incomplete) {
+        final bool exportPartial =
+            await showDialog<bool>(
+              context: context,
+              builder: (BuildContext context) => AlertDialog(
+                title: Text(l10n.calendarExportIncompleteTitle),
+                content: Text(l10n.calendarExportIncompleteMessage),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(l10n.calendarExportCancel),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: Text(l10n.calendarExportPartialAction),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+        if (!exportPartial || !mounted) return;
+      }
 
       if (data.entries.isEmpty) {
         messenger.showSnackBar(
@@ -208,6 +245,7 @@ class _ExportCalendarActionState extends ConsumerState<_ExportCalendarAction> {
         );
       }
     } finally {
+      exportSubscription?.close();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -277,6 +315,19 @@ List<Widget> _calendarHeader(BuildContext context, CalendarData data) {
     // "Not happening" and "we could not ask" are the two readings this
     // header exists to keep apart.
     if (data.hasPublicCalendarError) banner(l10n.calendarPublicUnavailable),
+    if (data.enabledSources.contains(CalendarSource.exchangeCalendar) &&
+        !data.exchangeCalendarConnected)
+      banner(
+        l10n.calendarExchangeNeedsMail,
+        tone: StatusTone.info,
+        icon: AppIcons.link_off,
+        action: OutlinedButton(
+          onPressed: () => showCalendarSourcesSheet(context),
+          child: Text(l10n.calendarSourcesLabel),
+        ),
+      ),
+    if (data.hasExchangeCalendarError)
+      banner(l10n.calendarExchangeUnavailable),
   ];
 }
 
@@ -548,6 +599,7 @@ class _EntryRow extends ConsumerWidget {
     final String sourceLabel = switch (entry.source) {
       CalendarSource.moodle => l10n.calendarSourceMoodle,
       CalendarSource.timetable => l10n.calendarSourceTimetable,
+      CalendarSource.exchangeCalendar => l10n.calendarSourceExchange,
       CalendarSource.canteenFavourite =>
         entry.sourceLabel ?? l10n.calendarSourceCanteenFavourite,
       CalendarSource.publicCalendar ||

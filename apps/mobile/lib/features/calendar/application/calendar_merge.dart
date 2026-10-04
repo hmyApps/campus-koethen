@@ -7,6 +7,7 @@ import '../../events/domain/event_dedup.dart';
 import '../../events/domain/event_source_label.dart';
 import '../../events/domain/saved_event_snapshot.dart';
 import '../../events/domain/unified_event.dart';
+import '../../mail/domain/exchange_calendar_event.dart';
 import '../../moodle/domain/moodle_deadline.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../domain/calendar_entry.dart';
@@ -125,6 +126,28 @@ List<CalendarEntry> moodleDeadlinesToCalendarEntries(
       )
       .toList();
 }
+
+/// Maps personal Exchange appointments into the local merged calendar. The
+/// opaque EWS item id is namespaced and kept on-device; account identifiers,
+/// attendees and bodies are never requested or copied into [CalendarEntry].
+List<CalendarEntry> exchangeEventsToCalendarEntries(
+  List<ExchangeCalendarEvent> events, {
+  required String untitledTitle,
+}) => events
+    .map(
+      (ExchangeCalendarEvent event) => CalendarEntry(
+        id: 'exchange:${event.id}',
+        source: CalendarSource.exchangeCalendar,
+        title: event.subject.isEmpty ? untitledTitle : event.subject,
+        start: event.start,
+        end: event.end,
+        allDay: event.isAllDay,
+        location: event.location,
+        isCancelled: event.isCancelled,
+        details: ExchangeCalendarDetails(location: event.location),
+      ),
+    )
+    .toList(growable: false);
 
 /// Maps aggregated public-calendar events to calendar entries, resolving each
 /// event's colour and display name from the catalogue (by slug). The colour is

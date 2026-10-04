@@ -169,6 +169,10 @@ DailySummaryDay _summariseDay({
         }
       case CalendarSource.moodle:
         deadlines++;
+      // Exchange appointments stay in memory and are never handed to the OS
+      // notification scheduler, whose pending requests persist their text.
+      case CalendarSource.exchangeCalendar:
+        break;
       case CalendarSource.publicCalendar:
       case CalendarSource.postEvent:
       case CalendarSource.savedEvents:

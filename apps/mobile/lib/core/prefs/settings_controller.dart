@@ -24,6 +24,7 @@ class AppSettings {
     this.defaultBuildingKey,
     this.onboardingCompleted = false,
     this.mailDownloadAttachments = false,
+    this.mailExchangeCalendarEnabled = false,
   });
 
   final LocaleMode localeMode;
@@ -58,6 +59,10 @@ class AppSettings {
   /// are available offline. Off by default to keep the cache small.
   final bool mailDownloadAttachments;
 
+  /// Whether personal Exchange appointments may be read and merged locally.
+  /// This remains false until the reader explicitly opts in.
+  final bool mailExchangeCalendarEnabled;
+
   AppSettings copyWith({
     LocaleMode? localeMode,
     BrightnessPreference? brightnessPreference,
@@ -72,6 +77,7 @@ class AppSettings {
     bool clearDefaultBuilding = false,
     bool? onboardingCompleted,
     bool? mailDownloadAttachments,
+    bool? mailExchangeCalendarEnabled,
   }) {
     return AppSettings(
       localeMode: localeMode ?? this.localeMode,
@@ -91,6 +97,8 @@ class AppSettings {
           : (timetableGroupId ?? this.timetableGroupId),
       mailDownloadAttachments:
           mailDownloadAttachments ?? this.mailDownloadAttachments,
+      mailExchangeCalendarEnabled:
+          mailExchangeCalendarEnabled ?? this.mailExchangeCalendarEnabled,
     );
   }
 }
@@ -141,6 +149,8 @@ class SettingsController extends Notifier<AppSettings> {
           store.getInt(PreferenceKeys.onboardingCompleted) == 1,
       mailDownloadAttachments:
           store.getInt(PreferenceKeys.mailDownloadAttachments) == 1,
+      mailExchangeCalendarEnabled:
+          store.getInt(PreferenceKeys.mailExchangeCalendarEnabled) == 1,
     );
   }
 
@@ -248,6 +258,7 @@ class SettingsController extends Notifier<AppSettings> {
       PreferenceKeys.preferredTimetableGroup,
       PreferenceKeys.defaultBuilding,
       PreferenceKeys.mailDownloadAttachments,
+      PreferenceKeys.mailExchangeCalendarEnabled,
       PreferenceKeys.calendarHomeWidgetEnabled,
       PreferenceKeys.calendarHomeWidgetShowDetails,
     ]) {
@@ -270,6 +281,14 @@ class SettingsController extends Notifier<AppSettings> {
     state = state.copyWith(mailDownloadAttachments: enabled);
     await _store.setInt(
       PreferenceKeys.mailDownloadAttachments,
+      enabled ? 1 : 0,
+    );
+  }
+
+  Future<void> setMailExchangeCalendarEnabled(bool enabled) async {
+    state = state.copyWith(mailExchangeCalendarEnabled: enabled);
+    await _store.setInt(
+      PreferenceKeys.mailExchangeCalendarEnabled,
       enabled ? 1 : 0,
     );
   }

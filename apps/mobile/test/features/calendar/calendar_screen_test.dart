@@ -478,7 +478,7 @@ void main() {
       expect(find.text('Nicht verbunden'), findsOneWidget);
     });
 
-    testWidgets('ignores a legacy global public-calendar hide setting', (
+    testWidgets('respects the global public-calendar visibility setting', (
       WidgetTester tester,
     ) async {
       final InMemoryKeyValueStore store = InMemoryKeyValueStore();
@@ -489,14 +489,14 @@ void main() {
       await pumpCalendar(tester, store: store);
       await openSources(tester);
 
-      // Public calendars are now controlled individually, so a persisted
-      // all-calendars-off value must no longer hide them.
+      // The global source switch controls whether the individually selected
+      // public calendars contribute to every calendar view.
       Finder inSheet(IconData icon) => find.descendant(
         of: find.byType(ListTile),
         matching: find.byIcon(icon),
       );
 
-      expect(inSheet(AppIcons.visibility_off_outlined), findsNothing);
+      expect(inSheet(AppIcons.visibility_off_outlined), findsOneWidget);
       expect(inSheet(AppIcons.link_off), findsOneWidget);
       expect(
         inSheet(calendarSourceIcon(CalendarSource.timetable)),
@@ -504,8 +504,8 @@ void main() {
       );
       expect(
         inSheet(calendarSourceIcon(CalendarSource.publicCalendar)),
-        findsOneWidget,
-        reason: 'legacy global state cannot hide every public calendar',
+        findsNothing,
+        reason: 'the persisted global choice must remain effective',
       );
     });
 
@@ -559,6 +559,34 @@ void main() {
       expect(
         store.getStringList(PreferenceKeys.calendarDisabledSources),
         <String>[CalendarSource.timetable.storageValue],
+      );
+    });
+
+    testWidgets('toggles every primary source directly in the overview', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      final ProviderContainer container = await pumpCalendar(
+        tester,
+        store: store,
+      );
+      await openSources(tester);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('calendar-source-public-calendar'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(calendarEnabledSourcesProvider),
+        isNot(contains(CalendarSource.publicCalendar)),
+      );
+      expect(find.text('Stundenplan'), findsOneWidget);
+      expect(
+        store.getStringList(PreferenceKeys.calendarDisabledSources),
+        <String>[CalendarSource.publicCalendar.storageValue],
       );
     });
 
@@ -865,8 +893,8 @@ void main() {
           CalendarScreen(exportShareService: _FakeShareService(shared)),
           overrides: <Override>[
             apiClientProvider.overrideWithValue(_emptyApi()),
-            calendarListDataProvider.overrideWith(
-              (Ref ref, DateTime day) => CalendarData(
+            calendarExportDataProvider.overrideWithValue(
+              CalendarData(
                 entries: <CalendarEntry>[lecture],
                 enabledSources: const <CalendarSource>{},
               ),
@@ -902,8 +930,8 @@ void main() {
         CalendarScreen(exportShareService: _FakeShareService(shared)),
         overrides: <Override>[
           apiClientProvider.overrideWithValue(_emptyApi()),
-          calendarListDataProvider.overrideWith(
-            (Ref ref, DateTime day) => CalendarData(
+          calendarExportDataProvider.overrideWithValue(
+            CalendarData(
               entries: const <CalendarEntry>[],
               enabledSources: const <CalendarSource>{},
             ),
@@ -913,10 +941,58 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Kalender exportieren'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(shared, isEmpty);
       expect(find.text('Es gibt noch nichts zu exportieren.'), findsOneWidget);
+    });
+
+    testWidgets('never exports an incomplete source set silently', (
+      WidgetTester tester,
+    ) async {
+      final DateTime today = TimetableWeek.dayOf(DateTime.now());
+      final List<AppDocument> shared = <AppDocument>[];
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await pumpScreen(
+        tester,
+        CalendarScreen(exportShareService: _FakeShareService(shared)),
+        overrides: <Override>[
+          apiClientProvider.overrideWithValue(_emptyApi()),
+          calendarExportDataProvider.overrideWithValue(
+            CalendarData(
+              entries: <CalendarEntry>[
+                CalendarEntry(
+                  id: 'partial',
+                  source: CalendarSource.publicCalendar,
+                  title: 'Bereits geladen',
+                  start: today,
+                ),
+              ],
+              enabledSources: const <CalendarSource>{
+                CalendarSource.publicCalendar,
+              },
+              hasPublicCalendarError: true,
+            ),
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Kalender exportieren'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(shared, isEmpty);
+      expect(find.text('Kalender nicht vollständig geladen'), findsOneWidget);
+      await tester.tap(find.text('Teilweise exportieren'));
+      await tester.pumpAndSettle();
+      expect(shared, hasLength(1));
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:campus_koethen/features/calendar/application/calendar_merge.dart
 import 'package:campus_koethen/features/calendar/application/calendar_providers.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_entry.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_entry_details.dart';
+import 'package:campus_koethen/features/mail/domain/exchange_calendar_event.dart';
 import 'package:campus_koethen/features/canteen/data/canteen_models.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_deadline.dart';
 import 'package:campus_koethen/features/timetable/data/timetable_models.dart';
@@ -46,6 +47,43 @@ MoodleDeadline _deadline() => MoodleDeadline(
 );
 
 void main() {
+  test('maps Exchange appointments without exposing account data', () {
+    final List<CalendarEntry> entries =
+        exchangeEventsToCalendarEntries(<ExchangeCalendarEvent>[
+          ExchangeCalendarEvent(
+            id: 'opaque-id',
+            subject: 'Sprechstunde',
+            start: DateTime.utc(2026, 10, 5, 8),
+            end: DateTime.utc(2026, 10, 5, 9),
+            isAllDay: false,
+            isCancelled: false,
+            location: 'B.202',
+          ),
+        ], untitledTitle: 'Termin ohne Betreff');
+
+    expect(entries.single.source, CalendarSource.exchangeCalendar);
+    expect(entries.single.id, 'exchange:opaque-id');
+    expect(entries.single.title, 'Sprechstunde');
+    expect(entries.single.location, 'B.202');
+    expect(entries.single.details, isA<ExchangeCalendarDetails>());
+  });
+
+  test('uses a localized fallback for an Exchange item without a subject', () {
+    final List<CalendarEntry> entries =
+        exchangeEventsToCalendarEntries(<ExchangeCalendarEvent>[
+          ExchangeCalendarEvent(
+            id: 'untitled',
+            subject: '',
+            start: DateTime.utc(2026, 10, 5, 8),
+            end: DateTime.utc(2026, 10, 5, 9),
+            isAllDay: false,
+            isCancelled: false,
+          ),
+        ], untitledTitle: 'Termin ohne Betreff');
+
+    expect(entries.single.title, 'Termin ohne Betreff');
+  });
+
   group('timetable mapping', () {
     test('maps entries to calendar entries and flags cancellation', () {
       final List<CalendarEntry> entries = timetableToCalendarEntries(

@@ -236,6 +236,32 @@ void main() {
       expect(container.read(settingsProvider).mailDownloadAttachments, isTrue);
     });
 
+    testWidgets('offers the Exchange calendar as an explicit opt-in', (
+      WidgetTester tester,
+    ) async {
+      _tallSurface(tester);
+      final container = await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(FakeMailGateway(), InMemoryMailCredentialStore()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Exchange-Termine'), findsOneWidget);
+      expect(
+        container.read(settingsProvider).mailExchangeCalendarEnabled,
+        isFalse,
+      );
+
+      await tester.tap(find.text('Exchange-Termine'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(settingsProvider).mailExchangeCalendarEnabled,
+        isTrue,
+      );
+    });
+
     testWidgets('shows the cached inbox when an account is stored', (
       WidgetTester tester,
     ) async {

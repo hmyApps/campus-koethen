@@ -35,7 +35,7 @@ Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsystem
 | Öffentliche Google-Kalender (öffentlicher ICS-Feed)                                                                                                          | Nicht freigegebene reale Gebäudepläne           |
 | Mensapläne und lokaler NFC-Guthabencheck (Android/iOS)                                                                                                       | Analytics, Tracking, Crash-Reporting            |
 | Kontakte und Kontaktbereiche                                                                                                                                 | Redis, SMTP                                     |
-| Studenten-E-Mail (IMAP/SMTP, direkt vom Gerät)                                                                                                               | Automatisches Deployment                        |
+| Studenten-E-Mail (IMAP/SMTP und optional lesender Exchange-Kalender, direkt vom Gerät)                                                                        | Automatisches Deployment                        |
 | Notenspiegel HIS-QIS **und** HISinOne, auf HISinOne zusätzlich nur lesend: Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht (direkt vom Gerät) | Globale Volltextsuche                           |
 | Moodle: Kurse, Materialien, Aufgaben, Ankündigungen                                                                                                          | Schreibzugriffe auf Moodle                      |
 | Nextcloud-Dateiexplorer: Browser-Login, Ordner und Dateien (nur lesend)                                                                                      | Uploads oder Freigabelinks in Nextcloud         |
@@ -77,7 +77,7 @@ Flutter ──/v1──► Campus API (NestJS) ──► campus_app_* (PostgreSQ
 **Pfad 2 — persönliche oder besonders sensible Dienste: direkt vom Gerät, bewusst am Backend vorbei**
 
 ```text
-                 ┌──► mail.hs-anhalt.de           IMAPS 993 / SMTP 587 + STARTTLS
+                 ┌──► mail.hs-anhalt.de           IMAPS 993 / SMTP 587 + STARTTLS / EWS (lesend)
                  ├──► service.ssc.hs-anhalt.de    HIS-QIS-Notenspiegel (Bestandsportal)
 Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel (neueres Portal);
                  │       Bescheinigungs-Druck-Buttons (Notenübersicht + Studienservice) per
@@ -124,7 +124,8 @@ Harte Systemgrenzen:
 - Flutter spricht für alle öffentlichen und redaktionellen Daten **ausschließlich** mit der versionierten Campus API unter `/v1` — niemals direkt mit Strapi, meine-mensa.de, WebUntis oder dem Google-ICS-Feed.
 - Das Backend liest Strapi **ausschließlich** über dessen REST-API mit einem serverseitigen Read-only-Token — niemals direkt aus Strapi-Tabellen.
 - Für Mail, Noten, Moodle, Nextcloud sowie Anträge und Feedback gibt es **keinen** Backend-Proxy, **keine** serverseitige Speicherung und **keinen** Analytics-/Logging-Umweg. Das gilt auch für den optionalen zentralen Hochschulzugang.
-- Der Kalender führt Stundenplan, öffentliche Kalender und Moodle-Deadlines **ausschließlich lokal auf dem Gerät** zusammen.
+- Der Kalender führt Stundenplan, öffentliche Kalender, Moodle-Deadlines und nach ausdrücklichem
+  Opt-in persönliche Exchange-Termine **ausschließlich lokal auf dem Gerät** zusammen.
 - CMS und operative Daten nutzen **getrennte Datenbanken und Rollen**.
 - Umgebungsunterschiede entstehen ausschließlich durch Environment/Secrets, nicht durch Quellcode.
 
@@ -157,7 +158,7 @@ docs/                          Produkt-, Architektur- und Betriebsdokumentation
 | [api.md](docs/api.md)                                             | Verbindlicher Vertrag der Campus API                       |
 | [data-sources.md](docs/data-sources.md)                           | Alle Fremdquellen mit verifizierten Eigenheiten            |
 | [public-calendars.md](docs/public-calendars.md)                   | Öffentliche Google-Kalender über den öffentlichen ICS-Feed |
-| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail-Client (IMAP/SMTP, direkt vom Gerät)      |
+| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail und optionaler Exchange-Kalender          |
 | [grades.md](docs/grades.md)                                       | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät)   |
 | [moodle.md](docs/moodle.md)                                       | Moodle-Integration und quellenübergreifender Kalender      |
 | [nextcloud.md](docs/nextcloud.md)                                 | Nextcloud Login Flow v2 und lesender WebDAV-Dateiexplorer  |

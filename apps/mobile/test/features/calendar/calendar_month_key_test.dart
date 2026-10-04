@@ -235,6 +235,32 @@ void main() {
     );
   });
 
+  test('an export range keeps its historic lower bound', () async {
+    final ProviderContainer c = container(
+      catalogueMeta: <String, dynamic>{
+        'from': '2026-01-01',
+        'to': '2026-12-31',
+        'maxRangeDays': 366,
+      },
+    );
+    await loadCatalogue(c);
+
+    await c.read(
+      publicCalendarRangeEntriesProvider(
+        CalendarDateWindow(
+          from: DateTime(2026, 1, 1),
+          to: DateTime(2026, 12, 31),
+        ),
+      ).future,
+    );
+
+    final RequestOptions request = requests.lastWhere(
+      (RequestOptions value) => value.path.contains('/calendars/events'),
+    );
+    expect(request.queryParameters['from'], '2026-01-01');
+    expect(request.queryParameters['to'], '2026-12-31');
+  });
+
   test(
     'the list splits a truncated response instead of dropping events',
     () async {

@@ -114,6 +114,7 @@ void main() {
       await controller.setAccentScheme(AccentScheme.green);
       await controller.setReducedMotion(true);
       await controller.setDefaultBuilding('ratke-gebaeude');
+      await controller.setMailExchangeCalendarEnabled(true);
       await controller.setOnboardingCompleted(true);
       await controller.setNavigationTabs(<AppModule>[
         AppModule.mail,
@@ -222,6 +223,7 @@ void main() {
       expect(after.reducedMotion, isFalse);
       expect(after.preferredCanteenSlug, isNull);
       expect(after.defaultBuildingKey, isNull);
+      expect(after.mailExchangeCalendarEnabled, isFalse);
       expect(
         after.onboardingCompleted,
         isTrue,
@@ -274,4 +276,30 @@ void main() {
       expect(store.getInt('grades.lastSync.v1'), 1234);
     });
   });
+
+  test(
+    'Exchange calendar aggregation is an explicit persisted opt-in',
+    () async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      final ProviderContainer container = _container(store);
+
+      expect(
+        container.read(settingsProvider).mailExchangeCalendarEnabled,
+        isFalse,
+      );
+      await container
+          .read(settingsProvider.notifier)
+          .setMailExchangeCalendarEnabled(true);
+
+      expect(
+        container.read(settingsProvider).mailExchangeCalendarEnabled,
+        isTrue,
+      );
+      expect(store.getInt(PreferenceKeys.mailExchangeCalendarEnabled), 1);
+      expect(
+        _container(store).read(settingsProvider).mailExchangeCalendarEnabled,
+        isTrue,
+      );
+    },
+  );
 }

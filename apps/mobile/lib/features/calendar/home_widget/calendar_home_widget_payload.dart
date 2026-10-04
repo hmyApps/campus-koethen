@@ -84,6 +84,10 @@ CalendarHomeWidgetPayload buildCalendarHomeWidgetPayload({
   final DateTime today = DateTime(localNow.year, localNow.month, localNow.day);
   final List<_Candidate> candidates = <_Candidate>[];
   for (final CalendarEntry entry in entries) {
+    // Native widgets persist their payload in SharedPreferences/UserDefaults.
+    // Personal EWS data is deliberately memory-only, so it must never cross
+    // this boundary even when the reader allows widget details.
+    if (entry.source == CalendarSource.exchangeCalendar) continue;
     if (entry.isCancelled) continue;
     final DateTime start;
     final DateTime end;

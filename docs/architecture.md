@@ -47,7 +47,7 @@ Sensibilität der Daten.
 
 ```text
 ┌────────────────┐
-│ Flutter        │──HTTPS/IMAPS/SMTP──► mail.hs-anhalt.de           E-Mail (IMAP 993, SMTP 587)
+│ Flutter        │──HTTPS/IMAPS/SMTP──► mail.hs-anhalt.de           E-Mail + EWS-Kalender (opt-in, lesend)
 │ apps/mobile    │──HTTPS─────────────► service.ssc.hs-anhalt.de    HIS-QIS-Notenspiegel
 │                │──HTTPS─────────────► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel
 │                │──HTTPS─────────────► moodle.hs-anhalt.de         Moodle-Webservice (lesend)
@@ -92,9 +92,13 @@ der jeweilige Adapter ausschließlich seinen eigenen Zustand: Mail-Credentials, 
 Noten-Credentials samt Portalwahl. Es gibt weder ein Campus-Köthen-Konto noch einen
 Identity-Endpunkt im Backend.
 
-Die Zusammenführung von Stundenplan (Pfad 1), öffentlichen Kalendern (Pfad 1) und Moodle-Deadlines
-(Pfad 2) im Kalender-Tab geschieht **ausschließlich lokal auf dem Gerät**. Kein Server sieht die
-kombinierte Ansicht.
+Die Zusammenführung von Stundenplan (Pfad 1), öffentlichen Kalendern (Pfad 1), Moodle-Deadlines
+und optionalen persönlichen Exchange-Terminen (Pfad 2) im Kalender-Tab geschieht
+**ausschließlich lokal auf dem Gerät**. Kein Server sieht die kombinierte Ansicht. EWS wird nur
+nach ausdrücklichem Opt-in angesprochen; die Termine bleiben im Arbeitsspeicher und gelangen in
+keinen Inhaltscache. Weil Homescreen-Widgets und geplante Betriebssystem-Benachrichtigungen ihre
+Payloads persistieren, erhalten sie keine Exchange-Inhalte. Nur ein bewusst ausgelöster ICS-Export
+darf aktuell geladene Termine an das vom Nutzer gewählte Ziel übergeben.
 
 ## 2. Harte Systemgrenzen
 
@@ -284,7 +288,7 @@ Bedrohungsmodell, Sicherheitszusagen und manueller Testcheckliste.
 
 | Dienst           | Ziel                                                                                                                                                                                                                          | Transport                                       | Umfang                                                                                                                                                                                                                                                                                      | Doku                               |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                                                                                                                                           | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS        | lesen, suchen, antworten, senden; Ordner wechseln; Anhänge anzeigen                                                                                                                                                                                                                         | [student-mail.md](student-mail.md) |
+| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                                                                                                                                           | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS; EWS HTTPS | Mail lesen, suchen, antworten, senden; Ordner/Anhänge; nach Opt-in persönlichen Standardkalender ausschließlich lesen                                                                                                                                                                     | [student-mail.md](student-mail.md) |
 | Notenspiegel     | `service.ssc.hs-anhalt.de` **oder** `sscportal.ssc.hs-anhalt.de` — nie beide, getrennte Allowlists; für einen erzeugten HISinOne-Nachweis zusätzlich nur `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload`, das per Redirect zweistufig auf die separate Origin `untrust-sscportal.ssc.hs-anhalt.de` desselben Pfads/Zustands weiterleitet (enge Pfad-/Parameter-Prüfung auf genau diese zwei Hosts) | HTTPS, HTML-/JSF-Parsing (keine offizielle API) | Notenspiegel lesen; 24-Stunden-Regel; Portalwahl bei der Einrichtung. Auf HISinOne zusätzlich **nur lesend**: die drei festen Bescheinigungs-Druck-Buttons direkt auf der Notenübersichtsseite (volle Formularabgabe, kein AJAX) sowie eine eigene Seite „Studienservice" mit mehreren Tabs: Bescheinigungsübersicht/-abruf, Personendaten/Kontaktdaten, Studiengangsübersicht — dieselben Zugangsdaten, kein zweiter Login | [grades.md](grades.md)             |
 | Moodle           | `moodle.hs-anhalt.de`                                                                                                                                                                                                         | HTTPS, Moodle-Webservice (REST)                 | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                                                                                                                                                                                     | [moodle.md](moodle.md)             |
 | Nextcloud        | `cloud.hs-anhalt.de`                                                                                                                                                                                                          | HTTPS, Login Flow v2, OCS und WebDAV            | Browser-Anmeldung mit widerrufbarem App-Passwort; Ordner und Dateien **nur lesend**, kein persistenter Dateicache                                                                                                                                                                            | [nextcloud.md](nextcloud.md)       |
@@ -429,7 +433,7 @@ Durchgehende Regeln:
 | Hochgeladene Nachweise inkl. **Kopie des Studierendenausweises**           | verschlüsselte `hive_ce`-Box `campus_request_files_v1` (Schlüssel `campus_request_files_key_v1`)     |
 | Aufgabenliste                                                              | `hive_ce`, rein lokal, ohne Netz                                                                     |
 | News, Kanäle, Kontakte, Mensadaten, Kalender-/Stundenplanfenster           | `hive_ce` (Inhaltscache; 128 Einträge/20 MiB, Namespace-LRU, 90-Tage-Fenster-Retention)              |
-| Kanal-Abos, Kalenderauswahl, Sprache, Theme, Mensa                         | `SharedPreferences` (kleine Skalare)                                                                 |
+| Kanal-Abos, Kalenderquellen einschließlich Exchange-Opt-in, Sprache, Theme, Mensa | `SharedPreferences` (kleine Skalare)                                                           |
 | Benachrichtigungs-Opt-in und Kategorieschalter                             | `SharedPreferences` (vier kleine Skalare)                                                            |
 | NFC-Mensaguthaben und Kartenantwort                                        | **keine Persistenz**; nur flüchtig im Arbeitsspeicher der geöffneten Anzeige                         |
 

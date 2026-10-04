@@ -453,6 +453,7 @@ class _DayColumn extends StatelessWidget {
   static IconData _iconFor(CalendarSource source) => switch (source) {
     CalendarSource.timetable => AppIcons.school_outlined,
     CalendarSource.moodle => AppIcons.assignment_outlined,
+    CalendarSource.exchangeCalendar => AppIcons.event_outlined,
     CalendarSource.canteenFavourite => AppIcons.soup,
     CalendarSource.publicCalendar ||
     CalendarSource.postEvent ||

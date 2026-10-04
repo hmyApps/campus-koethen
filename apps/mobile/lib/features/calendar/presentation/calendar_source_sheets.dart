@@ -8,10 +8,12 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../app/app_routes.dart';
 import '../../../core/network/loaded.dart';
+import '../../../core/prefs/settings_controller.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../moodle/domain/moodle_account.dart';
+import '../../mail/application/mail_account_controller.dart';
 import '../../timetable/application/timetable_providers.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
@@ -79,7 +81,21 @@ class _SourcesSheet extends ConsumerWidget {
             title: Text(calendarSourceLabel(l10n, source)),
             // The state is part of the row, not a tint on it.
             subtitle: Text(stateOf(source)),
-            trailing: const Icon(AppIcons.chevron_right),
+            trailing: Semantics(
+              label: calendarSourceLabel(l10n, source),
+              value: enabled.contains(source)
+                  ? l10n.calendarSourceVisible
+                  : l10n.calendarSourceHidden,
+              child: Switch.adaptive(
+                key: ValueKey<String>(
+                  'calendar-source-${source.storageValue}',
+                ),
+                value: enabled.contains(source),
+                onChanged: (_) => ref
+                    .read(calendarEnabledSourcesProvider.notifier)
+                    .toggle(source),
+              ),
+            ),
             onTap: () {
               // Replaces this sheet rather than stacking on it.
               Navigator.of(context).pop();
@@ -87,6 +103,7 @@ class _SourcesSheet extends ConsumerWidget {
             },
           ),
         const Divider(),
+        const ExchangeCalendarSwitch(),
         const SavedEventsCalendarSwitch(),
         const CanteenFavouriteMealsSwitch(),
       ],
@@ -113,6 +130,7 @@ Future<void> showCalendarSourceSheet(
       CalendarSource.timetable => const _TimetableSourceSheet(),
       CalendarSource.moodle => const _MoodleSourceSheet(),
       CalendarSource.publicCalendar => const _EventsSourceSheet(),
+      CalendarSource.exchangeCalendar ||
       CalendarSource.postEvent ||
       CalendarSource.savedEvents ||
       CalendarSource.canteenFavourite => throw UnsupportedError(
@@ -120,6 +138,38 @@ Future<void> showCalendarSourceSheet(
       ),
     },
   );
+}
+
+/// Explicit opt-in for personal Exchange appointments. This is a mail
+/// preference rather than a classic public calendar source, so connecting the
+/// mailbox alone never enables it.
+class ExchangeCalendarSwitch extends ConsumerWidget {
+  const ExchangeCalendarSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final bool enabled = ref.watch(
+      settingsProvider.select(
+        (AppSettings settings) => settings.mailExchangeCalendarEnabled,
+      ),
+    );
+    final bool connected =
+        ref.watch(mailAccountControllerProvider).value?.isSignedIn ?? false;
+    return SwitchListTile.adaptive(
+      value: enabled,
+      title: Text(l10n.calendarSourceExchange),
+      subtitle: Text(
+        connected
+            ? l10n.calendarExchangeSettingSubtitle
+            : l10n.calendarExchangeNeedsMail,
+      ),
+      secondary: const Icon(AppIcons.event_outlined),
+      onChanged: (bool value) => ref
+          .read(settingsProvider.notifier)
+          .setMailExchangeCalendarEnabled(value),
+    );
+  }
 }
 
 /// The shell every source sheet shares: a title and a scrollable body.
@@ -385,6 +435,7 @@ class _EventsSourceSheet extends ConsumerWidget {
     return _SourceSheet(
       title: l10n.calendarSectionPublic,
       children: const <Widget>[
+        CalendarSourceVisibilitySwitch(source: CalendarSource.publicCalendar),
         // The same list the manage screen shows, writing the same selection.
         PublicCalendarList(shrinkWrap: true),
       ],
@@ -398,6 +449,7 @@ String calendarSourceLabel(AppLocalizations l10n, CalendarSource source) =>
       CalendarSource.timetable => l10n.calendarSourceTimetable,
       CalendarSource.moodle => l10n.calendarSourceMoodle,
       CalendarSource.publicCalendar => l10n.calendarSourceEvents,
+      CalendarSource.exchangeCalendar => l10n.calendarSourceExchange,
       CalendarSource.postEvent ||
       CalendarSource.savedEvents ||
       CalendarSource.canteenFavourite => throw UnsupportedError(
@@ -411,6 +463,7 @@ IconData calendarSourceIcon(CalendarSource source) => switch (source) {
   CalendarSource.timetable => AppIcons.schedule_outlined,
   CalendarSource.moodle => AppIcons.cast_for_education_outlined,
   CalendarSource.publicCalendar => AppIcons.public_outlined,
+  CalendarSource.exchangeCalendar => AppIcons.event_outlined,
   CalendarSource.postEvent ||
   CalendarSource.savedEvents ||
   CalendarSource.canteenFavourite => throw UnsupportedError(

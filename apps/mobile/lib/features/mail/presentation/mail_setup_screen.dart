@@ -12,6 +12,7 @@ import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 import '../../settings/domain/direct_service.dart';
+import '../../calendar/presentation/calendar_source_sheets.dart';
 import '../../university_account/application/university_account_controller.dart';
 import '../../university_account/application/university_service_connector.dart';
 import '../../university_account/domain/university_identity.dart';
@@ -288,6 +289,7 @@ class _MailSetupScreenState extends ConsumerState<MailSetupScreen> {
                               .read(settingsProvider.notifier)
                               .setMailDownloadAttachments(value),
                   ),
+                  const ExchangeCalendarSwitch(),
                   const SizedBox(height: AppSpacing.xl),
                   FilledButton(
                     onPressed: _busy ? null : _submit,

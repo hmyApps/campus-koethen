@@ -94,8 +94,22 @@ final _listEntriesProvider =
       retry: (_, _) => null,
     );
 
+/// Public-calendar entries for an explicit inclusive export window. Unlike
+/// the rolling list provider this preserves the backend's advertised historic
+/// lower bound instead of shifting the horizon to today.
+final publicCalendarRangeEntriesProvider =
+    FutureProvider.family<List<CalendarEntry>, CalendarDateWindow>(
+      (Ref ref, CalendarDateWindow window) async {
+        final Loaded<List<PublicCalendar>> catalogue = await ref.watch(
+          publicCalendarsCatalogProvider.future,
+        );
+        return _loadWindowEntries(ref, window, catalogue);
+      },
+      retry: (_, _) => null,
+      isAutoDispose: true,
+    );
+
 Future<List<CalendarEntry>> _loadListEntries(Ref ref, DateTime today) async {
-  final String locale = ref.watch(localeCodeProvider);
   final Loaded<List<PublicCalendar>>? catalogue = ref
       .watch(publicCalendarsCatalogProvider)
       .value;
@@ -114,6 +128,26 @@ Future<List<CalendarEntry>> _loadListEntries(Ref ref, DateTime today) async {
     catalogue.meta.from,
     catalogue.meta.to,
   );
+  return _loadWindowEntries(ref, window, catalogue, slugs: slugs);
+}
+
+Future<List<CalendarEntry>> _loadWindowEntries(
+  Ref ref,
+  CalendarDateWindow window,
+  Loaded<List<PublicCalendar>> catalogue, {
+  List<String>? slugs,
+}) async {
+  final String locale = ref.watch(localeCodeProvider);
+  final PublicCalendarSelectionState selection = ref.watch(
+    publicCalendarSelectionProvider,
+  );
+  final List<String> selected =
+      slugs ??
+      PublicCalendarSelectionRules.effectiveSelection(
+        available: catalogue.value,
+        selected: selection.selectedSlugs,
+      );
+  if (selected.isEmpty) return const <CalendarEntry>[];
   // Old backend versions do not advertise their request limit; they used
   // 120-day list requests, so keep that safe fallback during rollout.
   final int maxDays = catalogue.meta.maxRangeDays ?? 120;
@@ -125,7 +159,7 @@ Future<List<CalendarEntry>> _loadListEntries(Ref ref, DateTime today) async {
     final Loaded<List<PublicCalendarEvent>> response = await repository
         .fetchEvents(
           locale: locale,
-          slugs: slugs,
+          slugs: selected,
           from: part.from.toIso8601String().slice10(),
           to: part.to.toIso8601String().slice10(),
         );

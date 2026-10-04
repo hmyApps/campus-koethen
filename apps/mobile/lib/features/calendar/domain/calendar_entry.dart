@@ -16,6 +16,11 @@ enum CalendarSource {
   moodle('moodle'),
   publicCalendar('public-calendar'),
 
+  /// A personal appointment read directly from the signed-in university
+  /// Exchange account. This source is strictly opt-in and never reaches the
+  /// Campus API or a persistent content cache.
+  exchangeCalendar('exchange-calendar'),
+
   /// An event post from `/v1/posts/events`, folded into the calendar as its
   /// own source so it can be deduplicated against a matching
   /// [publicCalendar] entry — see `features/events/domain/event_dedup.dart`.
@@ -52,6 +57,8 @@ enum CalendarSource {
 /// `features/events/application/event_source_filter.dart`.
 /// [CalendarSource.canteenFavourite] is excluded for the same reason: it has
 /// its own off-by-default switch, `calendarShowFavouriteMealsProvider`.
+/// [CalendarSource.exchangeCalendar] is also excluded: it is a personal,
+/// direct and off-by-default mail setting rather than a public default.
 const List<CalendarSource> kMergeableCalendarSources = <CalendarSource>[
   CalendarSource.timetable,
   CalendarSource.moodle,

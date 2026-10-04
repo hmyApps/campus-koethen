@@ -1,4 +1,4 @@
-# Studentische E-Mail (IMAP/SMTP)
+# Studentische E-Mail und Exchange-Kalender
 
 Ein minimaler E-Mail-Client, der sich **direkt vom Gerät** mit dem Mailserver der
 Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Proxy.
@@ -9,6 +9,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   - **IMAP** über `993` mit implizitem TLS (kein Fallback auf `143`/Klartext).
   - **SMTP-Submission** über `587` mit **verpflichtendem STARTTLS** (kein Fallback auf
     `25`/`465`/Klartext; Abbruch, wenn der Server STARTTLS nicht anbietet).
+  - **Exchange Web Services** ausschließlich lesend über exakt
+    `https://mail.hs-anhalt.de/EWS/Exchange.asmx`, ohne Redirects und erst nach einem
+    ausdrücklichen Opt-in. Angefordert werden nur ID, Betreff, Beginn, Ende,
+    Ganztags-/Absagestatus und Ort aus dem eigenen Standardkalender — keine Bodies,
+    Organisatoren oder Teilnehmerlisten.
 - Zertifikats- **und** Hostname-Prüfung sind aktiv. `allowBadCertificates` wird
   **nirgends** verwendet. Kein Certificate-Pinning.
 - Verbindungsaufbau, Protokollkommandos und das Aufräumen der Sitzung sind zeitlich begrenzt.
@@ -27,6 +32,9 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   (`flutter_secure_storage`, iOS Keychain / Android Keystore). **Nie** in
   `SharedPreferences` oder Hive. Kein unsicherer Fallback: Ist der sichere Speicher nicht
   verfügbar, wird **nicht** gespeichert und ein klarer Fehler gezeigt.
+- Exchange-Termine werden nicht dauerhaft gespeichert. Sie bleiben nur im Arbeitsspeicher und
+  werden dort mit Stundenplan, öffentlichen Kalendern, Moodle-Fristen und lokalen Quellen
+  zusammengeführt. Nur der skalare Opt-in-Schalter liegt in `SharedPreferences`.
 - Das Passwort erscheint **nie** in Logs, Exceptions, Telemetrie, `toString()` oder
   Debug-Ausgaben. Das Protokoll-Debugging von `enough_mail` ist **aus**
   (`isLogEnabled: false`).
@@ -88,6 +96,21 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP
 > bewusst nicht einbindet. Sync läuft, solange die App läuft, plus beim nächsten Start.
 
+## Optionaler Exchange-Kalender
+
+- Der Schalter ist standardmäßig aus und wird im Onboarding, in den Kalenderquellen sowie unter
+  Einstellungen → Studentische E-Mail angeboten. Eine Mailanmeldung allein aktiviert ihn nicht.
+- Der Client liest den Standardkalender in begrenzten Zeitfenstern. Eine als unvollständig
+  markierte EWS-Antwort wird als Fehler verworfen statt als vollständiger Kalender angezeigt.
+- Abmelden oder vollständiges Löschen des Mailzugangs invalidiert laufende EWS-Anfragen über
+  dieselbe Session-Generation wie IMAP. Eine verspätete Antwort kann danach keine Termine erneut
+  sichtbar machen.
+- Tages-, Wochen- und Listenansicht verwenden denselben lokalen Exchange-Opt-in. Der bewusst
+  ausgelöste ICS-Export fragt für Exchange ausdrücklich höchstens ein Jahr Vergangenheit und zwei
+  Jahre Zukunft ab, weil EWS keine Retentionsgrenze ausliefert. Homescreen-Widget und geplante
+  Benachrichtigungen erhalten keine Exchange-Inhalte, weil deren Betriebssystem-Payloads
+  persistiert werden.
+
 ## Suche
 
 - **Lokal zuerst:** Das Abschicken der Suche durchsucht ausschließlich den verschlüsselten
@@ -122,11 +145,13 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 
 ```
 features/mail/
-  domain/         Reine Modelle + Ports: MailGateway, MailCredentialStore, MailCacheStore
+  domain/         Reine Modelle + Ports: MailGateway, ExchangeCalendarGateway,
+                  MailCredentialStore, MailCacheStore
                   (inkl. searchHeaders für die lokale Suche), MailCredentials,
                   MailMessage*, mail_search_match (Normalisierung + Feldabgleich),
                   MailFailure, HsaMailProfile
   data/           Adapter: EnoughMailGateway (kapselt enough_mail vollständig),
+                  EwsExchangeCalendarGateway + strikter XML-Parser,
                   mail_mime_builder (MIME-Aufbau inkl. Anhänge, von Send und
                   Sent-Kopie geteilt), MailAttachmentPicker (kapselt file_selector),
                   SecureMailCredentialStore, EncryptedMailCache, MailCacheManager,
@@ -167,6 +192,8 @@ flutter test test/features/mail/
 
 - `mail_domain_test.dart` — Profil-Endpunkte, Credentials-Redaction, E-Mail-Validierung,
   `OutgoingMessage.attachments` (Default leer, mehrere Anhänge).
+- `exchange_calendar_*_test.dart` — EWS-Requestvertrag und Host-/Redirect-Grenze, strikter
+  XML-Parser, Zeitfenster und Schutz gegen verspätete Antworten nach dem Abmelden.
 - `mail_mime_builder_test.dart` — MIME-Aufbau mit und ohne Anhänge: Dateiname, Media-Type und
   Bytes überleben byteidentisch den Roundtrip, mehrere Anhänge gleichzeitig, Text bleibt neben
   Anhängen erhalten, zweimaliger Aufbau aus derselben Nachricht liefert identischen Anhangsinhalt
@@ -205,6 +232,12 @@ Einrichtung / Sicherheit
       Hinweis, dass Campus-Server keine Zugangsdaten/Mails erhalten, und den externen Link
       auf `https://mail.hs-anhalt.de/`.
 - [ ] Anmeldung mit korrekten Daten führt in den Posteingang.
+- [ ] „Exchange-Termine“ ist zunächst aus; Einschalten lädt reale Termine in Tag, Woche und Liste,
+      Ausschalten entfernt sie aus allen Ansichten und dem Export. Homescreen-Widget und geplante
+      Benachrichtigungen enthalten auch bei aktivem Opt-in keine Exchange-Inhalte.
+- [ ] Ein Termin mit Ort, ein Ganztagstermin und ein abgesagter Termin werden korrekt dargestellt;
+      E-Mail-Body und Teilnehmerdaten erscheinen nirgends.
+- [ ] Nach Abmelden während eines laufenden EWS-Abrufs taucht kein verspäteter Termin auf.
 - [ ] Falsches Passwort → verständliche Fehlermeldung, **keine** rohen Serverdaten,
       **kein** Speichern.
 - [ ] Ungültige Adresse → lokale Validierung, Server wird **nicht** kontaktiert.

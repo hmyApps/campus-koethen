@@ -28,6 +28,7 @@ import '../../mail/domain/mail_cache_store.dart';
 import '../../timetable/application/timetable_providers.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
+import '../../calendar/presentation/calendar_source_sheets.dart';
 
 /// Local settings. Everything here stays on the device — the app works
 /// entirely without a user account.
@@ -94,6 +95,13 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(AppIcons.chevron_right),
             onTap: () => context.push(AppRoutes.settingsCalendarWidget),
           ),
+          ListTile(
+            leading: const Icon(AppIcons.tune),
+            title: Text(l10n.calendarSourcesLabel),
+            subtitle: Text(l10n.calendarSourcesSettingsSubtitle),
+            trailing: const Icon(AppIcons.chevron_right),
+            onTap: () => showCalendarSourcesSheet(context),
+          ),
           SectionHeader(label: l10n.settingsSectionContent),
           ListTile(
             leading: const Icon(AppIcons.rss_feed_outlined),
@@ -126,6 +134,7 @@ class SettingsScreen extends ConsumerWidget {
                 .read(settingsProvider.notifier)
                 .setMailDownloadAttachments(value),
           ),
+          const ExchangeCalendarSwitch(),
           const _MailCacheTile(),
           SectionHeader(label: l10n.settingsSectionAccounts),
           const UniversityAccountCard(),

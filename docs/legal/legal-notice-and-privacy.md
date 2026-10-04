@@ -91,7 +91,7 @@ Nextcloud never receives this central identity and uses the browser-based Login 
 
 ## Student email
 
-When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. The service-specific email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. After a successful “Delete email connection and local data”, the service-specific credentials, local cache and its encryption key are removed; an optional central university access is retained. Your email on the university server remains unchanged.
+When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. The service-specific email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. You may optionally enable Exchange appointments. The app then reads subject, start, end, all-day and cancellation status, and location from your default calendar directly from the same mail server and merges them with the other calendar sources only in memory; message bodies and attendee lists are not requested for this purpose. Exchange appointments never enter home-screen widgets or scheduled notifications. Only a calendar export you deliberately start may pass the currently loaded appointments to a destination you choose. After a successful “Delete email connection and local data”, the service-specific credentials, local cache and its encryption key are removed; an optional central university access is retained. Your email and appointments on the university server remain unchanged.
 
 ## Grades
 
@@ -115,7 +115,7 @@ When you submit a funding application or feedback, the app sends the information
 
 ## Notifications
 
-Notifications are scheduled entirely on this device. The app asks for the operating system's permission only after you have explicitly enabled them, and it evaluates only data that is already stored locally – events, timetable, Moodle deadlines, canteen menus and your favourites. There is no push service, no device identifier, no user account and no recipient: no data ever leaves your device for this. You can change your settings or turn everything off again at any time under More → Settings → Notifications.
+Notifications are scheduled entirely on this device. The app asks for the operating system's permission only after you have explicitly enabled them, and it evaluates only data that is already stored locally – events, timetable, Moodle deadlines, canteen menus and your favourites. There is no push service, no device identifier, no user account and no recipient: no data ever leaves your device for this. You can change your settings or turn everything off again at any time under More → Settings → Notifications. Personal Exchange appointments are not copied into operating-system notifications.
 
 ## Direct services and external links
 

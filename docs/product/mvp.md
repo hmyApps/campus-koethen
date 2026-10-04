@@ -95,15 +95,23 @@ damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Pa
 
 - Explizite Umschaltung **Tag ↔ Woche ↔ Liste**; die Wochenansicht zeigt standardmäßig Montag
   bis Freitag, das Wochenende ist ein lokaler Schalter
-- Quellen: Stundenplan (Campus API), öffentliche Kalender (Campus API), Moodle-Deadlines (direkt)
+- Quellen: Stundenplan (Campus API), öffentliche Kalender (Campus API), Moodle-Deadlines (direkt),
+  optional persönliche Exchange-Termine (direkt) sowie lokale gemerkte Events und Mensafavoriten
 - Zusammenführung **ausschließlich lokal auf dem Gerät**; Quellen sind isoliert — ein Fehler einer
   Quelle blendet die anderen nicht aus, sondern erscheint als eigenes Banner
 - „Kalender verwalten": lokale Auswahl der öffentlichen Kalender
+- Granulare Quellenschalter gelten einheitlich für Tag, Woche, Liste und Export. Der
+  Benachrichtigungsumfang bleibt davon getrennt und folgt den Benachrichtigungseinstellungen sowie
+  der Auswahl öffentlicher Kalender; der Stundenplan-Lesson-Info-Filter gilt weiterhin auch für die
+  Tageszusammenfassung. Exchange ist standardmäßig aus und wird zusätzlich im Onboarding sowie in
+  den Mail-Einstellungen angeboten. Weil Widget- und Benachrichtigungs-Payloads persistiert werden,
+  enthalten beide keine persönlichen Exchange-Termine.
 
 **Persönliche Dienste, direkt vom Gerät**
 
 - **Studenten-E-Mail** (`mail.hs-anhalt.de`): Posteingang mit verschlüsseltem Offline-Cache, alle
   Server-Ordner, serverseitige Suche über IMAP SEARCH, Anhänge anzeigen und in der App öffnen,
+  optional lesender Exchange-Standardkalender ohne persistenten Termincache,
   Verfassen, Antworten und Allen antworten — reiner Text
 - **Notenspiegel** (HIS-QIS **und** HISinOne): Notenübersicht mit Detailansicht, verschlüsselter
   lokaler Cache, 24-Stunden-Regel mit manueller Übersteuerung. Auf HISinOne zusätzlich **nur
@@ -122,8 +130,8 @@ damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Pa
   persistenten Datei- oder Metadatencache. Das App-Passwort liegt nur im Keychain/Keystore.
 - **Zentraler Hochschulzugang**: optionale lokale Eingabehilfe für Mail, Moodle und Noten mit
   getrennten `+`-/`−`-Aktionen; keine gemeinsame Sitzung und kein Campus-Backend-Konto
-- **Ersteinrichtung**: eigener Kalender-Schritt für Stundenplan, Moodle-Fristen, gemerkte Events,
-  Lieblingsspeisen und öffentliche Kalender. Danach kann die gemeinsame Hochschulkennung einmal
+- **Ersteinrichtung**: eigener Kalender-Schritt für Stundenplan, Moodle-Fristen, Exchange-Termine,
+  gemerkte Events, Lieblingsspeisen und öffentliche Kalender. Danach kann die gemeinsame Hochschulkennung einmal
   eingegeben und auf einem getrennten Schritt bewusst für Mail, Moodle und/oder Noten verwendet
   werden. Die Eingabe bleibt bis zur erfolgreichen Prüfung mindestens eines gewählten Diensts
   flüchtig; erst danach wird sie mit Einwilligung im Keychain/Keystore gespeichert.
@@ -272,8 +280,9 @@ gebaut.
 
 ### 4.4 Kalender
 
-- Der Kalender ist ein eigener Tab und führt **drei** Quellen zusammen: Stundenplan und öffentliche
-  Kalender über die Campus API, Moodle-Deadlines direkt vom Gerät.
+- Der Kalender ist ein eigener Tab und führt die aktivierten Quellen zusammen: Stundenplan und
+  öffentliche Kalender über die Campus API, Moodle-Deadlines und optional Exchange-Termine direkt
+  vom Gerät sowie lokale gemerkte Events und Mensafavoriten.
 - Die Zusammenführung geschieht **ausschließlich lokal**. Kein Server sieht die kombinierte Ansicht.
 - **Quellen sind isoliert.** Ein Moodle-Fehler beeinträchtigt den Stundenplan nicht; ein
   Campus-API-Fehler entfernt die lokal gecachten Moodle-Deadlines nicht. Jeder Fehler erscheint als

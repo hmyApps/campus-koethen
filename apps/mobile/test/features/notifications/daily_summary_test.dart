@@ -286,5 +286,21 @@ void main() {
       expect(day.lectureCount, 0);
       expect(day.moodleDeadlineCount, 0);
     });
+
+    test('personal Exchange entries never enter persistent notifications', () {
+      final List<DailySummaryDay> days = buildDailySummaryDays(
+        firstDay: today,
+        entries: <CalendarEntry>[
+          event(
+            DateTime(2026, 8, 24, 16),
+            id: 'exchange:private',
+            title: 'Persönlicher Termin',
+            source: CalendarSource.exchangeCalendar,
+          ),
+        ],
+      );
+
+      expect(dayOf(days, today).hasRelevantEntry, isFalse);
+    });
   });
 }

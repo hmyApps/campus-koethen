@@ -18,9 +18,10 @@ void main() {
     String title = 'Diskrete Mathematik',
     String? location = 'Raum 101',
     bool isCancelled = false,
+    CalendarSource source = CalendarSource.timetable,
   }) => CalendarEntry(
     id: id,
-    source: CalendarSource.timetable,
+    source: source,
     title: title,
     start: start,
     end: end,
@@ -79,6 +80,29 @@ void main() {
     expect(encoded, isNot(contains('Geheimer')));
     expect(payload.events.single.title, isNull);
     expect(payload.events.single.location, isNull);
+  });
+
+  test('never persists personal Exchange appointments in the OS widget', () {
+    final CalendarHomeWidgetPayload payload = buildCalendarHomeWidgetPayload(
+      entries: <CalendarEntry>[
+        entry(
+          'exchange:private',
+          DateTime(2026, 10, 4, 12),
+          title: 'Persönlicher Termin',
+          source: CalendarSource.exchangeCalendar,
+        ),
+        entry('public', DateTime(2026, 10, 4, 13)),
+      ],
+      now: now,
+      locale: 'de',
+      showDetails: true,
+    );
+
+    expect(
+      payload.events.map((CalendarHomeWidgetEvent event) => event.id),
+      <String>['public'],
+    );
+    expect(jsonEncode(payload.toJson()), isNot(contains('Persönlicher')));
   });
 
   test('all-day dates use calendar arithmetic across DST', () {

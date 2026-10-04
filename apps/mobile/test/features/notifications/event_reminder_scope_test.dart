@@ -176,27 +176,24 @@ void main() {
       },
     );
 
-    test(
-      'the removed global public-calendar switch cannot change the plan',
-      () async {
-        final ProviderContainer container = await containerWith(
-          live: <CalendarEntry>[liveEvent()],
-        );
-        final List<String> before = entryIds(container);
+    test('the public-calendar display switch cannot change the plan', () async {
+      final ProviderContainer container = await containerWith(
+        live: <CalendarEntry>[liveEvent()],
+      );
+      final List<String> before = entryIds(container);
 
-        await container
-            .read(calendarEnabledSourcesProvider.notifier)
-            .toggle(CalendarSource.publicCalendar);
+      await container
+          .read(calendarEnabledSourcesProvider.notifier)
+          .toggle(CalendarSource.publicCalendar);
 
-        expect(
-          container
-              .read(calendarEnabledSourcesProvider)
-              .contains(CalendarSource.publicCalendar),
-          isTrue,
-        );
-        expect(entryIds(container), before);
-      },
-    );
+      expect(
+        container
+            .read(calendarEnabledSourcesProvider)
+            .contains(CalendarSource.publicCalendar),
+        isFalse,
+      );
+      expect(entryIds(container), before);
+    });
 
     test('a deselected public calendar DOES change it', () async {
       // The other half of the same rule: the calendar *selection* is part of

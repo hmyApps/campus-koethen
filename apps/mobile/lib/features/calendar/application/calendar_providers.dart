@@ -4,16 +4,21 @@
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/locale/locale_providers.dart';
 import '../../../core/network/loaded.dart';
 import '../../../core/prefs/preference_keys.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../../../core/time/clock.dart';
+import '../../../l10n/l10n.dart';
 import '../../canteen/application/canteen_filter_controller.dart';
 import '../../canteen/application/canteen_providers.dart';
 import '../../canteen/data/canteen_models.dart';
 import '../../canteen/domain/canteen_filter.dart';
 import '../../events/application/saved_events_controller.dart';
 import '../../events/domain/saved_event_snapshot.dart';
+import '../../mail/application/exchange_calendar_providers.dart';
+import '../../mail/application/mail_account_controller.dart';
+import '../../mail/domain/exchange_calendar_event.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../moodle/application/moodle_controller.dart';
 import '../../timetable/application/timetable_providers.dart';
@@ -149,15 +154,11 @@ class CalendarEnabledSourcesController extends Notifier<Set<CalendarSource>> {
             .whereType<CalendarSource>()
             .toSet();
     return kMergeableCalendarSources
-        .where(
-          (CalendarSource s) =>
-              s == CalendarSource.publicCalendar || !off.contains(s),
-        )
+        .where((CalendarSource source) => !off.contains(source))
         .toSet();
   }
 
   Future<void> toggle(CalendarSource source) async {
-    if (source == CalendarSource.publicCalendar) return;
     final Set<CalendarSource> next = <CalendarSource>{...state};
     if (!next.remove(source)) next.add(source);
     state = next;
@@ -263,6 +264,9 @@ class CalendarData {
     this.moodleLoading = false,
     this.publicCalendarsLoading = false,
     this.hasPublicCalendarError = false,
+    this.exchangeCalendarConnected = false,
+    this.exchangeCalendarLoading = false,
+    this.hasExchangeCalendarError = false,
     CalendarTimetableState? timetableState,
   }) : timetableState =
            timetableState ??
@@ -294,14 +298,20 @@ class CalendarData {
 
   final bool moodleLoading;
   final bool publicCalendarsLoading;
+  final bool exchangeCalendarConnected;
+  final bool exchangeCalendarLoading;
 
   /// Whether any enabled source has yet to answer.
   ///
   /// Read by every view that would otherwise render "nothing scheduled" over
   /// a load still in flight — a statement the app cannot yet make.
   bool get isLoading =>
-      timetableLoading || moodleLoading || publicCalendarsLoading;
+      timetableLoading ||
+      moodleLoading ||
+      publicCalendarsLoading ||
+      exchangeCalendarLoading;
   final bool hasPublicCalendarError;
+  final bool hasExchangeCalendarError;
 
   /// Built on first use and then reused: every reader below asks about the
   /// same, unchanged list, and a fresh [CalendarData] is what a changed list
@@ -341,6 +351,13 @@ class CalendarDateWindow {
 
   final DateTime from;
   final DateTime to;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CalendarDateWindow && other.from == from && other.to == to;
+
+  @override
+  int get hashCode => Object.hash(from, to);
 }
 
 /// The backend's advertised horizon, shifted with today so a cached catalogue
@@ -430,16 +447,26 @@ final calendarDataProvider = Provider.family<CalendarData, DateTime>(
 /// timetable weeks, public-calendar months and Moodle deadlines it reads are
 /// their own, non-disposing providers, so returning to a month re-merges from
 /// what is already there.
-final _calendarMonthDataProvider = Provider.family<CalendarData, DateTime>(
-  (Ref ref, DateTime anchor) => _buildCalendarData(
+final _calendarMonthDataProvider = Provider.family<CalendarData, DateTime>((
+  Ref ref,
+  DateTime anchor,
+) {
+  final List<DateTime> weeks = monthWeekStarts(anchor);
+  final bool publicEnabled = ref
+      .watch(calendarEnabledSourcesProvider)
+      .contains(CalendarSource.publicCalendar);
+  return _buildCalendarData(
     ref,
-    timetableWeekStarts: monthWeekStarts(anchor),
-    publicCalendarEntries: ref.watch(
-      publicCalendarMonthEntriesProvider(anchor),
+    timetableWeekStarts: weeks,
+    publicCalendarEntries: publicEnabled
+        ? ref.watch(publicCalendarMonthEntriesProvider(anchor))
+        : const AsyncData<List<CalendarEntry>>(<CalendarEntry>[]),
+    exchangeWindow: CalendarDateWindow(
+      from: weeks.first,
+      to: TimetableWeek.shift(weeks.last, TimetableWeek.lengthInDays - 1),
     ),
-  ),
-  isAutoDispose: true,
-);
+  );
+}, isAutoDispose: true);
 
 /// The list reads every source to the horizon advertised by its backend.
 final calendarListDataProvider = Provider.family<CalendarData, DateTime>(
@@ -453,6 +480,9 @@ final _calendarListDataProvider = Provider.family<CalendarData, DateTime>((
   DateTime today,
 ) {
   final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
+  final bool publicEnabled = ref
+      .watch(calendarEnabledSourcesProvider)
+      .contains(CalendarSource.publicCalendar);
   final AsyncValue<Loaded<TimetableGroup>?>? selectedGroup = groupId == null
       ? null
       : ref.watch(selectedTimetableGroupProvider);
@@ -469,15 +499,109 @@ final _calendarListDataProvider = Provider.family<CalendarData, DateTime>((
           ),
           42,
         );
+  final CalendarDateWindow listWindow = calendarListWindow(
+    today,
+    selectedGroup?.value?.meta.from,
+    selectedGroup?.value?.meta.to,
+  );
   return _buildCalendarData(
     ref,
     timetableWeekStarts: const <DateTime>[],
     timetableRanges: timetableRanges,
     timetableMetadataLoading: selectedGroup?.isLoading ?? false,
-    publicCalendarEntries: ref.watch(publicCalendarListEntriesProvider(today)),
+    publicCalendarEntries: publicEnabled
+        ? ref.watch(publicCalendarListEntriesProvider(today))
+        : const AsyncData<List<CalendarEntry>>(<CalendarEntry>[]),
     windowFrom: today,
+    exchangeWindow: listWindow,
   );
 }, isAutoDispose: true);
+
+/// A one-shot export view over every enabled source and its complete known
+/// range. Backend sources use their advertised absolute bounds (including
+/// history) instead of the list view's rolling "from today" window. Personal
+/// Exchange has no advertised retention contract, so its explicit export
+/// window is one year back through two years ahead.
+final Provider<CalendarData>
+calendarExportDataProvider = Provider<CalendarData>((Ref ref) {
+  final DateTime today = calendarDayKey(ref.watch(calendarClockProvider).now());
+  final Set<CalendarSource> enabled = ref.watch(calendarEnabledSourcesProvider);
+  final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
+  final AsyncValue<Loaded<TimetableGroup>?>? selectedGroup = groupId == null
+      ? null
+      : ref.watch(selectedTimetableGroupProvider);
+
+  final List<CalendarDateWindow> timetableRanges;
+  if (!enabled.contains(CalendarSource.timetable) || groupId == null) {
+    timetableRanges = const <CalendarDateWindow>[];
+  } else if (selectedGroup?.value case final Loaded<TimetableGroup> group) {
+    timetableRanges = splitCalendarWindow(
+      _absoluteOrFallbackWindow(today, group.meta.from, group.meta.to),
+      42,
+    );
+  } else {
+    timetableRanges = const <CalendarDateWindow>[];
+  }
+
+  final AsyncValue<List<CalendarEntry>> publicEntries;
+  if (!enabled.contains(CalendarSource.publicCalendar)) {
+    publicEntries = const AsyncData<List<CalendarEntry>>(<CalendarEntry>[]);
+  } else {
+    final AsyncValue<Loaded<List<PublicCalendar>>> catalogue = ref.watch(
+      publicCalendarsCatalogProvider,
+    );
+    final Loaded<List<PublicCalendar>>? loaded = catalogue.value;
+    if (loaded != null) {
+      publicEntries = ref.watch(
+        publicCalendarRangeEntriesProvider(
+          _absoluteOrFallbackWindow(today, loaded.meta.from, loaded.meta.to),
+        ),
+      );
+    } else if (catalogue.hasError) {
+      publicEntries = AsyncError<List<CalendarEntry>>(
+        catalogue.error!,
+        catalogue.stackTrace ?? StackTrace.current,
+      );
+    } else {
+      publicEntries = const AsyncLoading<List<CalendarEntry>>();
+    }
+  }
+
+  return _buildCalendarData(
+    ref,
+    timetableWeekStarts: const <DateTime>[],
+    timetableRanges: timetableRanges,
+    timetableMetadataLoading:
+        enabled.contains(CalendarSource.timetable) &&
+        groupId != null &&
+        (selectedGroup?.isLoading ?? false),
+    publicCalendarEntries: publicEntries,
+    exchangeWindow: CalendarDateWindow(
+      from: DateTime(today.year - 1, today.month, today.day),
+      to: DateTime(today.year + 2, today.month, today.day),
+    ),
+  );
+}, isAutoDispose: true);
+
+CalendarDateWindow _absoluteOrFallbackWindow(
+  DateTime today,
+  String? availableFrom,
+  String? availableTo,
+) {
+  final DateTime? from = _metadataDay(availableFrom);
+  final DateTime? to = _metadataDay(availableTo);
+  if (from != null && to != null && !to.isBefore(from)) {
+    return CalendarDateWindow(from: from, to: to);
+  }
+  return CalendarDateWindow(from: today, to: TimetableWeek.shift(today, 119));
+}
+
+DateTime? _metadataDay(String? value) {
+  final DateTime? parsed = value == null ? null : DateTime.tryParse(value);
+  return parsed == null
+      ? null
+      : DateTime(parsed.year, parsed.month, parsed.day);
+}
 
 CalendarData _buildCalendarData(
   Ref ref, {
@@ -486,6 +610,7 @@ CalendarData _buildCalendarData(
   List<CalendarDateWindow>? timetableRanges,
   bool timetableMetadataLoading = false,
   DateTime? windowFrom,
+  CalendarDateWindow? exchangeWindow,
 }) {
   final Set<CalendarSource> enabled = ref.watch(calendarEnabledSourcesProvider);
   final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
@@ -631,11 +756,13 @@ CalendarData _buildCalendarData(
   final List<CalendarEntry> publicEntries = <CalendarEntry>[];
   bool publicLoading = false;
   bool publicError = false;
-  publicCalendarEntries.when(
-    data: (List<CalendarEntry> entries) => publicEntries.addAll(entries),
-    loading: () => publicLoading = true,
-    error: (_, _) => publicError = true,
-  );
+  if (enabled.contains(CalendarSource.publicCalendar)) {
+    publicCalendarEntries.when(
+      data: (List<CalendarEntry> entries) => publicEntries.addAll(entries),
+      loading: () => publicLoading = true,
+      error: (_, _) => publicError = true,
+    );
+  }
 
   // --- Source 4 (optional, opt-in): "Meine gemerkten Events". Independent
   // too, and deduplicated against the live public-calendar entries above via
@@ -683,18 +810,66 @@ CalendarData _buildCalendarData(
     }
   }
 
+  // --- Source 6 (optional, opt-in): personal Exchange appointments. The
+  // provider reads credentials just in time from secure storage and retains
+  // neither credentials nor events after this window is disposed.
+  final bool exchangeEnabled = ref.watch(
+    settingsProvider.select(
+      (AppSettings settings) => settings.mailExchangeCalendarEnabled,
+    ),
+  );
+  final bool exchangeConnected =
+      ref.watch(mailAccountControllerProvider).value?.isSignedIn ?? false;
+  final List<CalendarEntry> exchangeEntries = <CalendarEntry>[];
+  bool exchangeLoading = false;
+  bool exchangeError = false;
+  if (exchangeEnabled && exchangeConnected && exchangeWindow != null) {
+    final AsyncValue<List<ExchangeCalendarEvent>> exchange = ref.watch(
+      exchangeCalendarEventsProvider(
+        ExchangeCalendarQuery(from: exchangeWindow.from, to: exchangeWindow.to),
+      ),
+    );
+    exchange.when(
+      data: (List<ExchangeCalendarEvent> events) {
+        final AppLocalizations l10n = lookupAppLocalizations(
+          ref.watch(activeLocaleProvider),
+        );
+        exchangeEntries.addAll(
+          exchangeEventsToCalendarEntries(
+            events,
+            untitledTitle: l10n.calendarExchangeUntitled,
+          ),
+        );
+      },
+      loading: () => exchangeLoading = true,
+      error: (_, _) => exchangeError = true,
+    );
+  }
+
+  final bool savedEventsEnabled = ref.watch(calendarSavedEventsEnabledProvider);
+  final bool favouriteMealsEnabled = ref.watch(
+    calendarShowFavouriteMealsProvider,
+  );
+  final Set<CalendarSource> effectiveEnabled = <CalendarSource>{
+    ...enabled,
+    if (savedEventsEnabled) CalendarSource.savedEvents,
+    if (favouriteMealsEnabled) CalendarSource.canteenFavourite,
+    if (exchangeEnabled) CalendarSource.exchangeCalendar,
+  };
+
   final List<CalendarEntry> merged = mergeCalendarEntries(<CalendarEntry>[
     ...timetableEntries,
     ...moodleEntries,
     ...publicEntries,
     ...savedEventEntries,
     ...canteenFavouriteEntries,
+    ...exchangeEntries,
   ]);
   return CalendarData(
     entries: windowFrom == null
         ? merged
         : calendarEntriesFrom(merged, windowFrom),
-    enabledSources: enabled,
+    enabledSources: effectiveEnabled,
     timetableLoading: timetableLoading,
     moodleLoading: moodleLoading,
     hasTimetableError: timetableError,
@@ -704,6 +879,9 @@ CalendarData _buildCalendarData(
     hasMoodleError: moodleError,
     publicCalendarsLoading: publicLoading,
     hasPublicCalendarError: publicError,
+    exchangeCalendarConnected: exchangeConnected,
+    exchangeCalendarLoading: exchangeLoading,
+    hasExchangeCalendarError: exchangeError,
   );
 }
 

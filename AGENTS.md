@@ -33,7 +33,15 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
    oder personenbezogene Inhalte erhalten. Aktuell sind das **genau fünf**:
-   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP);
+   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP sowie
+     ausschließlich nach ausdrücklichem Opt-in lesender Exchange-Kalenderzugriff über exakt
+     `https://mail.hs-anhalt.de/EWS/Exchange.asmx`). EWS darf nur Betreff, Beginn, Ende,
+     Ganztags-/Absagestatus und Ort des eigenen Standardkalenders abfragen; keine Bodies,
+     Teilnehmerlisten, Schreiboperationen oder Redirects. Termine bleiben im regulären Betrieb
+     flüchtig im Arbeitsspeicher und werden ausschließlich lokal mit den anderen Kalenderquellen
+     vereinigt. Sie dürfen weder in den persistenten Homescreen-Widget-Payload noch in geplante
+     Betriebssystem-Benachrichtigungen gelangen. Nur ein vom Nutzer bewusst ausgelöster ICS-Export
+     darf die aktuell geladenen Termine an ein vom Nutzer gewähltes Ziel übergeben;
    - der **Notenspiegel** → direkt und **nur** zu genau dem Host des Portals, auf dem das
      jeweilige Konto eingerichtet wurde. Die Hochschule Anhalt betreibt zwei Prüfungsportale
      parallel; jedes hat seine EIGENE, getrennte Host-Allowlist (kein gemeinsamer Pool):
@@ -74,8 +82,9 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    - die **Moodle-Integration** (Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines) →
      direkt und **nur** zu `https://moodle.hs-anhalt.de`. Kein Moodle-Token, keine Kurs-,
      Aufgaben-, Abgabe-, Ankündigungs- oder Deadline-Daten dürfen ein Campus-Köthen-Backend
-     erreichen. Der quellenübergreifende Kalender führt Stundenplan (Campus API) und
-     Moodle-Deadlines **ausschließlich lokal auf dem Gerät** zusammen.
+     erreichen. Der quellenübergreifende Kalender führt Stundenplan (Campus API),
+     Moodle-Deadlines und optional Exchange-Termine **ausschließlich lokal auf dem Gerät**
+     zusammen.
    - der **Nextcloud-Dateiexplorer** → direkt und **nur** zur exakten Origin
      `https://cloud.hs-anhalt.de`. Die Anmeldung erfolgt ausschließlich über Nextcloud Login Flow
      v2 im Systembrowser; Campus Köthen erhält und übermittelt dabei nie das zentrale
@@ -138,7 +147,8 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    eigenständiges DTO-Feld; sie darf ausschließlich innerhalb serverseitig erzeugter
    `googleOpenUrl`- beziehungsweise `src`-Parameter an die App gelangen, weil die Links zum Öffnen
    in Google ohne sie nicht funktionieren. Die Zusammenführung mit dem Stundenplan (Campus API)
-   und den Moodle-Deadlines (direkt) geschieht weiterhin **ausschließlich lokal** in Flutter. Details:
+   den Moodle-Deadlines sowie optionalen Exchange-Terminen (direkt) geschieht weiterhin
+   **ausschließlich lokal** in Flutter. Details:
    [`docs/public-calendars.md`](docs/public-calendars.md).
 
    **Selbst erstellte, versionierte Assets** sind von dieser Regel nicht berührt: Kartengeometrie

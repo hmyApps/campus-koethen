@@ -497,10 +497,27 @@ Die aktualisierten Datenschutzhinweise brauchen die organisatorische Freigabe vo
 
 | Kandidat                                          | Aktueller Stand / offene Entscheidung                                                                                                                                                                                                                                          |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Kalender-Homescreen-Widget und Live-Abo**       | Der einmalige lokale ICS-Export ist bereits umgesetzt. Ein dauerhaft abonnierbarer Feed würde personenbezogene lokale Quellen betreffen und braucht ein separates Datenschutz-, Authentifizierungs- und Hostingkonzept; er ist nicht Bestandteil der Anny-Kalenderintegration. |
+| **Kalender-Live-Abo**                             | Lokaler ICS-Export und datensparsames Homescreen-Widget sind umgesetzt. Ein dauerhaft abonnierbarer Feed würde personenbezogene lokale Quellen betreffen und braucht ein separates Datenschutz-, Authentifizierungs- und Hostingkonzept; er ist nicht Bestandteil der Anny-Kalenderintegration. |
 | **Weitere Widgets**                               | Noch nicht fachlich ausgearbeitet; jedes Widget braucht Datenminimierung, Updatebudget, Offlineverhalten und WCAG-Konzept.                                                                                                                                                     |
 | **Semesterticket aus Movemix**                    | Offizielle dokumentierte Schnittstelle, Vertragspartner, Datenschutz und Systemgrenze sind ungeklärt. Bis dahin keine native Integration.                                                                                                                                      |
 | **Copyright-Erweiterung um „hmyApps by Haaremy"** | Umfang, genaue Schreibweise und betroffene kanonische Stellen müssen vor einer Änderung ausdrücklich entschieden werden.                                                                                                                                                       |
+
+### Produktionskorrektur – Kalenderquellen, vollständiger Export und Exchange
+
+**Status 4. Oktober 2026:** umgesetzt und automatisiert validiert. Auf einem realen Android-Gerät
+wurden APK-Update, Quellenschalter, ICS-Share-Flow und ein EWS-Abruf über die vollständige
+Transport-Timeoutfrist ohne Fehlerbanner geprüft; der Opt-in wurde anschließend wieder deaktiviert.
+
+| Problem | Lösung | Betroffene Dateien |
+| ------- | ------ | ------------------ |
+| **Quellenauswahl war inkonsistent:** Öffentliche Events ließen sich global nicht abschalten und einzelne Kalenderansichten respektierten nicht dieselbe Auswahl. | Direkte, granulare Schalter für Stundenplan, Moodle und öffentliche Events sowie gemeinsame Opt-ins für gemerkte Events, Mensafavoriten und Exchange. Dieselbe Anzeigeauswahl steuert Tag, Woche, Liste und Export. Benachrichtigungen behalten ihren getrennten, bestehenden Scope; Exchange bleibt wegen der persistenten OS-Payloads außerdem aus Homescreen-Widget und Benachrichtigungen ausgeschlossen. | `apps/mobile/lib/features/calendar/application/calendar_providers.dart`; `presentation/calendar_source_sheets.dart`; Onboarding und Einstellungen; Widget-/Notification-Vertragstests |
+| **Export war still unvollständig:** Die rollierende Liste begann heute und exportierte nach zehn Sekunden unbemerkt Teildaten. | Eigene Exportaggregation über die absoluten, von den Backends gemeldeten Zeiträume. Fehler oder noch ladende beziehungsweise nicht verbundene Quellen erzwingen eine sichtbare Entscheidung vor einem ausdrücklichen Teil-Export. | Kalender- und Public-Calendar-Provider; `calendar_screen.dart`; Export-/Range-Tests |
+| **Persönliche Exchange-Termine fehlten.** | Read-only EWS-Anbindung an exakt `https://mail.hs-anhalt.de/EWS/Exchange.asmx`, ohne Redirects und nur nach Opt-in in Onboarding, Mail- und Kalender-Einstellungen. Nur minimale Terminfelder, flüchtig im Arbeitsspeicher, Schutz gegen verspätete Antworten nach Mail-Wipe. | `features/mail/domain/exchange_calendar_*`; `data/ews_exchange_calendar_gateway.dart`; Mail-/Kalender-Provider; ARB, Datenschutz- und Architekturtexte; Parser-, Transport-, Race- und UI-Tests |
+
+**Verbleibendes Hardware-Gate:** Auf Android müssen noch die inhaltlich korrekte Darstellung eines
+bekannten realen Terminsets sowie Abmelden während eines laufenden Abrufs geprüft werden; auf iOS
+steht die gesamte reale EWS-Abnahme noch aus. Zugangsdaten und Termininhalte dürfen nicht in
+Artefakten, Screenshots oder Logs landen.
 
 ## Phase 15 – Plattformübergreifende Gesamtabnahme und Release-Gates
 

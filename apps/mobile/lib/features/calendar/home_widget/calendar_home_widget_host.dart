@@ -106,7 +106,9 @@ class _CalendarHomeWidgetHostState extends ConsumerState<CalendarHomeWidgetHost>
 
     final CalendarData data = ref.watch(calendarListDataProvider(now));
     final bool incomplete =
-        data.isLoading ||
+        data.timetableLoading ||
+        data.moodleLoading ||
+        data.publicCalendarsLoading ||
         data.hasTimetableError ||
         data.hasMoodleError ||
         data.hasPublicCalendarError;

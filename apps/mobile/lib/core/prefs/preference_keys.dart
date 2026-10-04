@@ -166,6 +166,12 @@ abstract final class PreferenceKeys {
   static const String calendarShowFavouriteMeals =
       'calendar.favouriteMeals.enabled.v1';
 
+  /// `1` after the reader explicitly opts in to reading personal appointments
+  /// from the university Exchange account into the local merged calendar.
+  /// Absent is deliberately off: connecting mail alone is not consent.
+  static const String mailExchangeCalendarEnabled =
+      'mail.exchangeCalendar.enabled.v1';
+
   /// `1` after the reader explicitly enables the native calendar home-screen
   /// widget. No calendar payload is shared with the OS widget while absent.
   static const String calendarHomeWidgetEnabled =
