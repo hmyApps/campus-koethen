@@ -318,49 +318,60 @@ void main() {
       return const FakeHtmlResponse('not found', statusCode: 404);
     }
 
-    test(
-      'submits the real full-POST shape and returns the verified PDF',
-      () async {
-        final adapter = FakeHtmlAdapter((RequestOptions o) {
-          final String url = o.uri.toString();
-          if (o.uri.queryParameters['state'] == 'docdownload') {
-            return const FakeHtmlResponse(
-              '%PDF-1.7\nfixture',
-              contentType: 'application/pdf',
-            );
-          }
-          if (url.contains('personExamsReadonly.xhtml') && o.method == 'POST') {
-            expect(
-              o.data,
-              isA<Map>().having(
-                (Map m) => m[offer.buttonId],
-                'button field',
-                offer.label,
-              ),
-            );
-            expect((o.data as Map)['DISABLE_VALIDATION'], 'true');
-            return const FakeHtmlResponse.redirect(
-              'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
-              '?state=docdownload&docId=abc',
-            );
-          }
-          return scriptWithReports(o);
-        });
+    test('submits the real full-POST shape and follows both download hops to '
+        'the verified PDF', () async {
+      // Same two-hop mechanism confirmed 2026-10-04 for the Studienservice
+      // certificates: the POST's own redirect stays on the portal host
+      // with only docId; THAT redirects again, to the separate untrust-
+      // host with the richer accountId/hash/timestamp/docName set, before
+      // the actual bytes.
+      const String firstHop =
+          'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
+          '?state=docdownload&docId=abc';
+      const String secondHop =
+          'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+          '?state=docdownload&accountId=52153&hash=abc'
+          '&timestamp=20261004125245&docId=abc'
+          '&docName=Geb%C3%BChrenbescheinigung.pdf';
+      final adapter = FakeHtmlAdapter((RequestOptions o) {
+        final String url = o.uri.toString();
+        if (url == secondHop) {
+          return const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          );
+        }
+        if (url == firstHop) {
+          return const FakeHtmlResponse.redirect(secondHop);
+        }
+        if (url.contains('personExamsReadonly.xhtml') && o.method == 'POST') {
+          expect(
+            o.data,
+            isA<Map>().having(
+              (Map m) => m[offer.buttonId],
+              'button field',
+              offer.label,
+            ),
+          );
+          expect((o.data as Map)['DISABLE_VALIDATION'], 'true');
+          return const FakeHtmlResponse.redirect(firstHop);
+        }
+        return scriptWithReports(o);
+      });
 
-        final ExamReportDownloadResult result = await HisInOneGradesGateway(
-          const HisInOneProfile(),
-          adapter,
-        ).downloadExamReport(_creds, offer);
+      final ExamReportDownloadResult result = await HisInOneGradesGateway(
+        const HisInOneProfile(),
+        adapter,
+      ).downloadExamReport(_creds, offer);
 
-        expect(result, isA<ExamReportDownloadLoaded>());
-        final ExamReportDownloadLoaded loaded =
-            result as ExamReportDownloadLoaded;
-        expect(
-          loaded.bytes.take(5),
-          orderedEquals(<int>[0x25, 0x50, 0x44, 0x46, 0x2d]),
-        );
-      },
-    );
+      expect(result, isA<ExamReportDownloadLoaded>());
+      final ExamReportDownloadLoaded loaded =
+          result as ExamReportDownloadLoaded;
+      expect(
+        loaded.bytes.take(5),
+        orderedEquals(<int>[0x25, 0x50, 0x44, 0x46, 0x2d]),
+      );
+    });
 
     test('an offer no longer listed on a fresh read is rejected before any '
         'POST', () async {

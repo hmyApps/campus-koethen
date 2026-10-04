@@ -160,7 +160,7 @@ String partialResponseStarted({String viewState = 'view-state-token-5'}) =>
 <update id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"><![CDATA[
 <span id="studyserviceForm:report:reports:reportButtons:jobDownloadPoll"></span>
 ]]></update>
-<update id="javax.faces.ViewState"><![CDATA[$viewState]]></update>
+<update id="j_id__v_7:javax.faces.ViewState:1"><![CDATA[$viewState]]></update>
 </changes></partial-response>
 ''';
 
@@ -172,11 +172,13 @@ String partialResponseStarted({String viewState = 'view-state-token-5'}) =>
 /// resolves and unescapes it, never assumes it is already absolute.
 ///
 /// An earlier analysis had wrongly claimed a separate "untrust-" subdomain
-/// for this link. A real capture showed the opposite extreme is also
-/// wrong: the richer `accountId`/`hash`/`timestamp`/`docName` parameters it
-/// had invented for THIS link are real, but belong to a same-host redirect
-/// target one hop further — see [docDownloadRedirectTarget] — not to the
-/// link the partial-response itself renders.
+/// for this link; a follow-up manual request to that subdomain (missing the
+/// one-time, per-job `accountId`/`hash`/`timestamp`) failed and was wrongly
+/// read as proof the subdomain did not exist. A REAL captured download from
+/// an actual completed job (2026-10-04) settles it: the entry link stays on
+/// the portal host with only `docId`, exactly as rendered below; its `307`
+/// then redirects to the separate `untrust-` host with the richer parameter
+/// set — see [docDownloadRedirectTarget].
 String partialResponseFinished({String docId = 'abc-123'}) =>
     '''
 <?xml version='1.0' encoding='UTF-8'?>
@@ -191,9 +193,12 @@ String partialResponseFinished({String docId = 'abc-123'}) =>
 </changes></partial-response>
 ''';
 
-/// The same-host redirect target the entry link above actually resolves to
-/// once followed — confirmed 2026-10-04 from a real completed download.
+/// The SEPARATE-host redirect target the entry link above actually resolves
+/// to once followed — confirmed 2026-10-04 from a real completed download's
+/// `Location` header, independently corroborated by the portal's own
+/// `Content-Security-Policy` response header listing this exact host under
+/// `child-src`.
 String docDownloadRedirectTarget({String docId = 'abc-123'}) =>
-    'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload'
+    'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload'
     '&accountId=52153&hash=e09abb51206c61a0f776a5edc7848fb3'
     '&timestamp=20261004002735&docId=$docId&docName=Gebuehrenbescheinigung.pdf';

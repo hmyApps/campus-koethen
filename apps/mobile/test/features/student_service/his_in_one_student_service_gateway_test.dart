@@ -313,67 +313,66 @@ void main() {
       },
     );
 
-    test(
-      'follows the real site-relative link through its same-host redirect',
-      () async {
-        // Confirmed 2026-10-04 from a real completed download: the entry
-        // link the job-start response renders is relative and carries only
-        // state/docId; the portal then redirects, same host, to a richer
-        // URL (accountId/hash/timestamp/docName) before the actual bytes.
-        final String redirectTarget = docDownloadRedirectTarget(
-          docId: 'the-doc-id',
-        );
-        final adapter = FakeHtmlAdapter((RequestOptions o) {
-          final String url = o.uri.toString();
-          if (url.contains('auth.login')) {
-            return const FakeHtmlResponse.redirect(_landingUrl);
+    test('follows the real site-relative link through its separate-host '
+        'redirect', () async {
+      // Confirmed 2026-10-04 from a real completed download: the entry
+      // link the job-start response renders is relative and carries only
+      // state/docId, on the portal host; the portal then redirects to the
+      // SEPARATE untrust- host with a richer URL (accountId/hash/
+      // timestamp/docName) before the actual bytes.
+      final String redirectTarget = docDownloadRedirectTarget(
+        docId: 'the-doc-id',
+      );
+      final adapter = FakeHtmlAdapter((RequestOptions o) {
+        final String url = o.uri.toString();
+        if (url.contains('auth.login')) {
+          return const FakeHtmlResponse.redirect(_landingUrl);
+        }
+        if (url == _landingUrl) {
+          return const FakeHtmlResponse(hisInOneAuthenticatedLandingHtml);
+        }
+        if (url.contains('auth.logout')) {
+          return const FakeHtmlResponse('bye');
+        }
+        if (url == redirectTarget) {
+          return const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          );
+        }
+        if (o.uri.queryParameters['state'] == 'docdownload') {
+          return FakeHtmlResponse.redirect(redirectTarget);
+        }
+        if (url.contains('studyService/start.xhtml') && o.method == 'GET') {
+          return FakeHtmlResponse(studyServiceStgStudentHtml());
+        }
+        if (url.contains('studyService/start.xhtml') && o.method == 'POST') {
+          final Map<String, String> body = Map<String, String>.from(
+            o.data as Map,
+          );
+          if (body.containsKey('studyserviceForm:content.10')) {
+            return FakeHtmlResponse(studyServiceReportHtml());
           }
-          if (url == _landingUrl) {
-            return const FakeHtmlResponse(hisInOneAuthenticatedLandingHtml);
-          }
-          if (url.contains('auth.logout')) {
-            return const FakeHtmlResponse('bye');
-          }
-          if (url == redirectTarget) {
-            return const FakeHtmlResponse(
-              '%PDF-1.7\nfixture',
-              contentType: 'application/pdf',
+          if (body['javax.faces.partial.ajax'] == 'true') {
+            return FakeHtmlResponse(
+              partialResponseFinished(docId: 'the-doc-id'),
             );
           }
-          if (o.uri.queryParameters['state'] == 'docdownload') {
-            return FakeHtmlResponse.redirect(redirectTarget);
-          }
-          if (url.contains('studyService/start.xhtml') && o.method == 'GET') {
-            return FakeHtmlResponse(studyServiceStgStudentHtml());
-          }
-          if (url.contains('studyService/start.xhtml') && o.method == 'POST') {
-            final Map<String, String> body = Map<String, String>.from(
-              o.data as Map,
-            );
-            if (body.containsKey('studyserviceForm:content.10')) {
-              return FakeHtmlResponse(studyServiceReportHtml());
-            }
-            if (body['javax.faces.partial.ajax'] == 'true') {
-              return FakeHtmlResponse(
-                partialResponseFinished(docId: 'the-doc-id'),
-              );
-            }
-          }
-          return const FakeHtmlResponse('not found', statusCode: 404);
-        });
-        final CertificateOffer offer =
-            HisInOneStudentServiceParser.readCertificateOffers(
-              studyServiceReportHtml(),
-            ).first;
+        }
+        return const FakeHtmlResponse('not found', statusCode: 404);
+      });
+      final CertificateOffer offer =
+          HisInOneStudentServiceParser.readCertificateOffers(
+            studyServiceReportHtml(),
+          ).first;
 
-        final CertificateDownloadResult result =
-            await HisInOneStudentServiceGateway(
-              adapter,
-            ).downloadCertificate(_creds, offer);
+      final CertificateDownloadResult result =
+          await HisInOneStudentServiceGateway(
+            adapter,
+          ).downloadCertificate(_creds, offer);
 
-        expect(result, isA<CertificateDownloadLoaded>());
-      },
-    );
+      expect(result, isA<CertificateDownloadLoaded>());
+    });
 
     test(
       'polls a running job with its rotated view state before downloading',

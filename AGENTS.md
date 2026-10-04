@@ -54,11 +54,16 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      eine normale volle Formularabgabe, kein AJAX-Auftrag, kein Polling. Diese Funktionen nutzen
      dieselben, bereits für den Notenspiegel hinterlegten Zugangsdaten wieder — kein zweiter
      Login, kein separater `+`/`−`-Dienst. Der erzeugte Bescheinigungsabruf — ob aus dem
-     Studienservice-Auftrag oder aus einem Notenübersicht-Druck-Button — darf zusätzlich
+     Studienservice-Auftrag oder aus einem Notenübersicht-Druck-Button — ist zweistufig: zuerst
      ausschließlich per `GET` an `https://sscportal.ssc.hs-anhalt.de/qisserver/rds` mit exakt
-     `state=docdownload` gehen; Ziel und Einweg-Token müssen aus der jeweils aktuellen
-     AJAX-Antwort beziehungsweise dem Formular-Redirect stammen, und diese enge
-     Pfad-/Parameter-Prüfung ist **keine** gemeinsame oder allgemeine Allowlist für den Host.
+     `state=docdownload`, danach folgt ein serverseitiger Redirect auf denselben Pfad und
+     Zustand, aber auf die **separate** Origin `https://untrust-sscportal.ssc.hs-anhalt.de`
+     (bestätigt 2026-10-04 durch einen echten `Location`-Header eines abgeschlossenen Auftrags,
+     zusätzlich durch den `Content-Security-Policy`-Header des Portals selbst belegt, der genau
+     diesen Host unter `child-src` listet). Ziel und Einweg-Token für beide Stufen müssen aus der
+     jeweils aktuellen AJAX-Antwort beziehungsweise dem Formular-Redirect stammen, und diese enge
+     Pfad-/Parameter-Prüfung auf genau diesen zwei Hosts ist **keine** gemeinsame oder allgemeine
+     Allowlist.
      Erlaubte Formularaktionen sind nur Login, Studienservice-Tabwechsel, Start und Polling der
      vom Nutzer gewählten Studienservice-Bescheinigung, sowie das Absenden genau eines der drei
      festen Bescheinigungs-Buttons auf der Notenübersichtsseite. **Ausdrücklich ausgeschlossen**

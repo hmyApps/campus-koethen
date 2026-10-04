@@ -111,9 +111,10 @@ damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Pa
   (volle Formularabgabe, kein AJAX) sowie eine Seite „Studienservice" mit mehreren per Voll-POST
   gewechselten Tabs: Bescheinigungsübersicht, Personendaten (inkl. Hörerstatus) und Kontaktdaten,
   Studiengangsübersicht, sowie ein aus den Zahlungen abgeleiteter Rückmeldehinweis — dieselben
-  Zugangsdaten, kein zweiter Login. Bescheinigungen werden — aus beiden Quellen — vom selben Host
-  über den eng begrenzten Pfad `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload`
-  abgerufen; keine Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
+  Zugangsdaten, kein zweiter Login. Bescheinigungen werden — aus beiden Quellen — zweistufig
+  abgerufen: zuerst `sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload`, das per
+  Redirect weiter auf die separate Origin `untrust-sscportal.ssc.hs-anhalt.de` desselben
+  Pfads/Zustands führt; keine Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
   **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
 - **Nextcloud-Dateiexplorer** (`cloud.hs-anhalt.de`): Login Flow v2 im Systembrowser, Ordnernavigation

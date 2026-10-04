@@ -276,6 +276,13 @@ abstract final class HisInOneStudentServiceParser {
   /// A JSF partial response can rotate the view state after every AJAX call.
   /// Keeping that value for the next poll avoids replaying a stale CSRF/view
   /// token while still refusing to synthesize one when the portal omits it.
+  ///
+  /// The update's `id` is NOT the bare string `javax.faces.ViewState` — a
+  /// real response (confirmed 2026-10-04) prefixes it with the dynamic view
+  /// root id and suffixes it with an index, e.g.
+  /// `j_id__v_7:javax.faces.ViewState:1`. Anchoring the match to an exact
+  /// `id` equal to the bare string never matches any real response, which
+  /// silently kept resending the stale initial view state on every poll.
   static String? viewStateFromPartialResponse(String xml) {
     final RegExpMatch? match = _viewStatePattern.firstMatch(xml);
     final String? value = match?.group(1)?.trim();
@@ -283,7 +290,7 @@ abstract final class HisInOneStudentServiceParser {
   }
 
   static final RegExp _viewStatePattern = RegExp(
-    r'''<update\s+id=["']javax\.faces\.ViewState[^"']*["']>\s*(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</update>''',
+    r'''<update\s+id=["'][^"']*javax\.faces\.ViewState[^"']*["']>\s*(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</update>''',
     dotAll: true,
   );
 

@@ -82,7 +82,8 @@ Flutter ──/v1──► Campus API (NestJS) ──► campus_app_* (PostgreSQ
 Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel (neueres Portal);
                  │       Bescheinigungs-Druck-Buttons (Notenübersicht + Studienservice) per
                  │       Formular-POST, Abruf eng begrenzt auf
-                 │       `/qisserver/rds?state=docdownload`
+                 │       `/qisserver/rds?state=docdownload`, das per Redirect
+                 │       weiter zu untrust-sscportal.ssc.hs-anhalt.de führt
                  ├──► moodle.hs-anhalt.de         Moodle-Webservice (nur lesend)
                  ├──► cloud.hs-anhalt.de          Nextcloud Login Flow / WebDAV (nur lesend)
                  └──► REQUESTS_BASE_URL           Anträge und Feedback (HTTPS)

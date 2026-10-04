@@ -154,9 +154,10 @@ des Formulars plus der gedrückte Button plus `DISABLE_VALIDATION=true` werden a
 https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=…
 ```
 
-— derselbe Host und derselbe `state=docdownload`-Pfad wie beim Studienservice-Download, über eine
-eigene, separat benannte Prüfung (`HisInOneProfile.allowsDocumentDownload`, kein gemeinsamer Pool
-mit `StudentServiceProfile`). Die Liste der angebotenen Buttons (`ExamReportOffer`, Button-Id +
+— danach folgt derselbe zweite Redirect-Sprung wie beim Studienservice-Download, auf die separate
+Origin `untrust-sscportal.ssc.hs-anhalt.de` (siehe unten), über eine eigene, separat benannte
+Prüfung (`HisInOneProfile.allowsDocumentDownload`, kein gemeinsamer Pool mit
+`StudentServiceProfile`). Die Liste der angebotenen Buttons (`ExamReportOffer`, Button-Id +
 Beschriftung) wird bei jedem Notenabruf frisch mitgelesen (`HisInOneHtmlParser.findExamReports`)
 und zusammen mit dem Bericht zwischengespeichert (`GradeReport.examReports`); vor dem Absenden wird
 sie **erneut** von einer frisch geladenen Seite gelesen — ein Button, der dort nicht mehr auftaucht,
@@ -213,15 +214,18 @@ sich selbst → sobald fertig, löst die Partial-Response per JavaScript einen `
 https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=…
 ```
 
-Derselbe Host wie das Portal selbst, kein eigener Host — bestätigt am 2026-10-04 durch einen
-echten Download-Mitschnitt. Eine frühere Fassung dieser Dokumentation hatte fälschlich einen
-separaten Host `untrust-sscportal.ssc.hs-anhalt.de` sowie zusätzliche Parameter
-(`accountId`/`hash`/`timestamp`/`docName`) behauptet und einen `503` bei einem Testabruf dieser
-erfundenen URL auf einen lokalen Download-Manager zurückgeführt — tatsächlich war schlicht die
-URL selbst nie real. `docId` ist pro Vorgang neu und **nicht im Voraus konstruierbar** — er muss
-aus der Partial-Response gelesen werden. Der Ablauf ist anhand der realen Seitenstruktur und des
-JSF/MyFaces-Vertrags implementiert und durch deterministische Start-/Polling-/ViewState-/PDF-Tests
-abgesichert.
+Diese Antwort ist selbst ein `307`-Redirect auf eine **separate** Origin,
+`https://untrust-sscportal.ssc.hs-anhalt.de`, mit demselben Pfad/Zustand, aber einem reicheren
+Parametersatz (`accountId`/`hash`/`timestamp`/`docId`/`docName`) — bestätigt am 2026-10-04 durch
+einen echten `Location`-Header eines tatsächlich abgeschlossenen Auftrags, zusätzlich durch den
+`Content-Security-Policy`-Header des Portals selbst belegt, der genau diesen Host unter
+`child-src` listet. Eine Zwischenfassung dieser Dokumentation hatte diesen zweiten Host fälschlich
+für erfunden erklärt: ein `503` bei einem händischen Testabruf der URL ohne die echten,
+einweg-gültigen `accountId`/`hash`/`timestamp`-Werte wurde als Beweis für eine nicht existierende
+URL missverstanden, obwohl er schlicht bedeutete, dass diese Werte fehlten. `docId` ist pro Vorgang
+neu und **nicht im Voraus konstruierbar** — er muss aus der Partial-Response gelesen werden. Der
+Ablauf ist anhand der realen Seitenstruktur und des JSF/MyFaces-Vertrags implementiert und durch
+deterministische Start-/Polling-/ViewState-/PDF-Tests abgesichert.
 
 ### Konsequenzen für die Umsetzung
 
@@ -250,12 +254,17 @@ abgesichert.
 - Logout/Wipe ist an dieselbe Session-Generation gekoppelt wie Noten und Moodle: ein nach dem
   Trennen verspätet eintreffendes Ergebnis darf den lokalen Stand nie wiederbeleben.
 - Der Dokument-Download läuft über eine **eigene, explizite und pfadbegrenzte Allowlist** —
-  derselbe Host wie das Portal, aber eng auf ausschließlich HTTPS, Standardport,
-  `/qisserver/rds` und `state=docdownload` geprüft, getrennt von der allgemeinen Session-Allowlist
-  gehalten (AGENTS.md §2: „kein gemeinsamer Pool"). Der Download läuft im selben kurzlebigen
-  Cookie-Jar wie Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder
-  Antwort-Hosts werden abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte
-  Hosts.
+  genau zwei Hosts (der Portal-Host für den ersten Sprung, `untrust-sscportal.ssc.hs-anhalt.de`
+  für den zweiten, siehe oben), aber eng auf ausschließlich HTTPS, Standardport, `/qisserver/rds`
+  und `state=docdownload` geprüft, getrennt von der allgemeinen Session-Allowlist gehalten
+  (AGENTS.md §2: „kein gemeinsamer Pool"). Der Download läuft im selben kurzlebigen Cookie-Jar wie
+  Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder Antwort-Hosts werden
+  abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte Hosts.
+- **Die rotierende `javax.faces.ViewState` zwischen Polls hat eine eigene, dynamische
+  `<update>`-Id**, z. B. `j_id__v_7:javax.faces.ViewState:1`, nie die bloße Zeichenkette
+  `javax.faces.ViewState` — bestätigt 2026-10-04 aus einer echten Poll-Antwort. Eine Erkennung, die
+  exakt auf die bloße Zeichenkette anankert, trifft nie und sendet auf jedem weiteren Poll
+  unbemerkt den veralteten ersten ViewState erneut.
 
 ## Sicherheit (für beide Portale identisch)
 
@@ -475,12 +484,12 @@ flutter test test/features/grades/
   `submit_print_pdf`-Buttons (Id + Beschriftung), `buildExamReportPostRequest` baut den vollen
   Formular-POST inkl. Hidden-Feldern und `DISABLE_VALIDATION=true`.
 - `his_in_one_grades_gateway_test.dart` (zusätzlich) — ein Abruf füllt `entries` **und**
-  `examReports` aus derselben Seite; `downloadExamReport` postet, folgt dem Redirect und prüft
-  die PDF-Magicbytes; ein Button, der auf einer frisch gelesenen Seite nicht mehr auftaucht, wird
-  vor jedem POST abgelehnt.
-- `his_in_one_profile_test.dart` — `allowsDocumentDownload` lässt nur `state=docdownload` unter
-  `/qisserver/rds` auf dem gepinnten Host zu und lehnt den früher erfundenen
-  `untrust-sscportal`-Host ab.
+  `examReports` aus derselben Seite; `downloadExamReport` postet, folgt BEIDEN Redirect-Sprüngen
+  (Portal-Host → `untrust-sscportal`-Host) und prüft die PDF-Magicbytes; ein Button, der auf
+  einer frisch gelesenen Seite nicht mehr auftaucht, wird vor jedem POST abgelehnt.
+- `his_in_one_profile_test.dart` — `allowsDocumentDownload` lässt `state=docdownload` unter
+  `/qisserver/rds` auf BEIDEN gepinnten Hosts zu (Portal-Host, `untrust-sscportal`-Host) und lehnt
+  jeden dritten Host, auch einen Subdomain-Treffer auf den `untrust-`-Host, ab.
 - `grade_cache_migration_test.dart` (zusätzlich) — `examReports` übersteht einen Schreib-/
   Lesedurchlauf; ein vor dieser Änderung zwischengespeicherter Bericht (reines Array statt
   Wrapper-Objekt) liefert beim Lesen eine leere `examReports`-Liste statt eines Fehlers.

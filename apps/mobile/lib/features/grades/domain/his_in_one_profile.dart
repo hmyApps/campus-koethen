@@ -46,17 +46,31 @@ class HisInOneProfile implements GradePortalProfile {
   @override
   bool allows(Uri uri) => gradePortalAllows(uri, scheme: scheme, host: host);
 
+  /// The SEPARATE host the one-time download redirects to — the same
+  /// underlying document-download mechanism used by the Studienservice
+  /// certificates, confirmed there 2026-10-04 from a real `Location` header
+  /// (independently corroborated by the portal's own `Content-Security-
+  /// Policy` response header, which lists this exact host under
+  /// `child-src`). Never folded into [host]: the print button's own link
+  /// stays on the portal host; only the redirect target this constant pins
+  /// is on this separate subdomain.
+  static const String documentDownloadHost =
+      'untrust-sscportal.ssc.hs-anhalt.de';
+
   /// A second, narrower allowlist for exactly one purpose: the one-time
-  /// link one of the exam overview's own print buttons resolves to — same
-  /// host as the portal itself, confirmed 2026-10-04, but kept as its own
-  /// check (never folded into [allows]) so a future real difference would
-  /// not require re-threading every session call site (AGENTS.md §2: "kein
-  /// gemeinsamer Pool"). Deliberately NOT shared with
+  /// link one of the exam overview's own print buttons resolves to, and the
+  /// redirect it leads to — kept as its own check (never folded into
+  /// [allows]) so a future real difference would not require re-threading
+  /// every session call site (AGENTS.md §2: "kein gemeinsamer Pool").
+  /// Deliberately NOT shared with
   /// `StudentServiceProfile.allowsDocumentDownload`, even though both
-  /// currently pin the same values — separate features, separate checks.
+  /// currently pin the same two hosts — separate features, separate checks.
   bool allowsDocumentDownload(Uri uri) {
     final List<String>? states = uri.queryParametersAll['state'];
-    return gradePortalAllows(uri, scheme: scheme, host: host) &&
+    final bool hostAllowed =
+        gradePortalAllows(uri, scheme: scheme, host: host) ||
+        gradePortalAllows(uri, scheme: scheme, host: documentDownloadHost);
+    return hostAllowed &&
         uri.path == '/qisserver/rds' &&
         !uri.hasFragment &&
         states != null &&

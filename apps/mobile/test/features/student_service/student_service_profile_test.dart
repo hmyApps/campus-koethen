@@ -6,12 +6,28 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('document download allowlist', () {
-    test('allows only the exact HTTPS document endpoint and state', () {
+    test('allows the first-hop link on the portal host itself', () {
       expect(
         StudentServiceProfile.allowsDocumentDownload(
           Uri.parse(
             'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload&docId=abc',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('allows the second-hop redirect target on the separate '
+        'untrust- host (confirmed 2026-10-04 from a real Location header, '
+        'corroborated by the portal\'s own CSP child-src allowlist)', () {
+      expect(
+        StudentServiceProfile.allowsDocumentDownload(
+          Uri.parse(
+            'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload&accountId=52153&hash=abc'
+            '&timestamp=20261004125245&docId=abc'
+            '&docName=Geb%C3%BChrenbescheinigung.pdf',
           ),
         ),
         isTrue,
@@ -32,10 +48,12 @@ void main() {
             '?state=docdownload',
         'https://user@sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload',
-        // An earlier analysis wrongly claimed a separate "untrust-"
-        // subdomain; a real capture confirmed it is the plain portal host,
-        // so that invented subdomain must now be rejected like any other.
-        'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+        'http://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload',
+        'https://untrust-sscportal.ssc.hs-anhalt.de:8443/qisserver/rds'
+            '?state=docdownload',
+        // Neither confirmed host is a prefix/suffix match for an unrelated one.
+        'https://evil.untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
             '?state=docdownload',
       ];
       for (final String raw in rejected) {
