@@ -5,6 +5,8 @@ import '../../../core/documents/app_document.dart';
 import 'nextcloud_account.dart';
 import 'nextcloud_entry.dart';
 
+typedef NextcloudDownloadProgress = void Function(int received, int? total);
+
 class NextcloudLoginStart {
   const NextcloudLoginStart({
     required this.loginUri,
@@ -37,6 +39,8 @@ abstract interface class NextcloudGateway {
 
   Future<AppDocument> downloadFile(
     NextcloudCredential credential,
-    NextcloudEntry entry,
-  );
+    NextcloudEntry entry, {
+    NextcloudDownloadProgress? onProgress,
+    Future<void>? canceled,
+  });
 }

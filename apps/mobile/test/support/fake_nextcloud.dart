@@ -6,7 +6,28 @@ import 'dart:async';
 import 'package:campus_koethen/core/documents/app_document.dart';
 import 'package:campus_koethen/features/nextcloud/domain/nextcloud_account.dart';
 import 'package:campus_koethen/features/nextcloud/domain/nextcloud_entry.dart';
+import 'package:campus_koethen/features/nextcloud/domain/nextcloud_favourite_store.dart';
 import 'package:campus_koethen/features/nextcloud/domain/nextcloud_gateway.dart';
+
+class InMemoryNextcloudFavouriteStore implements NextcloudFavouriteStore {
+  Set<String> value = <String>{};
+  int clears = 0;
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    value = <String>{};
+  }
+
+  @override
+  Future<Set<String>> read(NextcloudAccount account) async =>
+      Set<String>.unmodifiable(value);
+
+  @override
+  Future<void> write(NextcloudAccount account, Set<String> paths) async {
+    value = <String>{...paths};
+  }
+}
 
 class InMemoryNextcloudCredentialStore implements NextcloudCredentialStore {
   NextcloudCredential? value;
@@ -66,6 +87,13 @@ class FakeNextcloudGateway implements NextcloudGateway {
   @override
   Future<AppDocument> downloadFile(
     NextcloudCredential credential,
-    NextcloudEntry entry,
-  ) async => document ?? (throw StateError('No fake document configured'));
+    NextcloudEntry entry, {
+    NextcloudDownloadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
+    final AppDocument result =
+        document ?? (throw StateError('No fake document configured'));
+    onProgress?.call(result.bytes.length, result.bytes.length);
+    return result;
+  }
 }

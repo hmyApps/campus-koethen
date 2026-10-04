@@ -24,6 +24,8 @@ String nextcloudFailureMessage(AppLocalizations l10n, Object error) {
     NextcloudFailureKind.notConnected => l10n.nextcloudErrorNotConnected,
     NextcloudFailureKind.fileTooLarge => l10n.nextcloudErrorFileTooLarge,
     NextcloudFailureKind.downloadFailed => l10n.nextcloudErrorDownload,
+    NextcloudFailureKind.favouriteLimitReached =>
+      l10n.nextcloudErrorFavouriteLimit,
     NextcloudFailureKind.unknown => l10n.nextcloudErrorUnknown,
   };
 }

@@ -172,6 +172,7 @@ abstract final class AppIcons {
   static const IconData star = TablerIcons.star_filled;
   static const IconData star_border = TablerIcons.star;
   static const IconData star_outline = TablerIcons.star;
+  static const IconData sort_ascending = TablerIcons.sort_ascending;
   static const IconData support_agent_outlined = TablerIcons.headset;
   static const IconData swap_horiz = TablerIcons.arrows_exchange;
   static const IconData sync = TablerIcons.refresh;

@@ -14,6 +14,8 @@ import 'package:campus_koethen/features/nextcloud/domain/nextcloud_gateway.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fake_nextcloud.dart';
+
 const NextcloudCredential _credential = NextcloudCredential(
   server: 'https://cloud.hs-anhalt.de',
   loginName: 'student',
@@ -141,6 +143,9 @@ ProviderContainer _container(_MemoryStore store, _Gateway gateway) =>
     ProviderContainer(
       overrides: [
         nextcloudCredentialStoreProvider.overrideWithValue(store),
+        nextcloudFavouriteStoreProvider.overrideWithValue(
+          InMemoryNextcloudFavouriteStore(),
+        ),
         nextcloudGatewayProvider.overrideWithValue(gateway),
         nextcloudLoginLauncherProvider.overrideWithValue(
           _Launcher(() => gateway.launched = true),
@@ -227,8 +232,10 @@ class _Gateway implements NextcloudGateway {
   @override
   Future<AppDocument> downloadFile(
     NextcloudCredential credential,
-    NextcloudEntry entry,
-  ) async {
+    NextcloudEntry entry, {
+    NextcloudDownloadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
     if (!downloadEntered.isCompleted) downloadEntered.complete();
     if (blockDownload) await releaseDownload.future;
     return AppDocument(

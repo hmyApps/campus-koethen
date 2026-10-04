@@ -426,8 +426,10 @@ class NextcloudDavGateway implements NextcloudGateway {
   @override
   Future<AppDocument> downloadFile(
     NextcloudCredential credential,
-    NextcloudEntry entry,
-  ) async {
+    NextcloudEntry entry, {
+    NextcloudDownloadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
     _validateCredential(credential);
     if (entry.isDirectory ||
         (entry.sizeBytes != null &&
@@ -439,6 +441,16 @@ class NextcloudDavGateway implements NextcloudGateway {
       uri = _profile.davUri(userId: credential.userId, path: entry.path);
     } on ArgumentError {
       throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+    }
+    final CancelToken cancelToken = CancelToken();
+    var wasCanceled = false;
+    if (canceled != null) {
+      unawaited(
+        canceled.then((_) {
+          wasCanceled = true;
+          cancelToken.cancel('canceled');
+        }),
+      );
     }
     try {
       final Response<ResponseBody> response = await _dio
@@ -452,6 +464,7 @@ class NextcloudDavGateway implements NextcloudGateway {
                 credential.appPassword,
               ),
             ),
+            cancelToken: cancelToken,
           );
       if (response.statusCode == HttpStatus.unauthorized ||
           response.statusCode == HttpStatus.forbidden) {
@@ -473,14 +486,20 @@ class NextcloudDavGateway implements NextcloudGateway {
       if (declaredLength != null && declaredLength > kMaxInMemoryPreviewBytes) {
         throw const NextcloudFailure(NextcloudFailureKind.fileTooLarge);
       }
+      final int? progressTotal = declaredLength ?? entry.sizeBytes;
       final BytesBuilder bytes = BytesBuilder(copy: false);
       var received = 0;
+      onProgress?.call(received, progressTotal);
       await for (final Uint8List chunk in response.data!.stream) {
+        if (wasCanceled) {
+          throw const NextcloudFailure(NextcloudFailureKind.canceled);
+        }
         received += chunk.length;
         if (received > kMaxInMemoryPreviewBytes) {
           throw const NextcloudFailure(NextcloudFailureKind.fileTooLarge);
         }
         bytes.add(chunk);
+        onProgress?.call(received, progressTotal);
       }
       final String filename = safeDocumentFilename(entry.name);
       return AppDocument(
@@ -497,6 +516,9 @@ class NextcloudDavGateway implements NextcloudGateway {
     } on NextcloudFailure {
       rethrow;
     } on DioException catch (error) {
+      if (wasCanceled || CancelToken.isCancel(error)) {
+        throw const NextcloudFailure(NextcloudFailureKind.canceled);
+      }
       throw _mapDio(error, download: true);
     } catch (_) {
       throw const NextcloudFailure(NextcloudFailureKind.downloadFailed);

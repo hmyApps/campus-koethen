@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -13,9 +15,12 @@ import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../application/nextcloud_account_controller.dart';
+import '../application/nextcloud_favourites_controller.dart';
 import '../application/nextcloud_providers.dart';
 import '../domain/nextcloud_account.dart';
+import '../domain/nextcloud_browser_view.dart';
 import '../domain/nextcloud_entry.dart';
+import '../domain/nextcloud_failure.dart';
 import 'nextcloud_messages.dart';
 
 class NextcloudScreen extends ConsumerStatefulWidget {
@@ -28,6 +33,19 @@ class NextcloudScreen extends ConsumerStatefulWidget {
 class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
   String _path = '/';
   String? _downloadingPath;
+  final TextEditingController _searchController = TextEditingController();
+  NextcloudSort _sort = NextcloudSort.name;
+  bool _favouritesOnly = false;
+  Completer<void>? _downloadCancellation;
+  int _downloadReceived = 0;
+  int? _downloadTotal;
+
+  @override
+  void dispose() {
+    _cancelDownload();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     ref.invalidate(nextcloudFolderProvider(_path));
@@ -39,22 +57,41 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
   }
 
   void _openFolder(NextcloudEntry entry) {
-    setState(() => _path = entry.path);
+    _openPath(entry.path);
   }
 
   void _openPath(String path) {
     if (path == _path) return;
-    setState(() => _path = path);
+    setState(() {
+      _path = path;
+      _searchController.clear();
+    });
   }
 
   Future<void> _openFile(NextcloudEntry entry) async {
     if (_downloadingPath != null) return;
-    setState(() => _downloadingPath = entry.path);
+    final Completer<void> cancellation = Completer<void>();
+    setState(() {
+      _downloadingPath = entry.path;
+      _downloadCancellation = cancellation;
+      _downloadReceived = 0;
+      _downloadTotal = entry.sizeBytes;
+    });
     try {
       final AppDocument document = await ref
           .read(nextcloudFileServiceProvider)
-          .download(entry);
-      if (!mounted) return;
+          .download(
+            entry,
+            canceled: cancellation.future,
+            onProgress: (int received, int? total) {
+              if (!mounted || _downloadCancellation != cancellation) return;
+              setState(() {
+                _downloadReceived = received;
+                _downloadTotal = total;
+              });
+            },
+          );
+      if (!mounted || cancellation.isCompleted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext _) => DocumentViewerScreen(document: document),
@@ -62,11 +99,42 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      if (error is NextcloudFailure &&
+          error.kind == NextcloudFailureKind.canceled) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(nextcloudFailureMessage(context.l10n, error))),
       );
     } finally {
-      if (mounted) setState(() => _downloadingPath = null);
+      if (mounted && _downloadCancellation == cancellation) {
+        setState(() {
+          _downloadingPath = null;
+          _downloadCancellation = null;
+          _downloadReceived = 0;
+          _downloadTotal = null;
+        });
+      }
+    }
+  }
+
+  void _cancelDownload() {
+    final Completer<void>? cancellation = _downloadCancellation;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
+  }
+
+  Future<void> _toggleFavourite(NextcloudEntry entry) async {
+    try {
+      await ref
+          .read(nextcloudFavouritesControllerProvider.notifier)
+          .toggle(entry.path);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(nextcloudFailureMessage(context.l10n, error))),
+      );
     }
   }
 
@@ -108,6 +176,10 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
     final AsyncValue<List<NextcloudEntry>> folder = ref.watch(
       nextcloudFolderProvider(_path),
     );
+    final AsyncValue<Set<String>> favourites = ref.watch(
+      nextcloudFavouritesControllerProvider,
+    );
+    final Set<String> favouritePaths = favourites.value ?? const <String>{};
     return ScreenScaffold(
       title: l10n.nextcloudTitle,
       actions: <Widget>[
@@ -137,6 +209,78 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
             ),
           ),
           _Breadcrumbs(path: _path, onSelected: _openPath),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(AppIcons.search),
+                    hintText: l10n.nextcloudSearch,
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                            tooltip: l10n.nextcloudClearSearch,
+                            icon: const Icon(AppIcons.close),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    FilterChip(
+                      avatar: Icon(
+                        _favouritesOnly ? AppIcons.star : AppIcons.star_outline,
+                        size: AppSizes.iconSmall,
+                      ),
+                      label: Text(l10n.nextcloudFavouritesOnly),
+                      selected: _favouritesOnly,
+                      onSelected: (bool selected) =>
+                          setState(() => _favouritesOnly = selected),
+                    ),
+                    PopupMenuButton<NextcloudSort>(
+                      tooltip: l10n.nextcloudSort,
+                      initialValue: _sort,
+                      onSelected: (NextcloudSort value) =>
+                          setState(() => _sort = value),
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<NextcloudSort>>[
+                            PopupMenuItem<NextcloudSort>(
+                              value: NextcloudSort.name,
+                              child: Text(l10n.nextcloudSortName),
+                            ),
+                            PopupMenuItem<NextcloudSort>(
+                              value: NextcloudSort.modifiedNewest,
+                              child: Text(l10n.nextcloudSortModified),
+                            ),
+                            PopupMenuItem<NextcloudSort>(
+                              value: NextcloudSort.sizeLargest,
+                              child: Text(l10n.nextcloudSortSize),
+                            ),
+                          ],
+                      icon: const Icon(AppIcons.sort_ascending),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
       body: folder.when(
@@ -150,47 +294,71 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
             label: Text(l10n.nextcloudRetry),
           ),
         ),
-        data: (List<NextcloudEntry> entries) => RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.sm,
-              AppSpacing.sm,
-              AppSpacing.sm,
-              AppSpacing.xxl,
-            ),
-            children: <Widget>[
-              if (_path != '/')
-                ListTile(
-                  leading: const Icon(AppIcons.arrow_back),
-                  title: Text(l10n.nextcloudGoUp),
-                  minTileHeight: AppSizes.minTouchTarget,
-                  onTap: () => _openPath(_parentPath(_path)),
-                ),
-              if (entries.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      l10n.nextcloudFolderEmpty,
-                      textAlign: TextAlign.center,
+        data: (List<NextcloudEntry> entries) {
+          final List<NextcloudEntry> visible = nextcloudVisibleEntries(
+            entries,
+            query: _searchController.text,
+            sort: _sort,
+            favouritePaths: favouritePaths,
+            favouritesOnly: _favouritesOnly,
+          );
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.xxl,
+              ),
+              children: <Widget>[
+                if (_path != '/')
+                  ListTile(
+                    leading: const Icon(AppIcons.arrow_back),
+                    title: Text(l10n.nextcloudGoUp),
+                    minTileHeight: AppSizes.minTouchTarget,
+                    onTap: () => _openPath(_parentPath(_path)),
+                  ),
+                if (visible.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        entries.isEmpty &&
+                                _searchController.text.isEmpty &&
+                                !_favouritesOnly
+                            ? l10n.nextcloudFolderEmpty
+                            : l10n.nextcloudNoMatches,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
-                ),
-              for (final NextcloudEntry entry in entries)
-                _EntryTile(
-                  entry: entry,
-                  downloading: _downloadingPath == entry.path,
-                  disabled: _downloadingPath != null,
-                  onTap: entry.isDirectory
-                      ? () => _openFolder(entry)
-                      : () => _openFile(entry),
-                ),
-            ],
-          ),
-        ),
+                for (final NextcloudEntry entry in visible)
+                  _EntryTile(
+                    entry: entry,
+                    downloading: _downloadingPath == entry.path,
+                    disabled: _downloadingPath != null,
+                    favourite: favouritePaths.contains(entry.path),
+                    progressReceived: _downloadingPath == entry.path
+                        ? _downloadReceived
+                        : null,
+                    progressTotal: _downloadingPath == entry.path
+                        ? _downloadTotal
+                        : null,
+                    onCancel: _downloadingPath == entry.path
+                        ? _cancelDownload
+                        : null,
+                    onToggleFavourite: () => _toggleFavourite(entry),
+                    onTap: entry.isDirectory
+                        ? () => _openFolder(entry)
+                        : () => _openFile(entry),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -306,12 +474,22 @@ class _EntryTile extends StatelessWidget {
     required this.entry,
     required this.downloading,
     required this.disabled,
+    required this.favourite,
+    required this.progressReceived,
+    required this.progressTotal,
+    required this.onCancel,
+    required this.onToggleFavourite,
     required this.onTap,
   });
 
   final NextcloudEntry entry;
   final bool downloading;
   final bool disabled;
+  final bool favourite;
+  final int? progressReceived;
+  final int? progressTotal;
+  final VoidCallback? onCancel;
+  final VoidCallback onToggleFavourite;
   final VoidCallback onTap;
 
   @override
@@ -334,6 +512,17 @@ class _EntryTile extends StatelessWidget {
           Localizations.localeOf(context).toLanguageTag(),
         ).add_Hm().format(modified.toLocal()),
     ];
+    final int? percent =
+        progressReceived != null && progressTotal != null && progressTotal! > 0
+        ? (progressReceived! * 100 ~/ progressTotal!).clamp(0, 100)
+        : null;
+    if (downloading) {
+      details.add(
+        percent == null
+            ? l10n.nextcloudDownloading
+            : l10n.nextcloudDownloadProgress(percent),
+      );
+    }
     return Semantics(
       button: !disabled,
       enabled: !disabled,
@@ -349,16 +538,30 @@ class _EntryTile extends StatelessWidget {
         ),
         title: Text(entry.name, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: details.isEmpty ? null : Text(details.join(' · ')),
-        trailing: downloading
-            ? const SizedBox.square(
-                dimension: AppSizes.icon,
-                child: CircularProgressIndicator(strokeWidth: 2),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            IconButton(
+              onPressed: onToggleFavourite,
+              tooltip: favourite
+                  ? l10n.nextcloudFavouriteRemove(entry.name)
+                  : l10n.nextcloudFavouriteAdd(entry.name),
+              icon: Icon(favourite ? AppIcons.star : AppIcons.star_outline),
+            ),
+            if (downloading)
+              IconButton(
+                onPressed: onCancel,
+                tooltip: l10n.nextcloudDownloadCancel,
+                icon: const Icon(AppIcons.cancel_outlined),
               )
-            : Icon(
+            else
+              Icon(
                 entry.isDirectory
                     ? AppIcons.chevron_right
                     : AppIcons.download_outlined,
               ),
+          ],
+        ),
         onTap: disabled ? null : onTap,
       ),
     );

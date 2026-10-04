@@ -106,6 +106,8 @@ class _Fixtures {
   final InMemoryMoodleTokenStore moodleStore;
   final InMemoryNextcloudCredentialStore nextcloudStore =
       InMemoryNextcloudCredentialStore();
+  final InMemoryNextcloudFavouriteStore nextcloudFavouriteStore =
+      InMemoryNextcloudFavouriteStore();
   final FakeNextcloudGateway nextcloudGateway = FakeNextcloudGateway();
   final _MemoryIdentityStore identityStore = _MemoryIdentityStore();
   final InMemoryGradeCacheStore gradeCache = InMemoryGradeCacheStore();
@@ -129,6 +131,7 @@ class _Fixtures {
     moodleTokenStoreProvider.overrideWithValue(moodleStore),
     moodleCacheStoreProvider.overrideWithValue(moodleCache),
     nextcloudCredentialStoreProvider.overrideWithValue(nextcloudStore),
+    nextcloudFavouriteStoreProvider.overrideWithValue(nextcloudFavouriteStore),
     nextcloudGatewayProvider.overrideWithValue(nextcloudGateway),
   ];
 

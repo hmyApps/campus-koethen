@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/documents/app_document.dart';
 import '../data/nextcloud_dav_gateway.dart';
 import '../data/secure_nextcloud_credential_store.dart';
+import '../data/secure_nextcloud_favourite_store.dart';
 import '../domain/nextcloud_account.dart';
 import '../domain/nextcloud_entry.dart';
 import '../domain/nextcloud_failure.dart';
+import '../domain/nextcloud_favourite_store.dart';
 import '../domain/nextcloud_gateway.dart';
 import '../domain/nextcloud_profile.dart';
 
@@ -18,6 +20,11 @@ final Provider<NextcloudProfile> nextcloudProfileProvider =
 final Provider<NextcloudCredentialStore> nextcloudCredentialStoreProvider =
     Provider<NextcloudCredentialStore>(
       (Ref ref) => SecureNextcloudCredentialStore(),
+    );
+
+final Provider<NextcloudFavouriteStore> nextcloudFavouriteStoreProvider =
+    Provider<NextcloudFavouriteStore>(
+      (Ref ref) => SecureNextcloudFavouriteStore(),
     );
 
 final Provider<NextcloudGateway> nextcloudGatewayProvider =
@@ -56,7 +63,11 @@ class NextcloudFileService {
 
   final Ref _ref;
 
-  Future<AppDocument> download(NextcloudEntry entry) async {
+  Future<AppDocument> download(
+    NextcloudEntry entry, {
+    NextcloudDownloadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
     final int sessionGeneration = _ref.read(nextcloudSessionGenerationProvider);
     final NextcloudCredential? credential = await _ref
         .read(nextcloudCredentialStoreProvider)
@@ -66,7 +77,12 @@ class NextcloudFileService {
     }
     final AppDocument document = await _ref
         .read(nextcloudGatewayProvider)
-        .downloadFile(credential, entry);
+        .downloadFile(
+          credential,
+          entry,
+          onProgress: onProgress,
+          canceled: canceled,
+        );
     if (_ref.read(nextcloudSessionGenerationProvider) != sessionGeneration) {
       throw const NextcloudFailure(NextcloudFailureKind.notConnected);
     }

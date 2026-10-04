@@ -158,9 +158,20 @@ class NextcloudAccountController extends AsyncNotifier<NextcloudAccount?> {
         // A server outage must not keep a bearer credential on the device.
       }
     }
-    await store.clear();
+    Object? localFailure;
+    try {
+      await ref.read(nextcloudFavouriteStoreProvider).clear();
+    } catch (error) {
+      localFailure = error;
+    }
+    try {
+      await store.clear();
+    } catch (error) {
+      localFailure ??= error;
+    }
     ref.read(nextcloudSessionGenerationProvider.notifier).advance();
     state = const AsyncData<NextcloudAccount?>(null);
+    if (localFailure != null) throw localFailure;
   }
 }
 
