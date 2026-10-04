@@ -121,7 +121,7 @@ void main() {
     expect(find.text('Hochschulzugang'), findsOneWidget);
     expect(find.textContaining('student@hs-anhalt.de'), findsOneWidget);
     expect(find.text('Verbunden'), findsOneWidget);
-    expect(find.text('Nicht verbunden'), findsNWidgets(3));
+    expect(find.text('Nicht verbunden'), findsNWidgets(4));
     expect(find.byTooltip('Studentische E-Mail trennen'), findsOneWidget);
     expect(find.byTooltip('Moodle verbinden'), findsOneWidget);
 

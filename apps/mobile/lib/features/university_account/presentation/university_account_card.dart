@@ -10,6 +10,8 @@ import '../../../l10n/l10n.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../settings/presentation/sign_out_everywhere_tile.dart';
+import '../../hsa_ki/presentation/hsa_ki_connect_flow.dart';
+import '../../hsa_ki/presentation/hsa_ki_messages.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
 import '../../nextcloud/domain/nextcloud_account.dart';
 import '../application/university_account_controller.dart';
@@ -60,6 +62,10 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
       await _toggleNextcloud(connected: connected);
       return;
     }
+    if (service == DirectService.hsaKi && !connected) {
+      await _connectHsaKi();
+      return;
+    }
     if (!connected && !hasIdentity) {
       await _showSetup(initialService: service);
       return;
@@ -84,6 +90,28 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
         _errors[service] = connected
             ? context.l10n.universityAccountDisconnectFailed
             : universityAccountErrorMessage(context.l10n, service, error);
+      });
+    } finally {
+      if (mounted) setState(() => _busy.remove(service));
+    }
+  }
+
+  /// HSA-GPT's `+` always opens its own dedicated consent screen first — see
+  /// `AGENTS.md` §2 and `DirectService.onboardingWizardServices` for why it
+  /// is kept out of the generic flow everywhere else. Disconnecting needs no
+  /// special case and falls through to the generic path above.
+  Future<void> _connectHsaKi() async {
+    const DirectService service = DirectService.hsaKi;
+    setState(() {
+      _busy.add(service);
+      _errors.remove(service);
+    });
+    try {
+      await connectHsaKiWithOnboarding(context, ref);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errors[service] = hsaKiFailureMessage(context.l10n, error);
       });
     } finally {
       if (mounted) setState(() => _busy.remove(service));
@@ -301,6 +329,7 @@ class _UniversityServiceRow extends StatelessWidget {
       DirectService.moodle => AppIcons.school_outlined,
       DirectService.grades => AppIcons.grade_outlined,
       DirectService.nextcloud => AppIcons.cloud_outlined,
+      DirectService.hsaKi => AppIcons.message_2,
     };
     final String actionLabel = connected
         ? l10n.universityAccountDisconnectService(label)

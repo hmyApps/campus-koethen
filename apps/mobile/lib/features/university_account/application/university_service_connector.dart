@@ -6,6 +6,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../grades/application/grade_account_controller.dart';
+import '../../hsa_ki/application/hsa_ki_account_controller.dart';
+import '../../hsa_ki/domain/hsa_ki_account.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
@@ -135,6 +137,21 @@ class _GradesUniversityServiceAdapter implements UniversityServiceAdapter {
       _ref.read(gradeAccountControllerProvider.notifier).deleteEverything();
 }
 
+class _HsaKiUniversityServiceAdapter implements UniversityServiceAdapter {
+  const _HsaKiUniversityServiceAdapter(this._ref);
+  final Ref _ref;
+
+  @override
+  Future<void> connect(UniversityIdentity identity, {String? displayName}) =>
+      _ref
+          .read(hsaKiAccountControllerProvider.notifier)
+          .connect(username: identity.identifier, password: identity.password);
+
+  @override
+  Future<void> disconnect() =>
+      _ref.read(hsaKiAccountControllerProvider.notifier).disconnect();
+}
+
 class _NextcloudUniversityServiceAdapter implements UniversityServiceAdapter {
   const _NextcloudUniversityServiceAdapter(this._ref);
   final Ref _ref;
@@ -160,6 +177,7 @@ final universityServiceAdapterProvider =
         DirectService.moodle => _MoodleUniversityServiceAdapter(ref),
         DirectService.grades => _GradesUniversityServiceAdapter(ref),
         DirectService.nextcloud => _NextcloudUniversityServiceAdapter(ref),
+        DirectService.hsaKi => _HsaKiUniversityServiceAdapter(ref),
       };
     });
 
@@ -191,11 +209,13 @@ universityServiceConnectionSnapshotProvider =
       final GradeAccountState? grades = ref
           .watch(gradeAccountControllerProvider)
           .value;
+      final HsaKiAccount? hsaKi = ref.watch(hsaKiAccountControllerProvider).value;
       return UniversityServiceConnectionSnapshot(
         connected: <DirectService>{
           if (mail?.isSignedIn ?? false) DirectService.mail,
           if (moodle != null) DirectService.moodle,
           if (grades?.isSignedIn ?? false) DirectService.grades,
+          if (hsaKi != null) DirectService.hsaKi,
         },
         mailDisplayName: mail?.displayName,
       );

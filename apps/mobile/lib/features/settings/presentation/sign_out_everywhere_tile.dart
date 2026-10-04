@@ -19,6 +19,7 @@ extension on DirectService {
     DirectService.moodle => l10n.moodleTitle,
     DirectService.grades => l10n.gradesTitle,
     DirectService.nextcloud => l10n.nextcloudTitle,
+    DirectService.hsaKi => l10n.hsaKiTitle,
   };
 }
 

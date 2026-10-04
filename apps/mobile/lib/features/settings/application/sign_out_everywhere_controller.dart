@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../grades/application/grade_account_controller.dart';
+import '../../hsa_ki/application/hsa_ki_account_controller.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
@@ -30,6 +31,9 @@ final Provider<List<DirectService>> connectedDirectServicesProvider =
       }
       if (ref.watch(nextcloudAccountControllerProvider).value != null) {
         connected.add(DirectService.nextcloud);
+      }
+      if (ref.watch(hsaKiAccountControllerProvider).value != null) {
+        connected.add(DirectService.hsaKi);
       }
       return connected;
     });

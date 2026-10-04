@@ -103,6 +103,14 @@ enum AppModule {
     icon: AppIcons.checklist_outlined,
     selectedIcon: AppIcons.checklist,
   ),
+  hsaKi(
+    storageValue: 'hsaKi',
+    route: AppRoutes.hsaKi,
+    category: ModuleCategory.study,
+    sortOrder: 9,
+    icon: AppIcons.message_2,
+    selectedIcon: AppIcons.message_2,
+  ),
 
   // --- Campus --------------------------------------------------------------
   news(
@@ -203,6 +211,7 @@ enum AppModule {
     AppModule.grades => l10n.gradesTitle,
     AppModule.studentService => l10n.studentServiceTitle,
     AppModule.todos => l10n.todosTitle,
+    AppModule.hsaKi => l10n.hsaKiTitle,
     AppModule.news => l10n.navNews,
     AppModule.canteen => l10n.navCanteen,
     AppModule.campusMap => l10n.moduleCampusMapTitle,
@@ -232,6 +241,7 @@ enum AppModule {
     AppModule.moodle => l10n.moreMoodleSubtitle,
     AppModule.nextcloud => l10n.nextcloudSubtitle,
     AppModule.todos => l10n.moreTodosSubtitle,
+    AppModule.hsaKi => l10n.hsaKiSubtitle,
     AppModule.campusMap => l10n.moreCampusMapSubtitle,
     AppModule.contacts => l10n.moreContactsSubtitle,
     AppModule.requests => l10n.requestsSubtitle,
@@ -247,6 +257,7 @@ enum AppModule {
     AppModule.studentService ||
     AppModule.moodle => true,
     AppModule.nextcloud => true,
+    AppModule.hsaKi => true,
     _ => false,
   };
 

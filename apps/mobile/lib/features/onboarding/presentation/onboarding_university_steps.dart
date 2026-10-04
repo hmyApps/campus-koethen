@@ -235,7 +235,7 @@ class _OnboardingUniversityServicesStepState
       universityServiceConnectorProvider,
     );
     try {
-      for (final DirectService service in DirectService.values) {
+      for (final DirectService service in DirectService.onboardingWizardServices) {
         if (!_selected.contains(service) || _connectedHere.contains(service)) {
           continue;
         }
@@ -311,7 +311,7 @@ class _OnboardingUniversityServicesStepState
       children: <Widget>[
         if (!canUseIdentity)
           Panel(child: Text(l10n.onboardingUniversityMissingDraft)),
-        for (final DirectService service in DirectService.values) ...<Widget>[
+        for (final DirectService service in DirectService.onboardingWizardServices) ...<Widget>[
           CheckboxListTile(
             value:
                 alreadyConnected.contains(service) ||
@@ -432,5 +432,8 @@ class _OnboardingUniversityServicesStepState
     DirectService.moodle => AppIcons.school_outlined,
     DirectService.grades => AppIcons.grade_outlined,
     DirectService.nextcloud => AppIcons.cloud_outlined,
+    // Never actually rendered — excluded from onboardingWizardServices —
+    // but the switch must stay exhaustive.
+    DirectService.hsaKi => AppIcons.message_2,
   };
 }

@@ -10,6 +10,8 @@ import '../../../core/theme/app_icons.dart';
 import '../../../l10n/l10n.dart';
 import '../../grades/domain/grade_failure.dart';
 import '../../grades/presentation/grade_messages.dart';
+import '../../hsa_ki/domain/hsa_ki_failure.dart';
+import '../../hsa_ki/presentation/hsa_ki_messages.dart';
 import '../../mail/domain/mail_failure.dart';
 import '../../mail/presentation/mail_error_messages.dart';
 import '../../moodle/domain/moodle_failure.dart';
@@ -27,6 +29,7 @@ String universityServiceLabel(AppLocalizations l10n, DirectService service) =>
       DirectService.moodle => l10n.universityAccountServiceMoodle,
       DirectService.grades => l10n.universityAccountServiceGrades,
       DirectService.nextcloud => l10n.nextcloudTitle,
+      DirectService.hsaKi => l10n.hsaKiTitle,
     };
 
 String universityAccountErrorMessage(
@@ -56,6 +59,7 @@ String universityAccountErrorMessage(
   if (error is MoodleFailure) return moodleFailureMessage(l10n, error);
   if (error is GradeFailure) return gradeFailureMessage(l10n, error);
   if (error is NextcloudFailure) return nextcloudFailureMessage(l10n, error);
+  if (error is HsaKiFailure) return hsaKiFailureMessage(l10n, error);
   return l10n.universityAccountConnectFailed;
 }
 
