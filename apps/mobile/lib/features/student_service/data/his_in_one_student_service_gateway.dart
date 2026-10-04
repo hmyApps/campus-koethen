@@ -251,7 +251,9 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
 
   // ---------------------------------------------------------------------
 
-  static const int _maxPollAttempts = 10;
+  // 30 attempts × the 2s default interval ≈ 60s total — widened from 10
+  // (≈20s) for testing whether the real job just needs more time than that.
+  static const int _maxPollAttempts = 30;
   static const String _pollComponentId =
       'studyserviceForm:report:reports:reportButtons:jobDownloadPoll';
   static const String _loginUrl =
