@@ -29,6 +29,8 @@ dependencies:
   # Imported directly for MediaType on multipart parts. Already a transitive
   # dependency of dio; declared so the import is not an implicit one.
   http_parser: ^4.1.2
+  # WebDAV multistatus responses from Nextcloud are XML.
+  xml: ^6.6.1
 
   # Content cache
   hive_ce: ^2.15.0

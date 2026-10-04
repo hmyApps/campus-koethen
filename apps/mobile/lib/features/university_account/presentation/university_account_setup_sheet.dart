@@ -14,6 +14,8 @@ import '../../mail/domain/mail_failure.dart';
 import '../../mail/presentation/mail_error_messages.dart';
 import '../../moodle/domain/moodle_failure.dart';
 import '../../moodle/presentation/moodle_messages.dart';
+import '../../nextcloud/domain/nextcloud_failure.dart';
+import '../../nextcloud/presentation/nextcloud_messages.dart';
 import '../../settings/domain/direct_service.dart';
 import '../application/university_account_controller.dart';
 import '../application/university_service_connector.dart';
@@ -24,6 +26,7 @@ String universityServiceLabel(AppLocalizations l10n, DirectService service) =>
       DirectService.mail => l10n.universityAccountServiceMail,
       DirectService.moodle => l10n.universityAccountServiceMoodle,
       DirectService.grades => l10n.universityAccountServiceGrades,
+      DirectService.nextcloud => l10n.nextcloudTitle,
     };
 
 String universityAccountErrorMessage(
@@ -52,6 +55,7 @@ String universityAccountErrorMessage(
   if (error is MailFailure) return mailFailureMessage(l10n, error);
   if (error is MoodleFailure) return moodleFailureMessage(l10n, error);
   if (error is GradeFailure) return gradeFailureMessage(l10n, error);
+  if (error is NextcloudFailure) return nextcloudFailureMessage(l10n, error);
   return l10n.universityAccountConnectFailed;
 }
 
@@ -193,7 +197,7 @@ class _UniversityAccountSetupSheetState
                       labelText: l10n.universityAccountValidationService,
                       prefixIcon: const Icon(AppIcons.shield_outlined),
                     ),
-                    items: DirectService.values
+                    items: DirectService.universityIdentityServices
                         .map(
                           (DirectService service) =>
                               DropdownMenuItem<DirectService>(

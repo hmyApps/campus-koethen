@@ -23,6 +23,7 @@ import '../features/grades/presentation/grades_screen.dart';
 import '../features/student_service/presentation/student_service_screen.dart';
 import '../features/moodle/presentation/moodle_course_screen.dart';
 import '../features/moodle/presentation/moodle_screen.dart';
+import '../features/nextcloud/presentation/nextcloud_screen.dart';
 import '../features/more/presentation/more_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/news/presentation/news_channel_screen.dart';
@@ -168,6 +169,16 @@ GoRouter createAppRouter({
                         ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          // AppModule.nextcloud
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.nextcloud,
+                builder: (BuildContext _, GoRouterState _) =>
+                    const NextcloudScreen(),
               ),
             ],
           ),

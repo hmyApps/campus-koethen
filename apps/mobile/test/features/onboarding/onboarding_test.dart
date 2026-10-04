@@ -18,6 +18,9 @@ import 'package:campus_koethen/features/campusmap/domain/map_catalog.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/application/notification_settings_controller.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
+import 'package:campus_koethen/features/nextcloud/application/nextcloud_account_controller.dart';
+import 'package:campus_koethen/features/nextcloud/application/nextcloud_providers.dart';
+import 'package:campus_koethen/features/nextcloud/domain/nextcloud_account.dart';
 import 'package:campus_koethen/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:campus_koethen/features/news/presentation/news_list_screen.dart';
 import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
@@ -35,6 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_http_adapter.dart';
 import '../../support/fake_notification_gateway.dart';
+import '../../support/fake_nextcloud.dart';
 
 ApiClient _emptyApi() => fakeApiClient(
   FakeHttpAdapter((RequestOptions _) => FakeHttpResponse(envelope(<Object>[]))),
@@ -78,6 +82,16 @@ class _RecordingServiceAdapter implements UniversityServiceAdapter {
   Future<void> disconnect() async {}
 }
 
+class _NextcloudLauncher implements NextcloudLoginLauncher {
+  var opened = false;
+
+  @override
+  Future<bool> open(Uri uri) async {
+    opened = true;
+    return true;
+  }
+}
+
 /// Pumps the real app — router, redirect and all — on a phone-sized surface.
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
@@ -87,6 +101,7 @@ Future<ProviderContainer> pumpApp(
   UniversityIdentityStore? identityStore,
   Map<DirectService, UniversityServiceAdapter> serviceAdapters =
       const <DirectService, UniversityServiceAdapter>{},
+  List<Override> additionalOverrides = const <Override>[],
 }) async {
   tester.view.physicalSize = const Size(390, 1400);
   tester.view.devicePixelRatio = 1;
@@ -139,6 +154,7 @@ Future<ProviderContainer> pumpApp(
         universityServiceAdapterProvider(
           entry.key,
         ).overrideWithValue(entry.value),
+      ...additionalOverrides,
     ],
   );
   addTearDown(container.dispose);
@@ -438,6 +454,53 @@ void main() {
       expect(mail.connectedWith, expected);
       expect(grades.connectedWith, expected);
       expect(identityStore.value, expected);
+    },
+  );
+
+  testWidgets(
+    'Nextcloud can be connected in onboarding without sharing the password',
+    (WidgetTester tester) async {
+      const NextcloudCredential credential = NextcloudCredential(
+        server: 'https://cloud.hs-anhalt.de',
+        loginName: 'student-login',
+        userId: 'student-id',
+        appPassword: 'issued-app-password',
+      );
+      final InMemoryNextcloudCredentialStore nextcloudStore =
+          InMemoryNextcloudCredentialStore();
+      final FakeNextcloudGateway nextcloudGateway = FakeNextcloudGateway()
+        ..loginCredential = credential;
+      final _NextcloudLauncher launcher = _NextcloudLauncher();
+      await pumpApp(
+        tester,
+        additionalOverrides: <Override>[
+          nextcloudCredentialStoreProvider.overrideWithValue(nextcloudStore),
+          nextcloudGatewayProvider.overrideWithValue(nextcloudGateway),
+          nextcloudLoginLauncherProvider.overrideWithValue(launcher),
+        ],
+      );
+
+      for (var index = 0; index < 5; index++) {
+        await tester.tap(find.text('Weiter'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(TextButton, 'Überspringen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Schritt 7 von 8'), findsOneWidget);
+      final CheckboxListTile nextcloud = tester.widget<CheckboxListTile>(
+        find.widgetWithText(CheckboxListTile, 'Nextcloud'),
+      );
+      expect(nextcloud.enabled, isTrue);
+
+      await tester.tap(find.text('Nextcloud'));
+      await tester.pump();
+      await tester.tap(find.text('Ausgewählte Dienste verbinden'));
+      await tester.pumpAndSettle();
+
+      expect(launcher.opened, isTrue);
+      expect(await nextcloudStore.read(), credential);
+      expect(find.text('Verbunden'), findsOneWidget);
     },
   );
 

@@ -71,11 +71,19 @@ enum AppModule {
     icon: AppIcons.book_outlined,
     selectedIcon: AppIcons.book_outlined,
   ),
+  nextcloud(
+    storageValue: 'nextcloud',
+    route: AppRoutes.nextcloud,
+    category: ModuleCategory.study,
+    sortOrder: 5,
+    icon: AppIcons.cloud_outlined,
+    selectedIcon: AppIcons.cloud_outlined,
+  ),
   grades(
     storageValue: 'grades',
     route: AppRoutes.grades,
     category: ModuleCategory.study,
-    sortOrder: 5,
+    sortOrder: 6,
     icon: AppIcons.grade_outlined,
     selectedIcon: AppIcons.grade_outlined,
   ),
@@ -83,7 +91,7 @@ enum AppModule {
     storageValue: 'studentService',
     route: AppRoutes.studentService,
     category: ModuleCategory.study,
-    sortOrder: 6,
+    sortOrder: 7,
     icon: AppIcons.badge_outlined,
     selectedIcon: AppIcons.badge_outlined,
   ),
@@ -91,7 +99,7 @@ enum AppModule {
     storageValue: 'todos',
     route: AppRoutes.todos,
     category: ModuleCategory.study,
-    sortOrder: 7,
+    sortOrder: 8,
     icon: AppIcons.checklist_outlined,
     selectedIcon: AppIcons.checklist,
   ),
@@ -191,6 +199,7 @@ enum AppModule {
     AppModule.timetable => l10n.timetableTitle,
     AppModule.mail => l10n.mailTitle,
     AppModule.moodle => l10n.moodleTitle,
+    AppModule.nextcloud => l10n.nextcloudTitle,
     AppModule.grades => l10n.gradesTitle,
     AppModule.studentService => l10n.studentServiceTitle,
     AppModule.todos => l10n.todosTitle,
@@ -221,6 +230,7 @@ enum AppModule {
     AppModule.grades => l10n.moreGradesSubtitle,
     AppModule.studentService => l10n.moreStudentServiceSubtitle,
     AppModule.moodle => l10n.moreMoodleSubtitle,
+    AppModule.nextcloud => l10n.nextcloudSubtitle,
     AppModule.todos => l10n.moreTodosSubtitle,
     AppModule.campusMap => l10n.moreCampusMapSubtitle,
     AppModule.contacts => l10n.moreContactsSubtitle,
@@ -236,6 +246,7 @@ enum AppModule {
     AppModule.grades ||
     AppModule.studentService ||
     AppModule.moodle => true,
+    AppModule.nextcloud => true,
     _ => false,
   };
 

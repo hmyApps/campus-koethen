@@ -61,6 +61,7 @@ class LegalScreen extends StatelessWidget {
         _LegalSection(l10n.privacyMailTitle, l10n.privacyMailBody),
         _LegalSection(l10n.privacyGradesTitle, l10n.privacyGradesBody),
         _LegalSection(l10n.privacyMoodleTitle, l10n.privacyMoodleBody),
+        _LegalSection(l10n.privacyNextcloudTitle, l10n.privacyNextcloudBody),
         _LegalSection(l10n.privacyRequestsTitle, l10n.privacyRequestsBody),
         _LegalSection(
           l10n.privacyNotificationsTitle,

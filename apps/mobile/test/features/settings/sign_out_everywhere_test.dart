@@ -15,6 +15,7 @@ import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_account_controller.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
+import 'package:campus_koethen/features/nextcloud/application/nextcloud_providers.dart';
 import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
 import 'package:campus_koethen/features/settings/presentation/sign_out_everywhere_tile.dart';
@@ -30,6 +31,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/fake_grades.dart';
 import '../../support/fake_mail.dart';
 import '../../support/fake_moodle.dart';
+import '../../support/fake_nextcloud.dart';
 import '../../support/pump_app.dart';
 
 const MailCredentials _mailCreds = MailCredentials(
@@ -102,6 +104,9 @@ class _Fixtures {
   final FakeMailGateway mailGateway;
   final InMemoryGradeCredentialStore gradeStore;
   final InMemoryMoodleTokenStore moodleStore;
+  final InMemoryNextcloudCredentialStore nextcloudStore =
+      InMemoryNextcloudCredentialStore();
+  final FakeNextcloudGateway nextcloudGateway = FakeNextcloudGateway();
   final _MemoryIdentityStore identityStore = _MemoryIdentityStore();
   final InMemoryGradeCacheStore gradeCache = InMemoryGradeCacheStore();
   final InMemoryGradePortalStore gradePortalStore = InMemoryGradePortalStore();
@@ -123,6 +128,8 @@ class _Fixtures {
     gradesGatewayProvider.overrideWithValue(FakeGradesGateway()),
     moodleTokenStoreProvider.overrideWithValue(moodleStore),
     moodleCacheStoreProvider.overrideWithValue(moodleCache),
+    nextcloudCredentialStoreProvider.overrideWithValue(nextcloudStore),
+    nextcloudGatewayProvider.overrideWithValue(nextcloudGateway),
   ];
 
   Future<void> signInAll() async {
@@ -167,6 +174,7 @@ void main() {
       expect(fixtures.mailStore.clears, 1);
       expect(fixtures.moodleStore.clears, 1);
       expect(fixtures.gradeStore.clears, 1);
+      expect(fixtures.nextcloudStore.clears, 1);
       expect(fixtures.identityStore.clears, 1);
       expect(
         find.text('Hochschulzugang vollständig gelöscht.'),
@@ -367,6 +375,7 @@ void main() {
     expect(fixtures.mailStore.clears, 1);
     expect(fixtures.moodleStore.clears, 1);
     expect(fixtures.gradeStore.clears, 1);
+    expect(fixtures.nextcloudStore.clears, 1);
   });
 
   testWidgets('identity clear failure is reported and identity remains', (

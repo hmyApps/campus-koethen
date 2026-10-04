@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../grades/application/grade_account_controller.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
+import '../../nextcloud/application/nextcloud_account_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../domain/university_identity.dart';
 import 'university_account_controller.dart';
@@ -134,6 +135,21 @@ class _GradesUniversityServiceAdapter implements UniversityServiceAdapter {
       _ref.read(gradeAccountControllerProvider.notifier).deleteEverything();
 }
 
+class _NextcloudUniversityServiceAdapter implements UniversityServiceAdapter {
+  const _NextcloudUniversityServiceAdapter(this._ref);
+  final Ref _ref;
+
+  @override
+  Future<void> connect(UniversityIdentity identity, {String? displayName}) =>
+      throw const UniversityAccountFailure(
+        UniversityAccountFailureKind.operationBlocked,
+      );
+
+  @override
+  Future<void> disconnect() =>
+      _ref.read(nextcloudAccountControllerProvider.notifier).disconnect();
+}
+
 final universityServiceAdapterProvider =
     Provider.family<UniversityServiceAdapter, DirectService>((
       Ref ref,
@@ -143,6 +159,7 @@ final universityServiceAdapterProvider =
         DirectService.mail => _MailUniversityServiceAdapter(ref),
         DirectService.moodle => _MoodleUniversityServiceAdapter(ref),
         DirectService.grades => _GradesUniversityServiceAdapter(ref),
+        DirectService.nextcloud => _NextcloudUniversityServiceAdapter(ref),
       };
     });
 
@@ -318,7 +335,8 @@ class UniversityServiceConnector {
         );
 
         var cleanupFailed = false;
-        for (final DirectService service in DirectService.values) {
+        for (final DirectService service
+            in DirectService.universityIdentityServices) {
           if (service == validationService) continue;
           try {
             await _ref

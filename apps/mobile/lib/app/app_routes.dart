@@ -77,6 +77,9 @@ abstract final class AppRoutes {
   static const String moodleCourseName = 'moodle-course';
   static const String moodleCoursePath = 'course/:id';
 
+  // Hochschule Anhalt Nextcloud file explorer (direct WebDAV integration).
+  static const String nextcloud = '/more/nextcloud';
+
   // Local, on-device to-do list, nested under More.
   static const String todosPath = 'todos';
   static const String todos = '/more/todos';

@@ -29,7 +29,7 @@ abgeschaltet, bis die Nutzung organisatorisch entschieden ist. Details in §4 un
 
 ### 1.2 Geräteseitige Quellen (Pfad 2)
 
-Diese vier Dienste spricht die App **direkt** an — ausdrücklich beschlossene, eng begrenzte
+Diese fünf Dienste spricht die App **direkt** an — ausdrücklich beschlossene, eng begrenzte
 Ausnahmen von G1, damit weder Campus API noch Strapi noch Worker Zugangsdaten oder persönliche
 Inhalte erhalten (siehe [`../AGENTS.md`](../AGENTS.md) §2).
 
@@ -37,10 +37,13 @@ Inhalte erhalten (siehe [`../AGENTS.md`](../AGENTS.md) §2).
 | -------------------------- | ----------------------------------- | ----------- | ------ |
 | `mail.hs-anhalt.de`        | IMAP/SMTP                           | Flutter     | aktiv  |
 | `service.ssc.hs-anhalt.de` | HIS-QIS, HTML (keine JSON-API)      | Flutter     | aktiv  |
+| `sscportal.ssc.hs-anhalt.de` | HISinOne, HTML/JSF (keine JSON-API) | Flutter   | aktiv  |
 | `moodle.hs-anhalt.de`      | Moodle-Webservice, nur lesend       | Flutter     | aktiv  |
+| `cloud.hs-anhalt.de`       | Nextcloud Login Flow v2 / WebDAV, nur lesend | Flutter | umgesetzt; reale Geräteabnahme offen |
 | `REQUESTS_BASE_URL`        | Gremiensystem, Finanzanträge (POST) | Flutter     | aktiv  |
 
-Die ersten drei sind nutzerauthentifiziert. Der vierte ist es **nicht** — ausschlaggebend ist der
+Mail, Prüfungsportale, Moodle und Nextcloud sind nutzerauthentifiziert. Der Antragsdienst ist es
+**nicht** — ausschlaggebend ist der
 Inhalt: Eine Einreichung trägt den Namen der antragstellenden Person und eine Kopie des
 Studierendenausweises. Genau solche Daten sollen kein Campus-Köthen-Backend erreichen.
 
@@ -423,6 +426,7 @@ sie keine API-Route, keine Strapi-Collection, keinen Worker-Job und keine Datenb
 | `service.ssc.hs-anhalt.de`           | HIS-QIS-Notenspiegel                                                                                                                                                                              | **keine** offizielle API — HTML-Parsing über Spaltenüberschriften                                                                                                                                                                                                    | [grades.md](grades.md)             |
 | `sscportal.ssc.hs-anhalt.de`         | HISinOne-Notenspiegel; zusätzlich **nur lesend** die drei festen Bescheinigungs-Druck-Buttons direkt auf der Notenübersichtsseite (volle Formularabgabe, kein AJAX) sowie auf der Seite „Studienservice" (mehrere Tabs, Wechsel per Voll-POST): Bescheinigungsübersicht, Personendaten/Kontaktdaten, Studiengangsübersicht. Der einmalige Abruf einer erzeugten Bescheinigung — aus beiden Quellen — läuft über denselben Host, eng auf `GET /qisserver/rds?state=docdownload…` geprüft — Ziel und Einweg-Token aus der aktuellen AJAX-Antwort bzw. dem Formular-Redirect, derselbe kurzlebige Cookie-Jar, vorhandener Content-Type sowie PDF-Magic/Größe geprüft; diese enge Pfad-/Parameter-Prüfung ist **keine** allgemeine Allowlist | **keine** offizielle API — HTML-/JSF-Parsing; dieselben Zugangsdaten wie der Notenspiegel, kein zweiter Login; keine Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation                                                                                | [grades.md](grades.md)             |
 | `moodle.hs-anhalt.de`                | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines                                                                                                                                            | feste, rein **lesende** Whitelist von `wsfunction`s                                                                                                                                                                                                                  | [moodle.md](moodle.md)             |
+| `cloud.hs-anhalt.de`                 | Persönliche Nextcloud-Dateien                                                                                                                                                                      | Login Flow v2 im Systembrowser; OCS nur für eigene Nutzer-ID und App-Passwort-Widerruf; WebDAV **nur lesend** unter der eigenen Nutzerwurzel; kein persistenter Datei- oder Metadatencache                                                                         | [nextcloud.md](nextcloud.md)       |
 | `REQUESTS_BASE_URL`                  | Finanzanträge und Feedback an das Gremiensystem des Studierendenrats                                                                                                                              | Adresse **nie** als Quellcode-Konstante, **HTTPS** erzwungen; Antrag als `multipart/form-data`, Feedback als `application/json`, beide mit Idempotenzschlüssel; Status per `POST` mit dem Link im Body                                                               | —                                  |
 
 Gemeinsame Regeln: feste Host-Allowlist vor jedem Request · Redirects auf fremde Hosts oder auf

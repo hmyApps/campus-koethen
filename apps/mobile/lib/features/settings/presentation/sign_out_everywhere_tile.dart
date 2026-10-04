@@ -18,6 +18,7 @@ extension on DirectService {
     DirectService.mail => l10n.settingsSectionMail,
     DirectService.moodle => l10n.moodleTitle,
     DirectService.grades => l10n.gradesTitle,
+    DirectService.nextcloud => l10n.nextcloudTitle,
   };
 }
 
@@ -34,7 +35,7 @@ class SignOutEverywhereTile extends ConsumerStatefulWidget {
 class _SignOutEverywhereTileState extends ConsumerState<SignOutEverywhereTile> {
   /// True while the sign-outs are running.
   ///
-  /// Signing out of three services means three network round trips, and the
+  /// Signing out of several services means several network round trips, and
   /// tile used to look completely idle throughout — so a second tap was easy
   /// and the wait was unexplained.
   bool _busy = false;

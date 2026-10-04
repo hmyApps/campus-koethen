@@ -12,6 +12,8 @@ import '../../../core/widgets/panel.dart';
 import '../../../l10n/l10n.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
+import '../../nextcloud/application/nextcloud_account_controller.dart';
+import '../../nextcloud/domain/nextcloud_account.dart';
 import '../../university_account/application/university_account_controller.dart';
 import '../../university_account/application/university_service_connector.dart';
 import '../../university_account/domain/university_identity.dart';
@@ -194,6 +196,7 @@ class _OnboardingUniversityServicesStepState
   final Map<DirectService, String> _errors = <DirectService, String>{};
   final TextEditingController _mailDisplayName = TextEditingController();
   bool _busy = false;
+  DirectService? _activeService;
   String? _generalError;
 
   @override
@@ -209,7 +212,12 @@ class _OnboardingUniversityServicesStepState
         .value;
     bool hasStoredIdentity = account?.hasIdentity ?? false;
     final UniversityIdentity? draft = widget.identity;
-    if (!hasStoredIdentity && (draft == null || !draft.isValid)) {
+    final bool needsUniversityIdentity = _selected.any(
+      (DirectService service) => service.usesUniversityIdentity,
+    );
+    if (needsUniversityIdentity &&
+        !hasStoredIdentity &&
+        (draft == null || !draft.isValid)) {
       setState(() {
         _generalError = context.l10n.universityAccountIdentityMissing;
       });
@@ -231,13 +239,23 @@ class _OnboardingUniversityServicesStepState
         if (!_selected.contains(service) || _connectedHere.contains(service)) {
           continue;
         }
+        if (mounted) setState(() => _activeService = service);
         final String? displayName = service == DirectService.mail
             ? (_mailDisplayName.text.trim().isEmpty
                   ? null
                   : _mailDisplayName.text.trim())
             : null;
         try {
-          if (hasStoredIdentity) {
+          if (service == DirectService.nextcloud) {
+            await ref
+                .read(nextcloudAccountControllerProvider.notifier)
+                .connect();
+            final AsyncValue<NextcloudAccount?> nextcloud = ref.read(
+              nextcloudAccountControllerProvider,
+            );
+            if (nextcloud.hasError) throw nextcloud.error!;
+            if (nextcloud.value == null) continue;
+          } else if (hasStoredIdentity) {
             await connector.connect(service, displayName: displayName);
           } else {
             await connector.connectAndRetain(
@@ -263,7 +281,10 @@ class _OnboardingUniversityServicesStepState
       }
     } finally {
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _activeService = null;
+        });
         widget.onBusyChanged(false);
       }
     }
@@ -280,6 +301,10 @@ class _OnboardingUniversityServicesStepState
           ..addAll(_connectedHere);
     final bool canUseIdentity =
         (account?.hasIdentity ?? false) || (widget.identity?.isValid ?? false);
+    final bool canConnectSelection = _selected.any(
+      (DirectService service) =>
+          service == DirectService.nextcloud || canUseIdentity,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,7 +316,10 @@ class _OnboardingUniversityServicesStepState
             value:
                 alreadyConnected.contains(service) ||
                 _selected.contains(service),
-            enabled: !_busy && !alreadyConnected.contains(service),
+            enabled:
+                !_busy &&
+                !alreadyConnected.contains(service) &&
+                (service == DirectService.nextcloud || canUseIdentity),
             controlAffinity: ListTileControlAffinity.leading,
             secondary: Icon(_serviceIcon(service)),
             title: Text(universityServiceLabel(l10n, service)),
@@ -308,6 +336,8 @@ class _OnboardingUniversityServicesStepState
                 : Text(
                     alreadyConnected.contains(service)
                         ? l10n.universityAccountConnected
+                        : service == DirectService.nextcloud
+                        ? l10n.nextcloudSubtitle
                         : l10n.universityAccountDisconnected,
                   ),
             onChanged: (bool? selected) => setState(() {
@@ -358,7 +388,7 @@ class _OnboardingUniversityServicesStepState
           liveRegion: _busy,
           label: _busy ? l10n.onboardingUniversityConnecting : null,
           child: FilledButton.icon(
-            onPressed: _busy || _selected.isEmpty || !canUseIdentity
+            onPressed: _busy || _selected.isEmpty || !canConnectSelection
                 ? null
                 : _connectSelected,
             icon: _busy
@@ -376,6 +406,16 @@ class _OnboardingUniversityServicesStepState
             ),
           ),
         ),
+        if (_busy && _activeService == DirectService.nextcloud) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: () => ref
+                .read(nextcloudAccountControllerProvider.notifier)
+                .cancelPendingLogin(),
+            icon: const Icon(AppIcons.cancel_outlined),
+            label: Text(l10n.nextcloudCancelLogin),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Text(
           l10n.onboardingUniversitySeparateSessions,
@@ -391,5 +431,6 @@ class _OnboardingUniversityServicesStepState
     DirectService.mail => AppIcons.mail_outline,
     DirectService.moodle => AppIcons.school_outlined,
     DirectService.grades => AppIcons.grade_outlined,
+    DirectService.nextcloud => AppIcons.cloud_outlined,
   };
 }
