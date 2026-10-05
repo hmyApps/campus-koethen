@@ -3067,6 +3067,8 @@
   "@hsaKiDisclaimerFooter": {},
   "hsaKiErrorInvalidCredentials": "Hochschulzugangsdaten wurden nicht akzeptiert.",
   "@hsaKiErrorInvalidCredentials": {},
+  "hsaKiErrorNotRegistered": "Dieser Hochschulzugang wurde noch nie bei HSA-GPT verwendet. Bitte zuerst einmal unter ki.hs-anhalt.de im Browser einloggen und einrichten, dann hier erneut verbinden.",
+  "@hsaKiErrorNotRegistered": {},
   "hsaKiErrorPortalUnavailable": "HSA-GPT ist momentan nicht erreichbar.",
   "@hsaKiErrorPortalUnavailable": {},
   "hsaKiErrorPortalStructureChanged": "HSA-GPT hat sich geändert. Bitte versuche es später erneut.",

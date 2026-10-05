@@ -124,6 +124,43 @@ void main() {
     });
 
     test(
+      'treats a redirectUri of /register as not-yet-registered, never '
+      'minting a token for a session the login endpoint never actually '
+      'authenticated',
+      () async {
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+          if (o.uri.path == '/login' && o.method == 'GET') {
+            return const FakeHtmlResponse(_loginPageHtml);
+          }
+          if (o.uri.path == '/req/login') {
+            return _json(<String, dynamic>{
+              'success': true,
+              'redirectUri': '/register',
+            });
+          }
+          return const FakeHtmlResponse('not found', statusCode: 404);
+        });
+
+        await expectLater(
+          HawkiGateway(adapter).connect(username: 'new-student', password: 'y'),
+          throwsA(
+            isA<HsaKiFailure>().having(
+              (HsaKiFailure e) => e.kind,
+              'kind',
+              HsaKiFailureKind.notRegistered,
+            ),
+          ),
+        );
+        expect(
+          adapter.urls.any(
+            (String u) => u.contains('/req/profile/create-token'),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
       'reports portalStructureChanged when the token response has no token',
       () async {
         final FakeHtmlAdapter adapter = FakeHtmlAdapter(

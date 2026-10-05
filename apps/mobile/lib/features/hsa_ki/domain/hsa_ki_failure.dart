@@ -5,6 +5,16 @@ import 'package:meta/meta.dart';
 
 enum HsaKiFailureKind {
   invalidCredentials,
+
+  /// The credentials were correct and HAWKI's own login endpoint answered
+  /// `success: true`, but with `redirectUri: "/register"` instead of
+  /// `"/handshake"` — confirmed from HAWKI's own `AuthenticationController
+  /// ::handleLogin` source: that branch is taken precisely when no HAWKI
+  /// user row exists yet for this account, and it never calls `Auth::
+  /// login()`. The account is real, but this is its first-ever HAWKI
+  /// contact; it must complete the one-time registration in a browser at
+  /// ki.hs-anhalt.de before a token can be minted here.
+  notRegistered,
   portalUnavailable,
   portalStructureChanged,
   tlsOrHostRejected,

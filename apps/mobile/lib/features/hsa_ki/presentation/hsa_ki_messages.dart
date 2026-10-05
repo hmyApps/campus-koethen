@@ -10,6 +10,7 @@ String hsaKiFailureMessage(AppLocalizations l10n, Object error) {
       : HsaKiFailureKind.unknown;
   return switch (kind) {
     HsaKiFailureKind.invalidCredentials => l10n.hsaKiErrorInvalidCredentials,
+    HsaKiFailureKind.notRegistered => l10n.hsaKiErrorNotRegistered,
     HsaKiFailureKind.portalUnavailable => l10n.hsaKiErrorPortalUnavailable,
     HsaKiFailureKind.portalStructureChanged =>
       l10n.hsaKiErrorPortalStructureChanged,

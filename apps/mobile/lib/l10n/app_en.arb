@@ -2012,6 +2012,7 @@
   "hsaKiModelLabel": "Model",
   "hsaKiDisclaimerFooter": "HSA-GPT can make mistakes. Check important information.",
   "hsaKiErrorInvalidCredentials": "University credentials were not accepted.",
+  "hsaKiErrorNotRegistered": "This university account has never used HSA-GPT before. Please log in and set it up once in a browser at ki.hs-anhalt.de, then connect here again.",
   "hsaKiErrorPortalUnavailable": "HSA-GPT is currently unavailable.",
   "hsaKiErrorPortalStructureChanged": "HSA-GPT has changed. Please try again later.",
   "hsaKiErrorSecurity": "The secure connection to HSA-GPT could not be established.",
