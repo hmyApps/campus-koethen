@@ -8,9 +8,12 @@ import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/time/clock.dart';
+import 'package:campus_koethen/features/canteen/application/canteen_providers.dart';
 import 'package:campus_koethen/features/calendar/application/calendar_providers.dart';
 import 'package:campus_koethen/features/calendar/application/public_calendar_providers.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_entry.dart';
+import 'package:campus_koethen/features/events/application/saved_events_controller.dart';
+import 'package:campus_koethen/features/events/data/saved_events_store.dart';
 import 'package:campus_koethen/features/timetable/application/timetable_providers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +48,8 @@ void main() {
     Map<String, dynamic>? catalogueMeta,
     bool lateEvent = false,
     bool truncatedRange = false,
+    bool groupEndpointFails = false,
+    bool timetableEntry = false,
     KeyValueStore? store,
   }) {
     requests = <RequestOptions>[];
@@ -56,6 +61,9 @@ void main() {
         );
       }
       if (options.path == '/timetable/groups/demo-group') {
+        if (groupEndpointFails) {
+          return const FakeHttpResponse(<String, dynamic>{}, statusCode: 404);
+        }
         return FakeHttpResponse(
           envelope(
             <String, dynamic>{'id': 'demo-group', 'shortName': 'Demo'},
@@ -63,11 +71,40 @@ void main() {
           ),
         );
       }
+      if (options.path == '/timetable/status') {
+        return FakeHttpResponse(
+          envelope(<String, dynamic>{
+            'featureEnabled': true,
+            'groupCount': 1,
+            'coveredFrom': '2026-09-24',
+            'coveredTo': '2026-10-22',
+          }),
+        );
+      }
       if (options.path == '/timetable/entries') {
         return FakeHttpResponse(
           envelope(<String, dynamic>{
             'group': <String, dynamic>{'id': 'demo-group', 'shortName': 'Demo'},
-            'days': <Object>[],
+            'days': timetableEntry
+                ? <Object>[
+                    <String, dynamic>{
+                      'date': '2026-09-25',
+                      'entries': <Object>[
+                        <String, dynamic>{
+                          'id': 'lesson-1',
+                          'start': '2026-09-25T07:00:00.000Z',
+                          'end': '2026-09-25T08:30:00.000Z',
+                          'title': 'Mathematik 2',
+                          'status': 'regular',
+                          'type': 'regular_teaching',
+                          'teachers': <Object>[],
+                          'rooms': <Object>[],
+                          'groups': <Object>[],
+                        },
+                      ],
+                    },
+                  ]
+                : <Object>[],
           }),
         );
       }
@@ -119,6 +156,7 @@ void main() {
         contentCacheProvider.overrideWithValue(
           SafeContentCache(MemoryContentCache()),
         ),
+        savedEventsStoreProvider.overrideWithValue(MemorySavedEventsStore()),
         apiClientProvider.overrideWithValue(fakeApiClient(adapter)),
       ],
     );
@@ -343,6 +381,102 @@ void main() {
       expect(timetableRequests.single.queryParameters['to'], '2026-10-22');
     },
   );
+
+  test(
+    'export uses status coverage when the selected group endpoint fails',
+    () async {
+      final ProviderContainer c = container(
+        groupEndpointFails: true,
+        timetableEntry: true,
+        store: InMemoryKeyValueStore(<String, Object>{
+          PreferenceKeys.preferredTimetableGroup: 'demo-group',
+          PreferenceKeys.calendarDisabledSources: <String>[
+            CalendarSource.moodle.storageValue,
+            CalendarSource.publicCalendar.storageValue,
+          ],
+        }),
+      );
+      final ProviderSubscription<CalendarData> export = c.listen(
+        calendarExportDataProvider,
+        (_, _) {},
+      );
+      expect(export.read().isLoading, isTrue);
+
+      await c.read(timetableStatusProvider.future);
+      await c.pump();
+      await c.read(
+        timetableRangeProvider(
+          TimetableRangeRequest(
+            groupId: 'demo-group',
+            from: DateTime(2026, 9, 24),
+            to: DateTime(2026, 10, 22),
+          ),
+        ).future,
+      );
+      await c.pump();
+
+      final CalendarData data = export.read();
+      expect(
+        requests.where(
+          (RequestOptions request) =>
+              request.path == '/timetable/groups/demo-group',
+        ),
+        isEmpty,
+      );
+      final RequestOptions timetableRequest = requests.singleWhere(
+        (RequestOptions request) => request.path == '/timetable/entries',
+      );
+      expect(timetableRequest.queryParameters['from'], '2026-09-24');
+      expect(timetableRequest.queryParameters['to'], '2026-10-22');
+      expect(data.hasTimetableError, isFalse);
+      expect(data.timetableState, CalendarTimetableState.ready);
+      expect(
+        data.entries.map((CalendarEntry entry) => entry.title),
+        contains('Mathematik 2'),
+      );
+    },
+  );
+
+  test('export waits for the opted-in saved-event store', () async {
+    final ProviderContainer c = container(
+      store: InMemoryKeyValueStore(<String, Object>{
+        PreferenceKeys.calendarSavedEventsEnabled: 1,
+        PreferenceKeys.calendarDisabledSources: kMergeableCalendarSources
+            .map((CalendarSource source) => source.storageValue)
+            .toList(growable: false),
+      }),
+    );
+    final ProviderSubscription<CalendarData> export = c.listen(
+      calendarExportDataProvider,
+      (_, _) {},
+    );
+
+    expect(export.read().isLoading, isTrue);
+    await c.read(savedEventsControllerProvider.future);
+    await c.pump();
+    expect(export.read().isLoading, isFalse);
+  });
+
+  test('export waits for opted-in canteen favourites', () async {
+    final ProviderContainer c = container(
+      store: InMemoryKeyValueStore(<String, Object>{
+        PreferenceKeys.calendarShowFavouriteMeals: 1,
+        PreferenceKeys.canteenFavourites: <String>['Bulgur-Pfanne'],
+        PreferenceKeys.calendarDisabledSources: kMergeableCalendarSources
+            .map((CalendarSource source) => source.storageValue)
+            .toList(growable: false),
+      }),
+    );
+    final ProviderSubscription<CalendarData> export = c.listen(
+      calendarExportDataProvider,
+      (_, _) {},
+    );
+
+    expect(export.read().isLoading, isTrue);
+    await c.read(canteensProvider.future);
+    await c.pump();
+    expect(export.read().isLoading, isFalse);
+  });
 
   test('focused calendar uses the rolling window only in list mode', () {
     final ProviderContainer c = ProviderContainer(
