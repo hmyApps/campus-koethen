@@ -1,12 +1,17 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 
 import '../domain/hsa_ki_failure.dart';
 import '../domain/hsa_ki_profile.dart';
+import 'geant_tls_ecc_intermediate.dart';
 import 'hawki_html_parser.dart';
 
 /// One short-lived HTTPS session against [HsaKiProfile.host] only.
@@ -29,8 +34,24 @@ class HawkiSession {
       ),
     );
     _dio.interceptors.add(CookieManager(_jar));
-    if (adapter != null) _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = adapter ?? _defaultAdapter();
   }
+
+  /// `ki.hs-anhalt.de` does not send its own intermediate certificate (see
+  /// [geantTlsEcc1IntermediatePem]'s doc comment for the full, verified
+  /// diagnosis). This supplies exactly that one missing, already-publicly-
+  /// trusted certificate so the chain can still be validated properly —
+  /// every other host and every other check remains exactly as strict as
+  /// the platform default; nothing is disabled.
+  static IOHttpClientAdapter _defaultAdapter() => IOHttpClientAdapter(
+    createHttpClient: () {
+      final SecurityContext context = SecurityContext(withTrustedRoots: true);
+      context.setTrustedCertificatesBytes(
+        utf8.encode(geantTlsEcc1IntermediatePem),
+      );
+      return HttpClient(context: context);
+    },
+  );
 
   static const Duration _timeout = Duration(seconds: 15);
   static const HsaKiProfile _profile = HsaKiProfile();
@@ -87,6 +108,14 @@ class HawkiSession {
     final dynamic json = response.data;
     if (json is! Map<String, dynamic> || json['success'] != true) {
       throw const HsaKiFailure(HsaKiFailureKind.invalidCredentials);
+    }
+    // Confirmed from HAWKI's own `handleLogin` source: `Auth::login()` is
+    // only ever called on the branch that redirects to `/handshake`. A
+    // `/register` redirect means the credentials were valid but no HAWKI
+    // user exists yet for this account — the session was never actually
+    // authenticated, so every later session-authenticated call would fail.
+    if (json['redirectUri'] == '/register') {
+      throw const HsaKiFailure(HsaKiFailureKind.notRegistered);
     }
     return json;
   }
