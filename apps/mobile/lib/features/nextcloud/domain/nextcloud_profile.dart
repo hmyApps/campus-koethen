@@ -13,6 +13,9 @@ class NextcloudProfile {
       server.resolve('/ocs/v2.php/cloud/user?format=json');
   Uri get revokeAppPasswordUri =>
       server.resolve('/ocs/v2.php/core/apppassword?format=json');
+  Uri get sharesUri => server.resolve(
+    '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json',
+  );
 
   bool allows(Uri uri) =>
       uri.scheme.toLowerCase() == 'https' &&
@@ -31,6 +34,27 @@ class NextcloudProfile {
       uri.query.isEmpty &&
       uri.fragment.isEmpty &&
       (uri.path == '/login/v2/poll' || uri.path == '/index.php/login/v2/poll');
+
+  bool allowsPublicShareUri(Uri uri) {
+    if (!allows(uri) ||
+        uri.query.isNotEmpty ||
+        uri.fragment.isNotEmpty ||
+        !_isPublicSharePath(uri.pathSegments)) {
+      return false;
+    }
+    try {
+      _validateSegment(uri.pathSegments.last);
+      return true;
+    } on ArgumentError {
+      return false;
+    }
+  }
+
+  bool _isPublicSharePath(List<String> segments) =>
+      (segments.length == 2 && segments.first == 's') ||
+      (segments.length == 3 &&
+          segments.first == 'index.php' &&
+          segments[1] == 's');
 
   Uri davUri({required String userId, required String path}) {
     final List<String> segments = <String>[

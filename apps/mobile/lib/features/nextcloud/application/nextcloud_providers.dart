@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/documents/app_document.dart';
 import '../data/nextcloud_dav_gateway.dart';
+import '../data/nextcloud_public_link_sharer.dart';
+import '../data/nextcloud_upload_picker.dart';
 import '../data/secure_nextcloud_credential_store.dart';
 import '../data/secure_nextcloud_favourite_store.dart';
 import '../domain/nextcloud_account.dart';
@@ -31,6 +33,16 @@ final Provider<NextcloudGateway> nextcloudGatewayProvider =
     Provider<NextcloudGateway>(
       (Ref ref) =>
           NextcloudDavGateway(profile: ref.watch(nextcloudProfileProvider)),
+    );
+
+final Provider<NextcloudUploadPicker> nextcloudUploadPickerProvider =
+    Provider<NextcloudUploadPicker>(
+      (Ref ref) => const SystemNextcloudUploadPicker(),
+    );
+
+final Provider<NextcloudPublicLinkSharer> nextcloudPublicLinkSharerProvider =
+    Provider<NextcloudPublicLinkSharer>(
+      (Ref ref) => const SystemNextcloudPublicLinkSharer(),
     );
 
 class NextcloudSessionGeneration extends Notifier<int> {
@@ -87,6 +99,57 @@ class NextcloudFileService {
       throw const NextcloudFailure(NextcloudFailureKind.notConnected);
     }
     return document;
+  }
+
+  Future<void> upload(
+    String directoryPath,
+    NextcloudUploadFile file, {
+    NextcloudUploadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
+    final (int generation, NextcloudCredential credential) = await _session();
+    await _ref
+        .read(nextcloudGatewayProvider)
+        .uploadFile(
+          credential,
+          directoryPath: directoryPath,
+          file: file,
+          onProgress: onProgress,
+          canceled: canceled,
+        );
+    _ensureCurrent(generation);
+  }
+
+  Future<void> delete(NextcloudEntry entry) async {
+    final (int generation, NextcloudCredential credential) = await _session();
+    await _ref.read(nextcloudGatewayProvider).deleteEntry(credential, entry);
+    _ensureCurrent(generation);
+  }
+
+  Future<Uri> createPublicShare(NextcloudEntry entry) async {
+    final (int generation, NextcloudCredential credential) = await _session();
+    final Uri result = await _ref
+        .read(nextcloudGatewayProvider)
+        .createPublicShare(credential, entry);
+    _ensureCurrent(generation);
+    return result;
+  }
+
+  Future<(int, NextcloudCredential)> _session() async {
+    final int generation = _ref.read(nextcloudSessionGenerationProvider);
+    final NextcloudCredential? credential = await _ref
+        .read(nextcloudCredentialStoreProvider)
+        .read();
+    if (credential == null) {
+      throw const NextcloudFailure(NextcloudFailureKind.notConnected);
+    }
+    return (generation, credential);
+  }
+
+  void _ensureCurrent(int generation) {
+    if (_ref.read(nextcloudSessionGenerationProvider) != generation) {
+      throw const NextcloudFailure(NextcloudFailureKind.notConnected);
+    }
   }
 }
 

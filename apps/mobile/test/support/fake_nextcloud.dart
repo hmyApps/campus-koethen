@@ -55,6 +55,10 @@ class FakeNextcloudGateway implements NextcloudGateway {
   AppDocument? document;
   NextcloudCredential? loginCredential;
   final List<String> listedPaths = <String>[];
+  final List<String> deletedPaths = <String>[];
+  final List<String> uploadedDirectories = <String>[];
+  final List<String> sharedPaths = <String>[];
+  Uri shareLink = Uri.parse('https://cloud.hs-anhalt.de/s/test-share');
 
   @override
   Future<NextcloudLoginStart> startLogin() async => NextcloudLoginStart(
@@ -95,5 +99,34 @@ class FakeNextcloudGateway implements NextcloudGateway {
         document ?? (throw StateError('No fake document configured'));
     onProgress?.call(result.bytes.length, result.bytes.length);
     return result;
+  }
+
+  @override
+  Future<void> uploadFile(
+    NextcloudCredential credential, {
+    required String directoryPath,
+    required NextcloudUploadFile file,
+    NextcloudUploadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
+    uploadedDirectories.add(directoryPath);
+    onProgress?.call(file.length, file.length);
+  }
+
+  @override
+  Future<void> deleteEntry(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async {
+    deletedPaths.add(entry.path);
+  }
+
+  @override
+  Future<Uri> createPublicShare(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async {
+    sharedPaths.add(entry.path);
+    return shareLink;
   }
 }

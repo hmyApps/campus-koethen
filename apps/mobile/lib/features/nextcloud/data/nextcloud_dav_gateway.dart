@@ -525,6 +525,189 @@ class NextcloudDavGateway implements NextcloudGateway {
     }
   }
 
+  @override
+  Future<void> uploadFile(
+    NextcloudCredential credential, {
+    required String directoryPath,
+    required NextcloudUploadFile file,
+    NextcloudUploadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {
+    _validateCredential(credential);
+    if (file.length < 0 ||
+        !_validText(file.filename, 1024) ||
+        !_validText(file.mediaType, 512)) {
+      throw const NextcloudFailure(NextcloudFailureKind.invalidFileName);
+    }
+    late final Uri uri;
+    try {
+      final List<String> directory = _profile.normalizedSegments(directoryPath);
+      final List<String> filename = _profile.normalizedSegments(
+        '/${file.filename}',
+      );
+      if (filename.length != 1) throw const FormatException();
+      uri = _profile.davUri(
+        userId: credential.userId,
+        path: _profile.normalizedPath(<String>[...directory, ...filename]),
+      );
+    } catch (_) {
+      throw const NextcloudFailure(NextcloudFailureKind.invalidFileName);
+    }
+    final CancelToken cancelToken = CancelToken();
+    var wasCanceled = false;
+    if (canceled != null) {
+      unawaited(
+        canceled.then((_) {
+          wasCanceled = true;
+          cancelToken.cancel('canceled');
+        }),
+      );
+    }
+    try {
+      final Response<Object?> response = await _dio.requestUri<Object?>(
+        uri,
+        data: file.openRead(),
+        options: Options(
+          method: 'PUT',
+          responseType: ResponseType.plain,
+          contentType: file.mediaType,
+          sendTimeout: const Duration(minutes: 10),
+          followRedirects: false,
+          headers: <String, Object?>{
+            ..._authorizedHeaders(credential.loginName, credential.appPassword),
+            Headers.contentLengthHeader: file.length,
+            'If-None-Match': '*',
+          },
+        ),
+        cancelToken: cancelToken,
+        onSendProgress: (int sent, int total) {
+          if (!wasCanceled) onProgress?.call(sent, file.length);
+        },
+      );
+      if (response.statusCode == HttpStatus.unauthorized ||
+          response.statusCode == HttpStatus.forbidden) {
+        throw const NextcloudFailure(NextcloudFailureKind.permissionDenied);
+      }
+      if (response.statusCode == HttpStatus.preconditionFailed) {
+        throw const NextcloudFailure(NextcloudFailureKind.alreadyExists);
+      }
+      if (!_successfulMutationStatus(response.statusCode)) {
+        throw const NextcloudFailure(NextcloudFailureKind.uploadFailed);
+      }
+    } on NextcloudFailure {
+      rethrow;
+    } on DioException catch (error) {
+      if (wasCanceled || CancelToken.isCancel(error)) {
+        throw const NextcloudFailure(NextcloudFailureKind.canceled);
+      }
+      throw _mapDio(error, mutation: NextcloudFailureKind.uploadFailed);
+    } catch (_) {
+      throw const NextcloudFailure(NextcloudFailureKind.uploadFailed);
+    }
+  }
+
+  @override
+  Future<void> deleteEntry(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async {
+    _validateCredential(credential);
+    late final Uri uri;
+    try {
+      if (_profile.normalizedSegments(entry.path).isEmpty) {
+        throw const FormatException();
+      }
+      uri = _profile.davUri(userId: credential.userId, path: entry.path);
+    } catch (_) {
+      throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+    }
+    try {
+      final Response<Object?> response = await _dio.deleteUri<Object?>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          followRedirects: false,
+          headers: _authorizedHeaders(
+            credential.loginName,
+            credential.appPassword,
+          ),
+        ),
+      );
+      if (response.statusCode == HttpStatus.unauthorized ||
+          response.statusCode == HttpStatus.forbidden) {
+        throw const NextcloudFailure(NextcloudFailureKind.permissionDenied);
+      }
+      if (!_successfulMutationStatus(response.statusCode)) {
+        throw const NextcloudFailure(NextcloudFailureKind.deleteFailed);
+      }
+    } on NextcloudFailure {
+      rethrow;
+    } on DioException catch (error) {
+      throw _mapDio(error, mutation: NextcloudFailureKind.deleteFailed);
+    } catch (_) {
+      throw const NextcloudFailure(NextcloudFailureKind.deleteFailed);
+    }
+  }
+
+  @override
+  Future<Uri> createPublicShare(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async {
+    _validateCredential(credential);
+    try {
+      if (_profile.normalizedSegments(entry.path).isEmpty) {
+        throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+      }
+      final Response<Object?> response = await _dio.postUri<Object?>(
+        _profile.sharesUri,
+        data: <String, String>{
+          'path': entry.path,
+          'shareType': '3',
+          'permissions': '1',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.json,
+          followRedirects: false,
+          headers: _authorizedHeaders(
+            credential.loginName,
+            credential.appPassword,
+          ),
+        ),
+      );
+      if (response.statusCode == HttpStatus.unauthorized ||
+          response.statusCode == HttpStatus.forbidden) {
+        throw const NextcloudFailure(NextcloudFailureKind.permissionDenied);
+      }
+      if (response.statusCode != HttpStatus.ok) {
+        throw const NextcloudFailure(NextcloudFailureKind.shareFailed);
+      }
+      final Map<String, Object?> ocs = _objectMap(
+        _objectMap(response.data)['ocs'],
+      );
+      final Object? statusCode = _objectMap(ocs['meta'])['statuscode'];
+      if (statusCode != 100 && statusCode != 200) {
+        throw const NextcloudFailure(NextcloudFailureKind.shareFailed);
+      }
+      final Uri link = _strictUri(
+        _boundedString(_objectMap(ocs['data'])['url'], max: 2048),
+      );
+      if (!_profile.allowsPublicShareUri(link)) {
+        throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+      }
+      return link;
+    } on NextcloudFailure {
+      rethrow;
+    } on DioException catch (error) {
+      throw _mapDio(error, mutation: NextcloudFailureKind.shareFailed);
+    } on ArgumentError {
+      throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+    } catch (_) {
+      throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
+    }
+  }
+
   Map<String, String> _authorizedHeaders(String username, String password) =>
       <String, String>{
         'authorization':
@@ -557,7 +740,11 @@ class NextcloudDavGateway implements NextcloudGateway {
         canceled.then((_) => true),
       ]);
 
-  NextcloudFailure _mapDio(DioException error, {bool download = false}) {
+  NextcloudFailure _mapDio(
+    DioException error, {
+    bool download = false,
+    NextcloudFailureKind? mutation,
+  }) {
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
         error.type == DioExceptionType.receiveTimeout) {
@@ -572,12 +759,18 @@ class NextcloudDavGateway implements NextcloudGateway {
       return const NextcloudFailure(NextcloudFailureKind.networkUnavailable);
     }
     return NextcloudFailure(
-      download
-          ? NextcloudFailureKind.downloadFailed
-          : NextcloudFailureKind.serviceUnavailable,
+      mutation ??
+          (download
+              ? NextcloudFailureKind.downloadFailed
+              : NextcloudFailureKind.serviceUnavailable),
     );
   }
 }
+
+bool _successfulMutationStatus(int? status) =>
+    status == HttpStatus.ok ||
+    status == HttpStatus.created ||
+    status == HttpStatus.noContent;
 
 Map<String, Object?> _objectMap(Object? value) {
   if (value is! Map) {

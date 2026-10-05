@@ -24,6 +24,11 @@ String nextcloudFailureMessage(AppLocalizations l10n, Object error) {
     NextcloudFailureKind.notConnected => l10n.nextcloudErrorNotConnected,
     NextcloudFailureKind.fileTooLarge => l10n.nextcloudErrorFileTooLarge,
     NextcloudFailureKind.downloadFailed => l10n.nextcloudErrorDownload,
+    NextcloudFailureKind.invalidFileName => l10n.nextcloudErrorInvalidFileName,
+    NextcloudFailureKind.alreadyExists => l10n.nextcloudErrorAlreadyExists,
+    NextcloudFailureKind.uploadFailed => l10n.nextcloudErrorUpload,
+    NextcloudFailureKind.deleteFailed => l10n.nextcloudErrorDelete,
+    NextcloudFailureKind.shareFailed => l10n.nextcloudErrorShare,
     NextcloudFailureKind.favouriteLimitReached =>
       l10n.nextcloudErrorFavouriteLimit,
     NextcloudFailureKind.unknown => l10n.nextcloudErrorUnknown,

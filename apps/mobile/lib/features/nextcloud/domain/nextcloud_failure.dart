@@ -18,6 +18,11 @@ enum NextcloudFailureKind {
   notConnected,
   fileTooLarge,
   downloadFailed,
+  invalidFileName,
+  alreadyExists,
+  uploadFailed,
+  deleteFailed,
+  shareFailed,
   favouriteLimitReached,
   unknown,
 }

@@ -477,7 +477,8 @@ Ausführungsplan mit Zielrelease erstellt.
 
 ### Phase 14F – Nextcloud-Dateiexplorer
 
-**Status 4. Oktober 2026:** Der lesende erste Umfang ist implementiert. Die zuvor offene
+**Status 5. Oktober 2026:** Der Dateiexplorer einschließlich Upload, Löschen und öffentlichen
+Read-only-Freigabelinks ist implementiert. Die zuvor offene
 Instanzfrage ist mit der festen Hochschul-Origin `https://cloud.hs-anhalt.de` geklärt; die
 Integration verwendet die offiziellen, clientseitig vorgesehenen Nextcloud-Verträge Login Flow v2,
 OCS und WebDAV. Es gibt keinen frei konfigurierbaren Drittanbieterzugriff.
@@ -485,7 +486,7 @@ OCS und WebDAV. Es gibt keinen frei konfigurierbaren Drittanbieterzugriff.
 | Problem | Lösung | Betroffene Dateien |
 | ------- | ------ | ------------------ |
 | **Anmeldung ohne Weitergabe des zentralen Passworts** | Login Flow v2 im Systembrowser; Login- und Poll-URL auf die exakte Origin begrenzen; tatsächliche DAV-Nutzer-ID per OCS ermitteln; App-Passwort nur verifiziert im Keychain/Keystore speichern. | `apps/mobile/lib/features/nextcloud/domain/`; `data/nextcloud_dav_gateway.dart`; `data/secure_nextcloud_credential_store.dart`; Account-Controller und Tests |
-| **Dateiexplorer ohne Datenabfluss oder unkontrollierte Schreibrechte** | `PROPFIND Depth: 1` und `GET` nur unter der eigenen DAV-Wurzel; jeden `href` erneut validieren; Ordnernavigation und vorhandenen Dokumentbetrachter verwenden; 25-MiB-Limit; kein persistenter Datei-/Metadatencache; keine Upload-, Änderungs-, Lösch- oder Share-Link-API. | Nextcloud-Gateway, Provider und `presentation/nextcloud_screen.dart`; `core/documents/`; Parser-, Größen- und Widgettests |
+| **Dateiexplorer ohne Datenabfluss oder unkontrollierte Schreibrechte** | Alle DAV-Ziele bleiben unter der eigenen Nutzerwurzel. Uploads werden gestreamt und mit `If-None-Match: *` gegen stilles Überschreiben geschützt. DELETE folgt nur auf eine Bestätigung mit rekursiver Ordnerwarnung. Öffentliche Links entstehen erst nach eigener Warnung als `shareType=3`, `permissions=1`, werden gegen die feste Origin geprüft und nur flüchtig ans OS-Share-Sheet übergeben. Kein persistenter Datei-/Metadatencache. | Nextcloud-Gateway, Upload-Picker, Link-Sharer, Provider und `presentation/nextcloud_screen.dart`; Parser-, Mutations-, Race- und Widgettests |
 | **`+`/`−`, Kontowechsel und vollständige Löschung** | Nextcloud als eigener Dienst im Hochschulzugang, jedoch nicht in der Passwort-Reconnect-Liste. `−` versucht Remote-Widerruf und wischt lokal auch bei Serverausfall. Laufenden Browserflow vor vollständiger Löschung abbrechen; Generation verhindert verspätetes Wiederherstellen. | `direct_service.dart`; Hochschulzugang-Card/Connector; globaler Sign-out; Race-Tests |
 | **Navigation, WCAG und Datenschutz** | Eigenes anheftbares Studienmodul mit Breadcrumbs, Pull-to-refresh, Live-Regionen, 48-dp-Zielen und DE/EN; Architektur-, Datenquellen-, Produkt- und Rechtstexte aktualisieren. | App-Modulkatalog/Router; ARB und Legal-Screen; `AGENTS.md`; `README.md`; `docs/nextcloud.md`; Architektur-/Produkt-/Datenschutzdokumente |
 
