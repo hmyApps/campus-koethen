@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:convert';
+
 import 'calendar_entry.dart';
 
 /// Serialises the already-merged, on-device calendar to one RFC 5545 file —
@@ -8,61 +10,85 @@ import 'calendar_entry.dart';
 /// never a server-hosted subscription feed. Every entry here already crossed
 /// onto the device through its own source (AGENTS.md §2); this only writes
 /// out what is already merged in the app, nothing is fetched to build it.
-///
-/// Deliberately does not fold long lines at 75 octets the way RFC 5545
-/// recommends: every mainstream calendar app this is meant to be imported
-/// into (Google Calendar, Apple Calendar, Outlook) parses an unfolded line
-/// without complaint, and folding correctly for multi-byte UTF-8 text adds
-/// real complexity for a one-shot personal export.
 String icsFromCalendarEntries(
   List<CalendarEntry> entries, {
   required String calendarName,
   DateTime Function() now = DateTime.now,
 }) {
-  final StringBuffer buffer = StringBuffer()
-    ..write('BEGIN:VCALENDAR\r\n')
-    ..write('VERSION:2.0\r\n')
-    ..write('PRODID:-//Campus Koethen//Kalenderexport//DE\r\n')
-    ..write('CALSCALE:GREGORIAN\r\n')
-    ..write('X-WR-CALNAME:${_escape(calendarName)}\r\n');
+  final StringBuffer buffer = StringBuffer();
+  _writeContentLine(buffer, 'BEGIN:VCALENDAR');
+  _writeContentLine(buffer, 'VERSION:2.0');
+  _writeContentLine(buffer, 'PRODID:-//Campus Koethen//Kalenderexport//DE');
+  _writeContentLine(buffer, 'CALSCALE:GREGORIAN');
+  _writeContentLine(buffer, 'X-WR-CALNAME:${_escape(calendarName)}');
 
   final String stamp = _utcStamp(now().toUtc());
   for (final CalendarEntry entry in entries) {
-    buffer.write('BEGIN:VEVENT\r\n');
-    buffer.write('UID:${_escape(entry.id)}@campus-koethen.app\r\n');
-    buffer.write('DTSTAMP:$stamp\r\n');
+    _writeContentLine(buffer, 'BEGIN:VEVENT');
+    _writeContentLine(buffer, 'UID:${_escape(entry.id)}@campus-koethen.app');
+    _writeContentLine(buffer, 'DTSTAMP:$stamp');
     if (entry.allDay) {
       // DTEND for an all-day event is the exclusive day-after, the same
       // convention `CalendarEntry.lastDay`'s own doc comment already
       // documents this app's all-day entries as using.
       final DateTime end = entry.end ?? _nextCalendarDay(entry.start);
-      buffer.write('DTSTART;VALUE=DATE:${_dateStamp(entry.start)}\r\n');
-      buffer.write('DTEND;VALUE=DATE:${_dateStamp(end)}\r\n');
+      _writeContentLine(
+        buffer,
+        'DTSTART;VALUE=DATE:${_dateStamp(entry.start)}',
+      );
+      _writeContentLine(buffer, 'DTEND;VALUE=DATE:${_dateStamp(end)}');
     } else {
-      buffer.write('DTSTART:${_utcStamp(entry.start.toUtc())}\r\n');
+      _writeContentLine(buffer, 'DTSTART:${_utcStamp(entry.start.toUtc())}');
       final DateTime? end = entry.end;
       if (end != null) {
-        buffer.write('DTEND:${_utcStamp(end.toUtc())}\r\n');
+        _writeContentLine(buffer, 'DTEND:${_utcStamp(end.toUtc())}');
       }
     }
     final String summary = entry.title.isEmpty ? calendarName : entry.title;
-    buffer.write('SUMMARY:${_escape(summary)}\r\n');
+    _writeContentLine(buffer, 'SUMMARY:${_escape(summary)}');
     final String? location = entry.location;
     if (location != null && location.isNotEmpty) {
-      buffer.write('LOCATION:${_escape(location)}\r\n');
+      _writeContentLine(buffer, 'LOCATION:${_escape(location)}');
     }
     final String? description = entry.subtitle;
     if (description != null && description.isNotEmpty) {
-      buffer.write('DESCRIPTION:${_escape(description)}\r\n');
+      _writeContentLine(buffer, 'DESCRIPTION:${_escape(description)}');
     }
     if (entry.isCancelled) {
-      buffer.write('STATUS:CANCELLED\r\n');
+      _writeContentLine(buffer, 'STATUS:CANCELLED');
     }
-    buffer.write('END:VEVENT\r\n');
+    _writeContentLine(buffer, 'END:VEVENT');
   }
 
-  buffer.write('END:VCALENDAR\r\n');
+  _writeContentLine(buffer, 'END:VCALENDAR');
   return buffer.toString();
+}
+
+/// RFC 5545 section 3.1 limits one physical content line to 75 octets. A
+/// continuation starts with one space, which counts towards that same limit.
+/// Iterating Unicode scalar values keeps a fold from splitting a UTF-8 code
+/// point (for example an umlaut or emoji) across two physical lines.
+void _writeContentLine(StringBuffer output, String line) {
+  const int maximumOctets = 75;
+  StringBuffer physicalLine = StringBuffer();
+  int physicalOctets = 0;
+  for (final int rune in line.runes) {
+    final String character = String.fromCharCode(rune);
+    final int characterOctets = utf8.encode(character).length;
+    if (physicalOctets + characterOctets > maximumOctets &&
+        physicalLine.isNotEmpty) {
+      output
+        ..write(physicalLine)
+        ..write('\r\n');
+      physicalLine = StringBuffer(' ');
+      physicalOctets = 1;
+    }
+    physicalLine.write(character);
+    physicalOctets += characterOctets;
+  }
+  output
+    ..write(physicalLine)
+    ..write('\r\n');
 }
 
 /// RFC 5545 §3.3.11 TEXT escaping — backslash first, so escaping the other

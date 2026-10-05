@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:convert';
+
 import 'package:campus_koethen/features/calendar/domain/calendar_entry.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_ics_export.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -194,5 +196,32 @@ void main() {
     );
 
     expect(ics, contains('SUMMARY:Campus Köthen\r\n'));
+  });
+
+  test('folds long UTF-8 content lines at at most 75 octets', () {
+    final String title = List<String>.filled(18, 'Übung 😀').join(' ');
+    final CalendarEntry entry = CalendarEntry(
+      id: 'publicCalendar:x:long-title',
+      source: CalendarSource.publicCalendar,
+      title: title,
+      start: DateTime.utc(2026, 10, 5, 9),
+    );
+
+    final String ics = icsFromCalendarEntries(
+      <CalendarEntry>[entry],
+      calendarName: 'Campus Köthen',
+      now: _now,
+    );
+
+    final List<String> physicalLines = ics
+        .split('\r\n')
+        .where((String line) => line.isNotEmpty)
+        .toList(growable: false);
+    expect(
+      physicalLines.map((String line) => utf8.encode(line).length),
+      everyElement(lessThanOrEqualTo(75)),
+    );
+    expect(ics, contains('\r\n '));
+    expect(ics.replaceAll('\r\n ', ''), contains('SUMMARY:$title\r\n'));
   });
 }
