@@ -65,25 +65,38 @@ final exchangeCalendarEventsProvider =
         // that is still truncated is rejected by the parser, never accepted as
         // an apparently complete calendar.
         const int maximumDaysPerRequest = 92;
+        const int maximumParallelRequests = 3;
         final Map<String, ExchangeCalendarEvent> byId =
             <String, ExchangeCalendarEvent>{};
         DateTime cursor = query.from;
         while (!cursor.isAfter(query.to)) {
-          final DateTime candidate = DateTime(
-            cursor.year,
-            cursor.month,
-            cursor.day + maximumDaysPerRequest - 1,
-          );
-          final DateTime endInclusive = candidate.isAfter(query.to)
-              ? query.to
-              : candidate;
-          final List<ExchangeCalendarEvent> chunk = await gateway.fetchEvents(
-            credentials,
-            from: cursor,
-            to: DateTime(
+          final List<({DateTime from, DateTime to})> batch =
+              <({DateTime from, DateTime to})>[];
+          while (batch.length < maximumParallelRequests &&
+              !cursor.isAfter(query.to)) {
+            final DateTime candidate = DateTime(
+              cursor.year,
+              cursor.month,
+              cursor.day + maximumDaysPerRequest - 1,
+            );
+            final DateTime endInclusive = candidate.isAfter(query.to)
+                ? query.to
+                : candidate;
+            final DateTime endExclusive = DateTime(
               endInclusive.year,
               endInclusive.month,
               endInclusive.day + 1,
+            );
+            batch.add((from: cursor, to: endExclusive));
+            cursor = endExclusive;
+          }
+          final List<List<ExchangeCalendarEvent>> chunks = await Future.wait(
+            batch.map(
+              (({DateTime from, DateTime to}) window) => gateway.fetchEvents(
+                credentials,
+                from: window.from,
+                to: window.to,
+              ),
             ),
           );
           if (!controller.isSessionCurrent(generation)) {
@@ -91,14 +104,11 @@ final exchangeCalendarEventsProvider =
               ExchangeCalendarFailureKind.invalidCredentials,
             );
           }
-          for (final ExchangeCalendarEvent event in chunk) {
-            byId[event.id] = event;
+          for (final List<ExchangeCalendarEvent> chunk in chunks) {
+            for (final ExchangeCalendarEvent event in chunk) {
+              byId[event.id] = event;
+            }
           }
-          cursor = DateTime(
-            endInclusive.year,
-            endInclusive.month,
-            endInclusive.day + 1,
-          );
         }
         final List<ExchangeCalendarEvent> events = byId.values.toList()
           ..sort((a, b) {
