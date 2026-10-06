@@ -4,8 +4,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/security/session_guard.dart';
+import '../../notifications/application/notification_providers.dart';
 import '../domain/exam_report.dart';
 import '../domain/grade.dart';
+import '../domain/grade_change.dart';
 import '../domain/grade_cache_store.dart';
 import '../domain/grade_failure.dart';
 import '../domain/grade_portal.dart';
@@ -165,6 +167,10 @@ class GradesController extends AsyncNotifier<GradesViewState> {
       if (!_sessions.isCurrent(lease)) return;
       await _cache.writeLastSuccessfulSync(now);
       if (!_sessions.isCurrent(lease)) return;
+      final int newGradeCount = newlyGradedEntries(
+        previous: cached,
+        current: report,
+      ).length;
       state = AsyncData(
         GradesViewState(
           report: report,
@@ -172,6 +178,16 @@ class GradesController extends AsyncNotifier<GradesViewState> {
           isSyncing: false,
         ),
       );
+      // Notification delivery is an optional side effect. A platform-channel
+      // failure must never turn a successfully cached grade refresh into an
+      // error or cause the same grade to be announced again next time.
+      if (newGradeCount > 0) {
+        try {
+          await ref
+              .read(gradeChangeNotificationProvider)
+              .notify(newGradeCount: newGradeCount);
+        } catch (_) {}
+      }
     } catch (error) {
       final GradeFailure failure = error is GradeFailure
           ? error

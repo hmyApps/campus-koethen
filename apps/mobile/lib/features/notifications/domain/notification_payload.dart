@@ -15,9 +15,9 @@ import 'notification_category.dart';
 /// * **No path, no URL.** The route is built by the app from [category] and
 ///   [target]; a payload that named a route would keep pointing at it after a
 ///   release renamed or removed it.
-/// * **No personal identifier and no secret.** No payload ever carries a
-///   Moodle id — P5 removed the only category that would have needed one — so
-///   the operating system's notification store never holds a study record.
+/// * **No personal identifier and no secret.** Moodle reminders use an opaque
+///   local target and grade alerts use only the constant `grades`, so the
+///   operating system never stores a title, course, grade, username or raw id.
 /// * **Versioned and validated.** A payload outlives the app version that
 ///   wrote it. [tryParse] returns `null` for anything it does not fully
 ///   understand, and the caller falls back rather than guessing.
@@ -33,9 +33,9 @@ class NotificationPayload {
   final NotificationCategory category;
 
   /// What the notification is about, in the category's own key vocabulary —
-  /// a `CalendarEntry.id` for N1, a `YYYY-MM-DD` day for N2, and a
-  /// `<canteenSlug>:<YYYY-MM-DD>` pair for N3 — optionally followed by
-  /// `:<dish name>`, the card the tap should land on.
+  /// a `CalendarEntry.id` for N1, a `YYYY-MM-DD` day for N2, a
+  /// `<canteenSlug>:<YYYY-MM-DD>` pair for N3 (optionally followed by a dish),
+  /// an opaque Moodle key, or the constant `grades`.
   ///
   /// Never empty, and never contains the separator: both are rejected on
   /// construction through [tryParse] and asserted by [toStorage].

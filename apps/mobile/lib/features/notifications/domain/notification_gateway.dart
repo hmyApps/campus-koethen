@@ -4,6 +4,7 @@
 import 'package:meta/meta.dart';
 
 import 'notification_category.dart';
+import 'immediate_notification.dart';
 import 'notification_permission.dart';
 import 'planned_notification.dart';
 
@@ -87,6 +88,9 @@ abstract interface class NotificationGateway {
   /// Registers one entry with the operating system.
   Future<void> schedule(PlannedNotification notification);
 
+  /// Shows one already-gated notification immediately.
+  Future<void> showNow(ImmediateNotification notification);
+
   /// How many entries the operating system currently holds for this app.
   /// Diagnostic only — a count, never the entries.
   Future<int> pendingCount();
@@ -132,6 +136,9 @@ class NoopNotificationGateway implements NotificationGateway {
 
   @override
   Future<void> schedule(PlannedNotification notification) async {}
+
+  @override
+  Future<void> showNow(ImmediateNotification notification) async {}
 
   @override
   Future<int> pendingCount() async => 0;

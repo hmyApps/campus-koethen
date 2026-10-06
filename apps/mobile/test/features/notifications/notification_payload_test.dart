@@ -44,13 +44,11 @@ void main() {
     });
 
     test('a category this version has dropped resolves to nothing', () {
-      // K3/K4/K6 were dropped by P5 — a build from before that could have
-      // scheduled one, and its payload is still out there.
+      // A payload from an abandoned prototype can still outlive that build.
       expect(
         NotificationPayload.tryParse('v1|timetable.reminder|timetable:9'),
         isNull,
       );
-      expect(NotificationPayload.tryParse('v1|moodle.deadline|4711'), isNull);
     });
 
     test('a malformed shape never throws and never half-parses', () {
@@ -74,13 +72,12 @@ void main() {
   });
 
   group('privacy', () {
-    test('no category key names a personal data source', () {
-      // P5 removed every individual Moodle and timetable reminder, so no
-      // payload can carry a study identifier at all (ADR-0001 § 7.8).
+    test('category keys contain no account or record identifier', () {
+      // Source names are harmless; user, course and result identifiers are not.
       for (final NotificationCategory category in NotificationCategory.values) {
-        expect(category.key, isNot(contains('moodle')));
-        expect(category.key, isNot(contains('grade')));
-        expect(category.key, isNot(contains('mail')));
+        expect(category.key, matches(RegExp(r'^[a-z]+\.[a-z]+$')));
+        expect(category.key, isNot(contains('@')));
+        expect(category.key, isNot(contains(':')));
       }
     });
 

@@ -10,11 +10,16 @@ import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
 import 'package:campus_koethen/features/grades/domain/grade_failure.dart';
 import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
+import 'package:campus_koethen/features/notifications/application/grade_change_notification.dart';
+import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_grades.dart';
+import '../../support/fake_notification_gateway.dart';
 
 const GradeCredentials _creds = GradeCredentials(
   username: 'testuser',
@@ -27,6 +32,7 @@ ProviderContainer _container({
   required InMemoryGradeCacheStore cache,
   required MutableClock clock,
   InMemoryGradePortalStore? portalStore,
+  GradeChangeNotification? gradeChangeNotification,
 }) {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
@@ -42,6 +48,10 @@ ProviderContainer _container({
       ),
       gradeCacheStoreProvider.overrideWithValue(cache),
       gradeClockProvider.overrideWithValue(clock),
+      if (gradeChangeNotification != null)
+        gradeChangeNotificationProvider.overrideWithValue(
+          gradeChangeNotification,
+        ),
     ],
   );
   addTearDown(container.dispose);
@@ -396,6 +406,48 @@ void main() {
 
       expect(gateway.fetchCalls, 1);
     });
+
+    test(
+      'a newly entered result reaches the immediate notification service',
+      () async {
+        final FakeNotificationGateway notifications = FakeNotificationGateway();
+        final GradeChangeNotification service = GradeChangeNotification(
+          gateway: notifications,
+          preferences: const NotificationPreferences(optedIn: true),
+          permission: NotificationPermissionStatus.granted,
+          title: 'Neue Note eingetragen',
+          body: 'Notenspiegel öffnen',
+        );
+        final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+        await cache.writeReport(
+          GradeReport(<GradeEntry>[
+            GradeEntry(
+              examNumber: '1',
+              title: 'Grundlagen',
+              grade: const Grade.none(),
+              status: ExamStatus.present,
+              statusText: 'vorhanden',
+              examDate: DateTime(2026, 2, 12),
+            ),
+          ]),
+        );
+        final InMemoryGradeCredentialStore store =
+            InMemoryGradeCredentialStore()..write(_creds);
+        final ProviderContainer c = _container(
+          gateway: FakeGradesGateway(report: sampleReport()),
+          store: store,
+          cache: cache,
+          clock: MutableClock(t0),
+          gradeChangeNotification: service,
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        await c.read(gradesControllerProvider.future);
+
+        await c.read(gradesControllerProvider.notifier).refresh();
+
+        expect(notifications.shown, hasLength(1));
+      },
+    );
 
     test('logout waits for and discards a delayed sync response', () async {
       final Completer<GradeReport> response = Completer<GradeReport>();

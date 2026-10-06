@@ -124,7 +124,8 @@ damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Pa
   Redirect weiter auf die separate Origin `untrust-sscportal.ssc.hs-anhalt.de` desselben
   Pfads/Zustands führt; keine Prüfungsanmeldung, keine Adressänderung, keine sonstige Mutation
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
-  **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel
+  **ausschließlich lesend**, verschlüsselter lokaler Cache, 24-Stunden-Regel; optional eine
+  datensparsame lokale Fristerinnerung mit wählbarem Vorlauf
 - **Nextcloud-Dateiexplorer** (`cloud.hs-anhalt.de`): Login Flow v2 im Systembrowser, Ordnernavigation
   und bewusstes Laden von Dateien bis 25 MiB über WebDAV — **ausschließlich lesend**, ohne
   persistenten Datei- oder Metadatencache. Das App-Passwort liegt nur im Keychain/Keystore.
@@ -338,12 +339,12 @@ Gemeinsame, nicht verhandelbare Regeln für E-Mail, Noten, Moodle und Nextcloud:
 
 Dienstspezifisch:
 
-| Dienst | Anmeldung                        | Sync                                                       | Umfang                                                                   |
-| ------ | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| E-Mail | Adresse + Passwort, sonst nichts | App-Start, Anmeldung, alle 10 Minuten, manuell             | lesen, suchen (IMAP SEARCH), Ordner wechseln, Anhänge, antworten, senden |
-| Noten  | Benutzername + Passwort          | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Notenspiegel mit Detailansicht                                           |
-| Moodle | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**  |
-| Nextcloud | Login Flow v2 → App-Passwort | nur beim Öffnen/Navigation und nach bewusster Aktion, manuell | Ordner/Download; Upload ohne Überschreiben; bestätigtes Löschen; bestätigte öffentliche Read-only-Links; kein persistenter Cache |
+| Dienst    | Anmeldung                        | Sync                                                          | Umfang                                                                                                                           |
+| --------- | -------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| E-Mail    | Adresse + Passwort, sonst nichts | App-Start, Anmeldung, alle 10 Minuten, manuell                | lesen, suchen (IMAP SEARCH), Ordner wechseln, Anhänge, antworten, senden                                                         |
+| Noten     | Benutzername + Passwort          | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell    | Notenspiegel mit Detailansicht                                                                                                   |
+| Moodle    | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell    | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                          |
+| Nextcloud | Login Flow v2 → App-Passwort     | nur beim Öffnen/Navigation und nach bewusster Aktion, manuell | Ordner/Download; Upload ohne Überschreiben; bestätigtes Löschen; bestätigte öffentliche Read-only-Links; kein persistenter Cache |
 
 Kein Hintergrund-Polling, kein Timer, kein Backend-Cron. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
@@ -393,7 +394,7 @@ Lokal gespeichert werden:
 | Aufgabenliste                                                 | `hive_ce`, rein lokal                        |
 | E-Mail-Kopfzeilen, -Inhalte, Adressindex, optional Anhänge    | **verschlüsselte** `hive_ce`-Box             |
 | Noten, Moodle-Inhalte                                         | **verschlüsselte** `hive_ce`-Box             |
-| Nextcloud-Verzeichnislisten und geladene Dateien              | nur flüchtig im Arbeitsspeicher               |
+| Nextcloud-Verzeichnislisten und geladene Dateien              | nur flüchtig im Arbeitsspeicher              |
 | Zugangsdaten, Token, Schlüssel der verschlüsselten Boxen      | `flutter_secure_storage` (Keychain/Keystore) |
 
 Gecachte Daten werden klar als offline bzw. veraltet gekennzeichnet. **Ein Cachefehler darf nie zum
@@ -412,47 +413,47 @@ Touch-Ziele >= 48dp · keine reine Farbcodierung · Light/Dark/System-Theme.
 
 ## 5. Akzeptanzkriterien
 
-| #    | Kriterium                                                                                                     |
-| ---- | ------------------------------------------------------------------------------------------------------------- |
-| A1   | Ein neuer Strapi-Kanal erscheint ohne Flutter-Codeänderung.                                                   |
-| A2   | Campus News und FB5 News sind unabhängig aktivierbar; beide standardmäßig abonniert.                          |
-| A3   | Auswahl bleibt nach App-Neustart erhalten; neue Default-Kanäle überschreiben keine Nutzerentscheidung.        |
-| A4   | News in mehreren abonnierten Kanälen erscheint genau einmal.                                                  |
-| A5   | Entwürfe sind nicht öffentlich sichtbar.                                                                      |
-| A6   | Inaktiver Kanal verschwindet ohne App-Fehler.                                                                 |
-| A7   | Alle Kanäle deaktiviert ⇒ Empty State, kein Request für alle Kanäle.                                          |
-| A8   | Beide Startmensen erscheinen über Backend-Daten; Flutter kennt keine Location-IDs.                            |
-| A9   | Nur der Preis der gewählten Personengruppe wird angezeigt; keine Mensabilder.                                 |
-| A10  | Leere/ungültige Quellantwort löscht bestehende Mensadaten nicht.                                              |
-| A10a | NFC-Guthaben wird nur nach Nutzeraktion gelesen, nie persistiert oder übertragen; Fehler sind kein Nullsaldo. |
-| A11  | Wiederholter Import erzeugt keine Duplikate.                                                                  |
-| A12  | Neuer Kontaktbereich erscheint ohne Codeänderung; Bereich ohne Person funktioniert.                           |
-| A13  | Inaktive Bereiche/Personen werden nicht ausgeliefert.                                                         |
-| A14  | API leakt keine Strapi-Internas (`data`/`attributes`/`documentId`/`populate`).                                |
-| A15  | Flutter spricht nur mit `/v1` der Campus API.                                                                 |
-| A16  | de/en sind in Flutter, Strapi und API real getestet.                                                          |
-| A17  | Kein offizieller HSA-Eindruck, keine Hochschulassets; Unabhängigkeitshinweis sichtbar.                        |
-| A18  | Keine Secrets im Repository oder in den Images.                                                               |
-| A19  | Zwei getrennte Datenbanken mit getrennten Rollen.                                                             |
-| A20  | Backend-, Strapi- und Flutter-Gates lokal grün.                                                               |
-| A21  | Ein neuer öffentlicher Kalender erscheint ohne App- und ohne Backend-Änderung.                                |
-| A22  | Keine Kalenderauswahl ⇒ keine öffentlichen Termine, niemals „alle".                                           |
-| A23  | Google-Kalender-ID, Feed-URL und ETag erscheinen in keiner API-Antwort.                                       |
-| A24  | Ein Fehler einer Kalenderquelle blendet die übrigen Quellen nicht aus.                                        |
-| A25  | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten-, Moodle- oder Nextcloud-Daten.       |
-| A26  | Mailcache ist verschlüsselt; Zugangsdaten, Token und Cache-Schlüssel liegen nur im Keychain/Keystore.         |
-| A27  | Ein Redirect auf einen fremden Host oder auf Klartext bricht den Aufruf ab, ohne Token weiterzugeben.         |
-| A28  | Eine leere oder fehlgeschlagene Antwort überschreibt bei keiner Quelle den letzten guten Stand.               |
-| A29  | Nach Mail-Wipe und Neustart sind alte Maildaten und Empfängervorschläge app-seitig unzugänglich.              |
-| A30  | Moodle wird ausschließlich lesend angesprochen; es existiert keine generische Aufruf-Schnittstelle.           |
-| A31  | Die Aufgabenliste funktioniert vollständig ohne Netzverbindung.                                               |
-| A32  | Der Katalog enthält exakt die 30 vorhandenen roomKeys; generierte App-Assets sind driftgesichert.             |
-| A33  | „Mehr → Lageplan" öffnet den fiktiven Demo-Plan mit sichtbarem Demo-Hinweis in DE/EN.                         |
-| A34  | `B.201` und `B201` finden denselben Raum; die Auswahl fokussiert und markiert ihn.                            |
-| A35  | Raumdaten funktionieren nach einem erfolgreichen Abruf offline aus dem Cache.                                 |
-| A36  | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.                     |
-| A37  | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten.       |
-| A38  | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                                    |
+| #    | Kriterium                                                                                                                                                                                                                                     |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1   | Ein neuer Strapi-Kanal erscheint ohne Flutter-Codeänderung.                                                                                                                                                                                   |
+| A2   | Campus News und FB5 News sind unabhängig aktivierbar; beide standardmäßig abonniert.                                                                                                                                                          |
+| A3   | Auswahl bleibt nach App-Neustart erhalten; neue Default-Kanäle überschreiben keine Nutzerentscheidung.                                                                                                                                        |
+| A4   | News in mehreren abonnierten Kanälen erscheint genau einmal.                                                                                                                                                                                  |
+| A5   | Entwürfe sind nicht öffentlich sichtbar.                                                                                                                                                                                                      |
+| A6   | Inaktiver Kanal verschwindet ohne App-Fehler.                                                                                                                                                                                                 |
+| A7   | Alle Kanäle deaktiviert ⇒ Empty State, kein Request für alle Kanäle.                                                                                                                                                                          |
+| A8   | Beide Startmensen erscheinen über Backend-Daten; Flutter kennt keine Location-IDs.                                                                                                                                                            |
+| A9   | Nur der Preis der gewählten Personengruppe wird angezeigt; keine Mensabilder.                                                                                                                                                                 |
+| A10  | Leere/ungültige Quellantwort löscht bestehende Mensadaten nicht.                                                                                                                                                                              |
+| A10a | NFC-Guthaben wird nur nach Nutzeraktion gelesen, nie persistiert oder übertragen; Fehler sind kein Nullsaldo.                                                                                                                                 |
+| A11  | Wiederholter Import erzeugt keine Duplikate.                                                                                                                                                                                                  |
+| A12  | Neuer Kontaktbereich erscheint ohne Codeänderung; Bereich ohne Person funktioniert.                                                                                                                                                           |
+| A13  | Inaktive Bereiche/Personen werden nicht ausgeliefert.                                                                                                                                                                                         |
+| A14  | API leakt keine Strapi-Internas (`data`/`attributes`/`documentId`/`populate`).                                                                                                                                                                |
+| A15  | Flutter spricht nur mit `/v1` der Campus API.                                                                                                                                                                                                 |
+| A16  | de/en sind in Flutter, Strapi und API real getestet.                                                                                                                                                                                          |
+| A17  | Kein offizieller HSA-Eindruck, keine Hochschulassets; Unabhängigkeitshinweis sichtbar.                                                                                                                                                        |
+| A18  | Keine Secrets im Repository oder in den Images.                                                                                                                                                                                               |
+| A19  | Zwei getrennte Datenbanken mit getrennten Rollen.                                                                                                                                                                                             |
+| A20  | Backend-, Strapi- und Flutter-Gates lokal grün.                                                                                                                                                                                               |
+| A21  | Ein neuer öffentlicher Kalender erscheint ohne App- und ohne Backend-Änderung.                                                                                                                                                                |
+| A22  | Keine Kalenderauswahl ⇒ keine öffentlichen Termine, niemals „alle".                                                                                                                                                                           |
+| A23  | Google-Kalender-ID, Feed-URL und ETag erscheinen in keiner API-Antwort.                                                                                                                                                                       |
+| A24  | Ein Fehler einer Kalenderquelle blendet die übrigen Quellen nicht aus.                                                                                                                                                                        |
+| A25  | Kein Backend-Endpunkt, keine Tabelle und kein Log berührt E-Mail-, Noten-, Moodle- oder Nextcloud-Daten.                                                                                                                                      |
+| A26  | Mailcache ist verschlüsselt; Zugangsdaten, Token und Cache-Schlüssel liegen nur im Keychain/Keystore.                                                                                                                                         |
+| A27  | Ein Redirect auf einen fremden Host oder auf Klartext bricht den Aufruf ab, ohne Token weiterzugeben.                                                                                                                                         |
+| A28  | Eine leere oder fehlgeschlagene Antwort überschreibt bei keiner Quelle den letzten guten Stand.                                                                                                                                               |
+| A29  | Nach Mail-Wipe und Neustart sind alte Maildaten und Empfängervorschläge app-seitig unzugänglich.                                                                                                                                              |
+| A30  | Moodle wird ausschließlich lesend angesprochen; es existiert keine generische Aufruf-Schnittstelle.                                                                                                                                           |
+| A31  | Die Aufgabenliste funktioniert vollständig ohne Netzverbindung.                                                                                                                                                                               |
+| A32  | Der Katalog enthält exakt die 30 vorhandenen roomKeys; generierte App-Assets sind driftgesichert.                                                                                                                                             |
+| A33  | „Mehr → Lageplan" öffnet den fiktiven Demo-Plan mit sichtbarem Demo-Hinweis in DE/EN.                                                                                                                                                         |
+| A34  | `B.201` und `B201` finden denselben Raum; die Auswahl fokussiert und markiert ihn.                                                                                                                                                            |
+| A35  | Raumdaten funktionieren nach einem erfolgreichen Abruf offline aus dem Cache.                                                                                                                                                                 |
+| A36  | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.                                                                                                                                                     |
+| A37  | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten.                                                                                                                                       |
+| A38  | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                                                                                                                                                                    |
 | A39  | Nextcloud nutzt nur `cloud.hs-anhalt.de`, speichert nur das App-Passwort sicher und arbeitet ohne Offline-Dateicache. Upload überschreibt nie still, DELETE folgt erst nach Bestätigung und öffentliche Links sind nur lesbar sowie flüchtig. |
 
 ## 6. Offene Release-Gates

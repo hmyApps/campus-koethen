@@ -7,6 +7,18 @@ Benachrichtigungseinstellungen frei wählbar (Standard 08:00 Uhr, Ortszeit). Das
 Zustellfenster von 07:00 bis 20:00 Uhr gilt dafür nicht; N2 wird zur gewählten Uhrzeit geplant.
 Die folgenden älteren Festlegungen auf 08:00 Uhr sind insoweit durch diese Änderung ersetzt.
 
+**Änderung vom 06.10.2026:** Die spätere Produktentscheidung zu akademischen Änderungen erweitert
+den geschlossenen Umfang um zwei lokale Kategorien: `moodle.deadline` (konfigurierbarer Vorlauf,
+Standard 24 Stunden) und `grade.change` (sofortiger, neutral formulierter Hinweis nach einer
+erfolgreichen manuellen oder Vordergrund-Aktualisierung). Damit sind die älteren Aussagen „genau
+drei Kategorien“ und „keine Moodle-Einzelerinnerungen“ ersetzt. Einzelne Vorlesungserinnerungen
+bleiben ausgeschlossen. Erkannte Stundenplanänderungen werden nach einem erfolgreichen Abruf als
+verschlüsselter In-App-Hinweis dargestellt; ohne Hintergrundabruf besteht weiterhin keine
+Echtzeitgarantie. Architekturgrenzen, lokales Opt-in, getrennte Schalter, neutrale Sperrbildschirm-
+Texte und der Verzicht auf Push-Server bleiben unverändert. Die Umsetzung ist in
+[`academic-updates-and-document-wallet.md`](../academic-updates-and-document-wallet.md)
+dokumentiert.
+
 | Feld            | Wert                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Status          | **Angenommen**                                                                                                                       |

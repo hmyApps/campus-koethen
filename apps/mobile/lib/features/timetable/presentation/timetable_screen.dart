@@ -15,6 +15,8 @@ import '../../../core/widgets/status_banner.dart';
 import '../../../core/widgets/translation_fallback_notice.dart';
 import '../../../l10n/l10n.dart';
 import '../application/timetable_pending_poller.dart';
+import '../application/timetable_change.dart';
+import '../application/timetable_change_controller.dart';
 import '../application/timetable_providers.dart';
 import '../application/timetable_lesson_info_filter.dart';
 import '../application/timetable_week.dart';
@@ -222,6 +224,13 @@ class _TimetableContent extends ConsumerWidget {
       loaded.meta.dataState,
     );
     final DateTime? lastSync = loaded.meta.lastSuccessfulSyncAt;
+    final List<TimetableChange> changes =
+        (ref.watch(timetableChangeControllerProvider).value ??
+                const <TimetableChange>[])
+            .where(
+              (TimetableChange change) => change.groupId == timetable.group.id,
+            )
+            .toList(growable: false);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -229,6 +238,29 @@ class _TimetableContent extends ConsumerWidget {
       children: <Widget>[
         _GroupHeader(group: timetable.group),
         const SizedBox(height: AppSpacing.md),
+        if (changes.isNotEmpty) ...<Widget>[
+          Semantics(
+            liveRegion: true,
+            child: StatusBanner(
+              tone: StatusTone.warning,
+              icon: AppIcons.edit_calendar_outlined,
+              title: l10n.timetableChangesTitle,
+              message: l10n.timetableChangesCount(changes.length),
+              action: TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (BuildContext _) => _TimetableChangesSheet(
+                    groupId: timetable.group.id,
+                    changes: changes,
+                  ),
+                ),
+                child: Text(l10n.timetableChangesDetails),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         if (refreshError != null) ...<Widget>[
           StatusBanner(
             tone: StatusTone.warning,
@@ -325,6 +357,97 @@ class _TimetableContent extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+class _TimetableChangesSheet extends ConsumerWidget {
+  const _TimetableChangesSheet({required this.groupId, required this.changes});
+
+  final String groupId;
+  final List<TimetableChange> changes;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final String locale = Localizations.localeOf(context).languageCode;
+    String description(TimetableChange change) => switch (change.kind) {
+      TimetableChangeKind.cancelled => l10n.timetableChangeCancelled(
+        change.title,
+      ),
+      TimetableChangeKind.room => l10n.timetableChangeRoom(
+        change.title,
+        change.oldRooms.isEmpty
+            ? l10n.timetableChangeUnknownValue
+            : change.oldRooms.join(', '),
+        change.newRooms.isEmpty
+            ? l10n.timetableChangeUnknownValue
+            : change.newRooms.join(', '),
+      ),
+      TimetableChangeKind.time => l10n.timetableChangeTime(
+        change.title,
+        AppDateFormats.dateTime(change.oldStart, locale),
+        change.newStart == null
+            ? l10n.timetableChangeUnknownValue
+            : AppDateFormats.dateTime(change.newStart!, locale),
+      ),
+    };
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  l10n.timetableChangesTitle,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: changes.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final TimetableChange change = changes[index];
+                  return ListTile(
+                    leading: Icon(switch (change.kind) {
+                      TimetableChangeKind.cancelled =>
+                        AppIcons.event_busy_outlined,
+                      TimetableChangeKind.room =>
+                        AppIcons.meeting_room_outlined,
+                      TimetableChangeKind.time => AppIcons.schedule_outlined,
+                    }),
+                    title: Text(description(change)),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    await ref
+                        .read(timetableChangeControllerProvider.notifier)
+                        .acknowledgeGroup(groupId);
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                  child: Text(l10n.timetableChangesAcknowledge),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

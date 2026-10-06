@@ -27,6 +27,7 @@ class NotificationSettingsController extends Notifier<NotificationPreferences> {
       prePromptDeclined:
           store.getInt(PreferenceKeys.notificationsPrePromptDeclined) == 1,
       dailySummaryMinutes: _readDailySummaryMinutes(store),
+      moodleDeadlineLeadMinutes: _readMoodleDeadlineLeadMinutes(store),
     );
   }
 
@@ -35,6 +36,27 @@ class NotificationSettingsController extends Notifier<NotificationPreferences> {
       PreferenceKeys.notificationsDailySummaryMinutes,
     );
     return value != null && value >= 0 && value < 24 * 60 ? value : 8 * 60;
+  }
+
+  static int _readMoodleDeadlineLeadMinutes(KeyValueStore store) {
+    final int? value = store.getInt(
+      PreferenceKeys.notificationsMoodleDeadlineLeadMinutes,
+    );
+    return value != null && value >= 15 && value <= 30 * 24 * 60
+        ? value
+        : 24 * 60;
+  }
+
+  Future<void> setMoodleDeadlineLeadMinutes(int value) async {
+    if (value < 15 || value > 30 * 24 * 60) {
+      throw RangeError.range(value, 15, 30 * 24 * 60, 'value');
+    }
+    if (state.moodleDeadlineLeadMinutes == value) return;
+    state = state.copyWith(moodleDeadlineLeadMinutes: value);
+    await _store.setInt(
+      PreferenceKeys.notificationsMoodleDeadlineLeadMinutes,
+      value,
+    );
   }
 
   Future<void> setDailySummaryMinutes(int value) async {

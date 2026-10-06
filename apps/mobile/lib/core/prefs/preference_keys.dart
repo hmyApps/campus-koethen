@@ -185,7 +185,7 @@ abstract final class PreferenceKeys {
 
   // --- Local notifications (device-only, no registration) -----------------
   //
-  // Four small scalars and nothing else. There is no token, no installation
+  // Small scalar/list preferences only. There is no token, no installation
   // id and no server-side record anywhere in this feature — ADR-0001 § 10.
 
   /// `1` once the reader has opted in to local notifications. Absent means
@@ -195,6 +195,11 @@ abstract final class PreferenceKeys {
   /// Local wall-clock minute of the daily overview; absent means 08:00.
   static const String notificationsDailySummaryMinutes =
       'notifications.dailySummary.minutes.v1';
+
+  /// Lead time of an individual Moodle deadline reminder, in minutes.
+  /// Absent means 24 hours.
+  static const String notificationsMoodleDeadlineLeadMinutes =
+      'notifications.moodleDeadline.leadMinutes.v1';
 
   /// The notification categories the reader switched OFF, as category storage
   /// values.

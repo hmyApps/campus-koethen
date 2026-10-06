@@ -28,9 +28,8 @@ class MoodleScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Contextual entry point D of the UX spec (§ 2.2): connecting Moodle is
-    // the moment submission deadlines start existing on this device, and they
-    // only ever surface in the 08:00 overview — P5 rules out a reminder of
-    // their own.
+    // the moment submission deadlines start existing on this device. They can
+    // feed both the daily overview and the separate local deadline reminder.
     //
     // Offered from the gate rather than from the setup screen, because the
     // setup screen is exactly what stops existing the moment the connection

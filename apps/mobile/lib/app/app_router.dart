@@ -22,6 +22,7 @@ import '../features/mail/presentation/mail_search_screen.dart';
 import '../features/grades/presentation/grades_screen.dart';
 import '../features/hsa_ki/presentation/hsa_ki_chat_screen.dart';
 import '../features/student_service/presentation/student_service_screen.dart';
+import '../features/document_wallet/presentation/document_wallet_screen.dart';
 import '../features/moodle/presentation/moodle_course_screen.dart';
 import '../features/moodle/presentation/moodle_screen.dart';
 import '../features/nextcloud/presentation/nextcloud_screen.dart';
@@ -201,6 +202,16 @@ GoRouter createAppRouter({
                 path: AppRoutes.studentService,
                 builder: (BuildContext _, GoRouterState _) =>
                     const StudentServiceScreen(),
+              ),
+            ],
+          ),
+          // AppModule.documentWallet
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.documentWallet,
+                builder: (BuildContext _, GoRouterState _) =>
+                    const DocumentWalletScreen(),
               ),
             ],
           ),

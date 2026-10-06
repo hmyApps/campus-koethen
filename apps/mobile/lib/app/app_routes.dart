@@ -72,6 +72,9 @@ abstract final class AppRoutes {
   /// its own, see `AGENTS.md` §2.
   static const String studentService = '/more/student-service';
 
+  /// Encrypted, device-local PDFs saved explicitly from HISinOne.
+  static const String documentWallet = '/more/document-wallet';
+
   // Moodle (direct integration), nested under More.
   static const String moodle = '/more/moodle';
   static const String moodleCourseName = 'moodle-course';

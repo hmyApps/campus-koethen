@@ -19,6 +19,7 @@ import 'features/mail/data/secure_mail_credential_store.dart';
 import 'features/mail/domain/mail_credential_store.dart';
 import 'features/grades/application/grades_providers.dart';
 import 'features/student_service/application/student_service_providers.dart';
+import 'features/document_wallet/application/document_wallet_controller.dart';
 
 /// Entry point.
 ///
@@ -73,6 +74,12 @@ Future<void> main() async {
                   .read(studentServiceSessionGuardProvider)
                   .invalidateAndWait();
               await ref.read(studentServiceCacheStoreProvider).clear();
+            },
+            () async {
+              await ref
+                  .read(documentWalletSessionGuardProvider)
+                  .invalidateAndWait();
+              await ref.read(documentWalletStoreProvider).clear();
             },
           ];
         }),

@@ -273,6 +273,16 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         name: l10n.notificationChannelCanteenName,
         description: l10n.notificationChannelCanteenDescription,
       ),
+      NotificationChannelSpec(
+        category: NotificationCategory.moodleDeadline,
+        name: l10n.notificationChannelMoodleDeadlineName,
+        description: l10n.notificationChannelMoodleDeadlineDescription,
+      ),
+      NotificationChannelSpec(
+        category: NotificationCategory.gradeChange,
+        name: l10n.notificationChannelGradeChangeName,
+        description: l10n.notificationChannelGradeChangeDescription,
+      ),
     ];
     final String signature = channels
         .map((NotificationChannelSpec c) => '${c.category.channelId}:${c.name}')
