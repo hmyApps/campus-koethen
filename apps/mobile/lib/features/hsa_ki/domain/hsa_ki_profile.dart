@@ -20,7 +20,14 @@ class HsaKiProfile {
   Uri get createTokenUri => server.resolve('/req/profile/create-token');
   Uri get revokeTokenUri => server.resolve('/req/profile/revoke-token');
   Uri get logoutUri => server.resolve('/logout');
-  Uri get aiRequestUri => server.resolve('/api/hawki/v1/ai-req');
+  // Confirmed 2026-10-06 against the real, currently deployed instance:
+  // unlike `ai-models` (a JSON:API resource, genuinely under `/hawki/v1`),
+  // `ai-req` is registered without that prefix — `/api/hawki/v1/ai-req`
+  // 404s for real (Laravel's own "route … could not be found"), while
+  // `/api/ai-req` answers 401 Unauthenticated, proving the route exists
+  // there. Source: `routes/api.php`, the `ai-req` group has no `->prefix()`
+  // call, only the framework's automatic `/api` prefix applies.
+  Uri get aiRequestUri => server.resolve('/api/ai-req');
   Uri get aiModelsUri => server.resolve('/api/hawki/v1/ai-models');
 
   bool allows(Uri uri) =>

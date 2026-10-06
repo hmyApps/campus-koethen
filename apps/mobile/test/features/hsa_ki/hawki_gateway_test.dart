@@ -342,6 +342,12 @@ void main() {
 
     test('posts the stateless payload shape and returns the reply text', () async {
       final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        // Confirmed 2026-10-06 against the real, currently deployed
+        // instance: `ai-req` is NOT under the JSON:API `/hawki/v1` prefix
+        // (that prefix only exists for `ai-models` and similar JSON:API
+        // resources) — `/api/hawki/v1/ai-req` 404s for real, `/api/ai-req`
+        // answers 401 Unauthenticated (route exists, needs a token).
+        expect(o.uri.path, '/api/ai-req');
         expect(o.data, <String, dynamic>{
           'payload': <String, dynamic>{
             'model': 'gpt-4',
