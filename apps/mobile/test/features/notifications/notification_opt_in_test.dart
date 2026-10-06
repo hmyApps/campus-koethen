@@ -162,7 +162,7 @@ void main() {
     expect(container.read(notificationSettingsProvider).optedIn, isTrue);
     expect(
       container.read(notificationSettingsProvider).enabledCategories,
-      hasLength(3),
+      hasLength(NotificationCategory.values.length),
     );
   });
 

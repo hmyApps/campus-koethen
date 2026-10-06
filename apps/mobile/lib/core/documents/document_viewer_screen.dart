@@ -22,6 +22,7 @@ class DocumentViewerScreen extends StatefulWidget {
     required this.document,
     this.shareService = const DocumentShareService(),
     this.allowSharing = true,
+    this.actions = const <Widget>[],
     super.key,
   });
 
@@ -35,6 +36,7 @@ class DocumentViewerScreen extends StatefulWidget {
   /// would hand over access to the whole case. The viewer then shows the
   /// document and offers no way out of it.
   final bool allowSharing;
+  final List<Widget> actions;
 
   @override
   State<DocumentViewerScreen> createState() => _DocumentViewerScreenState();
@@ -54,6 +56,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
     return ScreenScaffold(
       title: doc.filename,
       actions: <Widget>[
+        ...widget.actions,
         if (widget.allowSharing)
           IconButton(
             onPressed: () => widget.shareService.share(doc),

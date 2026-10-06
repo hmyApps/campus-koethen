@@ -345,6 +345,24 @@ Automatisch (lazy) beim Öffnen des Bereichs, getrennte Zeitstempel für letzten
 letzten Erfolg, 24-Stunden-Sperre für automatische Versuche, manueller Refresh umgeht sie,
 Single-Flight bei parallelen Auslösern. Details unverändert gegenüber der bisherigen Fassung.
 
+Nach einem **erfolgreichen** Abruf vergleicht die App den neuen Bericht lokal mit dem vorherigen
+erfolgreichen Cache. Eine bisher leere oder neu hinzugekommene Blattzeile mit numerischer Note oder
+„unbenotet bestanden“ löst bei aktivierten lokalen Benachrichtigungen den neutralen Hinweis
+„Neue Note eingetragen“ aus. Der erste Bericht legt nur die Baseline an; geänderte vorhandene Noten
+und neu berechnete Aggregatzeilen werden nicht als neue Note gemeldet. Es gibt keinen
+Hintergrundabruf und keine Echtzeitgarantie. Details:
+[`academic-updates-and-document-wallet.md`](academic-updates-and-document-wallet.md).
+
+## Offline-Dokumenten-Wallet
+
+Eine im Dokumentbetrachter geöffnete Immatrikulationsbescheinigung oder Leistungsübersicht kann
+bewusst verschlüsselt offline gespeichert werden. Andere Bescheinigungsarten und Listen fehlender
+Leistungen werden nicht angeboten. Je Art ersetzt eine neue PDF die alte; beim Konto- oder
+Portalwechsel sowie bei „Noten-Verbindung und lokale Noten löschen“ wird die Wallet verifiziert
+mit entfernt. Die Dokumente werden nicht automatisch heruntergeladen und verlassen das Gerät
+nicht. Details und Limits stehen in
+[`academic-updates-and-document-wallet.md`](academic-updates-and-document-wallet.md).
+
 Zusätzlich: Ein **leerer** Bericht überschreibt einen **nicht leeren** Cache nie. Liefert das
 Portal plötzlich nichts, wo gestern noch Leistungen standen, heißt das nie „die Noten sind weg",
 sondern Konto verschoben, Sitzung still verloren oder Seite geändert. Cache und

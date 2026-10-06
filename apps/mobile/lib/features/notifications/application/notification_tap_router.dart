@@ -151,6 +151,10 @@ class NotificationTapRouter {
           focusDay: day,
           focusMealName: parts!.group(3),
         );
+      case NotificationCategory.moodleDeadline:
+        return const NotificationTapTarget(location: AppRoutes.moodle);
+      case NotificationCategory.gradeChange:
+        return const NotificationTapTarget(location: AppRoutes.grades);
     }
   }
 

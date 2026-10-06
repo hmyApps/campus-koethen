@@ -16,6 +16,7 @@ class NotificationPreferences {
     this.disabledCategories = const <NotificationCategory>{},
     this.prePromptDeclined = false,
     this.dailySummaryMinutes = 8 * 60,
+    this.moodleDeadlineLeadMinutes = 24 * 60,
   });
 
   /// The global switch. `false` until the reader has explicitly opted in in
@@ -39,6 +40,9 @@ class NotificationPreferences {
   /// Preferred local wall-clock minute, in the range 0..1439.
   final int dailySummaryMinutes;
 
+  /// Local lead time for each Moodle deadline reminder.
+  final int moodleDeadlineLeadMinutes;
+
   bool isCategoryEnabled(NotificationCategory category) =>
       !disabledCategories.contains(category);
 
@@ -53,11 +57,14 @@ class NotificationPreferences {
     Set<NotificationCategory>? disabledCategories,
     bool? prePromptDeclined,
     int? dailySummaryMinutes,
+    int? moodleDeadlineLeadMinutes,
   }) => NotificationPreferences(
     optedIn: optedIn ?? this.optedIn,
     disabledCategories: disabledCategories ?? this.disabledCategories,
     prePromptDeclined: prePromptDeclined ?? this.prePromptDeclined,
     dailySummaryMinutes: dailySummaryMinutes ?? this.dailySummaryMinutes,
+    moodleDeadlineLeadMinutes:
+        moodleDeadlineLeadMinutes ?? this.moodleDeadlineLeadMinutes,
   );
 
   @override
@@ -66,6 +73,7 @@ class NotificationPreferences {
       other.optedIn == optedIn &&
       other.prePromptDeclined == prePromptDeclined &&
       other.dailySummaryMinutes == dailySummaryMinutes &&
+      other.moodleDeadlineLeadMinutes == moodleDeadlineLeadMinutes &&
       other.disabledCategories.length == disabledCategories.length &&
       other.disabledCategories.containsAll(disabledCategories);
 
@@ -74,6 +82,7 @@ class NotificationPreferences {
     optedIn,
     prePromptDeclined,
     dailySummaryMinutes,
+    moodleDeadlineLeadMinutes,
     Object.hashAllUnordered(disabledCategories),
   );
 }

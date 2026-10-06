@@ -7,6 +7,15 @@
 einer frei gewählten Ortszeit zugestellt werden. 08:00 Uhr ist nur noch der Standardwert.
 Ältere feste Uhrzeitangaben zu dieser Kategorie in der folgenden Spezifikation sind dadurch ersetzt.
 
+**Änderung vom 06.10.2026:** Die spätere Produktfreigabe ergänzt eine einzeln abschaltbare,
+datensparsame Moodle-Fristerinnerung mit lokal wählbarem Vorlauf sowie einen neutralen Hinweis nach
+dem lokalen Erkennen einer neu eingetragenen Note. Ältere Aussagen, Moodle-Fristen würden
+ausschließlich in der Tagesübersicht erscheinen oder es gebe nur drei Kategorien, sind dadurch
+ersetzt. Stundenplanänderungen erscheinen als In-App-Hinweis nach dem nächsten erfolgreichen
+Abruf; einzelne Erinnerungen vor jeder Lehrveranstaltung bleiben ausgeschlossen. Details und
+Abnahmekriterien stehen in
+[`academic-updates-and-document-wallet.md`](../academic-updates-and-document-wallet.md).
+
 ---
 
 ## 1. Kontext, Ziel und Funktionsweise lokaler Benachrichtigungen

@@ -189,7 +189,7 @@ void main() {
       null,
       '',
       'v2|daily.summary|2026-09-03',
-      'v1|moodle.deadline|4711',
+      'v1|timetable.reminder|4711',
       '/more/moodle',
       'garbage',
     ]) {
@@ -198,15 +198,33 @@ void main() {
   });
 
   test('every destination is an existing app route', () {
-    const Set<String> known = <String>{AppRoutes.calendar, AppRoutes.canteen};
+    const Set<String> known = <String>{
+      AppRoutes.calendar,
+      AppRoutes.canteen,
+      AppRoutes.moodle,
+      AppRoutes.grades,
+    };
     for (final String payload in <String>[
       'v1|event.reminder|savedEvent:1',
       'v1|daily.summary|2026-09-03',
       'v1|canteen.favourite|mensa-fasanerieallee:2026-09-03',
       'v1|canteen.favourite|broken',
+      'v1|moodle.deadline|deadline-a1b2',
+      'v1|grade.change|grades',
     ]) {
       expect(known, contains(router.resolve(payload)!.location));
     }
+  });
+
+  test('academic alerts open their privacy-safe overview routes', () {
+    expect(
+      router.resolve('v1|moodle.deadline|deadline-a1b2')?.location,
+      AppRoutes.moodle,
+    );
+    expect(
+      router.resolve('v1|grade.change|grades')?.location,
+      AppRoutes.grades,
+    );
   });
 
   test('a day key is written the way the router reads it', () {

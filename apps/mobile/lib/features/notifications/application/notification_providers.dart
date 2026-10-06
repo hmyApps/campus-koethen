@@ -7,6 +7,8 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../core/prefs/preference_keys.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../../../core/time/clock.dart';
+import '../../../core/locale/locale_providers.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../data/device_time_zone.dart';
 import '../data/local_notification_gateway.dart';
 import '../domain/notification_category.dart';
@@ -18,6 +20,8 @@ import '../domain/notification_request.dart';
 import 'canteen_favourite_candidates.dart';
 import 'daily_summary_providers.dart';
 import 'event_reminder_candidates.dart';
+import 'grade_change_notification.dart';
+import 'moodle_deadline_candidates.dart';
 import 'notification_planner.dart';
 import 'notification_scheduler.dart';
 import 'notification_settings_controller.dart';
@@ -26,6 +30,22 @@ import 'notification_settings_controller.dart';
 /// nothing — the real one is the default so no start-up wiring can forget it.
 final Provider<NotificationGateway> notificationGatewayProvider =
     Provider<NotificationGateway>((Ref ref) => LocalNotificationGateway());
+
+final Provider<GradeChangeNotification> gradeChangeNotificationProvider =
+    Provider<GradeChangeNotification>((Ref ref) {
+      final AppLocalizations l10n = lookupAppLocalizations(
+        ref.watch(activeLocaleProvider),
+      );
+      return GradeChangeNotification(
+        gateway: ref.watch(notificationGatewayProvider),
+        preferences: ref.watch(notificationSettingsProvider),
+        permission:
+            ref.watch(notificationPermissionProvider).value ??
+            NotificationPermissionStatus.notDetermined,
+        title: l10n.notificationGradeChangeTitle,
+        body: l10n.notificationGradeChangeBody,
+      );
+    });
 
 /// The device time zone resolver. Overridden in tests with
 /// [FixedTimeZoneResolver].
@@ -47,9 +67,10 @@ final Provider<NotificationScheduler> notificationSchedulerProvider =
 /// **The extension point of the whole feature.**
 ///
 /// Each approved category contributes its candidates here — LEVIORA-164
-/// (daily summary), LEVIORA-165 (canteen favourites) and LEVIORA-166
-/// (event reminders) each add one provider of their own and one line below,
-/// so the three can land independently without meeting in the same edit.
+/// (daily summary), LEVIORA-165 (canteen favourites), LEVIORA-166
+/// (event reminders) and the later Moodle-deadline extension each contribute
+/// one provider and one line below. Immediate grade alerts deliberately bypass
+/// the scheduled-candidate planner.
 ///
 /// Two consequences worth being explicit about, because they are why this is
 /// a provider rather than a function:
@@ -70,6 +91,7 @@ final Provider<List<NotificationRequest>> notificationCandidatesProvider =
         ...ref.watch(eventReminderCandidatesProvider),
         ...ref.watch(dailySummaryCandidatesProvider),
         ...ref.watch(canteenFavouriteCandidatesProvider),
+        ...ref.watch(moodleDeadlineCandidatesProvider),
       ],
     );
 

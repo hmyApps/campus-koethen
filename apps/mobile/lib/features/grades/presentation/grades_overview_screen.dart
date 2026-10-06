@@ -7,6 +7,8 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../core/documents/app_document.dart';
 import '../../../core/documents/document_viewer_screen.dart';
+import '../../document_wallet/domain/wallet_document.dart';
+import '../../document_wallet/presentation/wallet_save_action.dart';
 import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/locale/formatters.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -547,15 +549,24 @@ class _ExamReportRowState extends ConsumerState<_ExamReportRow> {
       final AppLocalizations l10n = context.l10n;
       switch (result) {
         case ExamReportDownloadLoaded(:final bytes, :final filename):
+          final AppDocument document = AppDocument(
+            filename: filename,
+            mediaType: 'application/pdf',
+            bytes: bytes,
+            sizeBytes: bytes.length,
+          );
+          final WalletDocumentKind? walletKind = walletKindForExamReportLabel(
+            widget.offer.label,
+          );
           await navigator.push(
             MaterialPageRoute<void>(
               builder: (BuildContext _) => DocumentViewerScreen(
-                document: AppDocument(
-                  filename: filename,
-                  mediaType: 'application/pdf',
-                  bytes: bytes,
-                  sizeBytes: bytes.length,
-                ),
+                document: document,
+                actions: walletKind == null
+                    ? const <Widget>[]
+                    : <Widget>[
+                        WalletSaveAction(kind: walletKind, document: document),
+                      ],
               ),
             ),
           );

@@ -27,28 +27,28 @@ Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsystem
 
 ## Umfang des MVP
 
-| Enthalten                                                                                                                                                    | Nicht enthalten                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| News als endloser Inline-Feed, Kanäle frei wählbar                                                                                                           | Nutzerkonten für die App selbst                 |
-| Quellenübergreifender Kalender (Tag/Woche/Liste)                                                                                                             | Push-Nachrichten von einem Server               |
-| Gruppenstundenplan (WebUntis, serverseitig schaltbar)                                                                                                        | Persönlicher WebUntis-Login                     |
-| Öffentliche Google-Kalender (öffentlicher ICS-Feed)                                                                                                          | Nicht freigegebene reale Gebäudepläne           |
-| Mensapläne und lokaler NFC-Guthabencheck (Android/iOS)                                                                                                       | Analytics, Tracking, Crash-Reporting            |
-| Kontakte und Kontaktbereiche                                                                                                                                 | Redis, SMTP                                     |
-| Studenten-E-Mail (IMAP/SMTP und optional lesender Exchange-Kalender, direkt vom Gerät)                                                                        | Automatisches Deployment                        |
-| Notenspiegel HIS-QIS **und** HISinOne, auf HISinOne zusätzlich nur lesend: Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht (direkt vom Gerät) | Globale Volltextsuche                           |
-| Moodle: Kurse, Materialien, Aufgaben, Ankündigungen                                                                                                          | Schreibzugriffe auf Moodle                      |
+| Enthalten                                                                                                                                                    | Nicht enthalten                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| News als endloser Inline-Feed, Kanäle frei wählbar                                                                                                           | Nutzerkonten für die App selbst                            |
+| Quellenübergreifender Kalender (Tag/Woche/Liste)                                                                                                             | Push-Nachrichten von einem Server                          |
+| Gruppenstundenplan (WebUntis, serverseitig schaltbar)                                                                                                        | Persönlicher WebUntis-Login                                |
+| Öffentliche Google-Kalender (öffentlicher ICS-Feed)                                                                                                          | Nicht freigegebene reale Gebäudepläne                      |
+| Mensapläne und lokaler NFC-Guthabencheck (Android/iOS)                                                                                                       | Analytics, Tracking, Crash-Reporting                       |
+| Kontakte und Kontaktbereiche                                                                                                                                 | Redis, SMTP                                                |
+| Studenten-E-Mail (IMAP/SMTP und optional lesender Exchange-Kalender, direkt vom Gerät)                                                                       | Automatisches Deployment                                   |
+| Notenspiegel HIS-QIS **und** HISinOne, auf HISinOne zusätzlich nur lesend: Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht (direkt vom Gerät) | Globale Volltextsuche                                      |
+| Moodle: Kurse, Materialien, Aufgaben, Ankündigungen                                                                                                          | Schreibzugriffe auf Moodle                                 |
 | Nextcloud-Dateiexplorer: Browser-Login, Ordner, Download, Upload, Löschen und nur lesbare öffentliche Freigabelinks                                          | Umbenennen, Verschieben oder Hintergrund-Sync in Nextcloud |
-| Optionaler zentraler Hochschulzugang, nur lokal                                                                                                              | Gemeinsame SSO-Sitzung oder App-Konto           |
-| Lokale Aufgabenliste (rein auf dem Gerät)                                                                                                                    | Serverseitige Synchronisierung der Aufgaben     |
-| Anträge & Feedback (direkt an das Gremiensystem)                                                                                                             | Serverseitige Ablage von Anträgen               |
-| Lageplan: Demo- und schematische Pläne, Raumsuche                                                                                                            | Indoor-Navigation, Wegberechnung, Live-Position |
-| Räume mit Kontaktbezug und Deep-Link in den Plan                                                                                                             | Raumbelegung und Buchung                        |
-| Lokale Einstellungen (Sprache, Theme, Abos)                                                                                                                  | Mehrere Mail- oder Moodle-Konten                |
-| Lokale Erinnerungen, rein auf dem Gerät geplant                                                                                                              |                                                 |
-| Offline-/Cache-Verhalten                                                                                                                                     |                                                 |
-| About, vollständiges Impressum und Datenschutz                                                                                                               |                                                 |
-| Deutsch und Englisch                                                                                                                                         |                                                 |
+| Optionaler zentraler Hochschulzugang, nur lokal                                                                                                              | Gemeinsame SSO-Sitzung oder App-Konto                      |
+| Lokale Aufgabenliste (rein auf dem Gerät)                                                                                                                    | Serverseitige Synchronisierung der Aufgaben                |
+| Anträge & Feedback (direkt an das Gremiensystem)                                                                                                             | Serverseitige Ablage von Anträgen                          |
+| Lageplan: Demo- und schematische Pläne, Raumsuche                                                                                                            | Indoor-Navigation, Wegberechnung, Live-Position            |
+| Räume mit Kontaktbezug und Deep-Link in den Plan                                                                                                             | Raumbelegung und Buchung                                   |
+| Lokale Einstellungen (Sprache, Theme, Abos)                                                                                                                  | Mehrere Mail- oder Moodle-Konten                           |
+| Lokale Erinnerungen, rein auf dem Gerät geplant                                                                                                              |                                                            |
+| Offline-/Cache-Verhalten                                                                                                                                     |                                                            |
+| About, vollständiges Impressum und Datenschutz                                                                                                               |                                                            |
+| Deutsch und Englisch                                                                                                                                         |                                                            |
 
 Details: [docs/product/mvp.md](docs/product/mvp.md)
 
@@ -126,6 +126,11 @@ Harte Systemgrenzen:
 - Für Mail, Noten, Moodle, Nextcloud sowie Anträge und Feedback gibt es **keinen** Backend-Proxy, **keine** serverseitige Speicherung und **keinen** Analytics-/Logging-Umweg. Das gilt auch für den optionalen zentralen Hochschulzugang.
 - Der Kalender führt Stundenplan, öffentliche Kalender, Moodle-Deadlines und nach ausdrücklichem
   Opt-in persönliche Exchange-Termine **ausschließlich lokal auf dem Gerät** zusammen.
+- Akademische Hinweise bleiben ebenfalls lokal: Moodle-Fristen können mit wählbarem Vorlauf
+  vorausgeplant werden, neue Noten werden erst nach einem erfolgreichen Abruf neutral gemeldet und
+  Stundenplanänderungen nach dem nächsten erfolgreichen Laden im Stundenplan angezeigt.
+- Immatrikulationsbescheinigung und Leistungsübersicht können ausdrücklich in einer
+  verschlüsselten, kontogebundenen Offline-Dokumenten-Wallet gespeichert werden.
 - CMS und operative Daten nutzen **getrennte Datenbanken und Rollen**.
 - Umgebungsunterschiede entstehen ausschließlich durch Environment/Secrets, nicht durch Quellcode.
 

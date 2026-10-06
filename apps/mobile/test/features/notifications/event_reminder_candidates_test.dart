@@ -286,7 +286,7 @@ void main() {
       );
     });
 
-    test('a lecture and a Moodle deadline (P5) — never, in any form', () {
+    test('lectures and Moodle deadlines never use the event category', () {
       final List<CalendarEntry> notEvents = <CalendarEntry>[
         CalendarEntry(
           id: 'timetable:99',
@@ -306,8 +306,8 @@ void main() {
         requestsIn(berlin, at(berlin, 2026, 7, 1), notEvents),
         isEmpty,
         reason:
-            'P5: lectures and Moodle deadlines reach the daily overview and '
-            'produce no individual reminder of their own',
+            'Moodle uses its dedicated neutral deadline category; '
+            'lectures remain part of the daily overview only',
       );
     });
 

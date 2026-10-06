@@ -116,6 +116,7 @@ class _NotificationSettingsScreenState
               interactive: categoriesInteractive,
               muted: muted.contains(category),
             ),
+          _MoodleLeadTile(enabled: categoriesInteractive),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
@@ -220,6 +221,16 @@ class _CategorySwitch extends ConsumerWidget {
         l10n.notificationsCategoryCanteenSubtitle,
         AppIcons.restaurant_outlined,
       ),
+      NotificationCategory.moodleDeadline => (
+        l10n.notificationsCategoryMoodleDeadline,
+        l10n.notificationsCategoryMoodleDeadlineSubtitle,
+        AppIcons.book_outlined,
+      ),
+      NotificationCategory.gradeChange => (
+        l10n.notificationsCategoryGradeChange,
+        l10n.notificationsCategoryGradeChangeSubtitle,
+        AppIcons.grade_outlined,
+      ),
     };
     return _SemanticSwitchTile(
       icon: icon,
@@ -236,6 +247,94 @@ class _CategorySwitch extends ConsumerWidget {
                 .read(notificationSettingsProvider.notifier)
                 .setCategoryEnabled(category, value)
           : null,
+    );
+  }
+}
+
+class _MoodleLeadTile extends ConsumerWidget {
+  const _MoodleLeadTile({required this.enabled});
+
+  final bool enabled;
+
+  static const List<int> _choices = <int>[
+    60,
+    6 * 60,
+    24 * 60,
+    48 * 60,
+    7 * 24 * 60,
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final NotificationPreferences preferences = ref.watch(
+      notificationSettingsProvider,
+    );
+    String label(int minutes) => switch (minutes) {
+      60 => l10n.notificationsMoodleLeadOneHour,
+      360 => l10n.notificationsMoodleLeadSixHours,
+      1440 => l10n.notificationsMoodleLeadOneDay,
+      2880 => l10n.notificationsMoodleLeadTwoDays,
+      _ => l10n.notificationsMoodleLeadOneWeek,
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.sm),
+            child: Icon(AppIcons.schedule_outlined),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  l10n.notificationsMoodleLeadTitle,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.notificationsMoodleLeadSubtitle,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                DropdownButton<int>(
+                  isExpanded: true,
+                  value:
+                      _choices.contains(preferences.moodleDeadlineLeadMinutes)
+                      ? preferences.moodleDeadlineLeadMinutes
+                      : 24 * 60,
+                  onChanged:
+                      enabled &&
+                          preferences.isCategoryEnabled(
+                            NotificationCategory.moodleDeadline,
+                          )
+                      ? (int? value) {
+                          if (value == null) return;
+                          ref
+                              .read(notificationSettingsProvider.notifier)
+                              .setMoodleDeadlineLeadMinutes(value);
+                        }
+                      : null,
+                  items: <DropdownMenuItem<int>>[
+                    for (final int value in _choices)
+                      DropdownMenuItem<int>(
+                        value: value,
+                        child: Text(label(value)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

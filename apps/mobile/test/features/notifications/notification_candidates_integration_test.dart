@@ -5,6 +5,7 @@ import 'package:campus_koethen/features/notifications/application/canteen_favour
 import 'package:campus_koethen/features/notifications/application/daily_summary_providers.dart';
 import 'package:campus_koethen/features/notifications/application/event_reminder_candidates.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
+import 'package:campus_koethen/features/notifications/application/moodle_deadline_candidates.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_category.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_request.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,9 @@ void main() {
         canteenFavouriteCandidatesProvider.overrideWithValue(
           <NotificationRequest>[request(NotificationCategory.canteenFavourite)],
         ),
+        moodleDeadlineCandidatesProvider.overrideWithValue(
+          <NotificationRequest>[request(NotificationCategory.moodleDeadline)],
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -40,7 +44,10 @@ void main() {
       container
           .read(notificationCandidatesProvider)
           .map((NotificationRequest candidate) => candidate.category),
-      NotificationCategory.values,
+      NotificationCategory.values.where(
+        (NotificationCategory category) =>
+            category != NotificationCategory.gradeChange,
+      ),
     );
   });
 }

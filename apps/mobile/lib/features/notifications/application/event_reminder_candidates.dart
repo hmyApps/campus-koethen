@@ -63,8 +63,9 @@ abstract interface class EventReminderCopy {
 /// The sources N1 is allowed to read (ADR-0001 § 7.2).
 ///
 /// Deliberately a closed set rather than "everything the calendar merged":
-/// P5 rules out individual reminders for lectures and Moodle deadlines, and
-/// those two are entries in exactly the same list. A source added to
+/// Lectures remain excluded, while Moodle deadlines use their own neutral,
+/// configurable category rather than the event category. Both sources are
+/// entries in exactly the same merged list. A source added to
 /// [CalendarSource] later is therefore out of scope until somebody names it
 /// here, which is a product decision.
 const Set<CalendarSource> kEventReminderSources = <CalendarSource>{
@@ -77,8 +78,8 @@ const Set<CalendarSource> kEventReminderSources = <CalendarSource>{
 /// A pure function: no provider, no clock of its own, no platform. What it
 /// drops, and why:
 ///
-/// * a source that is not [kEventReminderSources] — a lecture and a Moodle
-///   deadline reach the daily overview and nothing else (P5);
+/// * a source that is not [kEventReminderSources] — lectures have no
+///   individual reminder; Moodle deadlines are handled by their own provider;
 /// * `isCancelled` — a cancelled event is not something to look forward to;
 /// * an event that has already started, and a desired instant already past.
 ///   The planner drops past moments too, but doing it here as well keeps the

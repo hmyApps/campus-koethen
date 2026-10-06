@@ -1,11 +1,11 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
-/// The notification categories the product release (LEVIORA-159) approved.
+/// The notification categories approved by the product plan.
 ///
-/// The set is closed: ADR-0001 § 7.3 lists exactly three, and P5 rules out
-/// individual reminders for timetable slots and Moodle deadlines. Adding a
-/// value here is a product decision, not a refactoring.
+/// The set is closed. Adding a value here is a product decision, not a
+/// refactoring. Moodle deadline reminders and grade-change alerts were added
+/// by the academic-updates plan after ADR-0001's initial three categories.
 ///
 /// Every category carries its own identity in three places, and all three are
 /// stable across app updates because they end up inside data the operating
@@ -48,6 +48,27 @@ enum NotificationCategory {
     storageValue: 'canteen',
     order: 2,
     windowPolicy: DeliveryWindowPolicy.fixedLocalTime,
+  ),
+
+  /// One neutral local reminder before each cached Moodle deadline.
+  moodleDeadline(
+    key: 'moodle.deadline',
+    keyPrefix: 'n4',
+    channelId: 'moodle_deadline_channel',
+    storageValue: 'moodleDeadline',
+    order: 3,
+    windowPolicy: DeliveryWindowPolicy.shiftIntoWindow,
+  ),
+
+  /// Immediate, neutral alert after a successful grade refresh detects a new
+  /// result. It does not contribute scheduled candidates to the planner.
+  gradeChange(
+    key: 'grade.change',
+    keyPrefix: 'n5',
+    channelId: 'grade_change_channel',
+    storageValue: 'gradeChange',
+    order: 4,
+    windowPolicy: DeliveryWindowPolicy.anyLocalTime,
   );
 
   const NotificationCategory({
@@ -65,8 +86,8 @@ enum NotificationCategory {
   /// First segment of every scheduling key of this category.
   final String keyPrefix;
 
-  /// The Android notification channel this category posts to. Three channels,
-  /// one per category, so a reader can silence one kind without silencing the
+  /// The Android notification channel this category posts to. One channel per
+  /// category lets a reader silence one kind without silencing the
   /// rest. A channel is **not** a group key and does not bundle anything
   /// (ADR-0001 § 7.7, P8).
   final String channelId;

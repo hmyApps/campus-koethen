@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,8 @@ import '../../../core/prefs/settings_controller.dart';
 import '../data/timetable_models.dart';
 import '../data/timetable_repository.dart';
 import 'timetable_week.dart';
+import 'timetable_change.dart';
+import 'timetable_change_controller.dart';
 
 /// One progressively loaded result set of the server-side group search.
 @immutable
@@ -293,7 +297,7 @@ final timetableWeekProvider =
       TimetableWeekRequest request,
     ) async {
       final String locale = ref.watch(localeCodeProvider);
-      return ref
+      final Loaded<Timetable> loaded = await ref
           .watch(timetableRepositoryProvider)
           .fetchEntries(
             locale: locale,
@@ -301,6 +305,26 @@ final timetableWeekProvider =
             from: request.weekStart,
             to: request.weekEnd,
           );
+      if (!loaded.fromCache &&
+          (loaded.meta.featureEnabled ?? true) &&
+          TimetableDataState.fromWire(loaded.meta.dataState) ==
+              TimetableDataState.ready) {
+        // The encrypted hint store is supplementary local state. A slow or
+        // unavailable keystore must never hold the actual timetable response
+        // on the loading screen.
+        unawaited(
+          ref
+              .read(timetableChangeControllerProvider.notifier)
+              .observe(
+                scope: TimetableChangeScope(
+                  groupId: request.groupId,
+                  rangeKey: request.weekStart.toIso8601String(),
+                ),
+                timetable: loaded.value,
+              ),
+        );
+      }
+      return loaded;
     });
 
 typedef TimetableForegroundRefresh = Future<void> Function();

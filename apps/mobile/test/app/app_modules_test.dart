@@ -56,6 +56,7 @@ void main() {
         AppModule.nextcloud,
         AppModule.grades,
         AppModule.studentService,
+        AppModule.documentWallet,
         AppModule.todos,
         AppModule.hsaKi,
       ]);
@@ -87,7 +88,7 @@ void main() {
       expect(AppModule.settings.pinnable, isFalse);
       expect(AppModule.about.pinnable, isFalse);
       expect(AppModule.pinnableModules, isNot(contains(AppModule.settings)));
-      expect(AppModule.pinnableModules, hasLength(14));
+      expect(AppModule.pinnableModules, hasLength(15));
     });
 
     test('the pinnable modules are the leading values of the enum', () {
@@ -126,6 +127,7 @@ void main() {
         AppModule.nextcloud,
         AppModule.grades,
         AppModule.studentService,
+        AppModule.documentWallet,
         AppModule.todos,
         AppModule.hsaKi,
       ]);

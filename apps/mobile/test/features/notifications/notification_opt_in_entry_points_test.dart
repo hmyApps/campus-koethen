@@ -3,11 +3,10 @@
 
 /// Contextual entry points C and D of the UX spec (§ 2.2).
 ///
-/// Both exist because of the daily overview: choosing a timetable group and
-/// connecting Moodle are the two moments at which lectures and submission
-/// deadlines start existing locally, and neither ever produces a reminder of
-/// its own — they only ever appear in the 08:00 overview (P5). Both offer the
-/// **existing** global opt-in; there is no second permission concept here.
+/// Choosing a timetable group and connecting Moodle are the two moments at
+/// which lectures and submission deadlines start existing locally. Both offer
+/// the existing global opt-in; Moodle may additionally produce its own local,
+/// neutral deadline reminder, without a second permission concept.
 library;
 
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';

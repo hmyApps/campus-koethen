@@ -26,6 +26,7 @@ Future<(ProviderContainer, FakeNotificationGateway)> pumpSettings(
   bool optedIn = true,
   Set<NotificationCategory> muted = const <NotificationCategory>{},
   KeyValueStore? store,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   final FakeNotificationGateway gateway = FakeNotificationGateway(
     permission: permission,
@@ -42,6 +43,7 @@ Future<(ProviderContainer, FakeNotificationGateway)> pumpSettings(
     tester,
     const NotificationSettingsScreen(),
     keyValueStore: keyValueStore,
+    textScaler: textScaler,
     overrides: <Override>[
       notificationGatewayProvider.overrideWithValue(gateway),
     ],
@@ -162,12 +164,20 @@ void main() {
   ) async {
     await pumpSettings(tester);
 
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsTimetableMoodleNoticeTitle),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.text(de.notificationsTimetableMoodleNoticeTitle),
       findsOneWidget,
     );
-    await tester.drag(find.byType(ListView), const Offset(0, -600));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsFreshnessTitle),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text(de.notificationsFreshnessTitle), findsOneWidget);
   });
 
@@ -183,5 +193,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(notificationSettingsProvider).optedIn, isFalse);
+  });
+
+  testWidgets('the Moodle lead control fits a narrow phone at 200% text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpSettings(tester, textScaler: const TextScaler.linear(2));
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsMoodleLeadTitle),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text(de.notificationsMoodleLeadTitle), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

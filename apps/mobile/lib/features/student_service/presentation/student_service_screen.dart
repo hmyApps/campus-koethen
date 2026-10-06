@@ -19,6 +19,8 @@ import '../../../l10n/l10n.dart';
 import '../../grades/application/grade_account_controller.dart';
 import '../../grades/domain/grade_portal.dart';
 import '../../grades/presentation/grade_messages.dart';
+import '../../document_wallet/domain/wallet_document.dart';
+import '../../document_wallet/presentation/wallet_save_action.dart';
 import '../application/student_service_controller.dart';
 import '../domain/student_service_gateway.dart';
 import '../domain/student_service_overview.dart';
@@ -370,15 +372,24 @@ class _CertificateRowState extends ConsumerState<_CertificateRow> {
       final AppLocalizations l10n = context.l10n;
       switch (result) {
         case CertificateDownloadLoaded(:final bytes, :final filename):
+          final AppDocument document = AppDocument(
+            filename: filename,
+            mediaType: 'application/pdf',
+            bytes: bytes,
+            sizeBytes: bytes.length,
+          );
+          final WalletDocumentKind? walletKind = walletKindForCertificateLabel(
+            widget.offer.name,
+          );
           await navigator.push(
             MaterialPageRoute<void>(
               builder: (BuildContext _) => DocumentViewerScreen(
-                document: AppDocument(
-                  filename: filename,
-                  mediaType: 'application/pdf',
-                  bytes: bytes,
-                  sizeBytes: bytes.length,
-                ),
+                document: document,
+                actions: walletKind == null
+                    ? const <Widget>[]
+                    : <Widget>[
+                        WalletSaveAction(kind: walletKind, document: document),
+                      ],
               ),
             ),
           );
