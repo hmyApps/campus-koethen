@@ -93,8 +93,13 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      geladene Dateien bleiben flüchtig im Arbeitsspeicher und werden nicht in Hive,
      SharedPreferences oder einem Campus-Backend gespeichert. Erlaubt sind nur Login Flow v2,
      die OCS-Abfrage des eigenen Benutzerprofils, der Widerruf des eigenen App-Passworts sowie
-     lesende WebDAV-Aufrufe unter `/remote.php/dav/files/{eigene Nutzer-ID}`. Keine Uploads,
-     Änderungen, Freigabelinks oder frei konfigurierbaren Nextcloud-Server. `−` versucht den
+     WebDAV-Aufrufe unter `/remote.php/dav/files/{eigene Nutzer-ID}`. Schreibzugriffe sind eng
+     begrenzt auf bewusst ausgelöste Uploads ohne stilles Überschreiben und bestätigtes Löschen;
+     ein Ordner-DELETE muss ausdrücklich auf die rekursive Wirkung hinweisen. Nach separater
+     Bestätigung darf die OCS-Share-API einen nur lesbaren öffentlichen Link (`shareType=3`,
+     `permissions=1`) erzeugen. Der Link bleibt flüchtig, wird nie geloggt oder persistiert und
+     darf nur an das OS-Share-Sheet übergeben werden. Keine Umbenennungen, Verschiebungen,
+     Hintergrundmutationen oder frei konfigurierbaren Nextcloud-Server. `−` versucht den
      serverseitigen Widerruf und löscht die lokale Berechtigung auch dann verifiziert, wenn der
      Server nicht erreichbar ist. Details: [`docs/nextcloud.md`](docs/nextcloud.md).
    - die **Antragstellung und das Feedback** (Finanzanträge und Rückmeldungen an das Gremiensystem

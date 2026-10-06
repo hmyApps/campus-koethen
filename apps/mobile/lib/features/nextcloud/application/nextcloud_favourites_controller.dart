@@ -48,6 +48,31 @@ class NextcloudFavouritesController extends AsyncNotifier<Set<String>> {
       rethrow;
     }
   }
+
+  Future<void> removeTree(String path) async {
+    final NextcloudAccount? account = await ref.read(
+      nextcloudAccountControllerProvider.future,
+    );
+    if (account == null) {
+      throw const NextcloudFailure(NextcloudFailureKind.notConnected);
+    }
+    final Set<String> previous = state.value ?? await future;
+    final String descendantPrefix = path.endsWith('/') ? path : '$path/';
+    final Set<String> next = previous
+        .where(
+          (String favourite) =>
+              favourite != path && !favourite.startsWith(descendantPrefix),
+        )
+        .toSet();
+    if (next.length == previous.length) return;
+    state = AsyncData<Set<String>>(Set<String>.unmodifiable(next));
+    try {
+      await ref.read(nextcloudFavouriteStoreProvider).write(account, next);
+    } catch (_) {
+      state = AsyncData<Set<String>>(previous);
+      rethrow;
+    }
+  }
 }
 
 final AsyncNotifierProvider<NextcloudFavouritesController, Set<String>>

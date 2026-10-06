@@ -382,6 +382,169 @@ void main() {
       throwsA(const NextcloudFailure(NextcloudFailureKind.invalidResponse)),
     );
   });
+
+  test('uploads a stream to the selected folder without overwriting', () async {
+    late RequestOptions captured;
+    final _Adapter adapter = _Adapter((RequestOptions request) {
+      captured = request;
+      return const _Response('', 201);
+    });
+
+    await _gateway(adapter).uploadFile(
+      _credential,
+      directoryPath: '/Documents',
+      file: NextcloudUploadFile(
+        filename: 'notes.txt',
+        mediaType: 'text/plain',
+        length: 5,
+        openRead: () =>
+            Stream<Uint8List>.value(Uint8List.fromList(utf8.encode('hello'))),
+      ),
+    );
+
+    expect(captured.method, 'PUT');
+    expect(
+      captured.uri,
+      Uri.parse(
+        'https://cloud.hs-anhalt.de/remote.php/dav/files/student-id/Documents/notes.txt',
+      ),
+    );
+    expect(captured.headers['If-None-Match'], '*');
+    expect(captured.headers[Headers.contentLengthHeader], 5);
+    expect(adapter.requestBytes, utf8.encode('hello'));
+  });
+
+  test(
+    'classifies an existing upload destination without overwriting',
+    () async {
+      final _Adapter adapter = _Adapter((_) => const _Response('', 412));
+
+      await expectLater(
+        _gateway(adapter).uploadFile(
+          _credential,
+          directoryPath: '/',
+          file: NextcloudUploadFile(
+            filename: 'existing.txt',
+            mediaType: 'text/plain',
+            length: 0,
+            openRead: () => const Stream<Uint8List>.empty(),
+          ),
+        ),
+        throwsA(const NextcloudFailure(NextcloudFailureKind.alreadyExists)),
+      );
+    },
+  );
+
+  test('rejects an upload filename containing a path separator', () async {
+    var requests = 0;
+    final _Adapter adapter = _Adapter((_) {
+      requests++;
+      return const _Response('', 201);
+    });
+
+    await expectLater(
+      _gateway(adapter).uploadFile(
+        _credential,
+        directoryPath: '/',
+        file: NextcloudUploadFile(
+          filename: '../private.txt',
+          mediaType: 'text/plain',
+          length: 0,
+          openRead: () => const Stream<Uint8List>.empty(),
+        ),
+      ),
+      throwsA(const NextcloudFailure(NextcloudFailureKind.invalidFileName)),
+    );
+    expect(requests, 0);
+  });
+
+  test('deletes exactly the selected DAV entry', () async {
+    late RequestOptions captured;
+    final _Adapter adapter = _Adapter((RequestOptions request) {
+      captured = request;
+      return const _Response('', 204);
+    });
+
+    await _gateway(adapter).deleteEntry(
+      _credential,
+      const NextcloudEntry(
+        path: '/Documents/old.txt',
+        name: 'old.txt',
+        isDirectory: false,
+      ),
+    );
+
+    expect(captured.method, 'DELETE');
+    expect(
+      captured.uri,
+      Uri.parse(
+        'https://cloud.hs-anhalt.de/remote.php/dav/files/student-id/Documents/old.txt',
+      ),
+    );
+  });
+
+  test(
+    'creates a read-only public share and accepts only its pinned URL',
+    () async {
+      late RequestOptions captured;
+      final _Adapter adapter = _Adapter((RequestOptions request) {
+        captured = request;
+        return _Response.json(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{'statuscode': 100},
+            'data': <String, Object?>{
+              'url': 'https://cloud.hs-anhalt.de/s/safe-token',
+            },
+          },
+        });
+      });
+
+      final Uri link = await _gateway(adapter).createPublicShare(
+        _credential,
+        const NextcloudEntry(
+          path: '/Documents/notes.txt',
+          name: 'notes.txt',
+          isDirectory: false,
+        ),
+      );
+
+      expect(link, Uri.parse('https://cloud.hs-anhalt.de/s/safe-token'));
+      expect(captured.method, 'POST');
+      expect(captured.uri.path, '/ocs/v2.php/apps/files_sharing/api/v1/shares');
+      expect(captured.uri.queryParameters['format'], 'json');
+      expect(captured.data, <String, String>{
+        'path': '/Documents/notes.txt',
+        'shareType': '3',
+        'permissions': '1',
+      });
+    },
+  );
+
+  test(
+    'rejects a public share URL outside the pinned Nextcloud origin',
+    () async {
+      final _Adapter adapter = _Adapter(
+        (_) => _Response.json(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{'statuscode': 100},
+            'data': <String, Object?>{'url': 'https://attacker.test/s/token'},
+          },
+        }),
+      );
+
+      await expectLater(
+        _gateway(adapter).createPublicShare(
+          _credential,
+          const NextcloudEntry(
+            path: '/notes.txt',
+            name: 'notes.txt',
+            isDirectory: false,
+          ),
+        ),
+        throwsA(const NextcloudFailure(NextcloudFailureKind.invalidResponse)),
+      );
+    },
+  );
 }
 
 NextcloudDavGateway _gateway(_Adapter adapter) {
@@ -400,6 +563,7 @@ class _Adapter implements HttpClientAdapter {
   _Adapter(this.handler);
 
   final FutureOr<_Response> Function(RequestOptions request) handler;
+  List<int> requestBytes = const <int>[];
 
   @override
   Future<ResponseBody> fetch(
@@ -407,6 +571,13 @@ class _Adapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    final BytesBuilder bytes = BytesBuilder(copy: false);
+    if (requestStream != null) {
+      await for (final Uint8List chunk in requestStream) {
+        bytes.add(chunk);
+      }
+    }
+    requestBytes = bytes.takeBytes();
     final _Response response = await handler(options);
     return ResponseBody.fromBytes(
       utf8.encode(response.body),

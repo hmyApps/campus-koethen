@@ -48,4 +48,31 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('accepts only pinned public share link shapes', () {
+    expect(
+      profile.allowsPublicShareUri(
+        Uri.parse('https://cloud.hs-anhalt.de/s/share-token'),
+      ),
+      isTrue,
+    );
+    expect(
+      profile.allowsPublicShareUri(
+        Uri.parse('https://cloud.hs-anhalt.de/index.php/s/share-token'),
+      ),
+      isTrue,
+    );
+    expect(
+      profile.allowsPublicShareUri(
+        Uri.parse('https://cloud.hs-anhalt.de/s/share-token?download=1'),
+      ),
+      isFalse,
+    );
+    expect(
+      profile.allowsPublicShareUri(
+        Uri.parse('https://attacker.test/s/share-token'),
+      ),
+      isFalse,
+    );
+  });
 }

@@ -192,8 +192,8 @@ Abwesenheiten und Hausaufgaben
 **Moodle:** jeder Schreibzugriff — keine Abgaben, keine Forenbeiträge, keine generische
 „beliebige Funktion aufrufen"-Schnittstelle
 
-**Nextcloud:** Upload, Umbenennen, Verschieben, Löschen, Freigabelinks, frei konfigurierbare
-Server und Hintergrundsynchronisation
+**Nextcloud:** Umbenennen, Verschieben, beschreibbare oder passwortgeschützte Freigabelinks, frei
+konfigurierbare Server und Hintergrundsynchronisation
 
 **Kalender:** Google API Key · Google-OAuth · Google-SDK · Anbindung persönlicher Google-Konten ·
 automatisches Hinzufügen von Terminen zum persönlichen Google-Konto
@@ -343,7 +343,7 @@ Dienstspezifisch:
 | E-Mail | Adresse + Passwort, sonst nichts | App-Start, Anmeldung, alle 10 Minuten, manuell             | lesen, suchen (IMAP SEARCH), Ordner wechseln, Anhänge, antworten, senden |
 | Noten  | Benutzername + Passwort          | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Notenspiegel mit Detailansicht                                           |
 | Moodle | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**  |
-| Nextcloud | Login Flow v2 → App-Passwort | nur beim Öffnen/Navigation, manuell | Ordner und Dateien über WebDAV — **nur lesend**, kein persistenter Cache |
+| Nextcloud | Login Flow v2 → App-Passwort | nur beim Öffnen/Navigation und nach bewusster Aktion, manuell | Ordner/Download; Upload ohne Überschreiben; bestätigtes Löschen; bestätigte öffentliche Read-only-Links; kein persistenter Cache |
 
 Kein Hintergrund-Polling, kein Timer, kein Backend-Cron. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
@@ -453,7 +453,7 @@ Touch-Ziele >= 48dp · keine reine Farbcodierung · Light/Dark/System-Theme.
 | A36  | Der CMS-Sync legt exakt 30 Demo-Räume an und ist idempotent; `--dry-run` schreibt nichts.                     |
 | A37  | Technische Raumfelder sind über normale CMS-Wege nicht änderbar; redaktionelle Felder bleiben erhalten.       |
 | A38  | Kontakte ohne Raum funktionieren unverändert und zeigen keine leere Zeile.                                    |
-| A39  | Nextcloud nutzt nur `cloud.hs-anhalt.de`, speichert nur das App-Passwort sicher und liest DAV ohne Offline-Cache. |
+| A39  | Nextcloud nutzt nur `cloud.hs-anhalt.de`, speichert nur das App-Passwort sicher und arbeitet ohne Offline-Dateicache. Upload überschreibt nie still, DELETE folgt erst nach Bestätigung und öffentliche Links sind nur lesbar sowie flüchtig. |
 
 ## 6. Offene Release-Gates
 

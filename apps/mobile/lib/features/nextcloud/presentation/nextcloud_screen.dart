@@ -21,6 +21,7 @@ import '../domain/nextcloud_account.dart';
 import '../domain/nextcloud_browser_view.dart';
 import '../domain/nextcloud_entry.dart';
 import '../domain/nextcloud_failure.dart';
+import '../domain/nextcloud_gateway.dart';
 import 'nextcloud_messages.dart';
 
 class NextcloudScreen extends ConsumerStatefulWidget {
@@ -39,15 +40,29 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
   Completer<void>? _downloadCancellation;
   int _downloadReceived = 0;
   int? _downloadTotal;
+  String? _operationPath;
+  String? _uploadingName;
+  Completer<void>? _uploadCancellation;
+  int _uploadSent = 0;
+  int _uploadTotal = 0;
+  bool _pickingUpload = false;
+
+  bool get _busy =>
+      _downloadingPath != null ||
+      _operationPath != null ||
+      _uploadingName != null ||
+      _pickingUpload;
 
   @override
   void dispose() {
     _cancelDownload();
+    _cancelUpload();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _refresh() async {
+    if (_busy) return;
     ref.invalidate(nextcloudFolderProvider(_path));
     try {
       await ref.read(nextcloudFolderProvider(_path).future);
@@ -138,6 +153,180 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
     }
   }
 
+  Future<void> _upload() async {
+    if (_busy) return;
+    setState(() => _pickingUpload = true);
+    try {
+      final NextcloudUploadFile? file = await ref
+          .read(nextcloudUploadPickerProvider)
+          .pickFile();
+      if (file == null || !mounted) return;
+      final Completer<void> cancellation = Completer<void>();
+      setState(() {
+        _pickingUpload = false;
+        _uploadingName = file.filename;
+        _uploadCancellation = cancellation;
+        _uploadSent = 0;
+        _uploadTotal = file.length;
+      });
+      await ref
+          .read(nextcloudFileServiceProvider)
+          .upload(
+            _path,
+            file,
+            canceled: cancellation.future,
+            onProgress: (int sent, int total) {
+              if (!mounted || _uploadCancellation != cancellation) return;
+              setState(() {
+                _uploadSent = sent;
+                _uploadTotal = total;
+              });
+            },
+          );
+      if (!mounted || cancellation.isCompleted) return;
+      ref.invalidate(nextcloudFolderProvider(_path));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.nextcloudUploadComplete(file.filename)),
+        ),
+      );
+    } catch (error) {
+      if (!mounted ||
+          (error is NextcloudFailure &&
+              error.kind == NextcloudFailureKind.canceled)) {
+        return;
+      }
+      _showError(error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pickingUpload = false;
+          _uploadingName = null;
+          _uploadCancellation = null;
+          _uploadSent = 0;
+          _uploadTotal = 0;
+        });
+      }
+    }
+  }
+
+  void _cancelUpload() {
+    final Completer<void>? cancellation = _uploadCancellation;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
+  }
+
+  Future<void> _delete(NextcloudEntry entry) async {
+    if (_busy) return;
+    final AppLocalizations l10n = context.l10n;
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(l10n.nextcloudDeleteTitle(entry.name)),
+            content: Text(
+              entry.isDirectory
+                  ? l10n.nextcloudDeleteFolderBody
+                  : l10n.nextcloudDeleteFileBody,
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.nextcloudActionCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.nextcloudDeleteConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _operationPath = entry.path);
+    try {
+      await ref.read(nextcloudFileServiceProvider).delete(entry);
+      var favouriteCleanupFailed = false;
+      try {
+        await ref
+            .read(nextcloudFavouritesControllerProvider.notifier)
+            .removeTree(entry.path);
+      } catch (_) {
+        favouriteCleanupFailed = true;
+      }
+      if (!mounted) return;
+      ref.invalidate(nextcloudFolderProvider(_path));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            favouriteCleanupFailed
+                ? context.l10n.nextcloudDeleteCompleteFavouriteWarning(
+                    entry.name,
+                  )
+                : context.l10n.nextcloudDeleteComplete(entry.name),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _operationPath = null);
+    }
+  }
+
+  Future<void> _share(NextcloudEntry entry) async {
+    if (_busy) return;
+    final AppLocalizations l10n = context.l10n;
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(l10n.nextcloudShareTitle),
+            content: Text(l10n.nextcloudShareBody(entry.name)),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.nextcloudActionCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.nextcloudShareConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _operationPath = entry.path);
+    try {
+      final Uri link = await ref
+          .read(nextcloudFileServiceProvider)
+          .createPublicShare(entry);
+      if (!mounted) return;
+      await ref.read(nextcloudPublicLinkSharerProvider).share(link);
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _operationPath = null);
+    }
+  }
+
+  void _showError(Object error) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(nextcloudFailureMessage(context.l10n, error))),
+    );
+  }
+
+  void _handleEntryAction(_EntryAction action, NextcloudEntry entry) {
+    switch (action) {
+      case _EntryAction.share:
+        unawaited(_share(entry));
+      case _EntryAction.delete:
+        unawaited(_delete(entry));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
@@ -184,7 +373,16 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
       title: l10n.nextcloudTitle,
       actions: <Widget>[
         IconButton(
-          onPressed: folder.isLoading ? null : _refresh,
+          onPressed: folder.isLoading || _busy ? null : _upload,
+          tooltip: l10n.nextcloudUpload,
+          constraints: const BoxConstraints(
+            minWidth: AppSizes.minTouchTarget,
+            minHeight: AppSizes.minTouchTarget,
+          ),
+          icon: const Icon(AppIcons.upload_file_outlined),
+        ),
+        IconButton(
+          onPressed: folder.isLoading || _busy ? null : _refresh,
           tooltip: l10n.nextcloudRefresh,
           constraints: const BoxConstraints(
             minWidth: AppSizes.minTouchTarget,
@@ -208,7 +406,39 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
-          _Breadcrumbs(path: _path, onSelected: _openPath),
+          _Breadcrumbs(path: _path, enabled: !_busy, onSelected: _openPath),
+          if (_uploadingName case final String name)
+            Semantics(
+              liveRegion: true,
+              label: l10n.nextcloudUploading(name),
+              child: ListTile(
+                minTileHeight: AppSizes.minTouchTarget,
+                title: Text(l10n.nextcloudUploading(name)),
+                subtitle: LinearProgressIndicator(
+                  value: _uploadTotal > 0
+                      ? (_uploadSent / _uploadTotal).clamp(0, 1)
+                      : null,
+                  semanticsLabel: _uploadTotal > 0
+                      ? l10n.nextcloudUploadProgress(
+                          (_uploadSent * 100 ~/ _uploadTotal).clamp(0, 100),
+                        )
+                      : l10n.nextcloudUploading(name),
+                ),
+                trailing: IconButton(
+                  onPressed: _cancelUpload,
+                  tooltip: l10n.nextcloudUploadCancel,
+                  icon: const Icon(AppIcons.cancel_outlined),
+                ),
+              ),
+            ),
+          if (_operationPath != null)
+            Semantics(
+              liveRegion: true,
+              label: l10n.nextcloudActionRunning,
+              child: LinearProgressIndicator(
+                semanticsLabel: l10n.nextcloudActionRunning,
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
@@ -318,7 +548,7 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
                     leading: const Icon(AppIcons.arrow_back),
                     title: Text(l10n.nextcloudGoUp),
                     minTileHeight: AppSizes.minTouchTarget,
-                    onTap: () => _openPath(_parentPath(_path)),
+                    onTap: _busy ? null : () => _openPath(_parentPath(_path)),
                   ),
                 if (visible.isEmpty)
                   Padding(
@@ -339,7 +569,7 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
                   _EntryTile(
                     entry: entry,
                     downloading: _downloadingPath == entry.path,
-                    disabled: _downloadingPath != null,
+                    disabled: _busy,
                     favourite: favouritePaths.contains(entry.path),
                     progressReceived: _downloadingPath == entry.path
                         ? _downloadReceived
@@ -351,6 +581,8 @@ class _NextcloudScreenState extends ConsumerState<NextcloudScreen> {
                         ? _cancelDownload
                         : null,
                     onToggleFavourite: () => _toggleFavourite(entry),
+                    onAction: (_EntryAction action) =>
+                        _handleEntryAction(action, entry),
                     onTap: entry.isDirectory
                         ? () => _openFolder(entry)
                         : () => _openFile(entry),
@@ -430,9 +662,14 @@ class _LoginPending extends StatelessWidget {
 }
 
 class _Breadcrumbs extends StatelessWidget {
-  const _Breadcrumbs({required this.path, required this.onSelected});
+  const _Breadcrumbs({
+    required this.path,
+    required this.enabled,
+    required this.onSelected,
+  });
 
   final String path;
+  final bool enabled;
   final ValueChanged<String> onSelected;
 
   @override
@@ -442,7 +679,7 @@ class _Breadcrumbs extends StatelessWidget {
         : path.substring(1).split('/');
     final List<Widget> children = <Widget>[
       TextButton(
-        onPressed: path == '/' ? null : () => onSelected('/'),
+        onPressed: !enabled || path == '/' ? null : () => onSelected('/'),
         child: Text(context.l10n.nextcloudFilesRoot),
       ),
     ];
@@ -453,7 +690,9 @@ class _Breadcrumbs extends StatelessWidget {
         ..add(const Icon(AppIcons.chevron_right, size: AppSizes.iconSmall))
         ..add(
           TextButton(
-            onPressed: target == path ? null : () => onSelected(target),
+            onPressed: !enabled || target == path
+                ? null
+                : () => onSelected(target),
             child: Text(segment),
           ),
         );
@@ -479,6 +718,7 @@ class _EntryTile extends StatelessWidget {
     required this.progressTotal,
     required this.onCancel,
     required this.onToggleFavourite,
+    required this.onAction,
     required this.onTap,
   });
 
@@ -490,6 +730,7 @@ class _EntryTile extends StatelessWidget {
   final int? progressTotal;
   final VoidCallback? onCancel;
   final VoidCallback onToggleFavourite;
+  final ValueChanged<_EntryAction> onAction;
   final VoidCallback onTap;
 
   @override
@@ -542,7 +783,7 @@ class _EntryTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             IconButton(
-              onPressed: onToggleFavourite,
+              onPressed: disabled ? null : onToggleFavourite,
               tooltip: favourite
                   ? l10n.nextcloudFavouriteRemove(entry.name)
                   : l10n.nextcloudFavouriteAdd(entry.name),
@@ -555,10 +796,28 @@ class _EntryTile extends StatelessWidget {
                 icon: const Icon(AppIcons.cancel_outlined),
               )
             else
-              Icon(
-                entry.isDirectory
-                    ? AppIcons.chevron_right
-                    : AppIcons.download_outlined,
+              PopupMenuButton<_EntryAction>(
+                enabled: !disabled,
+                tooltip: l10n.nextcloudEntryActions(entry.name),
+                onSelected: onAction,
+                itemBuilder: (BuildContext context) =>
+                    <PopupMenuEntry<_EntryAction>>[
+                      PopupMenuItem<_EntryAction>(
+                        value: _EntryAction.share,
+                        child: ListTile(
+                          leading: const Icon(AppIcons.ios_share),
+                          title: Text(l10n.nextcloudShare),
+                        ),
+                      ),
+                      PopupMenuItem<_EntryAction>(
+                        value: _EntryAction.delete,
+                        child: ListTile(
+                          leading: const Icon(AppIcons.delete_outline),
+                          title: Text(l10n.nextcloudDelete),
+                        ),
+                      ),
+                    ],
+                icon: const Icon(AppIcons.more_horiz),
               ),
           ],
         ),
@@ -567,6 +826,8 @@ class _EntryTile extends StatelessWidget {
     );
   }
 }
+
+enum _EntryAction { share, delete }
 
 String _parentPath(String path) {
   final List<String> segments = path.substring(1).split('/');

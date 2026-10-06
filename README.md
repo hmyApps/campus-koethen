@@ -38,7 +38,7 @@ Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsystem
 | Studenten-E-Mail (IMAP/SMTP und optional lesender Exchange-Kalender, direkt vom Gerät)                                                                        | Automatisches Deployment                        |
 | Notenspiegel HIS-QIS **und** HISinOne, auf HISinOne zusätzlich nur lesend: Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht (direkt vom Gerät) | Globale Volltextsuche                           |
 | Moodle: Kurse, Materialien, Aufgaben, Ankündigungen                                                                                                          | Schreibzugriffe auf Moodle                      |
-| Nextcloud-Dateiexplorer: Browser-Login, Ordner und Dateien (nur lesend)                                                                                      | Uploads oder Freigabelinks in Nextcloud         |
+| Nextcloud-Dateiexplorer: Browser-Login, Ordner, Download, Upload, Löschen und nur lesbare öffentliche Freigabelinks                                          | Umbenennen, Verschieben oder Hintergrund-Sync in Nextcloud |
 | Optionaler zentraler Hochschulzugang, nur lokal                                                                                                              | Gemeinsame SSO-Sitzung oder App-Konto           |
 | Lokale Aufgabenliste (rein auf dem Gerät)                                                                                                                    | Serverseitige Synchronisierung der Aufgaben     |
 | Anträge & Feedback (direkt an das Gremiensystem)                                                                                                             | Serverseitige Ablage von Anträgen               |
@@ -85,7 +85,7 @@ Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISi
                  │       `/qisserver/rds?state=docdownload`, das per Redirect
                  │       weiter zu untrust-sscportal.ssc.hs-anhalt.de führt
                  ├──► moodle.hs-anhalt.de         Moodle-Webservice (nur lesend)
-                 ├──► cloud.hs-anhalt.de          Nextcloud Login Flow / WebDAV (nur lesend)
+                 ├──► cloud.hs-anhalt.de          Nextcloud Login Flow / OCS / WebDAV
                  └──► REQUESTS_BASE_URL           Anträge und Feedback (HTTPS)
 ```
 

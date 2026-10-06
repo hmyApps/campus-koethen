@@ -137,6 +137,35 @@ void main() {
       throwsA(const NextcloudFailure(NextcloudFailureKind.notConnected)),
     );
   });
+
+  test(
+    'a late delete response is discarded after the session changes',
+    () async {
+      final _MemoryStore store = _MemoryStore()..value = _credential;
+      final _Gateway gateway = _Gateway(blockDelete: true);
+      final ProviderContainer container = _container(store, gateway);
+      addTearDown(container.dispose);
+      await container.read(nextcloudAccountControllerProvider.future);
+
+      final Future<void> deletion = container
+          .read(nextcloudFileServiceProvider)
+          .delete(
+            const NextcloudEntry(
+              path: '/notes.txt',
+              name: 'notes.txt',
+              isDirectory: false,
+            ),
+          );
+      await gateway.deleteEntered.future;
+      container.read(nextcloudSessionGenerationProvider.notifier).advance();
+      gateway.releaseDelete.complete();
+
+      await expectLater(
+        deletion,
+        throwsA(const NextcloudFailure(NextcloudFailureKind.notConnected)),
+      );
+    },
+  );
 }
 
 ProviderContainer _container(_MemoryStore store, _Gateway gateway) =>
@@ -187,16 +216,20 @@ class _Gateway implements NextcloudGateway {
   _Gateway({
     this.blockLogin = false,
     this.blockDownload = false,
+    this.blockDelete = false,
     this.revokeFails = false,
   });
 
   final bool blockLogin;
   final bool blockDownload;
+  final bool blockDelete;
   final bool revokeFails;
   final Completer<void> completeLoginEntered = Completer<void>();
   final Completer<void> releaseLogin = Completer<void>();
   final Completer<void> downloadEntered = Completer<void>();
   final Completer<void> releaseDownload = Completer<void>();
+  final Completer<void> deleteEntered = Completer<void>();
+  final Completer<void> releaseDelete = Completer<void>();
   var launched = false;
   var revokeCalls = 0;
 
@@ -244,4 +277,28 @@ class _Gateway implements NextcloudGateway {
       bytes: Uint8List(0),
     );
   }
+
+  @override
+  Future<void> uploadFile(
+    NextcloudCredential credential, {
+    required String directoryPath,
+    required NextcloudUploadFile file,
+    NextcloudUploadProgress? onProgress,
+    Future<void>? canceled,
+  }) async {}
+
+  @override
+  Future<void> deleteEntry(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async {
+    if (!deleteEntered.isCompleted) deleteEntered.complete();
+    if (blockDelete) await releaseDelete.future;
+  }
+
+  @override
+  Future<Uri> createPublicShare(
+    NextcloudCredential credential,
+    NextcloudEntry entry,
+  ) async => Uri.parse('https://cloud.hs-anhalt.de/s/test');
 }
