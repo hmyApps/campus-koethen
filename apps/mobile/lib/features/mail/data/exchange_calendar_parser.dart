@@ -14,7 +14,20 @@ class ExchangeCalendarResponseException implements Exception {
   String toString() => 'ExchangeCalendarResponseException(<redacted>)';
 }
 
+/// A compromised or misbehaving endpoint must not be able to force an
+/// unbounded parse. A single calendar window is small; 8 MiB is already far
+/// beyond any legitimate FindItem page and still cheap to reject.
+const int _maxResponseCharacters = 8 * 1024 * 1024;
+
+/// Any inline DTD is rejected outright (defense-in-depth against entity
+/// expansion, mirroring the Nextcloud WebDAV gateway). EWS never emits one.
+final RegExp _doctypeDeclaration = RegExp(r'<!DOCTYPE', caseSensitive: false);
+
 List<ExchangeCalendarEvent> parseExchangeCalendarResponse(String source) {
+  if (source.length > _maxResponseCharacters ||
+      _doctypeDeclaration.hasMatch(source)) {
+    throw const ExchangeCalendarResponseException();
+  }
   final XmlDocument document;
   try {
     document = XmlDocument.parse(source);

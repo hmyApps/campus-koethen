@@ -32,6 +32,7 @@ class MailSearchScreen extends ConsumerStatefulWidget {
 class _MailSearchScreenState extends ConsumerState<MailSearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  bool _hasText = false;
 
   @override
   void initState() {
@@ -79,11 +80,18 @@ class _MailSearchScreenState extends ConsumerState<MailSearchScreen> {
                     onPressed: () {
                       _controller.clear();
                       ref.read(mailSearchControllerProvider.notifier).clear();
-                      setState(() {});
+                      setState(() => _hasText = false);
                     },
                   ),
           ),
-          onChanged: (_) => setState(() {}),
+          // Only rebuild when the field crosses between empty and non-empty —
+          // that is the sole thing the view derives from the live text (the
+          // clear button). The results list changes on submit, not on every
+          // keystroke, so rebuilding it per character was wasted work.
+          onChanged: (String value) {
+            final bool hasText = value.isNotEmpty;
+            if (hasText != _hasText) setState(() => _hasText = hasText);
+          },
         ),
       ),
       body: SafeArea(

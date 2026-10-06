@@ -17,10 +17,12 @@ import 'hawki_html_parser.dart';
 /// One short-lived HTTPS session against [HsaKiProfile.host] only.
 ///
 /// Unlike the JSF-based HISinOne portal this app also talks to, HAWKI is a
-/// plain modern Laravel app: ordinary redirects, one CSRF convention
+/// plain modern Laravel app: ordinary redirects and one CSRF convention
 /// (`X-CSRF-TOKEN` read fresh off the page being posted to, confirmed
-/// 2026-10-04 from the real login request), no multi-hop host allowlisting
-/// needed. The cookie jar is in-memory and lives only as long as this
+/// 2026-10-04 from the real login request). Redirects are nonetheless followed
+/// by hand and each hop re-validated against [HsaKiProfile.allows] before any
+/// credential header is replayed to it, exactly like the other direct
+/// integrations. The cookie jar is in-memory and lives only as long as this
 /// session.
 class HawkiSession {
   HawkiSession({HttpClientAdapter? adapter}) {
@@ -31,6 +33,12 @@ class HawkiSession {
         receiveTimeout: _timeout,
         sendTimeout: _timeout,
         validateStatus: (_) => true, // status handled explicitly below
+        // Redirects are validated by hand (see [fetchHtml]) so no hop can
+        // replay the session cookie, CSRF token or bearer token to another
+        // host. This matches every other direct integration in this app
+        // (grades, Nextcloud, EWS); the earlier reliance on Dio's default
+        // auto-follow was the one outlier.
+        followRedirects: false,
       ),
     );
     _dio.interceptors.add(CookieManager(_jar));
@@ -54,6 +62,7 @@ class HawkiSession {
   );
 
   static const Duration _timeout = Duration(seconds: 15);
+  static const int _maxRedirects = 10;
   static const HsaKiProfile _profile = HsaKiProfile();
 
   late final Dio _dio;
@@ -66,14 +75,31 @@ class HawkiSession {
     return uri;
   }
 
-  /// Fetches a page's HTML, following ordinary redirects (Dio's default).
+  /// Fetches a page's HTML, following redirects **by hand** so every hop is
+  /// re-validated against [HsaKiProfile.allows] BEFORE any header (session
+  /// cookie, CSRF token) is replayed to it. A redirect to another host or to
+  /// plain HTTP is rejected as [HsaKiFailureKind.tlsOrHostRejected], never
+  /// silently followed.
   Future<String> fetchHtml(Uri uri) async {
-    final Response<dynamic> response = await _dio.getUri<dynamic>(
-      _validated(uri),
-      options: Options(responseType: ResponseType.plain),
-    );
-    _requireOk(response);
-    return response.data?.toString() ?? '';
+    Uri target = _validated(uri);
+    for (int hop = 0; hop < _maxRedirects; hop++) {
+      final Response<dynamic> response = await _dio.getUri<dynamic>(
+        target,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final int status = response.statusCode ?? 0;
+      if (status >= 300 && status < 400) {
+        final String? location = response.headers.value('location');
+        if (location == null || location.isEmpty) {
+          throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+        }
+        target = _validated(target.resolve(location));
+        continue;
+      }
+      _requireOk(response);
+      return response.data?.toString() ?? '';
+    }
+    throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
   }
 
   /// `POST /req/login`: the real form submits `multipart/form-data`, not

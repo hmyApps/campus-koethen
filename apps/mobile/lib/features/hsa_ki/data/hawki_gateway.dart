@@ -66,13 +66,21 @@ class HawkiGateway implements HsaKiGateway {
     HsaKiCredential credential, {
     required String password,
   }) async {
+    final int? tokenId = int.tryParse(credential.tokenId);
+    if (tokenId == null) {
+      // A non-numeric stored id means the credential was never minted by the
+      // flow in [connect] (which only ever stores HAWKI's numeric id). Treat
+      // it as a structure mismatch instead of throwing an unhandled
+      // FormatException out of the sign-out path.
+      throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
+    }
     final HawkiSession session = HawkiSession(adapter: _adapter);
     try {
       await session.login(username: credential.username, password: password);
       await session.postJsonWithFreshCsrf(
         _profile.revokeTokenUri,
         csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
-        body: <String, dynamic>{'tokenId': int.parse(credential.tokenId)},
+        body: <String, dynamic>{'tokenId': tokenId},
       );
     } on HsaKiFailure {
       rethrow;
