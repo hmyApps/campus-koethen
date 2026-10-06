@@ -74,6 +74,32 @@ void main() {
     },
   );
 
+  test('loads long export windows in bounded parallel batches', () async {
+    final Completer<List<ExchangeCalendarEvent>> pending =
+        Completer<List<ExchangeCalendarEvent>>();
+    final _RecordingGateway gateway = _RecordingGateway(pending: pending);
+    final ProviderContainer container = await _container(gateway);
+
+    final Future<List<ExchangeCalendarEvent>> read = container.read(
+      exchangeCalendarEventsProvider(
+        ExchangeCalendarQuery(
+          from: DateTime(2026, 1, 1),
+          to: DateTime(2026, 12, 31),
+        ),
+      ).future,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      gateway.calls,
+      hasLength(3),
+      reason: 'three chunks run together, but the fourth waits for the batch',
+    );
+    pending.complete(const <ExchangeCalendarEvent>[]);
+    await read;
+    expect(gateway.calls, hasLength(4));
+  });
+
   test('a late EWS result cannot survive mail sign-out', () async {
     final Completer<List<ExchangeCalendarEvent>> pending =
         Completer<List<ExchangeCalendarEvent>>();

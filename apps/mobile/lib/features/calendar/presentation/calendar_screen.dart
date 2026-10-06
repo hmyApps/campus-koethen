@@ -191,6 +191,8 @@ class _ExportCalendarActionState extends ConsumerState<_ExportCalendarAction> {
           data.hasTimetableError ||
           data.hasMoodleError ||
           data.hasPublicCalendarError ||
+          data.hasSavedEventsError ||
+          data.hasCanteenFavouritesError ||
           data.hasExchangeCalendarError ||
           (data.enabledSources.contains(CalendarSource.moodle) &&
               !data.moodleConnected) ||
@@ -326,8 +328,7 @@ List<Widget> _calendarHeader(BuildContext context, CalendarData data) {
           child: Text(l10n.calendarSourcesLabel),
         ),
       ),
-    if (data.hasExchangeCalendarError)
-      banner(l10n.calendarExchangeUnavailable),
+    if (data.hasExchangeCalendarError) banner(l10n.calendarExchangeUnavailable),
   ];
 }
 

@@ -264,6 +264,10 @@ class CalendarData {
     this.moodleLoading = false,
     this.publicCalendarsLoading = false,
     this.hasPublicCalendarError = false,
+    this.savedEventsLoading = false,
+    this.hasSavedEventsError = false,
+    this.canteenFavouritesLoading = false,
+    this.hasCanteenFavouritesError = false,
     this.exchangeCalendarConnected = false,
     this.exchangeCalendarLoading = false,
     this.hasExchangeCalendarError = false,
@@ -298,6 +302,8 @@ class CalendarData {
 
   final bool moodleLoading;
   final bool publicCalendarsLoading;
+  final bool savedEventsLoading;
+  final bool canteenFavouritesLoading;
   final bool exchangeCalendarConnected;
   final bool exchangeCalendarLoading;
 
@@ -309,8 +315,12 @@ class CalendarData {
       timetableLoading ||
       moodleLoading ||
       publicCalendarsLoading ||
+      savedEventsLoading ||
+      canteenFavouritesLoading ||
       exchangeCalendarLoading;
   final bool hasPublicCalendarError;
+  final bool hasSavedEventsError;
+  final bool hasCanteenFavouritesError;
   final bool hasExchangeCalendarError;
 
   /// Built on first use and then reused: every reader below asks about the
@@ -527,16 +537,35 @@ calendarExportDataProvider = Provider<CalendarData>((Ref ref) {
   final DateTime today = calendarDayKey(ref.watch(calendarClockProvider).now());
   final Set<CalendarSource> enabled = ref.watch(calendarEnabledSourcesProvider);
   final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-  final AsyncValue<Loaded<TimetableGroup>?>? selectedGroup = groupId == null
+  final bool timetableEnabled = enabled.contains(CalendarSource.timetable);
+  final AsyncValue<Loaded<TimetableStatus>>? timetableStatus =
+      !timetableEnabled || groupId == null
       ? null
-      : ref.watch(selectedTimetableGroupProvider);
+      : ref.watch(timetableStatusProvider);
 
   final List<CalendarDateWindow> timetableRanges;
-  if (!enabled.contains(CalendarSource.timetable) || groupId == null) {
+  bool timetableFeatureDisabled = false;
+  if (!timetableEnabled || groupId == null) {
     timetableRanges = const <CalendarDateWindow>[];
-  } else if (selectedGroup?.value case final Loaded<TimetableGroup> group) {
+  } else if (timetableStatus?.value case final Loaded<TimetableStatus> status) {
+    timetableFeatureDisabled = !status.value.featureEnabled;
+    timetableRanges = timetableFeatureDisabled
+        ? const <CalendarDateWindow>[]
+        : splitCalendarWindow(
+            _absoluteOrFallbackWindow(
+              today,
+              status.value.coveredFrom,
+              status.value.coveredTo,
+            ),
+            42,
+          );
+  } else if (timetableStatus?.hasError ?? false) {
+    // The compact status endpoint normally supplies the absolute sync bounds.
+    // If it is unavailable, still try the documented rolling fallback instead
+    // of silently exporting no timetable at all. The error remains visible in
+    // CalendarData so the caller can label the result as partial.
     timetableRanges = splitCalendarWindow(
-      _absoluteOrFallbackWindow(today, group.meta.from, group.meta.to),
+      _absoluteOrFallbackWindow(today, null, null),
       42,
     );
   } else {
@@ -572,9 +601,14 @@ calendarExportDataProvider = Provider<CalendarData>((Ref ref) {
     timetableWeekStarts: const <DateTime>[],
     timetableRanges: timetableRanges,
     timetableMetadataLoading:
-        enabled.contains(CalendarSource.timetable) &&
+        timetableEnabled &&
         groupId != null &&
-        (selectedGroup?.isLoading ?? false),
+        (timetableStatus?.isLoading ?? false),
+    timetableMetadataError:
+        timetableEnabled &&
+        groupId != null &&
+        (timetableStatus?.hasError ?? false),
+    timetableFeatureDisabled: timetableFeatureDisabled,
     publicCalendarEntries: publicEntries,
     exchangeWindow: CalendarDateWindow(
       from: DateTime(today.year - 1, today.month, today.day),
@@ -609,6 +643,8 @@ CalendarData _buildCalendarData(
   required AsyncValue<List<CalendarEntry>> publicCalendarEntries,
   List<CalendarDateWindow>? timetableRanges,
   bool timetableMetadataLoading = false,
+  bool timetableMetadataError = false,
+  bool timetableFeatureDisabled = false,
   DateTime? windowFrom,
   CalendarDateWindow? exchangeWindow,
 }) {
@@ -620,7 +656,7 @@ CalendarData _buildCalendarData(
   // --- Source 1: timetable (Campus API), one week provider per visible week.
   final List<CalendarEntry> timetableEntries = <CalendarEntry>[];
   bool timetableLoading = timetableMetadataLoading;
-  bool timetableError = false;
+  bool timetableError = timetableMetadataError;
   bool needsGroup = false;
   CalendarTimetableState timetableState = CalendarTimetableState.hidden;
   if (enabled.contains(CalendarSource.timetable)) {
@@ -648,9 +684,15 @@ CalendarData _buildCalendarData(
         needsGroup = true;
         timetableState = CalendarTimetableState.needsGroup;
       }
-    } else {
+    } else if (timetableFeatureDisabled) {
       timetableLoading = false;
-      timetableState = CalendarTimetableState.ready;
+      timetableState = CalendarTimetableState.disabled;
+    } else {
+      timetableState = timetableMetadataError
+          ? CalendarTimetableState.unavailable
+          : timetableMetadataLoading
+          ? CalendarTimetableState.loading
+          : CalendarTimetableState.ready;
       void takeLoaded(Loaded<Timetable> loaded) {
         timetableEntries.addAll(
           timetableToCalendarEntries(
@@ -768,11 +810,18 @@ CalendarData _buildCalendarData(
   // too, and deduplicated against the live public-calendar entries above via
   // the events feature's own reusable dedup rule — never a second
   // implementation of it.
+  final bool savedEventsEnabled = ref.watch(calendarSavedEventsEnabledProvider);
   final List<CalendarEntry> savedEventEntries = <CalendarEntry>[];
-  if (ref.watch(calendarSavedEventsEnabledProvider)) {
+  bool savedEventsLoading = false;
+  bool savedEventsError = false;
+  if (savedEventsEnabled) {
+    final AsyncValue<List<SavedEventSnapshot>> savedState = ref.watch(
+      savedEventsControllerProvider,
+    );
+    savedEventsLoading = savedState.isLoading && savedState.value == null;
+    savedEventsError = savedState.hasError;
     final List<SavedEventSnapshot> saved =
-        ref.watch(savedEventsControllerProvider).value ??
-        const <SavedEventSnapshot>[];
+        savedState.value ?? const <SavedEventSnapshot>[];
     final List<PublicCalendar> catalog =
         ref.watch(publicCalendarsCatalogProvider).value?.value ??
         const <PublicCalendar>[];
@@ -791,21 +840,37 @@ CalendarData _buildCalendarData(
   // --- Source 5 (optional, opt-in): favourited dishes on the preferred
   // canteen's own menu. Independent of every other source — a canteen error
   // never removes the timetable, and vice versa.
+  final bool favouriteMealsEnabled = ref.watch(
+    calendarShowFavouriteMealsProvider,
+  );
   final List<CalendarEntry> canteenFavouriteEntries = <CalendarEntry>[];
-  if (ref.watch(calendarShowFavouriteMealsProvider)) {
+  bool canteenFavouritesLoading = false;
+  bool canteenFavouritesError = false;
+  if (favouriteMealsEnabled) {
     final Set<String> favourites = ref.watch(
       canteenFilterProvider.select((CanteenFilter f) => f.favourites),
     );
-    final String? canteenSlug = ref.watch(selectedCanteenSlugProvider);
-    if (favourites.isNotEmpty && canteenSlug != null) {
-      final CanteenMenu? menu = ref
-          .watch(canteenMenuProvider(canteenSlug))
-          .value
-          ?.value;
-      if (menu != null) {
-        canteenFavouriteEntries.addAll(
-          canteenFavouriteMealsToCalendarEntries(menu, favourites),
+    if (favourites.isNotEmpty) {
+      final AsyncValue<Loaded<List<Canteen>>> canteens = ref.watch(
+        canteensProvider,
+      );
+      canteenFavouritesLoading = canteens.isLoading && canteens.value == null;
+      canteenFavouritesError = canteens.hasError;
+      final String? canteenSlug = ref.watch(selectedCanteenSlugProvider);
+      if (canteenSlug != null) {
+        final AsyncValue<Loaded<CanteenMenu>> menuState = ref.watch(
+          canteenMenuProvider(canteenSlug),
         );
+        canteenFavouritesLoading =
+            canteenFavouritesLoading ||
+            (menuState.isLoading && menuState.value == null);
+        canteenFavouritesError = canteenFavouritesError || menuState.hasError;
+        final CanteenMenu? menu = menuState.value?.value;
+        if (menu != null) {
+          canteenFavouriteEntries.addAll(
+            canteenFavouriteMealsToCalendarEntries(menu, favourites),
+          );
+        }
       }
     }
   }
@@ -846,10 +911,6 @@ CalendarData _buildCalendarData(
     );
   }
 
-  final bool savedEventsEnabled = ref.watch(calendarSavedEventsEnabledProvider);
-  final bool favouriteMealsEnabled = ref.watch(
-    calendarShowFavouriteMealsProvider,
-  );
   final Set<CalendarSource> effectiveEnabled = <CalendarSource>{
     ...enabled,
     if (savedEventsEnabled) CalendarSource.savedEvents,
@@ -879,6 +940,10 @@ CalendarData _buildCalendarData(
     hasMoodleError: moodleError,
     publicCalendarsLoading: publicLoading,
     hasPublicCalendarError: publicError,
+    savedEventsLoading: savedEventsLoading,
+    hasSavedEventsError: savedEventsError,
+    canteenFavouritesLoading: canteenFavouritesLoading,
+    hasCanteenFavouritesError: canteenFavouritesError,
     exchangeCalendarConnected: exchangeConnected,
     exchangeCalendarLoading: exchangeLoading,
     hasExchangeCalendarError: exchangeError,
