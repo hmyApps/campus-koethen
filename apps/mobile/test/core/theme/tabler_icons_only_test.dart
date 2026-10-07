@@ -45,7 +45,7 @@ void main() {
             'package:flutter_tabler_icons/flutter_tabler_icons.dart',
           ),
         )
-        .map((File file) => file.path)
+        .map((File file) => file.path.replaceAll('\\', '/'))
         .toList(growable: false);
 
     expect(importers, <String>[cataloguePath]);

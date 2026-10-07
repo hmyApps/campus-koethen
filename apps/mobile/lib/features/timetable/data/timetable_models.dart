@@ -109,6 +109,125 @@ class TimetableGroup {
       .toList(growable: false);
 }
 
+String? timetableModuleKey(String? subjectCode, String? title) {
+  final String code = subjectCode?.trim() ?? '';
+  if (code.isNotEmpty) return 'code:$code';
+  final String name = title?.trim() ?? '';
+  return name.isEmpty ? null : 'title:$name';
+}
+
+class TimetableModule {
+  const TimetableModule({
+    required this.title,
+    required this.moduleKey,
+    this.subjectCode,
+  });
+
+  final String title;
+  final String? subjectCode;
+  final String moduleKey;
+
+  static TimetableModule? fromJson(Object? json) {
+    final Map<String, dynamic>? map = asJsonMap(json);
+    if (map == null) return null;
+    final String title = asString(map['title'])?.trim() ?? '';
+    final String? subjectCode = switch (asString(map['subjectCode'])?.trim()) {
+      final String value when value.isNotEmpty => value,
+      _ => null,
+    };
+    final String? moduleKey = timetableModuleKey(subjectCode, title);
+    if (title.isEmpty || moduleKey == null) return null;
+    return TimetableModule(
+      title: title,
+      subjectCode: subjectCode,
+      moduleKey: moduleKey,
+    );
+  }
+
+  static List<TimetableModule> listFromJson(Object? json) {
+    if (json is! List) {
+      throw const FormatException('Malformed timetable module catalogue');
+    }
+    final Map<String, TimetableModule> modules = <String, TimetableModule>{};
+    for (final Object? item in json) {
+      final TimetableModule? module = TimetableModule.fromJson(item);
+      if (module != null) modules.putIfAbsent(module.moduleKey, () => module);
+    }
+    if (json.isNotEmpty && modules.isEmpty) {
+      throw const FormatException('Malformed timetable module catalogue');
+    }
+    return List<TimetableModule>.unmodifiable(modules.values);
+  }
+}
+
+/// One semester catalogue as delivered by `GET /v1/timetable/periods`.
+///
+/// [id] and every group id are Campus UUIDs. No WebUntis identifier reaches
+/// the device.
+class TimetablePeriod {
+  const TimetablePeriod({
+    required this.id,
+    required this.name,
+    required this.validFrom,
+    required this.validTo,
+    required this.groups,
+  });
+
+  final String id;
+  final String name;
+  final DateTime validFrom;
+  final DateTime validTo;
+  final List<TimetableGroup> groups;
+
+  bool containsGroup(String groupId) =>
+      groups.any((TimetableGroup group) => group.id == groupId);
+
+  static TimetablePeriod? fromJson(Object? json) {
+    final Map<String, dynamic>? map = asJsonMap(json);
+    if (map == null) return null;
+    final String? id = asString(map['id']);
+    final String? name = asString(map['name']);
+    final DateTime? validFrom = asCalendarDate(map['validFrom']);
+    final DateTime? validTo = asCalendarDate(map['validTo']);
+    final List<TimetableGroup> groups = TimetableGroup.listFromJson(
+      map['groups'],
+    );
+    if (id == null ||
+        name == null ||
+        validFrom == null ||
+        validTo == null ||
+        validTo.isBefore(validFrom)) {
+      return null;
+    }
+    return TimetablePeriod(
+      id: id,
+      name: name,
+      validFrom: validFrom,
+      validTo: validTo,
+      groups: groups,
+    );
+  }
+
+  static List<TimetablePeriod> listFromJson(Object? json) {
+    if (json is! List) {
+      throw const FormatException('Malformed timetable period catalogue');
+    }
+    final List<TimetablePeriod> periods =
+        json
+            .map(TimetablePeriod.fromJson)
+            .whereType<TimetablePeriod>()
+            .toList(growable: false)
+          ..sort(
+            (TimetablePeriod a, TimetablePeriod b) =>
+                a.validFrom.compareTo(b.validFrom),
+          );
+    if (json.isNotEmpty && periods.isEmpty) {
+      throw const FormatException('Malformed timetable period catalogue');
+    }
+    return periods;
+  }
+}
+
 /// Normalised status of a single entry.
 ///
 /// An unknown upstream value is mapped onto [unknown] and never breaks the
@@ -254,6 +373,8 @@ class TimetableEntry {
   /// Title, falling back to the subject code. `null` when neither is set — the
   /// UI then shows a localised placeholder.
   String? get displayTitle => title ?? subjectCode;
+
+  String? get moduleKey => timetableModuleKey(subjectCode, title);
 
   static TimetableEntry? fromJson(Object? json) {
     final Map<String, dynamic>? map = asJsonMap(json);

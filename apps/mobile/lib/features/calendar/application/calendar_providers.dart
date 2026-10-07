@@ -19,6 +19,7 @@ import '../../timetable/data/timetable_models.dart';
 import '../domain/calendar_entry.dart';
 import '../domain/public_calendar.dart';
 import 'calendar_merge.dart';
+import 'calendar_color_preferences.dart';
 import 'public_calendar_providers.dart';
 
 /// Day agenda or month list — the two explicit calendar views.
@@ -392,8 +393,8 @@ final _calendarListDataProvider = Provider.family<CalendarData, DateTime>((
   Ref ref,
   DateTime today,
 ) {
-  final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-  final AsyncValue<Loaded<List<TimetableGroup>>>? groups = groupId == null
+  final List<String> groupIds = ref.watch(selectedTimetableGroupIdsProvider);
+  final AsyncValue<Loaded<List<TimetableGroup>>>? groups = groupIds.isEmpty
       ? null
       : ref.watch(timetableGroupsProvider);
   final List<CalendarDateWindow> timetableRanges =
@@ -429,6 +430,9 @@ CalendarData _buildCalendarData(
   final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
     timetableLessonInfoFilterProvider,
   );
+  final Map<String, Set<String>> moduleKeysByGroup = ref.watch(
+    selectedTimetableModuleKeysByGroupProvider,
+  );
 
   // --- Source 1: timetable (Campus API), one week provider per visible week.
   final List<CalendarEntry> timetableEntries = <CalendarEntry>[];
@@ -436,51 +440,67 @@ CalendarData _buildCalendarData(
   bool timetableError = false;
   bool needsGroup = false;
   if (enabled.contains(CalendarSource.timetable)) {
-    final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-    if (groupId == null) {
+    final List<String> groupIds = ref.watch(selectedTimetableGroupIdsProvider);
+    if (groupIds.isEmpty) {
       needsGroup = true;
     } else {
       if (timetableRanges != null) {
         for (final CalendarDateWindow range in timetableRanges) {
-          final AsyncValue<Loaded<Timetable>> result = ref.watch(
-            timetableRangeProvider(
-              TimetableRangeRequest(
-                groupId: groupId,
-                from: range.from,
-                to: range.to,
+          for (final String groupId in groupIds) {
+            final AsyncValue<Loaded<Timetable>> result = ref.watch(
+              timetableRangeProvider(
+                TimetableRangeRequest(
+                  groupId: groupId,
+                  from: range.from,
+                  to: range.to,
+                ),
               ),
-            ),
-          );
-          result.when(
-            data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
-              timetableToCalendarEntries(
-                loaded.value,
-                include: (TimetableEntry entry) =>
-                    lessonInfoFilter.accepts(entry.lessonInfo),
+            );
+            result.when(
+              data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
+                timetableToCalendarEntries(
+                  loaded.value,
+                  include: (TimetableEntry entry) =>
+                      (moduleKeysByGroup[groupId] == null ||
+                          (entry.moduleKey != null &&
+                              moduleKeysByGroup[groupId]!.contains(
+                                entry.moduleKey,
+                              ))) &&
+                      (groupId != lessonInfoFilter.groupId ||
+                          lessonInfoFilter.accepts(entry.lessonInfo)),
+                ),
               ),
-            ),
-            loading: () => timetableLoading = true,
-            error: (_, _) => timetableError = true,
-          );
+              loading: () => timetableLoading = true,
+              error: (_, _) => timetableError = true,
+            );
+          }
         }
       } else {
         for (final DateTime weekStart in timetableWeekStarts) {
-          final AsyncValue<Loaded<Timetable>> week = ref.watch(
-            timetableWeekProvider(
-              TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
-            ),
-          );
-          week.when(
-            data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
-              timetableToCalendarEntries(
-                loaded.value,
-                include: (TimetableEntry entry) =>
-                    lessonInfoFilter.accepts(entry.lessonInfo),
+          for (final String groupId in groupIds) {
+            final AsyncValue<Loaded<Timetable>> week = ref.watch(
+              timetableWeekProvider(
+                TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
               ),
-            ),
-            loading: () => timetableLoading = true,
-            error: (_, _) => timetableError = true,
-          );
+            );
+            week.when(
+              data: (Loaded<Timetable> loaded) => timetableEntries.addAll(
+                timetableToCalendarEntries(
+                  loaded.value,
+                  include: (TimetableEntry entry) =>
+                      (moduleKeysByGroup[groupId] == null ||
+                          (entry.moduleKey != null &&
+                              moduleKeysByGroup[groupId]!.contains(
+                                entry.moduleKey,
+                              ))) &&
+                      (groupId != lessonInfoFilter.groupId ||
+                          lessonInfoFilter.accepts(entry.lessonInfo)),
+                ),
+              ),
+              loading: () => timetableLoading = true,
+              error: (_, _) => timetableError = true,
+            );
+          }
         }
       }
     }
@@ -542,12 +562,15 @@ CalendarData _buildCalendarData(
     );
   }
 
-  final List<CalendarEntry> merged = mergeCalendarEntries(<CalendarEntry>[
-    ...timetableEntries,
-    ...moodleEntries,
-    ...publicEntries,
-    ...savedEventEntries,
-  ]);
+  final List<CalendarEntry> merged = applyCalendarColorPreferences(
+    mergeCalendarEntries(<CalendarEntry>[
+      ...timetableEntries,
+      ...moodleEntries,
+      ...publicEntries,
+      ...savedEventEntries,
+    ]),
+    ref.watch(calendarColorPreferencesProvider),
+  );
   return CalendarData(
     entries: windowFrom == null
         ? merged

@@ -114,15 +114,19 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
 
   Future<void> _refreshTimetable() async {
     ref.invalidate(timetableGroupsProvider);
+    ref.invalidate(timetablePeriodsProvider);
+    ref.invalidate(timetableModulesProvider);
     ref.invalidate(timetableWeekProvider);
+    ref.invalidate(aggregatedTimetableWeekProvider);
     await ref.read(timetableGroupsProvider.future);
+    await ref.read(timetablePeriodsProvider.future);
 
-    final String? groupId = ref.read(selectedTimetableGroupIdProvider);
-    if (groupId == null) return;
+    final List<String> groupIds = ref.read(selectedTimetableGroupIdsProvider);
+    if (groupIds.isEmpty) return;
     await ref.read(
-      timetableWeekProvider(
-        TimetableWeekRequest(
-          groupId: groupId,
+      aggregatedTimetableWeekProvider(
+        AggregatedTimetableWeekRequest(
+          groupIds: groupIds,
           weekStart: TimetableWeek.startOf(DateTime.now()),
         ),
       ).future,

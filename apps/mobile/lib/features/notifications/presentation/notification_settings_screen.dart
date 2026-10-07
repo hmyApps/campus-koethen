@@ -19,6 +19,7 @@ import '../domain/notification_plan.dart';
 import '../domain/notification_preferences.dart';
 import 'pre_permission_sheet.dart';
 import 'daily_summary_time_tile.dart';
+import 'event_reminder_rule_tile.dart';
 
 /// `/more/settings/notifications` — the one place where the whole feature can
 /// be switched on, tuned and switched off again.
@@ -109,13 +110,16 @@ class _NotificationSettingsScreenState
           const DailySummaryTimeTile(),
           SectionHeader(label: l10n.notificationsSectionCategories),
           for (final NotificationCategory category
-              in NotificationCategory.values)
+              in NotificationCategory.values) ...<Widget>[
             _CategorySwitch(
               category: category,
               enabled: preferences.isCategoryEnabled(category),
               interactive: categoriesInteractive,
               muted: muted.contains(category),
             ),
+            if (category == NotificationCategory.eventReminder)
+              const EventReminderDefaultLeadTile(),
+          ],
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,

@@ -30,6 +30,26 @@ FakeHttpAdapter workingApi({DateTime? monday, Map<String, dynamic>? meta}) {
     if (options.path.endsWith('/timetable/groups')) {
       return FakeHttpResponse(envelope(timetableGroupsFixture));
     }
+    if (options.path.endsWith('/timetable/periods')) {
+      return FakeHttpResponse(
+        envelope(<Object>[
+          <String, Object>{
+            'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            'name': '2026/2027',
+            'validFrom': '2026-10-05',
+            'validTo': '2027-03-31',
+            'groups': timetableGroupsFixture,
+          },
+        ]),
+      );
+    }
+    if (options.path.endsWith('/timetable/modules')) {
+      return FakeHttpResponse(
+        envelope(<Object>[
+          <String, Object?>{'subjectCode': 'MATH2', 'title': 'Mathematik 2'},
+        ]),
+      );
+    }
     return FakeHttpResponse(
       envelope(
         timetableWeekFixture(monday ?? _monday),
@@ -61,6 +81,36 @@ void main() {
 
       expect(adapter.queries.single, isNot(contains('school')));
       expect(adapter.queries.single, isNot(contains('untis')));
+    });
+  });
+
+  group('fetchPeriods', () {
+    test('reads semester dates and Campus groups', () async {
+      final FakeHttpAdapter adapter = workingApi();
+      final Loaded<List<TimetablePeriod>> loaded = await buildRepository(
+        adapter,
+      ).fetchPeriods(locale: 'de');
+
+      expect(loaded.value.single.name, '2026/2027');
+      expect(loaded.value.single.validFrom, DateTime(2026, 10, 5));
+      expect(loaded.value.single.groups, hasLength(3));
+      expect(adapter.requests.single.path, '/timetable/periods');
+    });
+  });
+
+  group('fetchModules', () {
+    test('reads modules for exactly one Campus group', () async {
+      final FakeHttpAdapter adapter = workingApi();
+      final Loaded<List<TimetableModule>> loaded = await buildRepository(
+        adapter,
+      ).fetchModules(locale: 'de', groupId: timetableGroupIdFixture);
+
+      expect(loaded.value.single.moduleKey, 'code:MATH2');
+      expect(adapter.requests.single.path, '/timetable/modules');
+      expect(
+        adapter.queries.single,
+        contains('groupId=$timetableGroupIdFixture'),
+      );
     });
   });
 

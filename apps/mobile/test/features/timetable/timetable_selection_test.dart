@@ -62,6 +62,135 @@ void main() {
       expect(container.read(selectedTimetableGroupIdProvider), isNull);
       expect(store.getString(PreferenceKeys.preferredTimetableGroup), isNull);
     });
+
+    test(
+      'keeps additional groups distinct and removes a new primary',
+      () async {
+        final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+        final ProviderContainer container = containerWith(store);
+        final SettingsController controller = container.read(
+          settingsProvider.notifier,
+        );
+        await controller.setTimetableGroup('primary');
+        await controller.setAdditionalTimetableGroups(<String>[
+          'extra',
+          'extra',
+          'primary',
+        ]);
+
+        expect(container.read(selectedTimetableGroupIdsProvider), <String>[
+          'primary',
+          'extra',
+        ]);
+
+        await controller.setTimetableGroup('extra');
+        expect(container.read(selectedTimetableGroupIdsProvider), <String>[
+          'extra',
+        ]);
+      },
+    );
+
+    test('bounds additional timetable subscriptions', () async {
+      final ProviderContainer container = containerWith(
+        InMemoryKeyValueStore(),
+      );
+      final SettingsController controller = container.read(
+        settingsProvider.notifier,
+      );
+      await controller.setTimetableGroup('primary');
+      await controller.setAdditionalTimetableGroups(
+        List<String>.generate(20, (index) => 'extra-$index'),
+      );
+
+      expect(
+        container.read(selectedTimetableGroupIdsProvider),
+        hasLength(SettingsController.maxAdditionalTimetableGroups + 1),
+      );
+    });
+
+    test(
+      'module subscriptions survive restart and load their owning group',
+      () async {
+        final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+        final ProviderContainer first = containerWith(store);
+        final SettingsController controller = first.read(
+          settingsProvider.notifier,
+        );
+        await controller.setTimetableGroup('primary');
+        await controller
+            .setAdditionalTimetableModules(<TimetableModuleSubscription>[
+              const TimetableModuleSubscription(
+                groupId: 'other-group',
+                moduleKey: 'code:WPF|AI',
+              ),
+            ]);
+
+        final ProviderContainer restarted = containerWith(store);
+        expect(restarted.read(selectedTimetableGroupIdsProvider), <String>[
+          'primary',
+          'other-group',
+        ]);
+        expect(
+          restarted.read(selectedTimetableModuleKeysByGroupProvider),
+          <String, Set<String>>{
+            'other-group': <String>{'code:WPF|AI'},
+          },
+        );
+      },
+    );
+
+    test(
+      'a full group subscription supersedes module-only subscriptions',
+      () async {
+        final ProviderContainer container = containerWith(
+          InMemoryKeyValueStore(),
+        );
+        final SettingsController controller = container.read(
+          settingsProvider.notifier,
+        );
+        await controller.setTimetableGroup('primary');
+        await controller
+            .setAdditionalTimetableModules(<TimetableModuleSubscription>[
+              const TimetableModuleSubscription(
+                groupId: 'other-group',
+                moduleKey: 'code:MATH2',
+              ),
+            ]);
+        await controller.setAdditionalTimetableGroups(<String>['other-group']);
+
+        expect(
+          container.read(settingsProvider).timetableAdditionalModules,
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'bounds module-only subscriptions by distinct network groups',
+      () async {
+        final ProviderContainer container = containerWith(
+          InMemoryKeyValueStore(),
+        );
+        final SettingsController controller = container.read(
+          settingsProvider.notifier,
+        );
+        await controller.setTimetableGroup('primary');
+        await controller.setAdditionalTimetableModules(
+          List<TimetableModuleSubscription>.generate(
+            20,
+            (index) => TimetableModuleSubscription(
+              groupId: 'group-$index',
+              moduleKey: 'code:module-$index',
+            ),
+          ),
+        );
+
+        expect(
+          container.read(selectedTimetableGroupIdsProvider),
+          hasLength(SettingsController.maxAdditionalTimetableGroups + 1),
+        );
+      },
+    );
   });
 
   group('week arithmetic', () {

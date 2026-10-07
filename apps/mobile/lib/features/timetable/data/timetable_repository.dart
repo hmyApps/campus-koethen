@@ -35,6 +35,26 @@ class TimetableRepository {
     );
   }
 
+  Future<Loaded<List<TimetablePeriod>>> fetchPeriods({
+    required String locale,
+  }) => _endpoint.load<List<TimetablePeriod>>(
+    path: '/timetable/periods',
+    cacheKey: CacheKeys.timetablePeriods(locale),
+    locale: locale,
+    parse: TimetablePeriod.listFromJson,
+  );
+
+  Future<Loaded<List<TimetableModule>>> fetchModules({
+    required String locale,
+    required String groupId,
+  }) => _endpoint.load<List<TimetableModule>>(
+    path: '/timetable/modules',
+    cacheKey: CacheKeys.timetableModules(locale, groupId),
+    locale: locale,
+    query: <String, Object?>{'groupId': groupId},
+    parse: TimetableModule.listFromJson,
+  );
+
   Future<Loaded<TimetableLessonInfoOptions>> fetchLessonInfo({
     required String locale,
     required String groupId,

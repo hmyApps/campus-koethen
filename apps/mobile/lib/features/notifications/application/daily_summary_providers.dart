@@ -19,6 +19,7 @@ import '../../events/domain/saved_event_snapshot.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../moodle/application/moodle_controller.dart';
 import '../../timetable/application/timetable_providers.dart';
+import '../../timetable/application/timetable_lesson_info_filter.dart';
 import '../../timetable/application/timetable_week.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../domain/notification_category.dart';
@@ -136,7 +137,7 @@ final Provider<List<NotificationRequest>> dailySummaryCandidatesProvider =
       ];
     });
 
-/// The lectures of the selected group across the horizon.
+/// The lectures of every subscribed group across the horizon.
 ///
 /// Nothing at all without a chosen group: there is deliberately no default
 /// timetable in the app, and a summary built from someone else's lectures
@@ -146,21 +147,41 @@ Iterable<CalendarEntry> _timetableEntries(
   DateTime today,
   DateTime lastDay,
 ) sync* {
-  final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-  if (groupId == null) return;
+  final List<String> groupIds = ref.watch(selectedTimetableGroupIdsProvider);
+  if (groupIds.isEmpty) return;
+  final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
+    timetableLessonInfoFilterProvider,
+  );
+  final Map<String, Set<String>> moduleKeysByGroup = ref.watch(
+    selectedTimetableModuleKeysByGroupProvider,
+  );
+  final Set<String> yielded = <String>{};
   for (
     DateTime weekStart = TimetableWeek.startOf(today);
     !weekStart.isAfter(lastDay);
     weekStart = TimetableWeek.shift(weekStart, TimetableWeek.lengthInDays)
   ) {
-    final Loaded<Timetable>? week = ref
-        .watch(
-          timetableWeekProvider(
-            TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
-          ),
-        )
-        .value;
-    if (week != null) yield* timetableToCalendarEntries(week.value);
+    for (final String groupId in groupIds) {
+      final Loaded<Timetable>? week = ref
+          .watch(
+            timetableWeekProvider(
+              TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
+            ),
+          )
+          .value;
+      if (week == null) continue;
+      for (final CalendarEntry entry in timetableToCalendarEntries(
+        week.value,
+        include: (TimetableEntry entry) =>
+            (moduleKeysByGroup[groupId] == null ||
+                (entry.moduleKey != null &&
+                    moduleKeysByGroup[groupId]!.contains(entry.moduleKey))) &&
+            (groupId != lessonInfoFilter.groupId ||
+                lessonInfoFilter.accepts(entry.lessonInfo)),
+      )) {
+        if (yielded.add(entry.id)) yield entry;
+      }
+    }
   }
 }
 

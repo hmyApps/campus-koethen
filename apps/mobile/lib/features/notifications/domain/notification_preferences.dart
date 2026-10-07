@@ -16,6 +16,8 @@ class NotificationPreferences {
     this.disabledCategories = const <NotificationCategory>{},
     this.prePromptDeclined = false,
     this.dailySummaryMinutes = 8 * 60,
+    this.eventReminderMinutes = 24 * 60,
+    this.eventReminderOverrides = const <String, int>{},
   });
 
   /// The global switch. `false` until the reader has explicitly opted in in
@@ -39,6 +41,12 @@ class NotificationPreferences {
   /// Preferred local wall-clock minute, in the range 0..1439.
   final int dailySummaryMinutes;
 
+  /// Default absolute lead for public and saved events.
+  final int eventReminderMinutes;
+
+  /// Per-entry lead in minutes. `-1` disables this one event.
+  final Map<String, int> eventReminderOverrides;
+
   bool isCategoryEnabled(NotificationCategory category) =>
       !disabledCategories.contains(category);
 
@@ -53,11 +61,16 @@ class NotificationPreferences {
     Set<NotificationCategory>? disabledCategories,
     bool? prePromptDeclined,
     int? dailySummaryMinutes,
+    int? eventReminderMinutes,
+    Map<String, int>? eventReminderOverrides,
   }) => NotificationPreferences(
     optedIn: optedIn ?? this.optedIn,
     disabledCategories: disabledCategories ?? this.disabledCategories,
     prePromptDeclined: prePromptDeclined ?? this.prePromptDeclined,
     dailySummaryMinutes: dailySummaryMinutes ?? this.dailySummaryMinutes,
+    eventReminderMinutes: eventReminderMinutes ?? this.eventReminderMinutes,
+    eventReminderOverrides:
+        eventReminderOverrides ?? this.eventReminderOverrides,
   );
 
   @override
@@ -66,6 +79,8 @@ class NotificationPreferences {
       other.optedIn == optedIn &&
       other.prePromptDeclined == prePromptDeclined &&
       other.dailySummaryMinutes == dailySummaryMinutes &&
+      other.eventReminderMinutes == eventReminderMinutes &&
+      _mapsEqual(other.eventReminderOverrides, eventReminderOverrides) &&
       other.disabledCategories.length == disabledCategories.length &&
       other.disabledCategories.containsAll(disabledCategories);
 
@@ -74,6 +89,12 @@ class NotificationPreferences {
     optedIn,
     prePromptDeclined,
     dailySummaryMinutes,
+    eventReminderMinutes,
+    Object.hashAllUnordered(eventReminderOverrides.entries),
     Object.hashAllUnordered(disabledCategories),
   );
 }
+
+bool _mapsEqual(Map<String, int> a, Map<String, int> b) =>
+    a.length == b.length &&
+    a.entries.every((entry) => b[entry.key] == entry.value);

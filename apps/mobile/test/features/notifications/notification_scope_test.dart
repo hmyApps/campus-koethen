@@ -91,7 +91,7 @@ void main() {
           if (file.readAsStringSync().contains(
             "package:flutter_local_notifications/",
           ))
-            file.path,
+            file.path.replaceAll('\\', '/'),
       ];
 
       expect(importers, <String>[

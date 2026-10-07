@@ -92,8 +92,16 @@ tz.TZDateTime at(
 List<NotificationRequest> requestsIn(
   tz.Location location,
   tz.TZDateTime now,
-  List<CalendarEntry> entries,
-) => eventReminderRequests(entries: entries, now: now, copy: const _TestCopy());
+  List<CalendarEntry> entries, {
+  Duration defaultLead = kEventReminderLead,
+  Map<String, int> overrides = const <String, int>{},
+}) => eventReminderRequests(
+  entries: entries,
+  now: now,
+  copy: const _TestCopy(),
+  defaultLead: defaultLead,
+  overrides: overrides,
+);
 
 /// The builder and the planner as one answer: what the operating system would
 /// actually be asked to deliver.
@@ -374,6 +382,72 @@ void main() {
         ], permission: NotificationPermissionStatus.denied),
         isEmpty,
       );
+    });
+  });
+
+  group('reader-defined event rules', () {
+    test('changes the default lead time', () {
+      final NotificationRequest request = requestsIn(
+        berlin,
+        at(berlin, 2026, 7, 1),
+        <CalendarEntry>[publicEvent(start: at(berlin, 2026, 7, 22, 16))],
+        defaultLead: const Duration(hours: 6),
+      ).single;
+
+      expect(
+        (request.trigger as AbsoluteTrigger).instant,
+        at(berlin, 2026, 7, 22, 10),
+      );
+    });
+
+    test('can disable exactly one event', () {
+      final CalendarEntry disabled = publicEvent(
+        id: 'publicCalendar:hsa:off',
+        start: at(berlin, 2026, 7, 22, 16),
+      );
+      final CalendarEntry enabled = publicEvent(
+        id: 'publicCalendar:hsa:on',
+        start: at(berlin, 2026, 7, 22, 17),
+      );
+
+      final List<NotificationRequest> requests = requestsIn(
+        berlin,
+        at(berlin, 2026, 7, 1),
+        <CalendarEntry>[disabled, enabled],
+        overrides: <String, int>{disabled.id: -1},
+      );
+
+      expect(requests.map((request) => request.target), <String>[enabled.id]);
+    });
+
+    test('a short lead for an early event is moved before, never after it', () {
+      final tz.TZDateTime start = at(berlin, 2026, 7, 22, 6);
+      final NotificationRequest request = requestsIn(
+        berlin,
+        at(berlin, 2026, 7, 1),
+        <CalendarEntry>[publicEvent(start: start)],
+        defaultLead: const Duration(minutes: 15),
+      ).single;
+
+      final tz.TZDateTime desired =
+          (request.trigger as AbsoluteTrigger).instant as tz.TZDateTime;
+      expect(desired, at(berlin, 2026, 7, 21, 20));
+      expect(desired.isBefore(start), isTrue);
+    });
+
+    test('a short lead for a late event uses 20:00 on the same day', () {
+      final tz.TZDateTime start = at(berlin, 2026, 7, 22, 21);
+      final NotificationRequest request = requestsIn(
+        berlin,
+        at(berlin, 2026, 7, 22, 12),
+        <CalendarEntry>[publicEvent(start: start)],
+        defaultLead: const Duration(minutes: 15),
+      ).single;
+
+      final tz.TZDateTime desired =
+          (request.trigger as AbsoluteTrigger).instant as tz.TZDateTime;
+      expect(desired, at(berlin, 2026, 7, 22, 20));
+      expect(desired.isBefore(start), isTrue);
     });
   });
 

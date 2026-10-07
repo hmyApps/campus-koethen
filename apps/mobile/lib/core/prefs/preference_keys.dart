@@ -20,6 +20,18 @@ abstract final class PreferenceKeys {
   static const String preferredTimetableGroup =
       'settings.preferredTimetableGroup.v1';
 
+  /// Additional Campus group UUIDs merged into the primary timetable.
+  static const String additionalTimetableGroups =
+      'settings.additionalTimetableGroups.v1';
+
+  /// Bounded, encoded Campus-group/module selections merged into the plan.
+  static const String additionalTimetableModules =
+      'settings.additionalTimetableModules.v1';
+
+  /// Campus period UUID whose semester suggestion was dismissed.
+  static const String dismissedTimetablePeriod =
+      'settings.dismissedTimetablePeriod.v1';
+
   /// Exact WebUntis lesson information strings switched off for one Campus
   /// group. A disabled set makes every newly appearing value visible by default.
   static String timetableLessonInfoDisabled(String groupId) =>
@@ -150,8 +162,9 @@ abstract final class PreferenceKeys {
 
   // --- Local notifications (device-only, no registration) -----------------
   //
-  // Four small scalars and nothing else. There is no token, no installation
-  // id and no server-side record anywhere in this feature — ADR-0001 § 10.
+  // Small bounded scalar values and string lists only. There is no token, no
+  // installation id and no server-side record anywhere in this feature —
+  // ADR-0001 § 10.
 
   /// `1` once the reader has opted in to local notifications. Absent means
   /// "not yet asked", which is why no system prompt appears on a cold start.
@@ -169,6 +182,18 @@ abstract final class PreferenceKeys {
   /// introduced later has to be on as well rather than invisible.
   static const String notificationCategoriesDisabled =
       'notifications.categories.off.v1';
+
+  /// Default lead for public/saved event reminders, in minutes.
+  static const String notificationEventReminderMinutes =
+      'notifications.eventReminder.minutes.v1';
+
+  /// Bounded `entryId=minutes` overrides for individual public/saved events.
+  /// `-1` means no reminder for that event.
+  static const String notificationEventReminderOverrides =
+      'notifications.eventReminder.overrides.v1';
+
+  /// Bounded `styleKey=ARGB` overrides for calendar content colours.
+  static const String calendarColorOverrides = 'calendar.colorOverrides.v1';
 
   /// `1` once the reader has answered "not now" to the in-app pre-permission
   /// sheet. Keeps a contextual trigger point from asking again; the switch in

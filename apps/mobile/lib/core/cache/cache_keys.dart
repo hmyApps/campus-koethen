@@ -72,6 +72,13 @@ abstract final class CacheKeys {
   /// Full study group list of the timetable.
   static String timetableGroups(String locale) => 'timetable.groups.$locale';
 
+  /// Semester catalogues and their Campus group ids.
+  static String timetablePeriods(String locale) => 'timetable.periods.$locale';
+
+  /// Modules observed for one Campus study group.
+  static String timetableModules(String locale, String groupId) =>
+      'timetable.modules.$locale.$groupId';
+
   /// Exact lesson information choices of one Campus study group.
   static String timetableLessonInfo(String locale, String groupId) =>
       'timetable.lessonInfo.$locale.$groupId';

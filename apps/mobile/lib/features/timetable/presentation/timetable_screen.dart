@@ -7,6 +7,7 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../core/locale/formatters.dart';
 import '../../../core/network/loaded.dart';
+import '../../../core/prefs/settings_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/offline_notice.dart';
@@ -22,6 +23,8 @@ import '../data/timetable_models.dart';
 import 'timetable_entry_card.dart';
 import 'timetable_group_picker_sheet.dart';
 import 'timetable_lesson_info_filter_sheet.dart';
+import 'timetable_subscriptions_sheet.dart';
+import '../application/semester_assistant.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../app/app_modules.dart';
 
@@ -64,12 +67,13 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
 
   Future<void> _refresh() async {
     ref.invalidate(timetableGroupsProvider);
-    final String? groupId = ref.read(selectedTimetableGroupIdProvider);
-    if (groupId == null) return;
+    ref.invalidate(timetablePeriodsProvider);
+    final List<String> groupIds = ref.read(selectedTimetableGroupIdsProvider);
+    if (groupIds.isEmpty) return;
     ref.invalidate(
-      timetableWeekProvider(
-        TimetableWeekRequest(
-          groupId: groupId,
+      aggregatedTimetableWeekProvider(
+        AggregatedTimetableWeekRequest(
+          groupIds: groupIds,
           weekStart: ref.read(selectedTimetableDayProvider),
         ),
       ),
@@ -110,22 +114,19 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
       ],
       body: groupId == null
           ? _OnboardingView(l10n: l10n)
-          : _buildTimetable(context, l10n, groupId),
+          : _buildTimetable(context, l10n),
     );
   }
 
-  Widget _buildTimetable(
-    BuildContext context,
-    AppLocalizations l10n,
-    String groupId,
-  ) {
+  Widget _buildTimetable(BuildContext context, AppLocalizations l10n) {
     final DateTime selectedDay = ref.watch(selectedTimetableDayProvider);
-    final TimetableWeekRequest request = TimetableWeekRequest(
-      groupId: groupId,
-      weekStart: selectedDay,
-    );
+    final AggregatedTimetableWeekRequest request =
+        AggregatedTimetableWeekRequest(
+          groupIds: ref.watch(selectedTimetableGroupIdsProvider),
+          weekStart: selectedDay,
+        );
     final AsyncValue<Loaded<Timetable>> week = ref.watch(
-      timetableWeekProvider(request),
+      aggregatedTimetableWeekProvider(request),
     );
     final Loaded<Timetable>? loaded = week.value;
 
@@ -149,7 +150,8 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
             when loaded == null =>
           ErrorView(
             failure: error,
-            onRetry: () => ref.invalidate(timetableWeekProvider(request)),
+            onRetry: () =>
+                ref.invalidate(aggregatedTimetableWeekProvider(request)),
           ),
         // TIME-2: a refresh that fails over a plan already on screen was
         // completely silent — pull-to-refresh in flight mode simply put the
@@ -212,6 +214,13 @@ class _TimetableContent extends ConsumerWidget {
     final AppLocalizations l10n = context.l10n;
     final String locale = Localizations.localeOf(context).languageCode;
     final Timetable timetable = loaded.value;
+    final List<String> additionalGroupIds = ref
+        .watch(settingsProvider)
+        .timetableAdditionalGroupIds;
+    final int additionalModuleCount = ref
+        .watch(settingsProvider)
+        .timetableAdditionalModules
+        .length;
     final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
       timetableLessonInfoFilterProvider,
     );
@@ -225,7 +234,49 @@ class _TimetableContent extends ConsumerWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: <Widget>[
+        if (ref.watch(timetableSemesterSuggestionProvider)
+            case final TimetableSemesterSuggestion suggestion) ...<Widget>[
+          StatusBanner(
+            tone: StatusTone.info,
+            icon: AppIcons.update,
+            title: l10n.timetableSemesterAssistantTitle,
+            message: l10n.timetableSemesterAssistantMessage(
+              suggestion.next.name,
+            ),
+            action: Wrap(
+              spacing: AppSpacing.xs,
+              children: <Widget>[
+                TextButton(
+                  onPressed: () => ref
+                      .read(settingsProvider.notifier)
+                      .dismissTimetablePeriod(suggestion.next.id),
+                  child: Text(l10n.actionNotNow),
+                ),
+                FilledButton.tonal(
+                  onPressed: () =>
+                      showSemesterSuggestionSheet(context, suggestion),
+                  child: Text(l10n.timetableSemesterAssistantSelect),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         _GroupHeader(group: timetable.group),
+        const SizedBox(height: AppSpacing.sm),
+        Card(
+          child: ListTile(
+            onTap: () => showAdditionalTimetableGroupsSheet(context),
+            leading: const Icon(AppIcons.add_circle_outline),
+            title: Text(
+              l10n.timetableSubscriptionsAction(
+                additionalGroupIds.length,
+                additionalModuleCount,
+              ),
+            ),
+            trailing: const Icon(AppIcons.chevron_right),
+          ),
+        ),
         const SizedBox(height: AppSpacing.md),
         if (refreshError != null) ...<Widget>[
           StatusBanner(
@@ -544,7 +595,11 @@ class _DayAgenda extends StatelessWidget {
     final List<TimetableEntry> allEntries =
         day?.entries ?? const <TimetableEntry>[];
     final List<TimetableEntry> entries = allEntries
-        .where((TimetableEntry entry) => filter.accepts(entry.lessonInfo))
+        .where(
+          (TimetableEntry entry) =>
+              !entry.groups.any((group) => group.id == filter.groupId) ||
+              filter.accepts(entry.lessonInfo),
+        )
         .toList(growable: false);
 
     return Column(

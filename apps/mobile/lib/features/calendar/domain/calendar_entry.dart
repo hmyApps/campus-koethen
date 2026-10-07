@@ -104,6 +104,22 @@ class CalendarEntry {
   /// the detail sheet degrades to the flattened fields rather than failing.
   final CalendarEntryDetails? details;
 
+  CalendarEntry copyWithColor(int? colorArgb) => CalendarEntry(
+    id: id,
+    source: source,
+    title: title,
+    start: start,
+    end: end,
+    allDay: allDay,
+    subtitle: subtitle,
+    location: location,
+    isCancelled: isCancelled,
+    calendarSlug: calendarSlug,
+    sourceLabel: sourceLabel,
+    colorArgb: colorArgb,
+    details: details,
+  );
+
   static final Expando<DateTime> _dayCache = Expando<DateTime>(
     'calendarEntryDay',
   );

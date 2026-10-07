@@ -19,8 +19,8 @@
 /// notifications due at the very same instant always survive the budget in the
 /// same order — see `notification_planner.dart`.
 enum NotificationCategory {
-  /// N1 · `event.reminder` — one reminder exactly 24 hours before a public or
-  /// saved event (P3).
+  /// N1 · `event.reminder` — at most one reminder with the global or
+  /// event-specific lead for a public or saved event.
   eventReminder(
     key: 'event.reminder',
     keyPrefix: 'n1',
@@ -100,9 +100,8 @@ enum DeliveryWindowPolicy {
   /// A time explicitly selected by the reader, including overnight hours.
   anyLocalTime,
 
-  /// The desired instant is derived from a source date (an event start minus
-  /// 24 hours), so it can fall outside the window and is moved to the next
-  /// 07:00 — ADR-0001 § 7.4.
+  /// The desired instant is derived from a source date minus a configured
+  /// lead, so it can fall outside the window and must be shifted safely.
   shiftIntoWindow,
 
   /// The category names a fixed local wall-clock time that lies inside the

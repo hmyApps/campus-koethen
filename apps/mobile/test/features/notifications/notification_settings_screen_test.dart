@@ -101,6 +101,11 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSettings(tester, permission: NotificationPermissionStatus.denied);
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsCategoryDailySummary),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     final Switch summary = tester.widget<Switch>(
       switchFor(de.notificationsCategoryDailySummary),
@@ -162,12 +167,20 @@ void main() {
   ) async {
     await pumpSettings(tester);
 
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsTimetableMoodleNoticeTitle),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.text(de.notificationsTimetableMoodleNoticeTitle),
       findsOneWidget,
     );
-    await tester.drag(find.byType(ListView), const Offset(0, -600));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsFreshnessTitle),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text(de.notificationsFreshnessTitle), findsOneWidget);
   });
 
