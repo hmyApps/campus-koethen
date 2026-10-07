@@ -35,7 +35,7 @@ Inhalte erhalten (siehe [`../AGENTS.md`](../AGENTS.md) §2).
 
 | Quelle                     | Art                                 | Verbraucher | Status |
 | -------------------------- | ----------------------------------- | ----------- | ------ |
-| `mail.hs-anhalt.de`        | IMAP/SMTP                           | Flutter     | aktiv  |
+| `mail.hs-anhalt.de`        | IMAP/SMTP + EWS `ResolveNames`      | Flutter     | aktiv  |
 | `service.ssc.hs-anhalt.de` | HIS-QIS, HTML (keine JSON-API)      | Flutter     | aktiv  |
 | `moodle.hs-anhalt.de`      | Moodle-Webservice, nur lesend       | Flutter     | aktiv  |
 | `REQUESTS_BASE_URL`        | Gremiensystem, Finanzanträge (POST) | Flutter     | aktiv  |
@@ -389,7 +389,7 @@ sie keine API-Route, keine Strapi-Collection, keinen Worker-Job und keine Datenb
 
 | Quelle                     | Zweck                                                                | Besonderheit                                                                                                                                                                                           | Doku                               |
 | -------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `mail.hs-anhalt.de`        | Studentisches Postfach                                               | IMAPS 993, SMTP 587 mit **Pflicht**-STARTTLS, kein Klartext                                                                                                                                            | [student-mail.md](student-mail.md) |
+| `mail.hs-anhalt.de`        | Studentisches Postfach und Exchange-Adressbuch                       | IMAPS 993, SMTP 587 mit **Pflicht**-STARTTLS sowie HTTPS-EWS ausschließlich für `ResolveNames`; kein Klartext, Autodiscover oder Redirect                                                               | [student-mail.md](student-mail.md) |
 | `service.ssc.hs-anhalt.de` | HIS-QIS-Notenspiegel                                                 | **keine** offizielle API — HTML-Parsing über Spaltenüberschriften                                                                                                                                      | [grades.md](grades.md)             |
 | `moodle.hs-anhalt.de`      | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines               | feste, rein **lesende** Whitelist von `wsfunction`s                                                                                                                                                    | [moodle.md](moodle.md)             |
 | `REQUESTS_BASE_URL`        | Finanzanträge und Feedback an das Gremiensystem des Studierendenrats | Adresse **nie** als Quellcode-Konstante, **HTTPS** erzwungen; Antrag als `multipart/form-data`, Feedback als `application/json`, beide mit Idempotenzschlüssel; Status per `POST` mit dem Link im Body | —                                  |

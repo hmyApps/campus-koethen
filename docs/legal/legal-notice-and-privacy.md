@@ -75,7 +75,7 @@ The app stores settings for language and appearance, selected channels, calendar
 
 ## Student email
 
-When you use the student email feature, your device connects directly to the Hochschule Anhalt mail server (mail.hs-anhalt.de) over a TLS-protected connection. The Campus API, Strapi and worker are not involved and receive neither your credentials nor your email. Your email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. After a successful “Remove account”, the credentials, local cache and its encryption key are removed from the device; your email on the university server remains unchanged.
+When you use the student email feature, your device connects directly over TLS to the Hochschule Anhalt mail server (mail.hs-anhalt.de). The app uses IMAP and SMTP and, solely for recipient suggestions, Exchange `ResolveNames`; your search term is sent directly to the university's Exchange directory. The Campus API, Strapi and worker are not involved and receive neither your credentials, email nor directory search terms. Your email address and password are stored only in your device's secure keystore. For offline use, the app stores email headers, message contents, involved addresses and, if enabled, attachments in an encrypted cache on this device. Deleting an individual message moves or removes it on the university server. After a successful “Remove account”, the credentials, local cache and its encryption key are removed from the device; removing the account does not alter your email on the university server.
 
 ## Grades
 
@@ -91,7 +91,7 @@ When you submit a funding application or feedback, the app sends the information
 
 ## Notifications
 
-Notifications are scheduled entirely on this device. The app asks for the operating system's permission only after you have explicitly enabled them, and it evaluates only data that is already stored locally – events, timetable, Moodle deadlines, canteen menus and your favourites. There is no push service, no device identifier, no user account and no recipient: no data ever leaves your device for this. You can change your settings or turn everything off again at any time under More → Settings → Notifications.
+Notifications are created entirely on this device. The app asks for the operating system's permission only after you have explicitly enabled them, and it evaluates only locally known data – events, timetable, Moodle deadlines, canteen menus, your favourites and the device-confirmed arrival of new email. A new-mail notice contains neither sender nor subject. There is no push service, device identifier, notification account or recipient: no data leaves your device for the notification itself. You can change every category, including “New emails”, or turn everything off at any time under More → Settings → Notifications.
 
 ## Direct services and external links
 

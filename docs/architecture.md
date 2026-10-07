@@ -47,7 +47,7 @@ Sensibilität der Daten.
 
 ```text
 ┌────────────────┐
-│ Flutter        │──HTTPS/IMAPS/SMTP──► mail.hs-anhalt.de           E-Mail (IMAP 993, SMTP 587)
+│ Flutter        │──HTTPS/IMAPS/SMTP──► mail.hs-anhalt.de           E-Mail (IMAP 993, SMTP 587, EWS ResolveNames)
 │ apps/mobile    │──HTTPS─────────────► service.ssc.hs-anhalt.de    HIS-QIS-Notenspiegel
 │                │──HTTPS─────────────► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel
 │                │──HTTPS─────────────► moodle.hs-anhalt.de         Moodle-Webservice (lesend)
@@ -261,7 +261,7 @@ Bedrohungsmodell, Sicherheitszusagen und manueller Testcheckliste.
 
 | Dienst           | Ziel                                                                                               | Transport                                     | Umfang                                                                                                                                   | Doku                               |
 | ---------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS      | lesen, suchen, antworten, senden; Ordner wechseln; Anhänge anzeigen                                                                      | [student-mail.md](student-mail.md) |
+| Studenten-Mail   | `mail.hs-anhalt.de`                                                                                | IMAPS 993, SMTP 587 mit Pflicht-STARTTLS; HTTPS-EWS nur `ResolveNames` | lesen, suchen, löschen, antworten, senden; Ordner wechseln; Empfänger im Exchange-Adressbuch suchen; Anhänge anzeigen | [student-mail.md](student-mail.md) |
 | Notenspiegel     | `service.ssc.hs-anhalt.de` **oder** `sscportal.ssc.hs-anhalt.de` — nie beide, getrennte Allowlists | HTTPS, HTML-Parsing (keine offizielle API)    | Notenspiegel lesen; 24-Stunden-Regel; Portalwahl bei der Einrichtung                                                                     | [grades.md](grades.md)             |
 | Moodle           | `moodle.hs-anhalt.de`                                                                              | HTTPS, Moodle-Webservice (REST)               | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                                  | [moodle.md](moodle.md)             |
 | Anträge/Feedback | `REQUESTS_BASE_URL` (Build-Environment, **nie** Quellcode-Konstante, **muss** HTTPS sein)          | HTTPS, öffentliche JSON-API, Multipart-Upload | Finanzanträge und Rückmeldungen einreichen; Vorgangsstatus per `POST` abfragen; Entwürfe, Nachweise und Statuslink bleiben auf dem Gerät | [requests.md](requests.md)         |
@@ -284,7 +284,9 @@ Gemeinsame, nicht verhandelbare Zusagen (G10–G12):
   Kontakte täglich. Beim App-Start laufen diese Quellen ebenfalls an; News aktualisiert zusätzlich
   bei jedem Vordergrundwechsel, Kalender frühestens 10 Minuten nach dem letzten Versuch. Noten
   folgen weiterhin einer 24-Stunden-Regel. Moodle und Noten behalten Single-Flight und manuelle
-  Übersteuerung.
+  Übersteuerung. Mail hält im Vordergrund zusätzlich eine abbrechbare IMAP-IDLE-Verbindung; ein
+  Änderungssignal stößt den normalen Mail-Abgleich an. Ohne IDLE nutzt dieselbe Vordergrundsitzung
+  einen minutenweisen `NOOP`-Fallback.
 - „Account entfernen“ bzw. „Verbindung und lokale Daten löschen“ entfernt Zugangsdaten, Token,
   Cache, Cache-Schlüssel, Zeitstempel und den zugehörigen State logisch. Beim Mailkonto wird
   Erfolg erst nach bestätigter Abwesenheit der persistenten Artefakte gemeldet. Ein Teilfehler
@@ -597,7 +599,7 @@ bewusst auf dem VPS installiert, geprüft und neu geladen.
 | Öffentliche Kalender                            | vollständig umgesetzt, aber `PUBLIC_CALENDAR_ENABLED=false` bis Kalender in Strapi gepflegt sind                                                                                                                                                                     |
 | Google API Key / OAuth / SDK                    | dauerhaft ausgeschlossen — der Worker liest ausschließlich den öffentlichen ICS-Feed                                                                                                                                                                                 |
 | Backend-Proxy für Mail, Noten, Moodle           | dauerhaft ausgeschlossen — genau deshalb laufen diese Dienste direkt vom Gerät                                                                                                                                                                                       |
-| Hintergrund-Sync bei geschlossener App          | ausgeschlossen — bräuchte WorkManager/BGTaskScheduler; Sync läuft, solange die App läuft, plus beim Start. Die lokale Benachrichtigungsplanung berührt das **nicht**: Sie meldet die Termine im Voraus beim Betriebssystem an, es läuft kein App-Code im Hintergrund |
+| Hintergrund-Sync bei geschlossener App          | ausgeschlossen — bräuchte WorkManager/BGTaskScheduler; Mail nutzt IMAP IDLE ausschließlich im Vordergrund und synchronisiert beim Start beziehungsweise Resume. Die lokale Terminplanung berührt das **nicht**: Sie meldet Termine im Voraus beim Betriebssystem an, es läuft kein App-Code im Hintergrund |
 | Push über einen externen Dienst (FCM/APNs)      | ausgeschlossen — Benachrichtigungen werden lokal aus vorhandenen Gerätedaten geplant, siehe [adr/0001](adr/0001-push-benachrichtigungen.md). Die Grundlage (Planer, Scheduler, Berechtigung, Einstellungen) ist umgesetzt; die fachlichen Kategorien folgen getrennt |
 | Schreibzugriffe auf Moodle                      | ausgeschlossen — nur eine feste, rein lesende Whitelist von `wsfunction`s                                                                                                                                                                                            |
 | Persönlicher WebUntis-Login                     | außerhalb des MVP; genutzt wird ausschließlich die öffentliche Gruppenansicht                                                                                                                                                                                        |

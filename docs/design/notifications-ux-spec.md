@@ -61,7 +61,7 @@ Nutzerinnen und Nutzer müssen die Funktionsweise verstehen: Die Benachrichtigun
 
 ### 2.1 System-Prompt erst nach erklärtem Nutzen
 
-Die App zeigt den nativen Systemdialog (`POST_NOTIFICATIONS` unter Android 13+ bzw. `UNUserNotificationCenter` unter iOS) nie unvermittelt beim Öffnen. Im letzten Onboarding-Schritt erklärt sie zuerst die drei lokalen Benachrichtigungsarten. Der Schalter „Benachrichtigungen aktivieren“ ist standardmäßig eingeschaltet; erst beim bewussten Abschluss des Schritts folgt der Systemdialog. Wird der Schalter ausgeschaltet oder das Onboarding vollständig übersprungen, erscheint kein Systemdialog. Außerhalb des Onboardings übernimmt weiterhin das Pre-Permission Sheet diese Erklärung. Ein im OS einmal verweigerter Status kann nicht erneut direkt aus der App abgefragt werden.
+Die App zeigt den nativen Systemdialog (`POST_NOTIFICATIONS` unter Android 13+ bzw. `UNUserNotificationCenter` unter iOS) nie unvermittelt beim Öffnen. Im letzten Onboarding-Schritt erklärt sie zuerst die vier lokalen Benachrichtigungsarten einschließlich des neutralen Neue-Mail-Hinweises. Der Schalter „Benachrichtigungen aktivieren“ ist standardmäßig eingeschaltet; erst beim bewussten Abschluss des Schritts folgt der Systemdialog. Wird der Schalter ausgeschaltet oder das Onboarding vollständig übersprungen, erscheint kein Systemdialog. Außerhalb des Onboardings übernimmt weiterhin das Pre-Permission Sheet diese Erklärung. Ein im OS einmal verweigerter Status kann nicht erneut direkt aus der App abgefragt werden.
 
 ### 2.2 Kontextuelle Einstiegspunkte (Trigger Points)
 
@@ -73,7 +73,7 @@ Die Berechtigungsabfrage wird erst gestartet, wenn Nutzende ein klares Interesse
 | **B. Mensa-Favorit**      | Nutzer favorisiert in `/canteen` ein Gericht (Stern-Symbol)            | „Lass dich um 11:00 Uhr erinnern, wenn dein Lieblingsgericht auf dem Speiseplan steht.“  |
 | **C. Stundenplan-Gruppe** | Nutzer wählt in `/calendar` erstmals seine Seminargruppe               | „Erhalte deine Tagesübersicht um 08:00 Uhr mit allen Vorlesungen und Terminen.“          |
 | **D. Moodle-Anmeldung**   | Nutzer verknüpft Moodle in `/more/moodle`                              | „Lass dich in der morgendlichen Tagesübersicht an anstehende Fristen erinnern.“          |
-| **E. Onboarding**         | Abschluss des letzten Onboarding-Schritts bei eingeschaltetem Schalter | Erklärung aller drei Kategorien im Schritt; anschließend direkt der native Systemdialog. |
+| **E. Onboarding**         | Abschluss des letzten Onboarding-Schritts bei eingeschaltetem Schalter | Erklärung aller vier Kategorien im Schritt; anschließend direkt der native Systemdialog. |
 | **F. Einstellungen**      | Nutzer öffnet `/more/settings/notifications`                           | Globaler Hauptschalter zur Aktivierung aller lokalen Benachrichtigungen.                 |
 
 ```mermaid
@@ -103,11 +103,11 @@ Bereitet den nativen Systemdialog transparent vor. Folgt dem Design-System (`24 
 - **Icon**: `IconBellCheck` in Beere (`#C2185B` Light / `#EC6E9F` Dark), Container `48x48 dp` (`#FBE4EE` / `#511F37`).
 - **Titel**: 20/24, Gewicht 800: `Lokale Benachrichtigungen aktivieren?` (EN: `Enable local notifications?`)
 - **Fließtext**: 14/20, Gewicht 400:
-  - _DE_: `Erhalte zur gewählten Uhrzeit deine Tagesübersicht mit Vorlesungen, Terminen, Fristen und Mensa sowie konfigurierbare Hinweise zu gemerkten Events und Mensa-Favoriten (11:00 Uhr). Alle Benachrichtigungen werden rein lokal auf deinem Smartphone geplant – ohne Tracking, ohne Server und ohne Nutzerkonto.`
-  - _EN_: `Get your daily overview at your chosen time with lectures, events, deadlines and canteen menus, plus configurable reminders for saved events and canteen favourites (11:00 AM). All notifications are scheduled purely on your device – no tracking, no servers, no user account.`
+  - _DE_: `Erhalte deine Tagesübersicht, Hinweise zu Events und Mensa-Favoriten sowie – bei verbundenem Hochschulpostfach und aktiver App – einen neutralen Hinweis auf neue E-Mails. Alle Benachrichtigungen werden lokal auf deinem Smartphone erzeugt – ohne Tracking, Push-Server oder Nutzerkonto.`
+  - _EN_: `Get your daily overview, event and canteen-favourite reminders and – while your university mailbox is connected and the app is active – a neutral notice for new email. Every notification is created locally on your phone – no tracking, push servers or user account.`
 - **Privacy-Note**: 12/16, Gewicht 600 mit `IconShieldCheck` (Größe 16):
-  - _DE_: `100 % geräteseitig: Deine Daten und Einstellungen verlassen niemals dein Smartphone.`
-  - _EN_: `100% on-device: Your preferences and data never leave your phone.`
+  - _DE_: `Geräteseitig: Benachrichtigungsinhalte und Einstellungen verlassen niemals dein Smartphone.`
+  - _EN_: `On-device: Notification content and preferences never leave your phone.`
 - **Primär-Button**: `Erinnerungen erlauben` (EN: `Allow reminders`) — Öffnet den OS-Dialog.
 - **Sekundär-Button**: `Nicht jetzt` (EN: `Not now`) — Schließt Sheet ohne OS-Aufruf.
 
@@ -148,6 +148,9 @@ Die Benachrichtigungseinstellungen liegen unter _Mehr → Einstellungen → Bena
 |                                                             |
 |  Favorisierte Mensagerichte                          [ ON ] |
 |  Einzelhinweis um 11:00 Uhr am Angebotstag                  |
+|                                                             |
+|  Neue E-Mails                                        [ ON ] |
+|  Neutraler Hinweis ohne Absender/Betreff bei aktiver App    |
 |                                                             |
 |  HINWEIS ZU STUNDENPLAN & MOODLE                            |
 |  Lehrveranstaltungen und Moodle-Fristen fließen in die      |
@@ -290,6 +293,7 @@ Ein Tap auf eine Benachrichtigung führt direkt zum betroffenen Inhalt:
 | `daily_summary`       | `daily.summary`        | `AppRoutes.calendar` (`/calendar`)          | **Öffnet direkt die Tagesansicht** des aktuellen Tages. |
 | `events_reminder`     | `event.reminder`       | `AppRoutes.newsEventsName` (`/news/events`) | **Öffnet direkt das Event** und fokussiert Details.     |
 | `canteen_favourites`  | `canteen.favourite`    | `AppRoutes.canteen` (`/canteen`)            | **Öffnet direkt das Mensagericht** im Speiseplan.       |
+| `new_mail`            | `mail.new`             | `AppRoutes.mail` (`/more/mail`)              | **Öffnet den Posteingang**; Payload enthält nur die UID.|
 
 ### 6.2 Fehler- und Fallback-Verhalten
 

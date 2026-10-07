@@ -94,7 +94,9 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
 
 - **Studenten-E-Mail** (`mail.hs-anhalt.de`): Posteingang mit verschlüsseltem Offline-Cache, alle
   Server-Ordner, serverseitige Suche über IMAP SEARCH, Anhänge anzeigen und in der App öffnen,
-  Verfassen, Antworten und Allen antworten — reiner Text
+  Verfassen, Antworten und Allen antworten, Löschen/Verschieben in den Papierkorb,
+  Empfängersuche im Exchange-Adressbuch sowie Live-Abgleich über IMAP IDLE im Vordergrund —
+  Nachrichteninhalt weiterhin als reiner Text
 - **Notenspiegel** (HIS-QIS): Notenübersicht mit Detailansicht, verschlüsselter lokaler Cache,
   24-Stunden-Regel mit manueller Übersteuerung
 - **Moodle**: Kurse, Materialien, Aufgaben mit Abgabestatus, Ankündigungen und Deadlines —
@@ -161,7 +163,7 @@ Raumverfügbarkeit („freie Räume") · Abwesenheiten und Hausaufgaben
 automatisches Hinzufügen von Terminen zum persönlichen Google-Konto
 
 **Technisch:** Analytics/Tracking · Sentry oder externes Crash-Reporting · Redis · SMTP ·
-automatisches Deployment · Hintergrund-Sync bei vollständig geschlossener App · IMAP IDLE ·
+automatisches Deployment · Hintergrund-Sync bei vollständig geschlossener App ·
 Backend-Proxy für E-Mail, Noten oder Moodle
 
 Die Architektur muss diese Erweiterungen ermöglichen, es wird dafür aber **kein ungenutzter Code**
@@ -275,11 +277,12 @@ Dienstspezifisch:
 
 | Dienst | Anmeldung                        | Sync                                                       | Umfang                                                                   |
 | ------ | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| E-Mail | Adresse + Passwort, sonst nichts | App-Start, Anmeldung, alle 10 Minuten, manuell             | lesen, suchen (IMAP SEARCH), Ordner wechseln, Anhänge, antworten, senden |
+| E-Mail | Adresse + Passwort, sonst nichts | App-Start/Resume, IMAP IDLE im Vordergrund, 10-Minuten-Sicherheitsabgleich, manuell | lesen, suchen (IMAP SEARCH), löschen, Ordner wechseln, Exchange-Empfängersuche, Anhänge, antworten, senden |
 | Noten  | Benutzername + Passwort          | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Notenspiegel mit Detailansicht                                           |
 | Moodle | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**  |
 
-Kein Hintergrund-Polling, kein Timer, kein Backend-Cron. Beim Moodle-Login wird das Passwort sofort
+Kein Hintergrund-Polling bei vollständig geschlossener App und kein Backend-Cron. Mail hält nur im
+Vordergrund eine abbrechbare IMAP-IDLE-Verbindung; beim Pausieren wird sie geschlossen. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
 es gibt kein WebView, kein JavaScript und keine automatische Nachladung entfernter Bilder.
 

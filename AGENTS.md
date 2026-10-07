@@ -33,7 +33,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
    oder personenbezogene Inhalte erhalten. Aktuell sind das **genau vier**:
-   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP);
+   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP sowie ausschließlich
+     für die authentifizierte Empfängersuche EWS `ResolveNames` am festen HTTPS-Endpunkt
+     `https://mail.hs-anhalt.de/EWS/Exchange.asmx`; kein Autodiscover, keine beliebigen
+     EWS-Operationen und keine Redirects);
    - der **Notenspiegel** → direkt und **nur** zu genau dem Host des Portals, auf dem das
      jeweilige Konto eingerichtet wurde. Die Hochschule Anhalt betreibt zwei Prüfungsportale
      parallel; jedes hat seine EIGENE, getrennte Host-Allowlist (kein gemeinsamer Pool):

@@ -26,7 +26,7 @@ Die App speichert Einstellungen, Sprache und Darstellung, ausgewählte Kanäle, 
 
 ### Studentische E-Mail
 
-Wenn du die studentische E-Mail nutzt, verbindet sich dein Gerät über eine TLS-geschützte Verbindung direkt mit dem Mailserver der Hochschule Anhalt (`mail.hs-anhalt.de`). Campus-API, Strapi und Worker sind nicht beteiligt und erhalten weder deine Zugangsdaten noch deine E-Mails. E-Mail-Adresse und Passwort werden ausschließlich im sicheren Schlüsselspeicher deines Geräts abgelegt. Für die Offline-Nutzung speichert die App E-Mail-Kopfzeilen, Nachrichteninhalte, beteiligte Adressen und – falls aktiviert – Anhänge in einem verschlüsselten Cache auf diesem Gerät. Nach erfolgreichem „Account entfernen“ sind Zugangsdaten, lokaler Cache und dessen Verschlüsselungsschlüssel vom Gerät entfernt; deine E-Mails auf dem Hochschulserver bleiben unverändert.
+Wenn du die studentische E-Mail nutzt, verbindet sich dein Gerät über TLS direkt mit dem Mailserver der Hochschule Anhalt (`mail.hs-anhalt.de`). Die App verwendet IMAP und SMTP sowie ausschließlich für Empfängervorschläge die Exchange-Funktion `ResolveNames`; Suchbegriffe werden dabei direkt an das Exchange-Adressbuch der Hochschule übertragen. Campus-API, Strapi und Worker sind nicht beteiligt und erhalten weder deine Zugangsdaten noch deine E-Mails oder Suchbegriffe. E-Mail-Adresse und Passwort werden ausschließlich im sicheren Schlüsselspeicher deines Geräts abgelegt. Für die Offline-Nutzung speichert die App E-Mail-Kopfzeilen, Nachrichteninhalte, beteiligte Adressen und – falls aktiviert – Anhänge in einem verschlüsselten Cache auf diesem Gerät. Das Löschen einer einzelnen E-Mail verschiebt oder entfernt sie auf dem Hochschulserver. Nach erfolgreichem „Account entfernen“ sind Zugangsdaten, lokaler Cache und dessen Verschlüsselungsschlüssel vom Gerät entfernt; diese Kontoentfernung verändert deine E-Mails auf dem Hochschulserver nicht.
 
 ### Noten
 
@@ -42,7 +42,7 @@ Wenn du einen Finanzantrag oder Feedback absendest, übermittelt die App die Ang
 
 ### Benachrichtigungen
 
-Benachrichtigungen werden ausschließlich auf diesem Gerät geplant. Die App fragt die Berechtigung des Betriebssystems erst, nachdem du sie ausdrücklich aktiviert hast, und wertet dafür nur Daten aus, die ohnehin schon lokal gespeichert sind – Termine, Stundenplan, Moodle-Fristen, Speiseplan und deine Favoriten. Es gibt keinen Push-Dienst, keine Gerätekennung, kein Nutzerkonto und keinen Empfänger: Zu keinem Zeitpunkt verlassen dafür Daten dein Gerät. Deine Einstellungen kannst du jederzeit unter Mehr → Einstellungen → Benachrichtigungen ändern oder alles wieder abschalten.
+Benachrichtigungen werden ausschließlich auf diesem Gerät erzeugt. Die App fragt die Berechtigung des Betriebssystems erst, nachdem du sie ausdrücklich aktiviert hast, und wertet dafür nur lokal bekannte Daten aus – Termine, Stundenplan, Moodle-Fristen, Speiseplan, Favoriten sowie die geräteseitig bestätigte Ankunft neuer E-Mails. Der E-Mail-Hinweis enthält weder Absender noch Betreff. Es gibt keinen Push-Dienst, keine Gerätekennung, kein Nutzerkonto und keinen Empfänger: Für die Benachrichtigung selbst verlassen keine Daten dein Gerät. Deine Einstellungen einschließlich der Kategorie „Neue E-Mails“ kannst du jederzeit unter Mehr → Einstellungen → Benachrichtigungen ändern oder alles wieder abschalten.
 
 ### Direkte Dienste und externe Links
 

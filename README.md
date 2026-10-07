@@ -35,7 +35,7 @@ Dieses Projekt verwendet **keine** Logos, Wappen, Markenassets oder Designsystem
 | Öffentliche Google-Kalender (öffentlicher ICS-Feed)      | Nicht freigegebene reale Gebäudepläne           |
 | Mensapläne (Trait-/Allergenfilter, eine Preisgruppe)     | Analytics, Tracking, Crash-Reporting            |
 | Kontakte und Kontaktbereiche                             | Redis, SMTP                                     |
-| Studenten-E-Mail (IMAP/SMTP, direkt vom Gerät)           | Automatisches Deployment                        |
+| Studenten-E-Mail (IMAP/SMTP/EWS, direkt vom Gerät)       | Automatisches Deployment                        |
 | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät) | Globale Volltextsuche                           |
 | Moodle: Kurse, Materialien, Aufgaben, Ankündigungen      | Schreibzugriffe auf Moodle                      |
 | Lokale Aufgabenliste (rein auf dem Gerät)                | Serverseitige Synchronisierung der Aufgaben     |
@@ -75,7 +75,7 @@ Flutter ──/v1──► Campus API (NestJS) ──► campus_app_* (PostgreSQ
 **Pfad 2 — persönliche oder besonders sensible Dienste: direkt vom Gerät, bewusst am Backend vorbei**
 
 ```text
-                 ┌──► mail.hs-anhalt.de           IMAPS 993 / SMTP 587 + STARTTLS
+                 ┌──► mail.hs-anhalt.de           IMAPS 993 / SMTP 587 + STARTTLS / EWS ResolveNames
                  ├──► service.ssc.hs-anhalt.de    HIS-QIS-Notenspiegel (Bestandsportal)
 Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISinOne-Notenspiegel (neueres Portal)
                  ├──► moodle.hs-anhalt.de         Moodle-Webservice (nur lesend)
@@ -135,7 +135,7 @@ docs/                          Produkt-, Architektur- und Betriebsdokumentation
 | [api.md](docs/api.md)                                             | Verbindlicher Vertrag der Campus API                       |
 | [data-sources.md](docs/data-sources.md)                           | Alle Fremdquellen mit verifizierten Eigenheiten            |
 | [public-calendars.md](docs/public-calendars.md)                   | Öffentliche Google-Kalender über den öffentlichen ICS-Feed |
-| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail-Client (IMAP/SMTP, direkt vom Gerät)      |
+| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail-Client (IMAP/SMTP/EWS, direkt vom Gerät)  |
 | [grades.md](docs/grades.md)                                       | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät)   |
 | [moodle.md](docs/moodle.md)                                       | Moodle-Integration und quellenübergreifender Kalender      |
 | [requests.md](docs/requests.md)                                   | Anträge und Feedback ans Gremiensystem (direkt vom Gerät)  |
