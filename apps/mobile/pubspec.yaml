@@ -85,6 +85,11 @@ dependencies:
   # native; this only writes local payloads and requests a refresh.
   home_widget: ^0.10.0
 
+  # PBKDF2/AES-256-GCM/RSA-OAEP for the HSA-GPT (HAWKI) chat-history keychain —
+  # see lib/features/hsa_ki/crypto/. Must stay byte-compatible with HAWKI's own
+  # WebCrypto-based frontend, never a "close enough" substitute.
+  pointycastle: ^4.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
