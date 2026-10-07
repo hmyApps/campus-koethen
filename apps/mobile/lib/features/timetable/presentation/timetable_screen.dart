@@ -238,7 +238,9 @@ class _TimetableContent extends ConsumerWidget {
         (ref.watch(timetableChangeControllerProvider).value ??
                 const <TimetableChange>[])
             .where(
-              (TimetableChange change) => change.groupId == timetable.group.id,
+              (TimetableChange change) =>
+                  change.groupId == timetable.group.id &&
+                  lessonInfoFilter.acceptsCourse(change.title),
             )
             .toList(growable: false);
 

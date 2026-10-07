@@ -10,8 +10,11 @@ import 'package:campus_koethen/features/calendar/presentation/calendar_entry_she
 import 'package:campus_koethen/features/campusmap/application/campus_map_providers.dart';
 import 'package:campus_koethen/features/campusmap/data/map_asset_loader.dart';
 import 'package:campus_koethen/features/campusmap/domain/map_catalog.dart';
+import 'package:campus_koethen/features/timetable/application/timetable_change.dart';
+import 'package:campus_koethen/features/timetable/application/timetable_change_controller.dart';
 import 'package:campus_koethen/features/timetable/application/timetable_providers.dart';
 import 'package:campus_koethen/features/timetable/application/timetable_week.dart';
+import 'package:campus_koethen/features/timetable/data/timetable_models.dart';
 import 'package:campus_koethen/features/timetable/presentation/timetable_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +30,21 @@ import '../../support/pump_app.dart';
 /// The Monday of the week the screen shows by default.
 final DateTime monday = TimetableWeek.startOf(DateTime.now());
 late final MapCatalog testCatalog;
+
+class _FakeTimetableChangeController extends TimetableChangeController {
+  _FakeTimetableChangeController(this.changes);
+
+  final List<TimetableChange> changes;
+
+  @override
+  Future<List<TimetableChange>> build() async => changes;
+
+  @override
+  Future<void> observe({
+    required TimetableChangeScope scope,
+    required Timetable timetable,
+  }) async {}
+}
 
 InMemoryKeyValueStore storeWithGroup() =>
     InMemoryKeyValueStore(<String, Object>{
@@ -471,6 +489,50 @@ void main() {
   });
 
   group('course hiding', () {
+    testWidgets('a hidden course is absent from timetable change hints', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = storeWithGroup();
+      await store.setStringList(
+        PreferenceKeys.timetableHiddenCourses(timetableGroupIdFixture),
+        <String>['Mathematik 2'],
+      );
+      final DateTime detectedAt = DateTime.utc(2026, 10, 7);
+      TimetableChange change(String title, String entryId) => TimetableChange(
+        entryId: entryId,
+        title: title,
+        kind: TimetableChangeKind.room,
+        detectedAt: detectedAt,
+        oldStart: monday,
+        newStart: monday,
+        oldRooms: const <String>['A1'],
+        newRooms: const <String>['B2'],
+        groupId: timetableGroupIdFixture,
+        rangeKey: monday.toIso8601String(),
+      );
+
+      await pumpTimetable(
+        tester,
+        store: store,
+        overrides: <Override>[
+          timetableChangeControllerProvider.overrideWith(
+            () => _FakeTimetableChangeController(<TimetableChange>[
+              change('Mathematik 2', 'hidden'),
+              change('Technische Mechanik', 'visible'),
+            ]),
+          ),
+        ],
+      );
+
+      expect(find.text('1 ungelesene Änderung'), findsOneWidget);
+      expect(find.text('2 ungelesene Änderungen'), findsNothing);
+
+      await tester.tap(find.text('Änderungen ansehen'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Mathematik 2:'), findsNothing);
+      expect(find.textContaining('Technische Mechanik:'), findsOneWidget);
+    });
+
     testWidgets(
       'hiding a course from its card removes it from the agenda and offers '
       'undo',
