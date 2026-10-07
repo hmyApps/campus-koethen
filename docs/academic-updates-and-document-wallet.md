@@ -19,10 +19,13 @@ Diese Erweiterung umfasst vier voneinander getrennte Funktionen:
    Zeitänderungen erscheinen als barrierefreier In-App-Hinweis. Ein fehlgeschlagener Abruf oder
    Cache-Fallback verändert die Baseline nicht. Die verschlüsselte Hinweisspeicherung ist additiv
    und darf das Laden des Stundenplans nie blockieren.
-3. Immatrikulationsbescheinigung und Leistungsübersicht können nach dem expliziten Öffnen des PDFs
-   bewusst in einer verschlüsselten Offline-Wallet gespeichert werden. Je Dokumentart bleibt nur
-   die neueste PDF-Version erhalten. Die Wallet ist ohne Netzwerk lesbar, akzeptiert nur valide
-   PDFs bis 25 MiB und wird bei Kontowechsel, Portalwechsel oder vollständigem Löschen der
+3. Immatrikulationsbescheinigung, Leistungsübersicht, Gebührenbescheinigung und
+   Studienverlaufsbescheinigung können nach dem expliziten Öffnen des PDFs bewusst in einer
+   verschlüsselten Offline-Wallet gespeichert werden — die letzten beiden ergänzt am 2026-10-07,
+   erkannt an denselben, bereits in `test/features/student_service/student_service_fixtures.dart`
+   verifizierten echten Bezeichnungen der Studienservice-Bescheinigungen. Je Dokumentart bleibt
+   nur die neueste PDF-Version erhalten. Die Wallet ist ohne Netzwerk lesbar, akzeptiert nur
+   valide PDFs bis 25 MiB und wird bei Kontowechsel, Portalwechsel oder vollständigem Löschen der
    Notenverbindung mit entfernt.
 4. Für bereits lokal verschlüsselt vorliegende Moodle-Fristen kann eine separate lokale Erinnerung
    geplant werden. Der Vorlauf ist in den Benachrichtigungseinstellungen wählbar (1 Stunde,

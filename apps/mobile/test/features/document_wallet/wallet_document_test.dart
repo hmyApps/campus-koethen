@@ -5,12 +5,19 @@ import 'package:campus_koethen/features/document_wallet/domain/wallet_document.d
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('recognises only the two approved HISinOne document classes', () {
+  test('recognises the approved HISinOne document classes', () {
     expect(
       walletKindForCertificateLabel('Immatrikulationsbescheinigung'),
       WalletDocumentKind.enrollmentCertificate,
     );
-    expect(walletKindForCertificateLabel('Gebührenbescheinigung'), isNull);
+    expect(
+      walletKindForCertificateLabel('Gebührenbescheinigung'),
+      WalletDocumentKind.feeCertificate,
+    );
+    expect(
+      walletKindForCertificateLabel('Studienverlaufsbescheinigung'),
+      WalletDocumentKind.studyProgressCertificate,
+    );
     expect(
       walletKindForExamReportLabel(
         'Leistungsübersicht (bestandene Leistungen) [PDF]',
@@ -21,5 +28,9 @@ void main() {
       walletKindForExamReportLabel('Leistungsübersicht fehlende Leistungen'),
       isNull,
     );
+  });
+
+  test('an unrecognised label is never silently accepted into the wallet', () {
+    expect(walletKindForCertificateLabel('Irgendein anderes Dokument'), isNull);
   });
 }

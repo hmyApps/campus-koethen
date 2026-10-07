@@ -9,7 +9,9 @@ import '../../../core/documents/app_document.dart';
 
 enum WalletDocumentKind {
   enrollmentCertificate('enrollment-certificate'),
-  transcript('transcript');
+  transcript('transcript'),
+  feeCertificate('fee-certificate'),
+  studyProgressCertificate('study-progress-certificate');
 
   const WalletDocumentKind(this.storageValue);
 
@@ -75,8 +77,9 @@ abstract interface class DocumentWalletStore {
   Future<void> clear();
 }
 
-/// The wallet intentionally accepts only the enrolment certificate, not every
-/// document the Study Service happens to offer.
+/// The wallet intentionally accepts only these specific, confirmed-real
+/// Studienservice "Bescheinigungen" offers — never an arbitrary/unrecognised
+/// one — matched by label text since the portal gives no stable id for them.
 WalletDocumentKind? walletKindForCertificateLabel(String label) {
   final String value = label.trim().toLowerCase();
   if (value.contains('immatrikulationsbescheinigung') ||
@@ -84,6 +87,13 @@ WalletDocumentKind? walletKindForCertificateLabel(String label) {
       value.contains('certificate of enrolment') ||
       value.contains('certificate of enrollment')) {
     return WalletDocumentKind.enrollmentCertificate;
+  }
+  if (value.contains('gebührenbescheinigung') ||
+      value.contains('gebuehrenbescheinigung')) {
+    return WalletDocumentKind.feeCertificate;
+  }
+  if (value.contains('studienverlaufsbescheinigung')) {
+    return WalletDocumentKind.studyProgressCertificate;
   }
   return null;
 }

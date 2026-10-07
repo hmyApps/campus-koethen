@@ -73,6 +73,9 @@ class _WalletDocumentTile extends ConsumerWidget {
       WalletDocumentKind.enrollmentCertificate =>
         l10n.documentWalletEnrollmentCertificate,
       WalletDocumentKind.transcript => l10n.documentWalletTranscript,
+      WalletDocumentKind.feeCertificate => l10n.documentWalletFeeCertificate,
+      WalletDocumentKind.studyProgressCertificate =>
+        l10n.documentWalletStudyProgressCertificate,
     };
     return Card(
       child: ListTile(
