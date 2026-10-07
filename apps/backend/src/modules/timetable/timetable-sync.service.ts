@@ -193,7 +193,7 @@ export class TimetableSyncService {
   private async contextsFor(
     from: string,
     to: string,
-  ): Promise<Array<{ id: number; from: string; to: string }>> {
+  ): Promise<Array<{ id: number; storageId: string; from: string; to: string }>> {
     const contexts = await this.prisma.timetableContext.findMany({
       where: {
         source: 'webuntis',
@@ -201,14 +201,21 @@ export class TimetableSyncService {
         validTo: { gte: new Date(`${from}T00:00:00.000Z`) },
       },
       orderBy: { validFrom: 'asc' },
-      select: { externalId: true, validFrom: true, validTo: true },
+      select: { id: true, externalId: true, validFrom: true, validTo: true },
     });
     return contexts.flatMap((context) => {
       const id = Number(context.externalId);
       if (!Number.isSafeInteger(id)) return [];
       const start = context.validFrom.toISOString().slice(0, 10);
       const end = context.validTo.toISOString().slice(0, 10);
-      return [{ id, from: start > from ? start : from, to: end < to ? end : to }];
+      return [
+        {
+          id,
+          storageId: context.id,
+          from: start > from ? start : from,
+          to: end < to ? end : to,
+        },
+      ];
     });
   }
 
@@ -223,11 +230,37 @@ export class TimetableSyncService {
         throw new WebUntisError('malformed', 'No timetable context covers the sync window.');
       }
 
-      const catalogues: FilterResponse[] = [];
+      const catalogues: Array<{ contextId: string; catalogue: FilterResponse }> = [];
       for (const context of contexts) {
-        catalogues.push(await this.client.fetchClasses(context.id));
+        catalogues.push({
+          contextId: context.storageId,
+          catalogue: await this.client.fetchClasses(context.id),
+        });
       }
-      const classes = catalogues.flatMap((catalogue) => catalogue.classes);
+      // One empty semester catalogue is suspect. Updating the other semester
+      // while retiring the empty one's groups would violate the same
+      // last-good-data rule as an entirely empty response.
+      if (catalogues.some(({ catalogue }) => catalogue.classes.length === 0)) {
+        await this.prisma.timetableSyncRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'empty',
+            finishedAt: new Date(),
+            errorMessage: 'one or more semester catalogues empty; existing groups kept',
+          },
+        });
+        return {
+          kind: 'groups',
+          status: 'empty',
+          received: 0,
+          accepted: 0,
+          rejected: 0,
+          written: 0,
+          removed: 0,
+        };
+      }
+
+      const classes = catalogues.flatMap(({ catalogue }) => catalogue.classes);
       const received = classes.length;
 
       const seen = classes
@@ -269,6 +302,20 @@ export class TimetableSyncService {
       // writes are batched, where the sequential loop simply wrote twice. Last
       // one wins, exactly as it did before.
       const uniqueGroups = [...new Map(seen.map((group) => [group.externalId, group])).values()];
+
+      const externalIdsByContext = new Map<string, string[]>(
+        catalogues.map(({ contextId, catalogue }) => [
+          contextId,
+          [
+            ...new Set(
+              catalogue.classes
+                .filter((item) => item.class.shortName.trim().length > 0)
+                .map((item) => String(item.class.id))
+                .filter((externalId) => externalId.length > 0),
+            ),
+          ],
+        ]),
+      );
 
       await this.prisma.$transaction(
         async (tx) => {
@@ -331,6 +378,42 @@ export class TimetableSyncService {
             await tx.timetableGroup.updateMany({
               where: { id: { in: unchangedIds } },
               data: { lastSeenAt: now },
+            });
+          }
+
+          const linkedGroups = await tx.timetableGroup.findMany({
+            where: {
+              source: 'webuntis',
+              externalId: { in: uniqueGroups.map((group) => group.externalId) },
+            },
+            select: { id: true, externalId: true },
+          });
+          const groupIdByExternal = new Map(
+            linkedGroups.map((group) => [group.externalId, group.id]),
+          );
+          for (const [contextId, externalIds] of externalIdsByContext) {
+            const groupIds = externalIds
+              .map((externalId) => groupIdByExternal.get(externalId))
+              .filter((groupId): groupId is string => groupId !== undefined);
+            // A catalogue is complete only if every accepted upstream class can
+            // be resolved to its persisted row. Fail the transaction closed;
+            // otherwise an unexpected partial write could erase valid semester
+            // links and make a period look empty to clients.
+            if (groupIds.length !== externalIds.length) {
+              throw new WebUntisError(
+                'malformed',
+                'Not every timetable group could be linked to its semester.',
+              );
+            }
+            await tx.timetableContextGroup.createMany({
+              data: groupIds.map((groupId) => ({ contextId, groupId })),
+              skipDuplicates: true,
+            });
+            await tx.timetableContextGroup.deleteMany({
+              where: {
+                contextId,
+                groupId: { notIn: groupIds },
+              },
             });
           }
         },

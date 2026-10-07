@@ -111,7 +111,7 @@ export class UserTestDataSeedService {
         });
 
         const context = dataset.timetable.context;
-        await tx.timetableContext.upsert({
+        const storedContext = await tx.timetableContext.upsert({
           where: {
             source_externalId: { source: USER_TEST_SOURCE, externalId: context.externalId },
           },
@@ -145,6 +145,16 @@ export class UserTestDataSeedService {
             active: true,
             lastSeenAt: seededAt,
           },
+        });
+        await tx.timetableContextGroup.upsert({
+          where: {
+            contextId_groupId: {
+              contextId: storedContext.id,
+              groupId: storedGroup.id,
+            },
+          },
+          create: { contextId: storedContext.id, groupId: storedGroup.id },
+          update: {},
         });
 
         for (const entry of dataset.timetable.entries) {

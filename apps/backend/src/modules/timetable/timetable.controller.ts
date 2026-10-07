@@ -14,6 +14,10 @@ import {
   TimetableGroupsResponseDto,
   TimetableLessonInfoDto,
   TimetableLessonInfoResponseDto,
+  TimetableModuleDto,
+  TimetableModulesResponseDto,
+  TimetablePeriodDto,
+  TimetablePeriodsResponseDto,
   TimetableStatusDto,
   TimetableStatusResponseDto,
   TimetableWeekDto,
@@ -82,6 +86,30 @@ export class TimetableController {
     };
   }
 
+  @Get('periods')
+  @ApiOperation({
+    summary: 'List semester catalogues available to the timetable assistant.',
+    description:
+      'Contains Campus UUIDs only. WebUntis school-year and class identifiers remain server-internal.',
+  })
+  @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
+  @ApiOkResponse({ type: TimetablePeriodsResponseDto })
+  async periods(
+    @RequestLocale() locale: LocaleResolution,
+  ): Promise<ApiResponse<TimetablePeriodDto[]>> {
+    const result = await this.timetable.listPeriods();
+    return {
+      data: result.data,
+      meta: buildMeta({
+        ...locale,
+        translationFallback: locale.resolvedLocale !== 'de',
+        featureEnabled: this.timetable.featureEnabled,
+        lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,
+        dataStale: result.stale,
+      }),
+    };
+  }
+
   @Get('lesson-info')
   @ApiOperation({
     summary: 'List exact lesson information texts for a selected timetable group.',
@@ -99,6 +127,33 @@ export class TimetableController {
     return {
       data: await this.timetable.listLessonInfo(groupId, locale),
       meta: buildMeta({ ...locale, translationFallback: locale.resolvedLocale !== 'de' }),
+    };
+  }
+
+  @Get('modules')
+  @ApiOperation({
+    summary: 'List modules observed for one selectable study group.',
+    description:
+      'Reads retained Campus timetable rows only. Module names and codes are source-provided; no upstream identifiers or live request are exposed.',
+  })
+  @ApiQuery({ name: 'groupId', required: true, format: 'uuid' })
+  @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
+  @ApiOkResponse({ type: TimetableModulesResponseDto })
+  async modules(
+    @RequestLocale() locale: LocaleResolution,
+    @Query() query: Record<string, unknown>,
+  ): Promise<ApiResponse<TimetableModuleDto[]>> {
+    const { groupId } = parseWith(lessonInfoQuerySchema, query, locale.resolvedLocale);
+    const result = await this.timetable.listModules(groupId, locale);
+    return {
+      data: result.data,
+      meta: buildMeta({
+        ...locale,
+        translationFallback: locale.resolvedLocale !== 'de',
+        featureEnabled: this.timetable.featureEnabled,
+        lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,
+        dataStale: result.stale,
+      }),
     };
   }
 
