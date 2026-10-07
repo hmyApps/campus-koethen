@@ -271,6 +271,17 @@ enum AppModule {
     _ => false,
   };
 
+  /// Greyed out and not navigable in the "More" hub, with the reason shown
+  /// instead of the usual subtitle.
+  ///
+  /// HSA-GPT specifically: confirmed 2026-10-07 that `ki.hs-anhalt.de` runs
+  /// HAWKI 2.4.0, which predates the JSON:API/keychain layer this app's chat
+  /// feature depends on for model selection — every model list request 404s,
+  /// so no message can currently be sent at all. Reported to HSA IT; remove
+  /// this once their deployment is updated (confirm `/api/hawki/v1/ai-models`
+  /// responds before re-enabling).
+  bool get isTemporarilyUnavailable => this == AppModule.hsaKi;
+
   static AppModule? fromStorage(String? value) {
     for (final AppModule module in AppModule.values) {
       if (module.storageValue == value) return module;

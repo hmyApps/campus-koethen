@@ -73,10 +73,15 @@ class _ModuleRow extends StatelessWidget {
     final AppColors colors = context.colors;
     final AppMetrics metrics = context.metrics;
     final TextTheme text = Theme.of(context).textTheme;
-    final String? subtitle = module.subtitle(l10n);
+    final bool disabled = module.isTemporarilyUnavailable;
+    final String? subtitle = disabled
+        ? l10n.moreModuleTemporarilyUnavailable
+        : module.subtitle(l10n);
+    final double contentOpacity = disabled ? 0.45 : 1;
 
     return Semantics(
       button: true,
+      enabled: !disabled,
       label: subtitle == null
           ? module.title(l10n)
           : '${module.title(l10n)}. $subtitle',
@@ -84,51 +89,55 @@ class _ModuleRow extends StatelessWidget {
       child: InkWell(
         // Pushed rather than switched to: a module opened from here belongs to
         // this stack, which is what keeps "Mehr" highlighted while it is open.
-        onTap: () => GoRouter.of(context).push(module.route),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: metrics.screenPadding,
-            vertical: AppSpacing.md,
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: AppSizes.minTouchTarget - AppSpacing.sm,
-                height: AppSizes.minTouchTarget - AppSpacing.sm,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  border: Border.all(
-                    color: colors.outline.withValues(alpha: 0.36),
-                    width: AppSizes.hairline,
+        onTap: disabled ? null : () => GoRouter.of(context).push(module.route),
+        child: Opacity(
+          opacity: contentOpacity,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.screenPadding,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: AppSizes.minTouchTarget - AppSpacing.sm,
+                  height: AppSizes.minTouchTarget - AppSpacing.sm,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(
+                      color: colors.outline.withValues(alpha: 0.36),
+                      width: AppSizes.hairline,
+                    ),
+                  ),
+                  child: Icon(
+                    module.icon,
+                    size: AppSizes.iconSmall,
+                    color: colors.primary,
                   ),
                 ),
-                child: Icon(
-                  module.icon,
-                  size: AppSizes.iconSmall,
-                  color: colors.primary,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(module.title(l10n), style: text.titleMedium),
-                    if (subtitle != null) ...<Widget>[
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(subtitle, style: text.bodySmall),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(module.title(l10n), style: text.titleMedium),
+                      if (subtitle != null) ...<Widget>[
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(subtitle, style: text.bodySmall),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(
-                AppIcons.chevron_right,
-                size: AppSizes.icon,
-                color: colors.textSecondary,
-              ),
-            ],
+                const SizedBox(width: AppSpacing.sm),
+                if (!disabled)
+                  Icon(
+                    AppIcons.chevron_right,
+                    size: AppSizes.icon,
+                    color: colors.textSecondary,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

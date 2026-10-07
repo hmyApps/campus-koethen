@@ -888,6 +888,8 @@
   "@privacyChangesBody": {},
   "moreTitle": "Mehr",
   "@moreTitle": {},
+  "moreModuleTemporarilyUnavailable": "Vorübergehend nicht verfügbar",
+  "@moreModuleTemporarilyUnavailable": {},
   "moreMail": "Studentische E-Mail",
   "@moreMail": {},
   "moreMailSubtitle": "Postfach der Hochschule Anhalt",
