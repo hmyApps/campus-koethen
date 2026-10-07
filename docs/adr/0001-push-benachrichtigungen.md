@@ -7,6 +7,13 @@ Benachrichtigungseinstellungen frei wählbar (Standard 08:00 Uhr, Ortszeit). Das
 Zustellfenster von 07:00 bis 20:00 Uhr gilt dafür nicht; N2 wird zur gewählten Uhrzeit geplant.
 Die folgenden älteren Festlegungen auf 08:00 Uhr sind insoweit durch diese Änderung ersetzt.
 
+**Änderung vom 07.10.2026:** Der Event-Vorlauf N1 ist nicht mehr fest auf 24 Stunden begrenzt.
+Lokal wählbar sind 15 Minuten, 1 Stunde, 6 Stunden, 1 Tag (Standard), 2 Tage und 1 Woche. Ein
+einzelnes öffentliches oder gemerktes Event kann den Standard überschreiben oder die Erinnerung
+abschalten. Die Regeln bleiben rein geräteseitig, klein und begrenzt gespeichert; Kategorie,
+Zustellfenster, Identität, Datenschutz und Planung ohne Push-Server bleiben unverändert. Alle
+folgenden Aussagen „exakt 24 Stunden“ beziehungsweise „nicht einstellbar“ sind insoweit ersetzt.
+
 | Feld            | Wert                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Status          | **Angenommen**                                                                                                                       |

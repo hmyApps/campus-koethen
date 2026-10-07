@@ -87,12 +87,12 @@ genug Raum für die Event-Erinnerungen, mit denen sie geteilt werden.
 Quellen — allesamt die vorhandenen Provider der jeweiligen Features, keine zweite Datenhaltung und
 kein zweiter Mapper:
 
-| Inhalt              | Quelle                                                                            |
-| ------------------- | --------------------------------------------------------------------------------- |
-| Lehrveranstaltungen | `timetableWeekProvider` der **gewählten** Gruppe; ohne Gruppe: keine              |
-| Relevante Events    | `publicCalendarMonthEntriesProvider` (aktivierte Kalender) + gemerkte Events      |
-| Moodle-Fristen      | der zwischengespeicherte Bestand, nur bei verbundenem Konto                       |
-| Mensa               | `canteenMenuProvider` der bevorzugten Mensa + `canteenFilterProvider` (Favoriten) |
+| Inhalt              | Quelle                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Lehrveranstaltungen | `timetableWeekProvider` für Haupt-, Zusatzgruppen und Gruppen abonnierter Einzelmodule; Modulfilter lokal; ohne Hauptgruppe: keine |
+| Relevante Events    | `publicCalendarMonthEntriesProvider` (aktivierte Kalender) + gemerkte Events                                                       |
+| Moodle-Fristen      | der zwischengespeicherte Bestand, nur bei verbundenem Konto                                                                        |
+| Mensa               | `canteenMenuProvider` der bevorzugten Mensa + `canteenFilterProvider` (Favoriten)                                                  |
 
 Die Anzeigeschalter des Kalenders werden **nicht** gelesen; ein Test hält das fest (§ 3).
 
@@ -144,7 +144,7 @@ Kollision wäre folgenlos, weil ohnehin vollständig neu geplant wird.
 P5 gibt es keine Moodle- und keine Stundenplan-Einzelhinweise, und damit auch keine Kategorie, die
 so etwas bräuchte. Ein Test hält das fest.
 
-### 1.4 N1 — `event.reminder`, genau eine Erinnerung 24 Stunden vorher
+### 1.4 N1 — `event.reminder`, eine lokal konfigurierbare Erinnerung je Event
 
 Umgesetzt in `application/event_reminder_candidates.dart` (LEVIORA-166). Die Kategorie besteht aus
 drei Teilen, die getrennt prüfbar sind:
@@ -157,10 +157,13 @@ Merkschalter des Kalenders (standardmäßig **aus**) hier nicht. Entdoppelt wird
 `savedEventEntriesForCalendar`, also der wiederverwendbaren Regel des Events-Features — nicht mit
 einer zweiten Fassung davon. Verwaiste (`isOrphaned`) und abgesagte Merkeinträge fallen heraus.
 
-**Regel** (`eventReminderRequests`, reine Funktion). Sollzeitpunkt ist `start` minus exakt 24
-Stunden als **absolute Dauer**; das Zustellfenster aus § 7.4 wendet der Planer an. Stundenplan- und
-Moodle-Einträge erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon —
-sie haben einen definierten `start`, und die Regel gilt darauf unverändert.
+**Regel** (`eventReminderRequests`, reine Funktion). Der globale Vorlauf ist lokal zwischen
+15 Minuten, 1 Stunde, 6 Stunden, 1 Tag (Standard), 2 Tagen und 1 Woche wählbar. Im Detail eines
+öffentlichen oder gemerkten Events kann die Regel geerbt, überschrieben oder für genau dieses Event
+abgeschaltet werden. Vorläufe sind **absolute Dauern**; das Zustellfenster aus § 7.4 wendet der
+Planer an. Würde das Fenster einen kurzen Vorlauf hinter den Eventbeginn schieben, wird auf die
+letzte zulässige 20:00-Grenze vor dem Event zurückgefallen. Stundenplan- und Moodle-Einträge
+erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon.
 
 **Text.** „Erinnerung morgen: …" beziehungsweise „Erinnerung heute: …", wenn das Zustellfenster den
 Hinweis auf den Eventtag selbst geschoben hat. Beide Seiten — Text und Zeitpunkt — fragen dieselbe

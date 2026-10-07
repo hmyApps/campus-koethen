@@ -7,6 +7,11 @@
 einer frei gewählten Ortszeit zugestellt werden. 08:00 Uhr ist nur noch der Standardwert.
 Ältere feste Uhrzeitangaben zu dieser Kategorie in der folgenden Spezifikation sind dadurch ersetzt.
 
+**Änderung vom 07.10.2026:** Event-Erinnerungen haben einen lokal wählbaren Standardvorlauf
+(15 Minuten, 1 Stunde, 6 Stunden, 1 Tag, 2 Tage oder 1 Woche; Standard 1 Tag). Im Eventdetail kann
+die Regel geerbt, überschrieben oder für genau diesen Termin abgeschaltet werden. Ältere Angaben
+„exakt 24 Stunden“ und „keine einstellbare Vorlaufzeit“ sind dadurch ersetzt.
+
 ---
 
 ## 1. Kontext, Ziel und Funktionsweise lokaler Benachrichtigungen
@@ -32,7 +37,7 @@ Gemäß der verbindlichen Produktentscheidung ([LEVIORA-159](mention://issue/5e3
 | (Datiert & beim letzten Abruf bekannt)           | (Erst nach App-Schließen neu)    |
 +--------------------------------------------------+----------------------------------+
 | - Relevante Events (gemerkt & aus aktivierten    | - Neue redaktionelle Beiträge    |
-|   Kalendern): genau 1 Hinweis 24h vorher         |   und Events, die erst nach dem  |
+|   Kalendern): höchstens 1 konfigurierbarer Hinweis|   und Events, die erst nach dem |
 | - Morgendliche Tagesübersicht um 08:00 Uhr       |   letzten App-Lauf entstanden    |
 |   (Mensa, Events, Vorlesungen, Moodle-Fristen)   | - Kurzfristige Ausfälle am Morgen|
 | - Favorisiertes Mensaessen um 11:00 Uhr          |   die erst nach dem letzten      |
@@ -64,7 +69,7 @@ Die Berechtigungsabfrage wird erst gestartet, wenn Nutzende ein klares Interesse
 
 | Einstiegspunkt            | Auslöser / Nutzeraktion                                                | Kontextueller Nutzen im Pre-Permission Sheet                                             |
 | :------------------------ | :--------------------------------------------------------------------- | :--------------------------------------------------------------------------------------- |
-| **A. Event merken**       | Nutzer tippt in `/news/events` oder `/calendar` auf „Event merken“     | „Erhalte exakt 24 Stunden vor Beginn deiner gemerkten Events eine Erinnerung.“           |
+| **A. Event merken**       | Nutzer tippt in `/news/events` oder `/calendar` auf „Event merken“     | „Erhalte mit deinem gewählten Vorlauf eine Erinnerung an gemerkte Events.“               |
 | **B. Mensa-Favorit**      | Nutzer favorisiert in `/canteen` ein Gericht (Stern-Symbol)            | „Lass dich um 11:00 Uhr erinnern, wenn dein Lieblingsgericht auf dem Speiseplan steht.“  |
 | **C. Stundenplan-Gruppe** | Nutzer wählt in `/calendar` erstmals seine Seminargruppe               | „Erhalte deine Tagesübersicht um 08:00 Uhr mit allen Vorlesungen und Terminen.“          |
 | **D. Moodle-Anmeldung**   | Nutzer verknüpft Moodle in `/more/moodle`                              | „Lass dich in der morgendlichen Tagesübersicht an anstehende Fristen erinnern.“          |
@@ -98,8 +103,8 @@ Bereitet den nativen Systemdialog transparent vor. Folgt dem Design-System (`24 
 - **Icon**: `IconBellCheck` in Beere (`#C2185B` Light / `#EC6E9F` Dark), Container `48x48 dp` (`#FBE4EE` / `#511F37`).
 - **Titel**: 20/24, Gewicht 800: `Lokale Benachrichtigungen aktivieren?` (EN: `Enable local notifications?`)
 - **Fließtext**: 14/20, Gewicht 400:
-  - _DE_: `Erhalte morgens um 08:00 Uhr deine Tagesübersicht mit Vorlesungen, Terminen, Fristen und Mensa sowie rechtzeitige Hinweise zu gemerkten Events (24 Stunden vorher) und Mensa-Favoriten (11:00 Uhr). Alle Benachrichtigungen werden rein lokal auf deinem Smartphone geplant – ohne Tracking, ohne Server und ohne Nutzerkonto.`
-  - _EN_: `Get your daily overview at 8:00 AM with lectures, events, deadlines, and canteen menus, plus timely reminders for saved events (24 hours prior) and canteen favourites (11:00 AM). All notifications are scheduled purely on your device – no tracking, no servers, no user account.`
+  - _DE_: `Erhalte zur gewählten Uhrzeit deine Tagesübersicht mit Vorlesungen, Terminen, Fristen und Mensa sowie konfigurierbare Hinweise zu gemerkten Events und Mensa-Favoriten (11:00 Uhr). Alle Benachrichtigungen werden rein lokal auf deinem Smartphone geplant – ohne Tracking, ohne Server und ohne Nutzerkonto.`
+  - _EN_: `Get your daily overview at your chosen time with lectures, events, deadlines and canteen menus, plus configurable reminders for saved events and canteen favourites (11:00 AM). All notifications are scheduled purely on your device – no tracking, no servers, no user account.`
 - **Privacy-Note**: 12/16, Gewicht 600 mit `IconShieldCheck` (Größe 16):
   - _DE_: `100 % geräteseitig: Deine Daten und Einstellungen verlassen niemals dein Smartphone.`
   - _EN_: `100% on-device: Your preferences and data never leave your phone.`
@@ -138,7 +143,7 @@ Die Benachrichtigungseinstellungen liegen unter _Mehr → Einstellungen → Bena
 |  Moodle-Abgabefristen und Speiseplan                        |
 |                                                             |
 |  Gemerkte & öffentliche Events                       [ ON ] |
-|  Genau eine Erinnerung 24h vor Beginn                       |
+|  Eine Erinnerung je Event mit einstellbarem Vorlauf         |
 |  (Zustellfenster: 07:00–20:00 Uhr)                          |
 |                                                             |
 |  Favorisierte Mensagerichte                          [ ON ] |
@@ -174,19 +179,19 @@ Die Benachrichtigungseinstellungen liegen unter _Mehr → Einstellungen → Bena
 
 ### 4.1 Detailmatrix nach LEVIORA-159
 
-| #         | Kategorie-ID & Name (DE / EN)                                                              | Fachlicher Umfang                                                                        | Quelle & Trigger                                                         | Vorlauf & Zustellzeitpunkt                                                            | Bündelung & Frequenz                                                                  | Default (nach Opt-in) |
-| :-------- | :----------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- | :------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------ | :-------------------- |
-| **K7**    | `daily_summary`<br>**Morgendliche Tagesübersicht**<br>_Daily Morning Summary_              | **Hoch**: Zusammenfassung aller relevanten Termine des Tages auf einen Blick.            | Aggregierter lokaler Tagesbestand (Kalender, Vorlesungen, Moodle, Mensa) | **Morgens um 08:00 Uhr** (täglich)                                                    | **Genau 1 Nachricht pro Tag**. Fasst Mensa, Events, Stundenplan und Fristen zusammen. | **EIN**               |
-| **K1/K2** | `events_reminder`<br>**Gemerkte & öffentliche Events**<br>_Saved & Public Calendar Events_ | **Sehr hoch**: Pünktliche Erinnerung an selbst gemerkte Termine und aktivierte Kalender. | `campus_saved_events_v1` + lokaler Kalender-Cache aktivierter Kalender   | **Exakt 24 Stunden vorher**.<br>Zustellfenster: **07:00–20:00 Uhr** (sonst 07:00 Uhr) | **Genau 1 Nachricht je Event**. Gleichzeitig fällige Hinweise bleiben getrennt.       | **EIN**               |
-| **K5**    | `canteen_favourites`<br>**Favorisierte Mensagerichte**<br>_Canteen Meal Favourites_        | **Hoch**: Informiert gezielt, wenn Lieblingsgerichte auf dem Speiseplan stehen.          | Lokaler Speiseplan-Cache (14 Tage) + `canteen.favourites.v1`             | **Vormittags um 11:00 Uhr** am Angebotstag                                            | **Genau 1 Nachricht um 11:00 Uhr**. Zusätzlicher Einzelhinweis zur Tagesübersicht.    | **EIN**               |
-| **K3**    | `timetable_lectures`<br>**Lehrveranstaltungen & Stundenplan**<br>_Timetable & Lectures_    | **Bestandteil K7**: Geplante Vorlesungen & bekannte Änderungen.                          | Lokaler Stundenplan-Cache der gewählten Gruppe                           | Fließt in die Tagesübersicht um **08:00 Uhr** ein.                                    | **Keine zusätzlichen Einzelerinnerungen**.                                            | **EIN** (in K7)       |
-| **K6**    | `moodle_deadlines`<br>**Moodle-Abgabefristen**<br>_Moodle Submission Deadlines_            | **Bestandteil K7**: Diskreter Schutz vor verpassten Abgabefristen.                       | Verschlüsselte lokale Moodle-Box (`dueAt`)                               | Fließt in die Tagesübersicht um **08:00 Uhr** ein.                                    | **Keine zusätzlichen Einzelerinnerungen**.                                            | **EIN** (in K7)       |
+| #         | Kategorie-ID & Name (DE / EN)                                                              | Fachlicher Umfang                                                                        | Quelle & Trigger                                                         | Vorlauf & Zustellzeitpunkt                                                              | Bündelung & Frequenz                                                                                   | Default (nach Opt-in) |
+| :-------- | :----------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- | :-------------------- |
+| **K7**    | `daily_summary`<br>**Morgendliche Tagesübersicht**<br>_Daily Morning Summary_              | **Hoch**: Zusammenfassung aller relevanten Termine des Tages auf einen Blick.            | Aggregierter lokaler Tagesbestand (Kalender, Vorlesungen, Moodle, Mensa) | **Morgens um 08:00 Uhr** (täglich)                                                      | **Genau 1 Nachricht pro Tag**. Fasst Mensa, Events, Stundenplan und Fristen zusammen.                  | **EIN**               |
+| **K1/K2** | `events_reminder`<br>**Gemerkte & öffentliche Events**<br>_Saved & Public Calendar Events_ | **Sehr hoch**: Pünktliche Erinnerung an selbst gemerkte Termine und aktivierte Kalender. | `campus_saved_events_v1` + lokaler Kalender-Cache aktivierter Kalender   | **Wählbar: 15 min bis 1 Woche; Standard 1 Tag**.<br>Zustellfenster: **07:00–20:00 Uhr** | **Genau 1 Nachricht je Event**, optional je Event aus. Gleichzeitig fällige Hinweise bleiben getrennt. | **EIN**               |
+| **K5**    | `canteen_favourites`<br>**Favorisierte Mensagerichte**<br>_Canteen Meal Favourites_        | **Hoch**: Informiert gezielt, wenn Lieblingsgerichte auf dem Speiseplan stehen.          | Lokaler Speiseplan-Cache (14 Tage) + `canteen.favourites.v1`             | **Vormittags um 11:00 Uhr** am Angebotstag                                              | **Genau 1 Nachricht um 11:00 Uhr**. Zusätzlicher Einzelhinweis zur Tagesübersicht.                     | **EIN**               |
+| **K3**    | `timetable_lectures`<br>**Lehrveranstaltungen & Stundenplan**<br>_Timetable & Lectures_    | **Bestandteil K7**: Geplante Vorlesungen & bekannte Änderungen.                          | Lokaler Stundenplan-Cache der gewählten Gruppe                           | Fließt in die Tagesübersicht um **08:00 Uhr** ein.                                      | **Keine zusätzlichen Einzelerinnerungen**.                                                             | **EIN** (in K7)       |
+| **K6**    | `moodle_deadlines`<br>**Moodle-Abgabefristen**<br>_Moodle Submission Deadlines_            | **Bestandteil K7**: Diskreter Schutz vor verpassten Abgabefristen.                       | Verschlüsselte lokale Moodle-Box (`dueAt`)                               | Fließt in die Tagesübersicht um **08:00 Uhr** ein.                                      | **Keine zusätzlichen Einzelerinnerungen**.                                                             | **EIN** (in K7)       |
 
 ### 4.2 Frequenz-, Zeitfenster- und Bündelungsregeln
 
-1. **Exakte 24-Stunden-Regel mit Zustellfenster (07:00–20:00 Uhr)**:
-   - Ein relevantes Event löst genau eine Erinnerung exakt 24 Stunden vor Veranstaltungsbeginn aus.
-   - Liegt dieser 24-Stunden-Zeitpunkt außerhalb des Zeitfensters von **07:00 bis 20:00 Uhr** (z. B. bei einem Event, das um 08:00 Uhr morgens beginnt, wäre 24h vorher 08:00 Uhr am Vortag = im Fenster; bei einem frühen Event oder besonderen Zeiten außerhalb 07:00–20:00 Uhr), erfolgt die Zustellung stattdessen zum **nächstmöglichen Zeitpunkt um 07:00 Uhr**.
+1. **Konfigurierbarer Event-Vorlauf mit Zustellfenster (07:00–20:00 Uhr)**:
+   - Ein relevantes Event löst höchstens eine Erinnerung mit globalem oder eventbezogenem Vorlauf aus; „Aus“ unterdrückt genau diesen Termin.
+   - Liegt der Zeitpunkt außerhalb des Fensters, wird er in das zulässige Fenster verschoben. Eine Verschiebung darf nie nach dem Eventbeginn landen; dann gilt die letzte zulässige 20:00-Grenze davor.
 2. **Feste Zeitpunkte für Tagesübersicht und Mensa**:
    - Die Tagesübersicht erscheint verlässlich um **08:00 Uhr**.
    - Der Mensa-Favoritenhinweis erscheint verlässlich um **11:00 Uhr**.
@@ -352,7 +357,7 @@ Ein Tap auf eine Benachrichtigung führt direkt zum betroffenen Inhalt:
 | **Kategorie-Defaults**              | **Alle Kategorien standardmäßig aktiviert (EIN)** nach globalem Opt-in.                                         |
 | **Tagesübersicht (K7)**             | **08:00 Uhr morgens**; umfasst Vorlesungen, Moodle-Abgabefristen, relevante Events und Mensa.                   |
 | **Stundenplan (K3) & Moodle (K6)**  | **Keine separaten Einzelerinnerungen**; fließen vollständig in die Tagesübersicht (08:00 Uhr) ein.              |
-| **Events (K1/K2)**                  | **Genau 1 Erinnerung exakt 24 Stunden vorher**; Zustellfenster **07:00–20:00 Uhr** (sonst 07:00 Uhr).           |
+| **Events (K1/K2)**                  | **Höchstens 1 Erinnerung je Event**, Vorlauf global oder je Event wählbar; Zustellfenster **07:00–20:00 Uhr**.  |
 | **Mensa-Favorit (K5)**              | **Genau 1 Einzelhinweis um 11:00 Uhr** am Tag des Angebots.                                                     |
 | **Bündelung gleichzeitig fälliger** | **Keine Bündelung**; gleichzeitig fällige Hinweise werden als separate Benachrichtigungen zugestellt.           |
 | **Sperrbildschirm-Datenschutz**     | Öffentliche Events/Mensa vollständig sichtbar; **persönliche Inhalte (Moodle) bleiben vor Entsperren neutral**. |

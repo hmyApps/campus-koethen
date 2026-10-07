@@ -9,6 +9,11 @@ Icons und Abstände folgen den mitgelieferten Light- und Dark-Mockups.
 Die App besitzt genau zwei feste Paletten. Eine frei wählbare Akzentfarbe oder
 ein Systemmodus werden nicht angeboten.
 
+Davon getrennt sind semantische **Kalender-Inhaltsfarben**: Nutzer können aus einer zentral
+definierten, kontrastgeprüften Palette Farben für Stundenplan, Moodle, gemerkte Events und einzelne
+öffentliche Kalender wählen. Das ändert weder die App-Akzentfarbe noch das Light-/Dark-Theme;
+Kalendername, Text und Icon bleiben stets zusätzliche, nichtfarbliche Unterscheidungsmerkmale.
+
 | Rolle            | Light     | Dark      |
 | ---------------- | --------- | --------- |
 | Primär / Beere   | `#C2185B` | `#EC6E9F` |

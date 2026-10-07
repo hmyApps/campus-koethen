@@ -71,7 +71,11 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
   Bereich
 - **Gruppenstundenplan** aus der öffentlichen WebUntis-Ansicht — vollständig umgesetzt, aber
   serverseitig über `WEBUNTIS_ENABLED` **standardmäßig deaktiviert**, bis die Nutzung
-  organisatorisch freigegeben ist (siehe Release-Gates)
+  organisatorisch freigegeben ist (siehe Release-Gates); ein Hauptkurs und bis zu zwölf weitere
+  Studiengruppen oder Gruppen mit einzeln abonnierten Modulen werden lokal gefiltert, entdoppelt
+  und zusammengeführt
+- **Semester-Assistent** — schlägt nach Ende des bisherigen Zeitraums einen ähnlich passenden
+  Hauptkurs aus dem nächsten verfügbaren Semesterkatalog vor; nie ein automatischer Wechsel
 - **Öffentliche Google-Kalender** über deren öffentlichen ICS-Feed, redaktionell in Strapi
   gepflegt — vollständig umgesetzt, aber über `PUBLIC_CALENDAR_ENABLED` **standardmäßig
   deaktiviert**; ohne Google API Key, ohne OAuth, ohne Anbindung persönlicher Google-Konten
@@ -83,7 +87,8 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
 - Quellen: Stundenplan (Campus API), öffentliche Kalender (Campus API), Moodle-Deadlines (direkt)
 - Zusammenführung **ausschließlich lokal auf dem Gerät**; Quellen sind isoliert — ein Fehler einer
   Quelle blendet die anderen nicht aus, sondern erscheint als eigenes Banner
-- „Kalender verwalten": lokale Auswahl der öffentlichen Kalender
+- „Kalender verwalten": lokale Auswahl der öffentlichen Kalender sowie lokale Inhaltsfarben pro
+  Quelle und pro öffentlichem Kalender
 
 **Persönliche Dienste, direkt vom Gerät**
 
@@ -128,8 +133,10 @@ Zugangsdaten verlassen das Gerät nur in Richtung des offiziellen Anbieters.
 **Lokales und Rahmen**
 
 - Lokale Aufgabenliste unter „Mehr → Aufgaben" — rein auf dem Gerät, ohne jede Netzbeteiligung
-- Lokale Einstellungen: Sprache, Theme, Kanal-Abos, bevorzugte Mensa, gewählte Stundenplangruppe,
-  Kalenderauswahl, Anhänge-Download für E-Mail
+- Lokale Einstellungen: Sprache, Theme, Kanal-Abos, bevorzugte Mensa, Haupt- und zusätzliche
+  Stundenplangruppen beziehungsweise einzelne Zusatzmodule, Semesterhinweise,
+  Kalenderauswahl/-farben, Erinnerungsregeln und
+  Anhänge-Download für E-Mail
 - Offline-/Cache-Verhalten mit klarer Stale-Kennzeichnung
 - About, Impressums-Platzhalter, Datenschutz-Platzhalter
 - Deutsch und Englisch in App, CMS und API
@@ -145,8 +152,7 @@ CMS-Schreibzugang in der App · Auswertung des SVG zur Laufzeit (ein Tap trifft 
 dem Katalog, nicht das Bild)
 
 **Stundenplan:** persönlicher WebUntis-Login · Stundenpläne für Lehrpersonen oder Räume ·
-Raumverfügbarkeit („freie Räume") · Zusammenführen mehrerer Gruppen in einen Plan ·
-Abwesenheiten und Hausaufgaben
+Raumverfügbarkeit („freie Räume") · Abwesenheiten und Hausaufgaben
 
 **Moodle:** jeder Schreibzugriff — keine Abgaben, keine Forenbeiträge, keine generische
 „beliebige Funktion aufrufen"-Schnittstelle
@@ -235,6 +241,9 @@ gebaut.
   standardmäßig Montag bis Freitag; das Wochenende ist ein lokaler, versionierter Schalter.
 - Öffentliche Termine tragen einen Farbpunkt **plus** Kalendername und Icon — Farbe ist nie das
   alleinige Unterscheidungsmerkmal.
+- Inhaltsfarben für Stundenplan, Moodle und gemerkte Events sind lokal wählbar; jeder öffentliche
+  Kalender kann die redaktionelle Standardfarbe lokal überschreiben. Die Auswahl verändert keine
+  Daten und wird nie an das Backend übertragen.
 - Eine neue Quelle bedeutet: ein Wert in `CalendarSource`, ein Mapper und eine Verdrahtung im
   Aggregator. Mehr nicht.
 - **Kalenderauswahl:** `defaultSubscribed` wird pro Slug **genau einmal** ausgewertet — beim
@@ -309,16 +318,17 @@ Details: [`../campus-map.md`](../campus-map.md).
 
 Lokal gespeichert werden:
 
-| Daten                                                         | Speicher                                     |
-| ------------------------------------------------------------- | -------------------------------------------- |
-| Kanal-Abos, Kalenderauswahl, bevorzugte Mensa, Sprache, Theme | `SharedPreferences` (kleine Skalare)         |
-| Gewählte Stundenplangruppe, Anhänge-Download                  | `SharedPreferences`                          |
-| Letzte News-Seite · Kanäle · Kontakte vollständig             | `hive_ce`                                    |
-| Mensadaten aktuelle + kommende Woche                          | `hive_ce`                                    |
-| Aufgabenliste                                                 | `hive_ce`, rein lokal                        |
-| E-Mail-Kopfzeilen, -Inhalte, Adressindex, optional Anhänge    | **verschlüsselte** `hive_ce`-Box             |
-| Noten, Moodle-Inhalte                                         | **verschlüsselte** `hive_ce`-Box             |
-| Zugangsdaten, Token, Schlüssel der verschlüsselten Boxen      | `flutter_secure_storage` (Keychain/Keystore) |
+| Daten                                                                                | Speicher                                     |
+| ------------------------------------------------------------------------------------ | -------------------------------------------- |
+| Kanal-Abos, Kalenderauswahl, bevorzugte Mensa, Sprache, Theme                        | `SharedPreferences` (kleine Skalare)         |
+| Haupt-/Zusatzgruppen und -module, Semesterhinweis, Kalenderfarben, Erinnerungsregeln | `SharedPreferences`                          |
+| Anhänge-Download                                                                     | `SharedPreferences`                          |
+| Letzte News-Seite · Kanäle · Kontakte vollständig                                    | `hive_ce`                                    |
+| Mensadaten aktuelle + kommende Woche                                                 | `hive_ce`                                    |
+| Aufgabenliste                                                                        | `hive_ce`, rein lokal                        |
+| E-Mail-Kopfzeilen, -Inhalte, Adressindex, optional Anhänge                           | **verschlüsselte** `hive_ce`-Box             |
+| Noten, Moodle-Inhalte                                                                | **verschlüsselte** `hive_ce`-Box             |
+| Zugangsdaten, Token, Schlüssel der verschlüsselten Boxen                             | `flutter_secure_storage` (Keychain/Keystore) |
 
 Gecachte Daten werden klar als offline bzw. veraltet gekennzeichnet. **Ein Cachefehler darf nie zum
 App-Crash führen** — er degradiert auf einen Netzwerkabruf. Umgekehrt darf eine leere oder
