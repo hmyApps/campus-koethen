@@ -518,6 +518,36 @@ void main() {
   });
 
   group('message detail', () {
+    testWidgets('deletes only after confirmation', (WidgetTester tester) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway(
+        detail: MailMessageDetail(
+          id: '1',
+          subject: 'Betreff',
+          from: const MailAddress(email: 'alice@hs-anhalt.de', name: 'Alice'),
+          to: const <MailAddress>[MailAddress(email: 'stud@hs-anhalt.de')],
+          date: null,
+          body: 'Nachricht',
+        ),
+      );
+      await pumpScreen(
+        tester,
+        const MailMessageScreen(id: '1'),
+        overrides: _mail(gateway, store),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('E-Mail löschen'));
+      await tester.pumpAndSettle();
+      expect(gateway.deletedMessages, isEmpty);
+      await tester.tap(find.widgetWithText(FilledButton, 'Löschen'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.deletedMessages, <({String mailboxPath, String id})>[
+        (mailboxPath: 'INBOX', id: '1'),
+      ]);
+    });
+
     testWidgets('renders the plain-text body and marks it seen', (
       WidgetTester tester,
     ) async {

@@ -25,8 +25,8 @@ import 'mail_mime_builder.dart';
 ///    certificate AND hostname validation and rejects anything invalid.
 ///  - `isLogEnabled` is NEVER set, so enough_mail's protocol logging — which
 ///    would print credentials and message content — stays off.
-///  - Every method opens, uses and closes its own connections; there is no
-///    persistent IMAP IDLE.
+///  - Request methods open, use and close their own connections. The sole
+///    exception is the explicitly cancellable foreground [watchInbox] stream.
 ///  - Raw exceptions are converted to a [MailFailure] classification; server
 ///    responses and credentials never escape this class.
 class EnoughMailGateway implements MailGateway {
@@ -413,6 +413,221 @@ class EnoughMailGateway implements MailGateway {
         );
       });
     });
+  }
+
+  @override
+  Future<void> deleteMessage(
+    domain.MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+  }) async {
+    await _guard(() async {
+      await _withImap(credentials, (ImapClient client) async {
+        final int? uid = int.tryParse(id);
+        if (uid == null || uid <= 0) {
+          throw const MailFailure(MailFailureKind.protocol);
+        }
+        final List<Mailbox> boxes = await client.listMailboxes(recursive: true);
+        Mailbox? trash = boxes.where((Mailbox box) => box.isTrash).firstOrNull;
+        trash ??= boxes
+            .where(
+              (Mailbox box) =>
+                  box.name == 'Trash' ||
+                  box.name == 'Deleted Items' ||
+                  box.name == 'Gelöschte Elemente' ||
+                  box.name == 'Papierkorb',
+            )
+            .firstOrNull;
+        await _select(client, mailboxPath);
+        final MessageSequence sequence = MessageSequence.fromRange(
+          uid,
+          uid,
+          isUidSequence: true,
+        );
+
+        if (trash != null && trash.encodedPath != mailboxPath) {
+          if (client.serverInfo.supportsMove) {
+            await client.uidMove(sequence, targetMailbox: trash);
+            return;
+          }
+          if (!client.serverInfo.supportsUidPlus) {
+            // A broad EXPUNGE could irreversibly remove unrelated messages
+            // another client marked. Fail closed when UID-scoped cleanup is
+            // unavailable.
+            throw const MailFailure(MailFailureKind.protocol);
+          }
+          await client.uidCopy(sequence, targetMailbox: trash);
+          await client.uidMarkDeleted(sequence, silent: true);
+          await client.uidExpunge(sequence);
+          return;
+        }
+
+        if (!client.serverInfo.supportsUidPlus) {
+          throw const MailFailure(MailFailureKind.protocol);
+        }
+        await client.uidMarkDeleted(sequence, silent: true);
+        await client.uidExpunge(sequence);
+      });
+    });
+  }
+
+  @override
+  Stream<MailLiveSignal> watchInbox(domain.MailCredentials credentials) {
+    late final StreamController<MailLiveSignal> controller;
+    ImapClient? client;
+    Timer? keepAlive;
+    final List<StreamSubscription<dynamic>> subscriptions =
+        <StreamSubscription<dynamic>>[];
+    bool idle = false;
+    bool closing = false;
+    bool restarting = false;
+
+    Future<void> cleanup() async {
+      if (closing) return;
+      closing = true;
+      keepAlive?.cancel();
+      for (final StreamSubscription<dynamic> subscription in subscriptions) {
+        await subscription.cancel();
+      }
+      final ImapClient? active = client;
+      if (active == null) return;
+      if (idle) {
+        try {
+          await active.idleDone().timeout(_cleanupTimeout);
+        } catch (_) {}
+      }
+      try {
+        await active.logout().timeout(_cleanupTimeout);
+      } catch (_) {}
+      try {
+        await active.disconnect().timeout(_cleanupTimeout);
+      } catch (_) {}
+    }
+
+    MailFailure safeFailure(Object error) {
+      if (error is MailFailure) return error;
+      if (error is TimeoutException) {
+        return const MailFailure(MailFailureKind.timeout);
+      }
+      if (error is HandshakeException || error is TlsException) {
+        return const MailFailure(MailFailureKind.tls);
+      }
+      if (error is SocketException) {
+        return const MailFailure(MailFailureKind.serverUnreachable);
+      }
+      if (error is ImapException) {
+        return MailFailure(_classifyImap(error));
+      }
+      return const MailFailure(MailFailureKind.protocol);
+    }
+
+    Future<void> fail(Object error) async {
+      if (closing || controller.isClosed) return;
+      controller.addError(safeFailure(error));
+      await controller.close();
+    }
+
+    void changed() {
+      if (!closing && !controller.isClosed) {
+        controller.add(MailLiveSignal.changed);
+      }
+    }
+
+    Future<void> restartIdle() async {
+      final ImapClient? active = client;
+      if (active == null || closing || restarting) return;
+      restarting = true;
+      try {
+        await active.idleDone().timeout(_commandTimeout);
+        idle = false;
+        await active.idleStart().timeout(_commandTimeout);
+        idle = true;
+      } catch (error) {
+        await fail(error);
+      } finally {
+        restarting = false;
+      }
+    }
+
+    Future<void> poll() async {
+      final ImapClient? active = client;
+      if (active == null || closing || restarting) return;
+      restarting = true;
+      try {
+        await active.noop().timeout(_commandTimeout);
+        changed();
+      } catch (error) {
+        await fail(error);
+      } finally {
+        restarting = false;
+      }
+    }
+
+    Future<void> connect() async {
+      try {
+        final ImapClient active = ImapClient(
+          isLogEnabled: false,
+          defaultWriteTimeout: _commandTimeout,
+          defaultResponseTimeout: _commandTimeout,
+        );
+        client = active;
+        await active
+            .connectToServer(
+              _profile.imapHost,
+              _profile.imapPort,
+              isSecure: _profile.imapImplicitTls,
+              timeout: _connectionTimeout,
+            )
+            .timeout(_connectionTimeout);
+        await active.login(credentials.emailAddress, credentials.password);
+        await active.selectInbox();
+        if (closing) return;
+
+        subscriptions.addAll(<StreamSubscription<dynamic>>[
+          active.eventBus.on<ImapMessagesExistEvent>().listen((event) {
+            if (event.newMessagesExists > event.oldMessagesExists) changed();
+          }),
+          active.eventBus.on<ImapMessagesRecentEvent>().listen((event) {
+            if (event.newMessagesRecent > event.oldMessagesRecent) changed();
+          }),
+          active.eventBus.on<ImapExpungeEvent>().listen((_) => changed()),
+          active.eventBus.on<ImapVanishedEvent>().listen((_) => changed()),
+          active.eventBus.on<ImapFetchEvent>().listen((_) => changed()),
+          active.eventBus.on<ImapConnectionLostEvent>().listen(
+            (_) => unawaited(
+              fail(const MailFailure(MailFailureKind.serverUnreachable)),
+            ),
+          ),
+        ]);
+
+        if (active.serverInfo.supportsIdle) {
+          await active.idleStart().timeout(_commandTimeout);
+          idle = true;
+          controller.add(MailLiveSignal.connected);
+          // RFC 2177 recommends ending IDLE before the common 30-minute
+          // server timeout. Restarting keeps one authenticated foreground
+          // session without periodic full mailbox downloads.
+          keepAlive = Timer.periodic(
+            const Duration(minutes: 25),
+            (_) => unawaited(restartIdle()),
+          );
+        } else {
+          controller.add(MailLiveSignal.pollingFallback);
+          keepAlive = Timer.periodic(
+            const Duration(minutes: 1),
+            (_) => unawaited(poll()),
+          );
+        }
+      } catch (error) {
+        await fail(error);
+      }
+    }
+
+    controller = StreamController<MailLiveSignal>(
+      onListen: () => unawaited(connect()),
+      onCancel: cleanup,
+    );
+    return controller.stream;
   }
 
   @override

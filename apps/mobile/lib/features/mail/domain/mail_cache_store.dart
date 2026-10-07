@@ -39,6 +39,10 @@ abstract interface class MailCacheStore {
   /// quadratic work. Callers with more than one message must use this.
   Future<void> saveMessages(List<MailMessageDetail> messages);
 
+  /// Removes one message, its header and any addresses no longer referenced by
+  /// another cached message.
+  Future<void> removeMessage(String id);
+
   /// Headers of the cached messages matching [query], newest first.
   ///
   /// This is the offline half of mail search: it matches sender, recipients,

@@ -13,22 +13,24 @@ import 'dart:io';
 /// parsing of the response. Each connected test can inspect
 /// [receivedCommands] to assert on that command text.
 class FakeImapServer {
-  FakeImapServer._(this._server, this.onCommand);
+  FakeImapServer._(this._server, this.onCommand, this._greeting);
 
   final ServerSocket _server;
   final List<String> Function(String tag, String command) onCommand;
+  final String _greeting;
 
   /// Every command line received, across all connections, in order.
   final List<String> receivedCommands = <String>[];
 
   static Future<FakeImapServer> start(
-    List<String> Function(String tag, String command) onCommand,
-  ) async {
+    List<String> Function(String tag, String command) onCommand, {
+    String greeting = '* OK IMAP4rev1 fake server ready',
+  }) async {
     final ServerSocket server = await ServerSocket.bind(
       InternetAddress.loopbackIPv4,
       0,
     );
-    final FakeImapServer fake = FakeImapServer._(server, onCommand);
+    final FakeImapServer fake = FakeImapServer._(server, onCommand, greeting);
     server.listen(fake._handleConnection);
     return fake;
   }
@@ -36,7 +38,7 @@ class FakeImapServer {
   int get port => _server.port;
 
   void _handleConnection(Socket socket) {
-    socket.write('* OK IMAP4rev1 fake server ready\r\n');
+    socket.write('$_greeting\r\n');
     final StringBuffer pending = StringBuffer();
     socket.listen((List<int> data) {
       pending.write(utf8.decode(data));

@@ -224,6 +224,11 @@ class _CategorySwitch extends ConsumerWidget {
         l10n.notificationsCategoryCanteenSubtitle,
         AppIcons.restaurant_outlined,
       ),
+      NotificationCategory.newMail => (
+        l10n.notificationsCategoryNewMail,
+        l10n.notificationsCategoryNewMailSubtitle,
+        AppIcons.mail_outline,
+      ),
     };
     return _SemanticSwitchTile(
       icon: icon,

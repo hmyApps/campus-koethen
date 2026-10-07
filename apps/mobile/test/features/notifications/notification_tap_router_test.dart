@@ -184,6 +184,28 @@ void main() {
     });
   });
 
+  group('new mail', () {
+    test('opens the inbox for a validated IMAP UID', () {
+      final NotificationTapTarget? target = router.resolve('v1|mail.new|4711');
+
+      expect(target?.location, AppRoutes.mail);
+      expect(target?.resolved, isTrue);
+    });
+
+    test('a malformed UID falls back to the inbox and says so', () {
+      for (final String broken in <String>[
+        'v1|mail.new|abc',
+        'v1|mail.new|-1',
+        'v1|mail.new|1@host',
+        'v1|mail.new|123456789012345678901',
+      ]) {
+        final NotificationTapTarget? target = router.resolve(broken);
+        expect(target?.location, AppRoutes.mail, reason: broken);
+        expect(target?.resolved, isFalse, reason: broken);
+      }
+    });
+  });
+
   test('a payload this version cannot read navigates nowhere at all', () {
     for (final String? raw in <String?>[
       null,
@@ -198,12 +220,17 @@ void main() {
   });
 
   test('every destination is an existing app route', () {
-    const Set<String> known = <String>{AppRoutes.calendar, AppRoutes.canteen};
+    const Set<String> known = <String>{
+      AppRoutes.calendar,
+      AppRoutes.canteen,
+      AppRoutes.mail,
+    };
     for (final String payload in <String>[
       'v1|event.reminder|savedEvent:1',
       'v1|daily.summary|2026-09-03',
       'v1|canteen.favourite|mensa-fasanerieallee:2026-09-03',
       'v1|canteen.favourite|broken',
+      'v1|mail.new|4711',
     ]) {
       expect(known, contains(router.resolve(payload)!.location));
     }

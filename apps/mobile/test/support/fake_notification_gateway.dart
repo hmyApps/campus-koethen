@@ -39,6 +39,7 @@ class FakeNotificationGateway implements NotificationGateway {
 
   final List<String> calls = <String>[];
   final List<PlannedNotification> pending = <PlannedNotification>[];
+  final List<ImmediateNotification> shown = <ImmediateNotification>[];
   final List<NotificationChannelSpec> channels = <NotificationChannelSpec>[];
 
   int requestCount = 0;
@@ -86,6 +87,12 @@ class FakeNotificationGateway implements NotificationGateway {
       throw StateError('platform refused ${notification.key}');
     }
     pending.add(notification);
+  }
+
+  @override
+  Future<void> showNow(ImmediateNotification notification) async {
+    calls.add('showNow:${notification.key}');
+    shown.add(notification);
   }
 
   @override

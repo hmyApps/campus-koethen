@@ -109,11 +109,16 @@ void main() {
     });
   });
 
-  group('categories are the approved three (LEVIORA-159)', () {
+  group('categories are the approved four', () {
     test('no more and no fewer', () {
       expect(
         NotificationCategory.values.map((NotificationCategory c) => c.key),
-        <String>['event.reminder', 'daily.summary', 'canteen.favourite'],
+        <String>[
+          'event.reminder',
+          'daily.summary',
+          'canteen.favourite',
+          'mail.new',
+        ],
       );
     });
 
@@ -122,13 +127,13 @@ void main() {
         NotificationCategory.values
             .map((NotificationCategory c) => c.channelId)
             .toSet(),
-        hasLength(3),
+        hasLength(4),
       );
       expect(
         NotificationCategory.values
             .map((NotificationCategory c) => c.keyPrefix)
             .toSet(),
-        hasLength(3),
+        hasLength(4),
       );
     });
 

@@ -26,15 +26,21 @@ import '../../../core/widgets/screen_scaffold.dart';
 /// Reads one message. The body is already reduced to safe plain text by the
 /// gateway (text/plain preferred, HTML sanitised): there is no WebView, no
 /// JavaScript and no remote image loading here.
-class MailMessageScreen extends ConsumerWidget {
+class MailMessageScreen extends ConsumerStatefulWidget {
   const MailMessageScreen({required this.id, super.key});
 
   final String id;
 
+  @override
+  ConsumerState<MailMessageScreen> createState() => _MailMessageScreenState();
+}
+
+class _MailMessageScreenState extends ConsumerState<MailMessageScreen> {
+  bool _deleting = false;
+
   /// Opens the compose screen pre-filled as a reply (or reply-all) to [detail].
   void _reply(
     BuildContext context,
-    WidgetRef ref,
     MailMessageDetail detail, {
     required bool all,
   }) {
@@ -60,13 +66,59 @@ class MailMessageScreen extends ConsumerWidget {
     context.push(AppRoutes.mailCompose, extra: draft);
   }
 
+  Future<void> _delete(MailMessageRef messageRef) async {
+    final AppLocalizations l10n = context.l10n;
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) => AlertDialog(
+            title: Text(l10n.mailDeleteConfirmTitle),
+            content: Text(l10n.mailDeleteConfirmBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(l10n.mailCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(l10n.mailDeleteConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await ref
+          .read(mailInboxControllerProvider.notifier)
+          .deleteMessage(messageRef);
+      if (!mounted) return;
+      final NavigatorState navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.mailDeleteSuccess)));
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mailFailureMessage(l10n, error))));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final String locale = Localizations.localeOf(context).languageCode;
     final MailMessageRef messageRef = (
       mailboxPath: ref.watch(selectedMailboxProvider).path,
-      id: id,
+      id: widget.id,
     );
     final AsyncValue<MailMessageDetail> message = ref.watch(
       mailMessageProvider(messageRef),
@@ -79,14 +131,28 @@ class MailMessageScreen extends ConsumerWidget {
           ? null
           : <Widget>[
               IconButton(
-                onPressed: () => _reply(context, ref, detail, all: false),
+                onPressed: _deleting
+                    ? null
+                    : () => _reply(context, detail, all: false),
                 tooltip: l10n.mailReply,
                 icon: const Icon(AppIcons.reply),
               ),
               IconButton(
-                onPressed: () => _reply(context, ref, detail, all: true),
+                onPressed: _deleting
+                    ? null
+                    : () => _reply(context, detail, all: true),
                 tooltip: l10n.mailReplyAll,
                 icon: const Icon(AppIcons.reply_all),
+              ),
+              IconButton(
+                onPressed: _deleting ? null : () => _delete(messageRef),
+                tooltip: l10n.mailDelete,
+                icon: _deleting
+                    ? const SizedBox.square(
+                        dimension: AppSizes.icon,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(AppIcons.delete_outline),
               ),
             ],
       body: message.when(

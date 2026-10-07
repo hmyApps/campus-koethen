@@ -3,16 +3,16 @@
 
 /// The notification categories the product release (LEVIORA-159) approved.
 ///
-/// The set is closed: ADR-0001 § 7.3 lists exactly three, and P5 rules out
-/// individual reminders for timetable slots and Moodle deadlines. Adding a
-/// value here is a product decision, not a refactoring.
+/// The set is closed: adding a value here is a product decision, not a
+/// refactoring. New mail is an immediate, privacy-neutral signal; the other
+/// categories are planned ahead by the local scheduler.
 ///
 /// Every category carries its own identity in three places, and all three are
 /// stable across app updates because they end up inside data the operating
 /// system keeps:
 ///
 /// * [key] — what a notification payload names (`v1|<key>|<target>`),
-/// * [keyPrefix] — the first segment of a scheduling key (`n1:`, `n2:`, `n3:`),
+/// * [keyPrefix] — the first segment of a notification key (`n1:` … `n4:`),
 /// * [channelId] — the Android notification channel.
 ///
 /// [order] is the tie-breaker of the planner's deterministic sort, so two
@@ -48,6 +48,17 @@ enum NotificationCategory {
     storageValue: 'canteen',
     order: 2,
     windowPolicy: DeliveryWindowPolicy.fixedLocalTime,
+  ),
+
+  /// N4 · `mail.new` — an immediate, content-neutral hint after IMAP reports
+  /// a new message and the inbox reconciliation confirms it.
+  newMail(
+    key: 'mail.new',
+    keyPrefix: 'n4',
+    channelId: 'mail_channel',
+    storageValue: 'mail',
+    order: 3,
+    windowPolicy: DeliveryWindowPolicy.anyLocalTime,
   );
 
   const NotificationCategory({
@@ -65,7 +76,7 @@ enum NotificationCategory {
   /// First segment of every scheduling key of this category.
   final String keyPrefix;
 
-  /// The Android notification channel this category posts to. Three channels,
+  /// The Android notification channel this category posts to. One channel
   /// one per category, so a reader can silence one kind without silencing the
   /// rest. A channel is **not** a group key and does not bundle anything
   /// (ADR-0001 § 7.7, P8).

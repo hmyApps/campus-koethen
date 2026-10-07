@@ -42,10 +42,14 @@ class AppSyncHost extends ConsumerStatefulWidget {
 class _AppSyncHostState extends ConsumerState<AppSyncHost>
     with WidgetsBindingObserver {
   late final List<ForegroundRefreshScheduler> _schedulers;
+  late final MailLiveSyncController _mailLiveSync;
 
   @override
   void initState() {
     super.initState();
+    // Keep the notifier itself: Riverpod refs are intentionally unavailable
+    // during unmount, while stopping the owned socket is part of dispose.
+    _mailLiveSync = ref.read(mailLiveSyncControllerProvider.notifier);
     _schedulers = <ForegroundRefreshScheduler>[
       ForegroundRefreshScheduler(
         interval: kNewsForegroundSyncInterval,
@@ -79,6 +83,7 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
       for (final ForegroundRefreshScheduler scheduler in _schedulers) {
         scheduler.start();
       }
+      unawaited(_mailLiveSync.start());
     });
   }
 
@@ -88,6 +93,7 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
     for (final ForegroundRefreshScheduler scheduler in _schedulers) {
       scheduler.dispose();
     }
+    unawaited(_mailLiveSync.stop());
     super.dispose();
   }
 
@@ -95,6 +101,11 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     for (final ForegroundRefreshScheduler scheduler in _schedulers) {
       scheduler.handleLifecycleState(state);
+    }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_mailLiveSync.start());
+    } else {
+      unawaited(_mailLiveSync.stop());
     }
   }
 
@@ -169,8 +180,12 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
       AsyncValue<MailAccountState> next,
     ) {
       final bool wasSignedIn = previous?.value?.isSignedIn ?? false;
-      if (!wasSignedIn && (next.value?.isSignedIn ?? false)) {
+      final bool isSignedIn = next.value?.isSignedIn ?? false;
+      if (!wasSignedIn && isSignedIn) {
         unawaited(_refreshMail());
+        unawaited(_mailLiveSync.start());
+      } else if (wasSignedIn && !isSignedIn) {
+        unawaited(_mailLiveSync.stop());
       }
     });
     return widget.child;

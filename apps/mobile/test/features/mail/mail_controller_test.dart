@@ -373,6 +373,36 @@ void main() {
       expect(result.first.id, '7');
     });
 
+    test('deletes on the server before removing the offline copy', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache();
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('7'), _hdr('8')]);
+      await cache.saveMessages(<MailMessageDetail>[_dtl('7'), _dtl('8')]);
+      final gateway = FakeMailGateway();
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      await container.read(mailInboxControllerProvider.future);
+
+      await container.read(mailInboxControllerProvider.notifier).deleteMessage((
+        mailboxPath: kInboxPath,
+        id: '7',
+      ));
+
+      expect(gateway.deletedMessages, <({String mailboxPath, String id})>[
+        (mailboxPath: kInboxPath, id: '7'),
+      ]);
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['8'],
+      );
+      expect(await cache.readMessage('7'), isNull);
+      expect(await cache.readMessage('8'), isNotNull);
+    });
+
     test('loads older inbox headers in stable 100-message pages', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
       final cache = MemoryMailCache();
@@ -642,6 +672,82 @@ void main() {
         expect(await cache.cachedMessageIds(), <String>{'1', '2'});
       },
     );
+
+    test(
+      'publishes only messages arriving after the initial baseline',
+      () async {
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        final cache = MemoryMailCache();
+        final gateway = FakeMailGateway(
+          inbox: <MailMessageHeader>[_hdr('1')],
+          detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
+        );
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        await container.read(mailAccountControllerProvider.future);
+        final List<MailNewMessageEvent> events = <MailNewMessageEvent>[];
+        container.listen<MailNewMessageEvent?>(mailNewMessageEventProvider, (
+          _,
+          MailNewMessageEvent? next,
+        ) {
+          if (next != null) events.add(next);
+        });
+
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+        expect(
+          events,
+          isEmpty,
+          reason: 'existing mailbox establishes baseline',
+        );
+
+        gateway.inbox = <MailMessageHeader>[_hdr('2'), _hdr('1')];
+        gateway.detailsById = <String, MailMessageDetail>{'2': _dtl('2')};
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+        expect(events, hasLength(1));
+        expect(events.single.newestMessageId, '2');
+        expect(events.single.count, 1);
+      },
+    );
+
+    test('a live IMAP change immediately triggers an inbox sync', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache();
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
+      final gateway = FakeMailGateway(
+        inbox: <MailMessageHeader>[_hdr('2'), _hdr('1')],
+        detailsById: <String, MailMessageDetail>{'2': _dtl('2')},
+      );
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+
+      await container.read(mailLiveSyncControllerProvider.notifier).start();
+      gateway.liveSignals.add(MailLiveSignal.connected);
+      gateway.liveSignals.add(MailLiveSignal.changed);
+      for (int attempt = 0; attempt < 30; attempt++) {
+        if ((await cache.readHeaders()).any((header) => header.id == '2')) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+
+      expect(gateway.watchInboxCalls, 1);
+      expect((await cache.readHeaders()).map((header) => header.id), <String>[
+        '2',
+        '1',
+      ]);
+      expect(
+        container.read(mailLiveSyncControllerProvider).connection,
+        MailLiveConnection.idle,
+      );
+    });
 
     test('downloads attachment bytes only when the setting is on', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
@@ -1062,6 +1168,37 @@ void main() {
         '2',
         '1',
       ]);
+    });
+
+    test('drops a missing UID inside an authoritative newest page', () {
+      final List<MailMessageHeader> merged = mergeInboxHeaders(
+        <MailMessageHeader>[_hdr('1'), _hdr('2'), _hdr('3')],
+        <MailMessageHeader>[_hdr('3'), _hdr('1')],
+        fetchedLimit: 2,
+      );
+      expect(merged.map((MailMessageHeader h) => h.id), <String>['3', '1']);
+    });
+
+    test('keeps cached UIDs older than the authoritative newest page', () {
+      final List<MailMessageHeader> merged = mergeInboxHeaders(
+        <MailMessageHeader>[_hdr('1'), _hdr('3')],
+        <MailMessageHeader>[_hdr('4'), _hdr('3')],
+        fetchedLimit: 2,
+      );
+      expect(merged.map((MailMessageHeader h) => h.id), <String>[
+        '4',
+        '3',
+        '1',
+      ]);
+    });
+
+    test('an empty server page never erases the last good cache', () {
+      final List<MailMessageHeader> merged = mergeInboxHeaders(
+        <MailMessageHeader>[_hdr('1'), _hdr('2')],
+        const <MailMessageHeader>[],
+        fetchedLimit: 50,
+      );
+      expect(merged.map((MailMessageHeader h) => h.id), <String>['2', '1']);
     });
   });
 

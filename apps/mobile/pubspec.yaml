@@ -65,6 +65,8 @@ dependencies:
   # PDFium paints AcroForm fields in filled PDFs on Android and iOS.
   pdfrx: 2.4.8
   html: ^0.15.6
+  # Parsed directly for the pinned Exchange EWS ResolveNames response.
+  xml: ^6.6.1
   dio_cookie_manager: ^3.5.0
   cookie_jar: ^4.0.9
 

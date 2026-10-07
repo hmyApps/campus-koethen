@@ -89,7 +89,7 @@ class LocalNotificationGateway implements NotificationGateway {
             spec.category.channelId,
             spec.name,
             description: spec.description,
-            // Default, not high: none of the three categories is urgent
+            // Default, not high: none of the categories is urgent
             // enough to interrupt, and an app that shouts is an app that
             // gets silenced wholesale.
             importance: fln.Importance.defaultImportance,
@@ -196,6 +196,20 @@ class LocalNotificationGateway implements NotificationGateway {
   }
 
   @override
+  Future<void> showNow(ImmediateNotification notification) async {
+    await _plugin.show(
+      id: notification.systemId,
+      title: notification.title,
+      body: notification.body,
+      payload: notification.payload.toStorage(),
+      notificationDetails: _detailsForValues(
+        category: notification.category,
+        visibility: notification.visibility,
+      ),
+    );
+  }
+
+  @override
   Future<int> pendingCount() async {
     try {
       final List<fln.PendingNotificationRequest> pending = await _plugin
@@ -256,14 +270,24 @@ class LocalNotificationGateway implements NotificationGateway {
   }
 
   fln.NotificationDetails _detailsFor(PlannedNotification notification) {
-    final NotificationChannelSpec? spec = _channels[notification.category];
+    return _detailsForValues(
+      category: notification.category,
+      visibility: notification.visibility,
+    );
+  }
+
+  fln.NotificationDetails _detailsForValues({
+    required NotificationCategory category,
+    required NotificationVisibility visibility,
+  }) {
+    final NotificationChannelSpec? spec = _channels[category];
     return fln.NotificationDetails(
       android: fln.AndroidNotificationDetails(
-        notification.category.channelId,
+        category.channelId,
         // The channel exists by the time anything is scheduled; the fallback
         // is the channel id so a mis-ordered call still produces a working
         // notification rather than an exception.
-        spec?.name ?? notification.category.channelId,
+        spec?.name ?? category.channelId,
         channelDescription: spec?.description,
         icon: androidSmallIcon,
         importance: fln.Importance.defaultImportance,
@@ -271,7 +295,7 @@ class LocalNotificationGateway implements NotificationGateway {
         // No group key, ever. P8 asks for separate notifications, and a group
         // key is what would merge them. That Android stacks one app's
         // notifications visually is system behaviour and not this app's doing.
-        visibility: switch (notification.visibility) {
+        visibility: switch (visibility) {
           NotificationVisibility.publicContent =>
             fln.NotificationVisibility.public,
           NotificationVisibility.neutral => fln.NotificationVisibility.private,

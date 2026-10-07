@@ -4,8 +4,31 @@
 import 'package:meta/meta.dart';
 
 import 'notification_category.dart';
+import 'notification_payload.dart';
 import 'notification_permission.dart';
+import 'notification_request.dart';
 import 'planned_notification.dart';
+
+@immutable
+class ImmediateNotification {
+  const ImmediateNotification({
+    required this.key,
+    required this.category,
+    required this.title,
+    required this.body,
+    required this.payload,
+    required this.visibility,
+  });
+
+  final String key;
+  final NotificationCategory category;
+  final String title;
+  final String body;
+  final NotificationPayload payload;
+  final NotificationVisibility visibility;
+
+  int get systemId => notificationSystemId(key);
+}
 
 /// The reader-visible name and description of one Android notification
 /// channel.
@@ -87,6 +110,9 @@ abstract interface class NotificationGateway {
   /// Registers one entry with the operating system.
   Future<void> schedule(PlannedNotification notification);
 
+  /// Shows a confirmed, current event immediately.
+  Future<void> showNow(ImmediateNotification notification);
+
   /// How many entries the operating system currently holds for this app.
   /// Diagnostic only — a count, never the entries.
   Future<int> pendingCount();
@@ -132,6 +158,9 @@ class NoopNotificationGateway implements NotificationGateway {
 
   @override
   Future<void> schedule(PlannedNotification notification) async {}
+
+  @override
+  Future<void> showNow(ImmediateNotification notification) async {}
 
   @override
   Future<int> pendingCount() async => 0;

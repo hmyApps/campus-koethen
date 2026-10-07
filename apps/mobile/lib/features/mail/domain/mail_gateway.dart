@@ -17,11 +17,16 @@ enum SentCopyResult {
   noSentFolder,
 }
 
+/// Signals emitted by the foreground IMAP watcher. No message content crosses
+/// this stream; a change only asks the normal cache sync to reconcile.
+enum MailLiveSignal { connected, pollingFallback, changed }
+
 /// The single boundary to enough_mail.
 ///
 /// No enough_mail type appears in this interface, so neither the UI nor the
-/// Riverpod controllers ever depend on the library. Every method opens, uses
-/// and closes its own connections — there is no persistent IMAP IDLE.
+/// Riverpod controllers ever depend on the library. Request methods open and
+/// close their own connections; only [watchInbox] owns a cancellable IMAP IDLE
+/// connection while the app is in the foreground.
 abstract interface class MailGateway {
   /// Verifies BOTH the IMAP (993, implicit TLS) and SMTP (587, STARTTLS)
   /// connections and authentication. Throws [MailFailure] on any problem and
@@ -79,6 +84,20 @@ abstract interface class MailGateway {
     String mailboxPath = kInboxPath,
     required String id,
   });
+
+  /// Moves one message to the server's Trash folder. When the message already
+  /// lives in Trash it is permanently removed. Implementations must address it
+  /// by IMAP UID, never by the unstable sequence number.
+  Future<void> deleteMessage(
+    MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+  });
+
+  /// Watches INBOX changes using IMAP IDLE, with a bounded NOOP polling
+  /// fallback when the server does not advertise IDLE. Cancelling the stream
+  /// must close the authenticated connection.
+  Stream<MailLiveSignal> watchInbox(MailCredentials credentials);
 
   /// Sends a plain-text message via SMTP submission. Throws [MailFailure] if the
   /// send fails. Deliberately does NOT touch the Sent folder: storing a copy is

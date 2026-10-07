@@ -229,6 +229,44 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
     }
     return detail;
   }
+
+  /// Deletes on the server first. Only a confirmed server success may remove
+  /// the offline copy; otherwise the reader still sees the message and can
+  /// retry without the UI pretending a destructive action succeeded.
+  Future<void> deleteMessage(MailMessageRef message) async {
+    final MailCredentials credentials = await ref
+        .read(mailAccountControllerProvider.notifier)
+        .requireCredentials();
+    final MailAccountController accountController = ref.read(
+      mailAccountControllerProvider.notifier,
+    );
+    final int generation = accountController.sessionGeneration;
+    await ref
+        .read(mailGatewayProvider)
+        .deleteMessage(
+          credentials,
+          mailboxPath: message.mailboxPath,
+          id: message.id,
+        );
+    if (!accountController.isSessionCurrent(generation)) {
+      throw const MailFailure(MailFailureKind.sessionClosed);
+    }
+
+    if (message.mailboxPath == kInboxPath) {
+      await ref.read(mailCacheStoreProvider).removeMessage(message.id);
+      if (!accountController.isSessionCurrent(generation)) {
+        throw const MailFailure(MailFailureKind.sessionClosed);
+      }
+      ref.read(mailCacheRevisionProvider.notifier).bump();
+    } else {
+      state = AsyncData<List<MailMessageHeader>>(
+        (state.value ?? const <MailMessageHeader>[])
+            .where((MailMessageHeader header) => header.id != message.id)
+            .toList(growable: false),
+      );
+    }
+    ref.invalidate(mailMessageProvider(message));
+  }
 }
 
 final AsyncNotifierProvider<MailInboxController, List<MailMessageHeader>>

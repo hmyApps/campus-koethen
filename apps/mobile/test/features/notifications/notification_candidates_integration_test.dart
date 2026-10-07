@@ -20,27 +20,36 @@ NotificationRequest request(NotificationCategory category) =>
     );
 
 void main() {
-  test('the aggregate keeps every approved category after parallel merges', () {
-    final ProviderContainer container = ProviderContainer(
-      overrides: [
-        eventReminderCandidatesProvider.overrideWithValue(<NotificationRequest>[
-          request(NotificationCategory.eventReminder),
-        ]),
-        dailySummaryCandidatesProvider.overrideWithValue(<NotificationRequest>[
-          request(NotificationCategory.dailySummary),
-        ]),
-        canteenFavouriteCandidatesProvider.overrideWithValue(
-          <NotificationRequest>[request(NotificationCategory.canteenFavourite)],
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'the aggregate keeps every scheduled category after parallel merges',
+    () {
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          eventReminderCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[request(NotificationCategory.eventReminder)],
+          ),
+          dailySummaryCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[request(NotificationCategory.dailySummary)],
+          ),
+          canteenFavouriteCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[
+              request(NotificationCategory.canteenFavourite),
+            ],
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    expect(
-      container
-          .read(notificationCandidatesProvider)
-          .map((NotificationRequest candidate) => candidate.category),
-      NotificationCategory.values,
-    );
-  });
+      expect(
+        container
+            .read(notificationCandidatesProvider)
+            .map((NotificationRequest candidate) => candidate.category),
+        <NotificationCategory>[
+          NotificationCategory.eventReminder,
+          NotificationCategory.dailySummary,
+          NotificationCategory.canteenFavourite,
+        ],
+      );
+    },
+  );
 }

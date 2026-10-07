@@ -8,7 +8,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../application/mail_suggestions.dart';
 import '../domain/mail_cache_store.dart';
 
-/// A recipient input with autocomplete drawn from the user's own mail history.
+/// A recipient input with autocomplete from Exchange and local mail history.
 ///
 /// The field holds a comma-separated list of addresses; suggestions apply to
 /// the token currently being typed (after the last comma), so a chosen address
@@ -84,11 +84,10 @@ class _RecipientAutocompleteFieldState
       textEditingController: widget.controller,
       focusNode: _focusNode,
       displayStringForOption: (MailAddressEntry e) => e.email,
-      optionsBuilder: (TextEditingValue value) {
-        final List<MailAddressEntry> all =
-            ref.read(mailKnownAddressesProvider).value ??
-            const <MailAddressEntry>[];
-        return suggestRecipients(all, _currentToken(value.text));
+      optionsBuilder: (TextEditingValue value) async {
+        final String query = _currentToken(value.text);
+        if (query.length < 2) return const <MailAddressEntry>[];
+        return ref.read(mailRecipientSuggestionsProvider(query).future);
       },
       onSelected: (MailAddressEntry option) =>
           _replaceCurrentToken(option.email),

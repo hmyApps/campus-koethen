@@ -74,14 +74,22 @@ void main() {
   });
 
   group('privacy', () {
-    test('no category key names a personal data source', () {
+    test('no category key names a study-record data source', () {
       // P5 removed every individual Moodle and timetable reminder, so no
       // payload can carry a study identifier at all (ADR-0001 § 7.8).
       for (final NotificationCategory category in NotificationCategory.values) {
         expect(category.key, isNot(contains('moodle')));
         expect(category.key, isNot(contains('grade')));
-        expect(category.key, isNot(contains('mail')));
       }
+    });
+
+    test('new-mail payload carries only an IMAP UID', () {
+      const NotificationPayload payload = NotificationPayload(
+        category: NotificationCategory.newMail,
+        target: '4711',
+      );
+      expect(payload.toStorage(), 'v1|mail.new|4711');
+      expect(payload.toStorage(), isNot(contains('@')));
     });
 
     test('the diagnostic form names the category and nothing else', () {
