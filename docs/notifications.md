@@ -7,9 +7,10 @@ Planungsvertrag) und [design/notifications-ux-spec.md](design/notifications-ux-s
 Einstellungen, Texte). Dieses Dokument beschreibt, **was im Code steht**, wie die beiden
 Plattformen konfiguriert sind und was auf echten Geräten geprüft werden muss.
 
-Der Kern in einem Satz: Die App meldet Benachrichtigungen **im Voraus beim Betriebssystem des
-eigenen Geräts** an. Es gibt keinen Push-Dienst, kein Gerätetoken, keinen Registrierungsendpunkt,
-keinen serverseitigen Datensatz und keinen Code, der im Hintergrund läuft.
+Der Kern in einem Satz: Datierte Hinweise meldet die App **im Voraus beim Betriebssystem des
+eigenen Geräts** an; eine im Vordergrund per IMAP bestätigte neue E-Mail kann sie zusätzlich sofort
+lokal anzeigen. Es gibt keinen Push-Dienst, kein Gerätetoken, keinen Registrierungsendpunkt,
+keinen serverseitigen Datensatz und keinen Code, der bei geschlossener App läuft.
 
 ## 1. Aufbau
 
@@ -18,7 +19,7 @@ OpenAPI-Vertrag sind **unverändert**.
 
 ```text
 domain/          reine Werte und Verträge, ohne Flutter und ohne Plugin
-  notification_category.dart      die drei freigegebenen Kategorien (N1/N2/N3)
+  notification_category.dart      vier Kategorien (N1/N2/N3 geplant, N4 sofort)
   notification_request.dart       ein Kandidat: Kategorie, Ziel, Auslöser, Text, Sichtbarkeit
   planned_notification.dart       ein eingeplanter Eintrag + der 31-Bit-Systemschlüssel
   notification_plan.dart          Sollzustand + Diagnose (Zähler, keine Inhalte)
@@ -48,6 +49,20 @@ presentation/
   pre_permission_sheet.dart          das In-App-Sheet vor dem Systemdialog
   notification_host.dart             Lebenszyklus, Kanäle, Anwenden des Plans, Tap-Routing
 ```
+
+### 1.0.1 Neue E-Mail (N4)
+
+`mail.new` ist keine vorausgeplante Erinnerung und belegt keinen Platz im 60er-Planungsbudget.
+Solange die App im Vordergrund ist, meldet IMAP IDLE eine mögliche Änderung. Der normale
+Mail-Sync bestätigt anschließend mindestens eine bisher unbekannte UID; erst dann ruft der
+`NotificationHost` `showNow(...)` auf. Der erste Inbox-Sync setzt nur die Ausgangsbasis.
+
+Die Kategorie unterliegt demselben globalen Opt-in, ihrem eigenen Schalter und der
+Betriebssystemberechtigung wie N1–N3. Titel und Text sind neutral und enthalten weder Absender noch
+Betreff; der validierte Payload enthält nur die numerische IMAP-UID und öffnet den Posteingang.
+Account-Wipe beziehungsweise Kontowechsel sind über die Mail-Session-Generation gegen verspätete
+Ereignisse abgesichert. Bei pausierter oder geschlossener App ist keine Live-Zustellung zugesagt;
+Start und Resume gleichen verpasste Nachrichten ab.
 
 ### 1.1 Vollständige Neuplanung, nie ein Delta
 
@@ -87,12 +102,12 @@ genug Raum für die Event-Erinnerungen, mit denen sie geteilt werden.
 Quellen — allesamt die vorhandenen Provider der jeweiligen Features, keine zweite Datenhaltung und
 kein zweiter Mapper:
 
-| Inhalt              | Quelle                                                                            |
-| ------------------- | --------------------------------------------------------------------------------- |
-| Lehrveranstaltungen | `timetableWeekProvider` der **gewählten** Gruppe; ohne Gruppe: keine              |
-| Relevante Events    | `publicCalendarMonthEntriesProvider` (aktivierte Kalender) + gemerkte Events      |
-| Moodle-Fristen      | der zwischengespeicherte Bestand, nur bei verbundenem Konto                       |
-| Mensa               | `canteenMenuProvider` der bevorzugten Mensa + `canteenFilterProvider` (Favoriten) |
+| Inhalt              | Quelle                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Lehrveranstaltungen | `timetableWeekProvider` für Haupt-, Zusatzgruppen und Gruppen abonnierter Einzelmodule; Modulfilter lokal; ohne Hauptgruppe: keine |
+| Relevante Events    | `publicCalendarMonthEntriesProvider` (aktivierte Kalender) + gemerkte Events                                                       |
+| Moodle-Fristen      | der zwischengespeicherte Bestand, nur bei verbundenem Konto                                                                        |
+| Mensa               | `canteenMenuProvider` der bevorzugten Mensa + `canteenFilterProvider` (Favoriten)                                                  |
 
 Die Anzeigeschalter des Kalenders werden **nicht** gelesen; ein Test hält das fest (§ 3).
 
@@ -144,7 +159,7 @@ Kollision wäre folgenlos, weil ohnehin vollständig neu geplant wird.
 P5 gibt es keine Moodle- und keine Stundenplan-Einzelhinweise, und damit auch keine Kategorie, die
 so etwas bräuchte. Ein Test hält das fest.
 
-### 1.4 N1 — `event.reminder`, genau eine Erinnerung 24 Stunden vorher
+### 1.4 N1 — `event.reminder`, eine lokal konfigurierbare Erinnerung je Event
 
 Umgesetzt in `application/event_reminder_candidates.dart` (LEVIORA-166). Die Kategorie besteht aus
 drei Teilen, die getrennt prüfbar sind:
@@ -157,10 +172,13 @@ Merkschalter des Kalenders (standardmäßig **aus**) hier nicht. Entdoppelt wird
 `savedEventEntriesForCalendar`, also der wiederverwendbaren Regel des Events-Features — nicht mit
 einer zweiten Fassung davon. Verwaiste (`isOrphaned`) und abgesagte Merkeinträge fallen heraus.
 
-**Regel** (`eventReminderRequests`, reine Funktion). Sollzeitpunkt ist `start` minus exakt 24
-Stunden als **absolute Dauer**; das Zustellfenster aus § 7.4 wendet der Planer an. Stundenplan- und
-Moodle-Einträge erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon —
-sie haben einen definierten `start`, und die Regel gilt darauf unverändert.
+**Regel** (`eventReminderRequests`, reine Funktion). Der globale Vorlauf ist lokal zwischen
+15 Minuten, 1 Stunde, 6 Stunden, 1 Tag (Standard), 2 Tagen und 1 Woche wählbar. Im Detail eines
+öffentlichen oder gemerkten Events kann die Regel geerbt, überschrieben oder für genau dieses Event
+abgeschaltet werden. Vorläufe sind **absolute Dauern**; das Zustellfenster aus § 7.4 wendet der
+Planer an. Würde das Fenster einen kurzen Vorlauf hinter den Eventbeginn schieben, wird auf die
+letzte zulässige 20:00-Grenze vor dem Event zurückgefallen. Stundenplan- und Moodle-Einträge
+erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon.
 
 **Text.** „Erinnerung morgen: …" beziehungsweise „Erinnerung heute: …", wenn das Zustellfenster den
 Hinweis auf den Eventtag selbst geschoben hat. Beide Seiten — Text und Zeitpunkt — fragen dieselbe
@@ -199,7 +217,7 @@ Gerichtsname. Ein ausgeschöpftes Budget ist so ein Zähler und keine stille Kü
 | Terminierung             | `zonedSchedule(..., androidScheduleMode: inexactAllowWhileIdle)`                                                                                        |
 | Receiver                 | `ScheduledNotificationReceiver` und `ScheduledNotificationBootReceiver`, beide `exported="false"`                                                       |
 | Desugaring               | `isCoreLibraryDesugaringEnabled = true` + `desugar_jdk_libs:2.1.4` — Pflicht ab Plugin-Version 10, sonst schlägt bereits der Build fehl                 |
-| Kanäle                   | drei, je einer für N1/N2/N3, angelegt bevor irgendetwas geplant wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht                      |
+| Kanäle                   | vier, je einer für N1/N2/N3/N4, angelegt bevor etwas geplant oder sofort angezeigt wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht     |
 | Kanalnamen               | aus den ARB-Dateien; ein Sprachwechsel registriert die Kanäle unter derselben Id neu, wodurch Android Name und Beschreibung übernimmt                   |
 | Kleines Symbol           | `@drawable/ic_notification`, einfarbig weiß und voll deckend — ein mehrfarbiges Icon stellt Android als graues Quadrat dar                              |
 | Sperrbildschirm          | `visibility: public` für öffentliche Inhalte, `private` für neutrale (P10). Beides greift nur unter Nutzereinstellungen, die die App nicht kontrolliert |
@@ -259,7 +277,7 @@ ohne Gerät prüfbar ist (§ 3); die Matrix unten steht weiterhin offen.
 | #   | Fall                                                             | Erwartet                                                                                               |
 | --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | 1   | Erster Start, Android 13+ und iOS                                | **kein** Systemdialog, keine Benachrichtigung vorgemerkt                                               |
-| 2   | Opt-in über einen kontextuellen Einstiegspunkt                   | erst das In-App-Sheet, dann der Systemdialog; danach sind alle drei Kategorien an                      |
+| 2   | Opt-in über einen kontextuellen Einstiegspunkt                   | erst das In-App-Sheet, dann der Systemdialog; danach sind alle vier Kategorien an                      |
 | 3   | „Nicht jetzt" im Sheet                                           | kein Systemdialog, Zustand bleibt „nie gefragt", kein erneutes Fragen am selben Einstiegspunkt         |
 | 4   | Berechtigung im Dialog abgelehnt                                 | Hauptschalter aus, Banner mit Weg in die Systemeinstellungen, **kein** erneuter Dialog                 |
 | 5   | Berechtigung nachträglich in den Systemeinstellungen entzogen    | beim Zurückkehren erkannt: Banner erscheint, vorgemerkte Einträge werden entfernt                      |

@@ -97,6 +97,20 @@ class MemoryMailCache implements MailCacheStore {
   }
 
   @override
+  Future<void> removeMessage(String id) async {
+    _headers = _headers
+        .where((MailMessageHeader header) => header.id != id)
+        .toList(growable: false);
+    _messages.remove(id);
+    _addresses.clear();
+    for (final MailMessageDetail message in _messages.values) {
+      for (final MailAddress address in addressesOf(message)) {
+        _indexAddress(_addresses, address);
+      }
+    }
+  }
+
+  @override
   Future<List<MailMessageHeader>> searchHeaders(String query) async {
     final String term = normalizeMailSearchTerm(query);
     if (term.isEmpty) return <MailMessageHeader>[];
@@ -339,6 +353,43 @@ class EncryptedMailCache implements MailCacheStore {
     );
     await _writeIndexes(indexes);
     await prune();
+  }
+
+  @override
+  Future<void> removeMessage(String id) async {
+    await saveHeaders(
+      (await readHeaders())
+          .where((MailMessageHeader header) => header.id != id)
+          .toList(growable: false),
+    );
+    await _box.delete('$_messagePrefix$id');
+
+    final Map<String, MailAddressEntry> index = <String, MailAddressEntry>{};
+    for (final String remainingId in await cachedMessageIds()) {
+      final Object? decoded = await _decodedMessage(remainingId);
+      if (decoded is! Map) continue;
+      try {
+        final MailMessageDetail message = MailCacheCodec.detailFrom(
+          Map<String, dynamic>.from(decoded),
+        );
+        for (final MailAddress address in addressesOf(message)) {
+          _indexAddress(index, address);
+        }
+      } catch (_) {}
+    }
+    await _box.write(
+      _addressesKey,
+      jsonEncode(
+        index.values
+            .map(
+              (MailAddressEntry entry) => <String, dynamic>{
+                'email': entry.email,
+                if (entry.name != null) 'name': entry.name,
+              },
+            )
+            .toList(),
+      ),
+    );
   }
 
   @override
@@ -769,6 +820,10 @@ class MailCacheManager implements MailCacheStore {
   @override
   Future<void> clearCachedBodies() =>
       _write(() => _delegate.clearCachedBodies());
+
+  @override
+  Future<void> removeMessage(String id) =>
+      _write(() => _delegate.removeMessage(id));
 
   @override
   Future<void> prune() => _write(() => _delegate.prune());

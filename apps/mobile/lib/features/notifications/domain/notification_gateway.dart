@@ -88,7 +88,7 @@ abstract interface class NotificationGateway {
   /// Registers one entry with the operating system.
   Future<void> schedule(PlannedNotification notification);
 
-  /// Shows one already-gated notification immediately.
+  /// Shows one already-gated, confirmed notification immediately.
   Future<void> showNow(ImmediateNotification notification);
 
   /// How many entries the operating system currently holds for this app.

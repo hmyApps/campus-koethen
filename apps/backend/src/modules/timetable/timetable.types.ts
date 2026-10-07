@@ -22,6 +22,27 @@ export class TimetableGroupDto {
   department!: string | null;
 }
 
+export class TimetablePeriodDto {
+  @ApiProperty({ format: 'uuid', description: 'Stable Campus identifier.' })
+  id!: string;
+
+  @ApiProperty({ description: 'Source-provided semester label. Never translated.' })
+  name!: string;
+
+  @ApiProperty({ format: 'date', example: '2026-10-05' }) validFrom!: string;
+  @ApiProperty({ format: 'date', example: '2027-03-31' }) validTo!: string;
+
+  @ApiProperty({ type: [TimetableGroupDto] }) groups!: TimetableGroupDto[];
+}
+
+export class TimetableModuleDto {
+  @ApiProperty({ type: String, nullable: true, description: 'Source-provided module code.' })
+  subjectCode!: string | null;
+
+  @ApiProperty({ description: 'Source-provided module title. Never translated.' })
+  title!: string;
+}
+
 export class TimetableTeacherDto {
   @ApiProperty({ description: 'Name as published by the source. Never translated.' })
   shortName!: string;
@@ -132,6 +153,16 @@ export class TimetableGroupsResponseDto {
 
 export class TimetableGroupResponseDto {
   @ApiProperty({ type: TimetableGroupDto }) data!: TimetableGroupDto;
+  @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;
+}
+
+export class TimetablePeriodsResponseDto {
+  @ApiProperty({ type: [TimetablePeriodDto] }) data!: TimetablePeriodDto[];
+  @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;
+}
+
+export class TimetableModulesResponseDto {
+  @ApiProperty({ type: [TimetableModuleDto] }) data!: TimetableModuleDto[];
   @ApiProperty({ type: ResponseMetaDto }) meta!: ResponseMetaDto;
 }
 

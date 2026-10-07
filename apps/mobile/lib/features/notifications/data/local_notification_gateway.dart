@@ -90,7 +90,7 @@ class LocalNotificationGateway implements NotificationGateway {
             spec.category.channelId,
             spec.name,
             description: spec.description,
-            // Default, not high: none of the three categories is urgent
+            // Default, not high: none of the categories is urgent
             // enough to interrupt, and an app that shouts is an app that
             // gets silenced wholesale.
             importance: fln.Importance.defaultImportance,

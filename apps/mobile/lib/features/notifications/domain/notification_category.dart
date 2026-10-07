@@ -5,22 +5,23 @@
 ///
 /// The set is closed. Adding a value here is a product decision, not a
 /// refactoring. Moodle deadline reminders and grade-change alerts were added
-/// by the academic-updates plan after ADR-0001's initial three categories.
+/// by the academic-updates plan after ADR-0001's initial three categories; new
+/// mail is an immediate, privacy-neutral signal added on top of them.
 ///
 /// Every category carries its own identity in three places, and all three are
 /// stable across app updates because they end up inside data the operating
 /// system keeps:
 ///
 /// * [key] — what a notification payload names (`v1|<key>|<target>`),
-/// * [keyPrefix] — the first segment of a scheduling key (`n1:`, `n2:`, `n3:`),
+/// * [keyPrefix] — the first segment of a notification key (`n1:` … `n4:`),
 /// * [channelId] — the Android notification channel.
 ///
 /// [order] is the tie-breaker of the planner's deterministic sort, so two
 /// notifications due at the very same instant always survive the budget in the
 /// same order — see `notification_planner.dart`.
 enum NotificationCategory {
-  /// N1 · `event.reminder` — one reminder exactly 24 hours before a public or
-  /// saved event (P3).
+  /// N1 · `event.reminder` — at most one reminder with the global or
+  /// event-specific lead for a public or saved event.
   eventReminder(
     key: 'event.reminder',
     keyPrefix: 'n1',
@@ -50,7 +51,8 @@ enum NotificationCategory {
     windowPolicy: DeliveryWindowPolicy.fixedLocalTime,
   ),
 
-  /// One neutral local reminder before each cached Moodle deadline.
+  /// N4 · `moodle.deadline` — one neutral local reminder before each cached
+  /// Moodle deadline.
   moodleDeadline(
     key: 'moodle.deadline',
     keyPrefix: 'n4',
@@ -60,14 +62,26 @@ enum NotificationCategory {
     windowPolicy: DeliveryWindowPolicy.shiftIntoWindow,
   ),
 
-  /// Immediate, neutral alert after a successful grade refresh detects a new
-  /// result. It does not contribute scheduled candidates to the planner.
+  /// N5 · `grade.change` — immediate, neutral alert after a successful grade
+  /// refresh detects a new result. It does not contribute scheduled candidates
+  /// to the planner.
   gradeChange(
     key: 'grade.change',
     keyPrefix: 'n5',
     channelId: 'grade_change_channel',
     storageValue: 'gradeChange',
     order: 4,
+    windowPolicy: DeliveryWindowPolicy.anyLocalTime,
+  ),
+
+  /// N6 · `mail.new` — an immediate, content-neutral hint after IMAP reports
+  /// a new message and the inbox reconciliation confirms it.
+  newMail(
+    key: 'mail.new',
+    keyPrefix: 'n6',
+    channelId: 'mail_channel',
+    storageValue: 'mail',
+    order: 5,
     windowPolicy: DeliveryWindowPolicy.anyLocalTime,
   );
 
@@ -121,9 +135,8 @@ enum DeliveryWindowPolicy {
   /// A time explicitly selected by the reader, including overnight hours.
   anyLocalTime,
 
-  /// The desired instant is derived from a source date (an event start minus
-  /// 24 hours), so it can fall outside the window and is moved to the next
-  /// 07:00 — ADR-0001 § 7.4.
+  /// The desired instant is derived from a source date minus a configured
+  /// lead, so it can fall outside the window and must be shifted safely.
   shiftIntoWindow,
 
   /// The category names a fixed local wall-clock time that lies inside the

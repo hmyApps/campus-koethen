@@ -11,6 +11,8 @@ import {
   TimetableEntryDto,
   TimetableGroupDto,
   TimetableLessonInfoDto,
+  TimetableModuleDto,
+  TimetablePeriodDto,
   TimetableRoomDto,
   TimetableStatusDto,
   TimetableTeacherDto,
@@ -214,6 +216,64 @@ export class TimetableService {
     };
   }
 
+  /**
+   * Semester catalogues known to the worker, in chronological order.
+   *
+   * Only Campus UUIDs and source display strings cross the boundary. The
+   * WebUntis school-year and class ids remain private database columns.
+   */
+  async listPeriods(): Promise<{
+    data: TimetablePeriodDto[];
+    lastSyncAt: Date | null;
+    stale: boolean;
+  }> {
+    if (!this.featureEnabled) {
+      const lastSyncAt = await this.lastSuccessful('groups');
+      return { data: [], lastSyncAt, stale: true };
+    }
+    const [lastSyncAt, periods] = await Promise.all([
+      this.lastSuccessful('groups'),
+      this.prisma.timetableContext.findMany({
+        where: { groups: { some: {} } },
+        orderBy: { validFrom: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          name: true,
+          validFrom: true,
+          validTo: true,
+          groups: {
+            orderBy: { group: { shortName: 'asc' } },
+            select: {
+              group: {
+                select: {
+                  id: true,
+                  shortName: true,
+                  longName: true,
+                  department: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: periods
+        .map((period) => ({
+          id: period.id,
+          name: period.name,
+          validFrom: period.validFrom.toISOString().slice(0, 10),
+          validTo: period.validTo.toISOString().slice(0, 10),
+          groups: period.groups.map(({ group }) => TimetableService.mapGroup(group)),
+        }))
+        .reverse(),
+      lastSyncAt,
+      stale: this.isStale(lastSyncAt),
+    };
+  }
+
   /** Exact source strings available in the last successfully covered window. */
   async listLessonInfo(groupId: string, locale: LocaleResolution): Promise<TimetableLessonInfoDto> {
     const [group, run] = await Promise.all([
@@ -245,6 +305,48 @@ export class TimetableService {
       }
     }
     return { values: [...values].sort(), hasWithoutInfo };
+  }
+
+  /**
+   * Modules already observed for a study group. The catalogue is assembled
+   * from retained Campus rows and never causes an upstream request.
+   */
+  async listModules(
+    groupId: string,
+    locale: LocaleResolution,
+  ): Promise<{ data: TimetableModuleDto[]; lastSyncAt: Date | null; stale: boolean }> {
+    const [group, lastSyncAt] = await Promise.all([
+      this.prisma.timetableGroup.findFirst({ where: { id: groupId }, select: { id: true } }),
+      this.lastSuccessful('entries'),
+    ]);
+    if (!group) {
+      throw new ApiError('TIMETABLE_GROUP_NOT_FOUND', locale.resolvedLocale);
+    }
+    if (!this.featureEnabled) {
+      return { data: [], lastSyncAt, stale: true };
+    }
+
+    const entries = await this.prisma.timetableEntry.findMany({
+      where: { groups: { some: { groupId } } },
+      orderBy: { startsAt: 'desc' },
+      select: { subjectCode: true, title: true },
+      // A group normally has only a few hundred retained lessons. The bound
+      // prevents accidental unbounded reads if retention changes later.
+      take: 2000,
+    });
+    const modules = new Map<string, TimetableModuleDto>();
+    for (const entry of entries) {
+      const title = entry.title.trim();
+      if (!title) continue;
+      const subjectCode = entry.subjectCode?.trim() || null;
+      const key = subjectCode ? `code:${subjectCode}` : `title:${title}`;
+      if (!modules.has(key)) modules.set(key, { subjectCode, title });
+    }
+    return {
+      data: [...modules.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      lastSyncAt,
+      stale: this.isStale(lastSyncAt),
+    };
   }
 
   async getWeek(

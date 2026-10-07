@@ -528,6 +528,9 @@ Zwei getrennte Jobs, beide über `WEBUNTIS_ENABLED` schaltbar (Default `false`):
 
 - **Gruppenkatalog** (`WEBUNTIS_GROUP_SYNC_CRON`, Default `0 2 * * *`) — eine Gruppe wird erst
   nach einem **vollständig** erfolgreichen Katalogimport deaktiviert, nie aufgrund eines Teillaufs.
+  Derselbe Lauf pflegt transaktional die Semester↔Gruppen-Zuordnung für
+  `GET /v1/timetable/periods`; eine verdächtig leere Semesterantwort lässt den letzten guten Stand
+  vollständig unangetastet.
 - **Einträge** (`WEBUNTIS_ENTRY_SYNC_CRON`, Default `15 2 * * *`) — die öffentliche Ansicht
   verlangt inzwischen genau eine Klasse pro Request. Der Worker lädt die Klassen aller Schuljahre,
   die das Zeitfenster schneiden, und übernimmt die Ergebnisse erst nach einem vollständigen Lauf.
@@ -538,6 +541,15 @@ Zeiten kommen als zonenlose
 Wandzeit und werden beim Import nach UTC gerechnet — würde man sie roh speichern, verschöbe sich
 jede Stunde. Unbekannte Vokabeln in `type`/`status` werden auf `unknown` abgebildet und brechen den
 Import **nicht**.
+
+Die App kann neben dem bewusst gewählten Hauptkurs bis zu zwölf weitere Studiengruppen oder
+Gruppen mit einzeln gewählten Modulen abonnieren. Der Modulkatalog kommt aus bereits importierten
+Campus-Zeilen über `GET /v1/timetable/modules`; die Auswahl bleibt lokal. Die App lädt die
+Campus-UUID-Endpunkte der beteiligten Gruppen parallel, filtert Modul-Abos lokal, führt gemeinsame
+Termine anhand der stabilen Eintrags-ID genau einmal zusammen und aggregiert alles ausschließlich
+auf dem Gerät. Scheitert eine Zusatzgruppe, bleibt der Hauptstundenplan nutzbar; scheitert der
+Hauptkurs, wird kein Zusatzplan irreführend als Hauptplan beschriftet. Die gemeinsame Obergrenze
+von zwölf zusätzlichen Gruppen hält Netzwerk- und Cache-Aufwand auch bei Modul-Abos begrenzt.
 
 ### 6.3 Öffentliche Kalender
 

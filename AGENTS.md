@@ -33,15 +33,18 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
    oder personenbezogene Inhalte erhalten. Aktuell sind das **genau sechs**:
-   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP sowie
-     ausschließlich nach ausdrücklichem Opt-in lesender Exchange-Kalenderzugriff über exakt
-     `https://mail.hs-anhalt.de/EWS/Exchange.asmx`). EWS darf nur Betreff, Beginn, Ende,
-     Ganztags-/Absagestatus und Ort des eigenen Standardkalenders abfragen; keine Bodies,
-     Teilnehmerlisten, Schreiboperationen oder Redirects. Termine bleiben im regulären Betrieb
-     flüchtig im Arbeitsspeicher und werden ausschließlich lokal mit den anderen Kalenderquellen
-     vereinigt. Sie dürfen weder in den persistenten Homescreen-Widget-Payload noch in geplante
-     Betriebssystem-Benachrichtigungen gelangen. Nur ein vom Nutzer bewusst ausgelöster ICS-Export
-     darf die aktuell geladenen Termine an ein vom Nutzer gewähltes Ziel übergeben;
+   - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP; ausschließlich für
+     die authentifizierte Empfängersuche EWS `ResolveNames` am festen HTTPS-Endpunkt
+     `https://mail.hs-anhalt.de/EWS/Exchange.asmx`, kein Autodiscover und keine beliebigen
+     EWS-Operationen; sowie ausschließlich nach ausdrücklichem Opt-in lesender
+     Exchange-Kalenderzugriff über exakt denselben Endpunkt). Der EWS-Kalender darf nur Betreff,
+     Beginn, Ende, Ganztags-/Absagestatus und Ort des eigenen Standardkalenders abfragen; keine
+     Bodies, Teilnehmerlisten, Schreiboperationen oder Redirects. Termine bleiben im regulären
+     Betrieb flüchtig im Arbeitsspeicher und werden ausschließlich lokal mit den anderen
+     Kalenderquellen vereinigt. Sie dürfen weder in den persistenten Homescreen-Widget-Payload
+     noch in geplante Betriebssystem-Benachrichtigungen gelangen. Nur ein vom Nutzer bewusst
+     ausgelöster ICS-Export darf die aktuell geladenen Termine an ein vom Nutzer gewähltes Ziel
+     übergeben;
    - der **Notenspiegel** → direkt und **nur** zu genau dem Host des Portals, auf dem das
      jeweilige Konto eingerichtet wurde. Die Hochschule Anhalt betreibt zwei Prüfungsportale
      parallel; jedes hat seine EIGENE, getrennte Host-Allowlist (kein gemeinsamer Pool):

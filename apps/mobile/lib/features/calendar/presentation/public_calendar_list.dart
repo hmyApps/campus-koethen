@@ -14,7 +14,9 @@ import '../../../core/widgets/translation_fallback_notice.dart';
 import '../../../l10n/l10n.dart';
 import '../application/public_calendar_providers.dart';
 import '../application/public_calendar_selection.dart';
+import '../application/calendar_color_preferences.dart';
 import '../domain/public_calendar.dart';
+import 'calendar_color_picker.dart';
 
 /// The public calendars with their individual switches and Google actions.
 ///
@@ -110,7 +112,7 @@ class PublicCalendarList extends ConsumerWidget {
 
 /// One public calendar: its name, its colour as decoration only, a switch and
 /// the safe link into Google Calendar.
-class PublicCalendarTile extends StatelessWidget {
+class PublicCalendarTile extends ConsumerWidget {
   const PublicCalendarTile({
     required this.calendar,
     required this.selected,
@@ -125,43 +127,73 @@ class PublicCalendarTile extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
     final TextTheme text = Theme.of(context).textTheme;
-    final Color dot =
-        parseHexColor(calendar.colorHex) ?? context.colors.primary;
+    final String styleKey = CalendarColorKeys.publicCalendar(calendar.slug);
+    final int? override = ref
+        .watch(calendarColorPreferencesProvider)
+        .overrideFor(styleKey);
+    final int? sourceArgb = parseHexColorArgb(calendar.colorHex);
+    final Color dot = override == null
+        ? (parseHexColor(calendar.colorHex) ?? context.colors.primary)
+        : Color(override);
     final List<String> subtitleParts = <String>[
       if (calendar.dataStale) l10n.calendarDataStale,
       // The state in words, so the switch position is never the only carrier.
       selected ? l10n.calendarSourceVisible : l10n.calendarSourceHidden,
     ];
-    return ListTile(
-      leading: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          // Colour is decorative; the name (title) carries the identity.
-          Container(
-            width: AppSizes.iconSmall,
-            height: AppSizes.iconSmall,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SwitchListTile.adaptive(
+          secondary: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              // Colour is decorative; the name (title) carries the identity.
+              Container(
+                width: AppSizes.iconSmall,
+                height: AppSizes.iconSmall,
+                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const Icon(AppIcons.public_outlined),
+            ],
           ),
-          const SizedBox(width: AppSpacing.sm),
-          const Icon(AppIcons.public_outlined),
-        ],
-      ),
-      title: Text(calendar.name),
-      subtitle: Text(subtitleParts.join(' · '), style: text.bodySmall),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          IconButton(
-            tooltip: l10n.calendarOpenInGoogle,
-            onPressed: onOpen,
-            icon: const Icon(AppIcons.open_in_new),
+          title: Text(calendar.name),
+          subtitle: Text(subtitleParts.join(' · '), style: text.bodySmall),
+          value: selected,
+          onChanged: onChanged,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: <Widget>[
+              TextButton.icon(
+                onPressed: () => showCalendarColorPicker(
+                  context,
+                  styleKey: styleKey,
+                  label: calendar.name,
+                ),
+                icon: Icon(
+                  AppIcons.edit_outlined,
+                  color: Color(override ?? sourceArgb ?? dot.toARGB32()),
+                ),
+                label: Text(l10n.calendarColorTitle),
+              ),
+              TextButton.icon(
+                onPressed: onOpen,
+                icon: const Icon(AppIcons.open_in_new),
+                label: Text(l10n.calendarOpenInGoogle),
+              ),
+            ],
           ),
-          Switch.adaptive(value: selected, onChanged: onChanged),
-        ],
-      ),
+        ),
+        const Divider(),
+      ],
     );
   }
 }

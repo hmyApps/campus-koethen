@@ -87,6 +87,7 @@ class MailInboxScreen extends ConsumerWidget {
     // Shows sync progress; the periodic/app-start scheduling itself lives in the
     // app shell.
     final MailSyncStatus sync = ref.watch(mailSyncControllerProvider);
+    final MailLiveSyncStatus live = ref.watch(mailLiveSyncControllerProvider);
     final MailPaginationStatus pagination = ref.watch(mailPaginationProvider);
     final bool cacheDegraded = ref.watch(mailCacheDegradedProvider);
 
@@ -232,6 +233,9 @@ class MailInboxScreen extends ConsumerWidget {
                     error: sync.error,
                     cacheDegraded: cacheDegraded,
                     lastSyncedAt: folder.isInbox ? sync.lastSyncedAt : null,
+                    liveConnection: folder.isInbox
+                        ? live.connection
+                        : MailLiveConnection.stopped,
                     onRetry: () => ref
                         .read(mailInboxControllerProvider.notifier)
                         .refresh(),
@@ -329,6 +333,7 @@ class _InboxStatusHeader extends StatelessWidget {
     required this.error,
     required this.cacheDegraded,
     required this.lastSyncedAt,
+    required this.liveConnection,
     required this.onRetry,
   });
 
@@ -336,13 +341,17 @@ class _InboxStatusHeader extends StatelessWidget {
   final Object? error;
   final bool cacheDegraded;
   final DateTime? lastSyncedAt;
+  final MailLiveConnection liveConnection;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final String locale = Localizations.localeOf(context).languageCode;
-    if (!showError && !cacheDegraded && lastSyncedAt == null) {
+    if (!showError &&
+        !cacheDegraded &&
+        lastSyncedAt == null &&
+        liveConnection == MailLiveConnection.stopped) {
       return const SizedBox.shrink();
     }
 
@@ -383,6 +392,17 @@ class _InboxStatusHeader extends StatelessWidget {
                 AppDateFormats.dateTime(lastSyncedAt!, locale),
               ),
               style: context.type.dataSmall,
+            ),
+          if (liveConnection != MailLiveConnection.stopped)
+            Semantics(
+              liveRegion: true,
+              child: Text(switch (liveConnection) {
+                MailLiveConnection.stopped => '',
+                MailLiveConnection.connecting => l10n.mailLiveConnecting,
+                MailLiveConnection.idle => l10n.mailLiveConnected,
+                MailLiveConnection.polling => l10n.mailLivePolling,
+                MailLiveConnection.retrying => l10n.mailLiveRetrying,
+              }, style: context.type.dataSmall),
             ),
         ],
       ),

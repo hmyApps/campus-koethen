@@ -182,6 +182,8 @@ model TimetableContext {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  groups TimetableContextGroup[]
+
   @@unique([source, externalId])
   @@index([source, active])
   @@map("timetable_contexts")
@@ -211,11 +213,29 @@ model TimetableGroup {
   updatedAt DateTime @updatedAt
 
   entries TimetableEntryGroup[]
+  contexts TimetableContextGroup[]
 
   @@unique([source, externalId])
   @@index([active, catalogVisible, shortName])
   @@index([department])
   @@map("timetable_groups")
+}
+
+/// Associates the public Campus group UUID with the semester/school-year
+/// catalogue it appeared in. The upstream ids stay on their owning rows and
+/// never become API fields.
+model TimetableContextGroup {
+  contextId String
+  groupId   String
+
+  context TimetableContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
+  group   TimetableGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([contextId, groupId])
+  @@index([groupId, contextId])
+  @@map("timetable_context_groups")
 }
 
 /// One scheduled lesson. Shared by however many groups attend it.

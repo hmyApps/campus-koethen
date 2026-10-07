@@ -9,8 +9,8 @@ import 'notification_payload.dart';
 /// When a request wants to be delivered.
 ///
 /// Two cases, because time is not one thing here (ADR-0001 § 7.4): the
-/// 24-hour lead of an event reminder is an **absolute duration** and moves
-/// with the clock across a daylight-saving change, while the chosen overview time
+/// event-reminder lead is an **absolute duration** and moves with the clock
+/// across a daylight-saving change, while the chosen overview time
 /// and the 11:00 canteen hint are **wall-clock times** that stay where they
 /// are on the dial.
 sealed class NotificationTrigger {

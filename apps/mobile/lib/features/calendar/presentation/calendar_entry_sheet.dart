@@ -19,6 +19,7 @@ import '../../events/data/event_posts_repository.dart';
 import '../../news/data/news_models.dart';
 import '../../news/presentation/article_block.dart';
 import '../../timetable/presentation/timetable_entry_card.dart';
+import '../../notifications/presentation/event_reminder_rule_tile.dart';
 import '../domain/calendar_entry.dart';
 import '../domain/calendar_entry_details.dart';
 import '../domain/entry_rooms.dart';
@@ -70,7 +71,14 @@ class _CalendarEntryPopup extends ConsumerWidget {
             AppSpacing.lg,
             AppSpacing.lg,
           ),
-          child: ArticleBlock(article: article, showFullContent: true),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              ArticleBlock(article: article, showFullContent: true),
+              const SizedBox(height: AppSpacing.md),
+              EventReminderRuleTile(entry: entry),
+            ],
+          ),
         ),
       );
     }
@@ -223,6 +231,12 @@ class CalendarEntrySheet extends ConsumerWidget {
               ),
 
               ..._sourceRows(context, l10n, unmappedTimetableRooms),
+
+              if (entry.source == CalendarSource.publicCalendar ||
+                  entry.source == CalendarSource.savedEvents) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                EventReminderRuleTile(entry: entry),
+              ],
 
               if (rooms.isNotEmpty) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),

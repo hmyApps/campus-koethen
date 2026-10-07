@@ -481,12 +481,22 @@ describe('TimetableSyncService catalogue write phase', () => {
   }
 
   function harness(stored: ReturnType<typeof storedGroup>[], upstream: ReturnType<typeof classes>) {
+    const linkedGroups = upstream.classes.map((item, index) => ({
+      id:
+        stored.find((row) => row.externalId === String(item.class.id))?.id ??
+        `created-group-${index}`,
+      externalId: String(item.class.id),
+    }));
     const tx = {
       timetableGroup: {
-        findMany: jest.fn().mockResolvedValue(stored),
+        findMany: jest.fn().mockResolvedValueOnce(stored).mockResolvedValueOnce(linkedGroups),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      timetableContextGroup: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
     };
     const prisma = {
@@ -497,6 +507,7 @@ describe('TimetableSyncService catalogue write phase', () => {
       timetableContext: {
         findMany: jest.fn().mockResolvedValue([
           {
+            id: 'context-49',
             externalId: '49',
             validFrom: new Date('2026-04-07T00:00:00.000Z'),
             validTo: new Date('2026-09-30T00:00:00.000Z'),
@@ -530,6 +541,16 @@ describe('TimetableSyncService catalogue write phase', () => {
     expect(tx.timetableGroup.updateMany).toHaveBeenCalledWith({
       where: { id: { in: stored.map((row) => row.id) } },
       data: { lastSeenAt: expect.any(Date) },
+    });
+    expect(tx.timetableContextGroup.createMany).toHaveBeenCalledWith({
+      data: stored.map((row) => ({ contextId: 'context-49', groupId: row.id })),
+      skipDuplicates: true,
+    });
+    expect(tx.timetableContextGroup.deleteMany).toHaveBeenCalledWith({
+      where: {
+        contextId: 'context-49',
+        groupId: { notIn: stored.map((row) => row.id) },
+      },
     });
   });
 

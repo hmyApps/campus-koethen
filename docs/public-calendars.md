@@ -132,6 +132,9 @@ lastSuccessfulSyncAt, dataStale, googleOpenUrl`. `channelSlug` verknüpft einen 
 - **Kalender-Tab:** dynamische Quelle neben Stundenplan und Moodle. Öffentliche Termine erhalten
   einen Farbpunkt **plus** Kalendername/Icon (Farbe nie alleiniges Merkmal). Ein Fehler der
   öffentlichen Quelle blendet Stundenplan/Moodle **nicht** aus.
+- **Lokale Farbwahl:** Die redaktionelle `colorHex` bleibt der Standard. Eine gerätelokale
+  Einstellung kann sie pro Kalender überschreiben; Name und Icon bleiben erhalten, und kein
+  Farbwert wird an Campus API oder Strapi zurückgeschrieben.
 - **„Kalender verwalten“:** Y-aus-X-Auswahl lokal (SharedPreferences). `defaultSubscribed` greift
   **genau einmal** pro Slug (seen-Ledger); bewusst deaktivierte bleiben aus; verschwundene Slugs
   werden tolerant bereinigt; ein Backend-Update überschreibt die Auswahl nie; keine Auswahl ⇒ keine

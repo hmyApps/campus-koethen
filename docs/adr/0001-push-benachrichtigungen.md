@@ -1,5 +1,13 @@
 # ADR-0001 — Benachrichtigungen aus lokal vorhandenen Daten, ohne Push-Server
 
+> **Ergänzung vom 7. Oktober 2026:** Die spätere Produktentscheidung zur Mail-Erweiterung ergänzt
+> die drei vorausgeplanten Kategorien um **N4 `mail.new`**. N4 ist ein sofortiger, rein lokaler und
+> inhaltlich neutraler Hinweis, nachdem IMAP IDLE im Vordergrund und ein anschließender Sync eine
+> neue UID bestätigt haben. Er verwendet weder S2 noch Hintergrundausführung und verspricht keine
+> Zustellung bei pausierter oder geschlossener App. Damit sind die früheren Aussagen „genau drei“
+> und „K10 nicht Bestandteil“ für den aktuellen Produktstand überholt; die ursprüngliche Abwägung
+> bleibt darunter als Entscheidungsverlauf erhalten. Technischer Vertrag: [notifications.md](../notifications.md).
+
 Campus Köthen App · `AGPL-3.0-only` · Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 **Änderung vom 24.09.2026:** Die Uhrzeit der Tagesübersicht N2 ist nun im Onboarding und in den
@@ -18,6 +26,12 @@ Echtzeitgarantie. Architekturgrenzen, lokales Opt-in, getrennte Schalter, neutra
 Texte und der Verzicht auf Push-Server bleiben unverändert. Die Umsetzung ist in
 [`academic-updates-and-document-wallet.md`](../academic-updates-and-document-wallet.md)
 dokumentiert.
+**Änderung vom 07.10.2026:** Der Event-Vorlauf N1 ist nicht mehr fest auf 24 Stunden begrenzt.
+Lokal wählbar sind 15 Minuten, 1 Stunde, 6 Stunden, 1 Tag (Standard), 2 Tage und 1 Woche. Ein
+einzelnes öffentliches oder gemerktes Event kann den Standard überschreiben oder die Erinnerung
+abschalten. Die Regeln bleiben rein geräteseitig, klein und begrenzt gespeichert; Kategorie,
+Zustellfenster, Identität, Datenschutz und Planung ohne Push-Server bleiben unverändert. Alle
+folgenden Aussagen „exakt 24 Stunden“ beziehungsweise „nicht einstellbar“ sind insoweit ersetzt.
 
 | Feld            | Wert                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -524,7 +538,7 @@ Eintrag. Beides ist rein additiv und berührt keinen bestehenden Vertrag.
 | Bibliothek                 | `flutter_local_notifications`, plus `timezone` für zonenrichtige Zeitpunkte und ein kleines Paket zur Ermittlung der Gerätezeitzone (exakte Auswahl gegen die eingesetzte Plugin-Version prüfen)                                                                                                                                                 |
 | Terminierung               | `zonedSchedule` **inexakt** (`inexactAllowWhileIdle`) — damit braucht Android 12+ **kein** `SCHEDULE_EXACT_ALARM`                                                                                                                                                                                                                                |
 | Genauigkeit am Fensterrand | Inexakte Terminierung kann einige Minuten später zustellen. Ein auf 19:5x geplanter Hinweis kann daher nach 20:00 Uhr erscheinen. Das Fenster aus P7 ist eine **Planungsregel**; eine Zustellung auf die Minute wäre nur mit `SCHEDULE_EXACT_ALARM` zusagbar, und dieser Preis steht in keinem Verhältnis. Die Abweichung ist zu messen (§ 13.2) |
-| Android-Kanäle             | **drei** Kanäle, je einer für N1, N2 und N3, vor der ersten Planung angelegt. Kanäle sind kein Gruppenschlüssel und berühren P8 nicht                                                                                                                                                                                                            |
+| Android-Kanäle             | **vier** Kanäle, je einer für N1, N2, N3 und das später ergänzte N4, vor der ersten Planung/Anzeige angelegt. Kanäle sind kein Gruppenschlüssel und berühren P8 nicht                                                                                                                                                                             |
 | Android-Berechtigung       | `POST_NOTIFICATIONS` ab Android 13; darunter gilt sie als erteilt — beides muss die UI korrekt darstellen                                                                                                                                                                                                                                        |
 | Kleines Symbol (Android)   | monochrom, sonst zeigt Android ein graues Quadrat                                                                                                                                                                                                                                                                                                |
 | iOS-Berechtigung           | erst nach erklärtem Nutzen anfragen: im letzten Onboarding-Schritt beim bewussten Abschluss mit aktiviertem Schalter oder später über einen kontextuellen Einstiegspunkt (LEVIORA-158/167)                                                                                                                                                       |
@@ -548,7 +562,7 @@ mehr.
 | K7  | Tagesübersicht                   | **N2**, fest um 08:00 Uhr                                                      |
 | K8  | Aufgabe fällig                   | Nicht Bestandteil der Freigabe. `Todo` hat weiterhin kein Fälligkeitsdatum     |
 | K9  | Neuer Beitrag / neues Event      | **Bewusster Verzicht** (LEVIORA-159). Strukturell nur mit S2, dann best effort |
-| K10 | Neue E-Mail                      | Nicht Bestandteil der Freigabe. Mit S2 grundsätzlich erreichbar, siehe § 13.4  |
+| K10 | Neue E-Mail                      | **Später als N4 ergänzt:** sofort lokal nach bestätigtem Vordergrund-IDLE-Sync; keine Hintergrundzusage |
 | K11 | Neue Note                        | **Nein** — persönliche Daten, falsche Voreinstellung auf dem Sperrbildschirm   |
 | K12 | Moodle-Ankündigung               | Nicht Bestandteil der Freigabe. Wie K10                                        |
 | K13 | Notfallmeldung                   | **Nein** — keine autoritative Quelle, die App ist unabhängig und inoffiziell   |
@@ -637,7 +651,7 @@ zwingt trotzdem, den Zielparameter aus § 7.8 gleich mitzubauen.
 | 4     | Stundenplananteil der Tagesübersicht — erst nach der WebUntis-Freigabe (`WEBUNTIS_ENABLED`)                                                           | Anteil entfällt ersatzlos     |
 | 5     | Getrennt zu entscheiden: **S2** und damit K9/K10/K12                                                                                                  | S2 abschaltbar                |
 
-Jede Kategorie ist einzeln abschaltbar; nach dem globalen Opt-in sind alle drei aktiv (P2). Ein
+Jede Kategorie ist einzeln abschaltbar; nach dem globalen Opt-in sind N1–N4 aktiv (P2). Ein
 Notaus ist ein Schalter in den Einstellungen plus `cancelAll()` — es gibt keinen Serverzustand, der
 nachziehen müsste.
 
@@ -679,7 +693,7 @@ funktionieren ohne sie unverändert.
 
 | Risiko                                                  | Frühindikator                                 | Gegenmaßnahme                                                           |
 | ------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
-| Zu viele Erinnerungen, Nutzer schalten alles ab         | Rückmeldungen; hohe Zahl geplanter Einträge   | Nach P5 nur drei Kategorien; jede einzeln abschaltbar                   |
+| Zu viele Erinnerungen, Nutzer schalten alles ab         | Rückmeldungen; hohe Zahl geplanter Einträge   | Drei geplante Kategorien plus neutraler N4-Live-Hinweis; jede einzeln abschaltbar |
 | Vorrat läuft leer bei seltener Nutzung                  | in der Gerätematrix reproduzierbar            | Budget ausschöpfen, in der UX ehrlich erklären                          |
 | Veraltete Erinnerung nach einer Absage                  | Testfall in der Gerätematrix                  | Neuplanung nach jedem Abruf; vorsichtige Textwahl                       |
 | iOS-Grenze überschritten, Einträge fallen weg           | Zähler „Budget ausgeschöpft“                  | Budget 60 statt 64, Priorisierung nach Zeitpunkt                        |
@@ -762,7 +776,7 @@ Sie ist **additiv**: Der Planer aus § 7 bliebe unverändert, es käme nur ein w
    _Akzeptanz:_ zweimaliges Planen desselben Zustands erzeugt keine Duplikate; zwei gleichzeitig
    angestoßene Neuplanungen führen zu genau einem Endzustand.
 4. Opt-in-Flow, Einstellungsseite `/more/settings/notifications` und Kategorieschalter nach
-   LEVIORA-167; alle drei Kategorien nach dem Opt-in aktiv (P2); Berechtigungsstatus korrekt für
+   LEVIORA-167; alle vier Kategorien nach dem Opt-in aktiv (P2); Berechtigungsstatus korrekt für
    Android 13+, ältere Android-Versionen, iOS und den entzogenen Zustand.
    _Akzeptanz:_ verweigerte Berechtigung führt nicht in eine Sackgasse und fragt nicht erneut.
 5. Neuplanung an allen Auslösern aus § 7.1, einschließlich Zeitzonen-, Sprach- und Tageswechsel.

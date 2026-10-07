@@ -170,8 +170,10 @@ damit die App das Hochschulpasswort nie erhält und nur ein widerrufbares App-Pa
 **Lokales und Rahmen**
 
 - Lokale Aufgabenliste unter „Mehr → Aufgaben" — rein auf dem Gerät, ohne jede Netzbeteiligung
-- Lokale Einstellungen: Sprache, Theme, Kanal-Abos, bevorzugte Mensa, gewählte Stundenplangruppe,
-  Kalenderauswahl, Anhänge-Download für E-Mail
+- Lokale Einstellungen: Sprache, Theme, Kanal-Abos, bevorzugte Mensa, Haupt- und zusätzliche
+  Stundenplangruppen beziehungsweise einzelne Zusatzmodule, Semesterhinweise,
+  Kalenderauswahl/-farben, Erinnerungsregeln und
+  Anhänge-Download für E-Mail
 - Offline-/Cache-Verhalten mit klarer Stale-Kennzeichnung
 - About, Impressums-Platzhalter, Datenschutz-Platzhalter
 - Deutsch und Englisch in App, CMS und API
@@ -187,8 +189,7 @@ CMS-Schreibzugang in der App · Auswertung des SVG zur Laufzeit (ein Tap trifft 
 dem Katalog, nicht das Bild)
 
 **Stundenplan:** persönlicher WebUntis-Login · Stundenpläne für Lehrpersonen oder Räume ·
-Raumverfügbarkeit („freie Räume") · Zusammenführen mehrerer Gruppen in einen Plan ·
-Abwesenheiten und Hausaufgaben
+Raumverfügbarkeit („freie Räume") · Abwesenheiten und Hausaufgaben
 
 **Moodle:** jeder Schreibzugriff — keine Abgaben, keine Forenbeiträge, keine generische
 „beliebige Funktion aufrufen"-Schnittstelle
@@ -292,6 +293,9 @@ gebaut.
   standardmäßig Montag bis Freitag; das Wochenende ist ein lokaler, versionierter Schalter.
 - Öffentliche Termine tragen einen Farbpunkt **plus** Kalendername und Icon — Farbe ist nie das
   alleinige Unterscheidungsmerkmal.
+- Inhaltsfarben für Stundenplan, Moodle und gemerkte Events sind lokal wählbar; jeder öffentliche
+  Kalender kann die redaktionelle Standardfarbe lokal überschreiben. Die Auswahl verändert keine
+  Daten und wird nie an das Backend übertragen.
 - Eine neue Quelle bedeutet: ein Wert in `CalendarSource`, ein Mapper und eine Verdrahtung im
   Aggregator. Mehr nicht.
 - **Kalenderauswahl:** `defaultSubscribed` wird pro Slug **genau einmal** ausgewertet — beim
@@ -346,7 +350,8 @@ Dienstspezifisch:
 | Moodle    | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell    | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                          |
 | Nextcloud | Login Flow v2 → App-Passwort     | nur beim Öffnen/Navigation und nach bewusster Aktion, manuell | Ordner/Download; Upload ohne Überschreiben; bestätigtes Löschen; bestätigte öffentliche Read-only-Links; kein persistenter Cache |
 
-Kein Hintergrund-Polling, kein Timer, kein Backend-Cron. Beim Moodle-Login wird das Passwort sofort
+Kein Hintergrund-Polling bei vollständig geschlossener App und kein Backend-Cron. Mail hält nur im
+Vordergrund eine abbrechbare IMAP-IDLE-Verbindung; beim Pausieren wird sie geschlossen. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
 es gibt kein WebView, kein JavaScript und keine automatische Nachladung entfernter Bilder.
 

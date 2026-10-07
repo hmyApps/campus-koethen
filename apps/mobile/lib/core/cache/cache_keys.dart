@@ -115,6 +115,13 @@ abstract final class CacheKeys {
   /// Small public timetable availability response.
   static String timetableStatus(String locale) => 'timetable.status.$locale';
 
+  /// Semester catalogues and their Campus group ids.
+  static String timetablePeriods(String locale) => 'timetable.periods.$locale';
+
+  /// Modules observed for one Campus study group.
+  static String timetableModules(String locale, String groupId) =>
+      'timetable.modules.$locale.$groupId';
+
   /// Exact lesson information choices of one Campus study group.
   static String timetableLessonInfo(String locale, String groupId) =>
       'timetable.lessonInfo.$locale.$groupId';

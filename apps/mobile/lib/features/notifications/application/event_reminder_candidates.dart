@@ -17,9 +17,10 @@ import '../domain/delivery_window.dart';
 import '../domain/notification_category.dart';
 import '../domain/notification_request.dart';
 import 'notification_providers.dart';
+import 'notification_settings_controller.dart';
 
-/// N1 · `event.reminder` — one reminder exactly 24 hours before an event
-/// (ADR-0001 § 7.3, P3).
+/// N1 · `event.reminder` — at most one locally configured reminder per event
+/// (ADR-0001 amendment of 2026-10-07).
 ///
 /// This file holds the whole category: the entries it is allowed to look at,
 /// the rule that turns one of them into a request, and the text that request
@@ -39,11 +40,8 @@ import 'notification_providers.dart';
 /// always fully in scope, however far out they lie.
 const int kEventReminderHorizonMonths = 2;
 
-/// Exactly 24 hours, as an **absolute duration** (P3).
-///
-/// Not "the same wall-clock time on the previous day": on the two nights the
-/// clocks change those are an hour apart, and the approved rule names the
-/// duration, not the dial.
+/// Default lead. Every selected lead remains an **absolute duration** rather
+/// than a wall-clock rule across daylight-saving changes.
 const Duration kEventReminderLead = Duration(hours: 24);
 
 /// The already-localised text of one reminder.
@@ -85,7 +83,7 @@ const Set<CalendarSource> kEventReminderSources = <CalendarSource>{
 ///   The planner drops past moments too, but doing it here as well keeps the
 ///   rule readable where it is stated rather than only as a side effect;
 /// * nothing else. In particular an `allDay` entry is kept: it has a defined
-///   `start`, and ADR-0001 § 7.3 applies the 24-hour rule to it unchanged.
+///   `start`, and the configured lead applies to it unchanged.
 ///
 /// Deduplication is **not** done here. It has already happened in
 /// [notificationEventEntriesProvider], through the events feature's own
@@ -96,6 +94,8 @@ List<NotificationRequest> eventReminderRequests({
   required Iterable<CalendarEntry> entries,
   required tz.TZDateTime now,
   required EventReminderCopy copy,
+  Duration defaultLead = kEventReminderLead,
+  Map<String, int> overrides = const <String, int>{},
 }) {
   final tz.Location location = now.location;
   final List<NotificationRequest> requests = <NotificationRequest>[];
@@ -107,11 +107,40 @@ List<NotificationRequest> eventReminderRequests({
     final tz.TZDateTime start = tz.TZDateTime.from(entry.start, location);
     if (!start.isAfter(now)) continue;
 
-    final tz.TZDateTime desired = start.subtract(kEventReminderLead);
+    final int? overrideMinutes = overrides[entry.id];
+    if (overrideMinutes == -1) continue;
+    final Duration lead = overrideMinutes == null
+        ? defaultLead
+        : Duration(minutes: overrideMinutes);
+
+    tz.TZDateTime desired = start.subtract(lead);
     // The same shift the planner will apply — asked here only to choose
     // between "morgen" and "heute". Both call [DeliveryWindow], so the text
     // and the schedule cannot disagree about which day the reminder lands on.
-    final tz.TZDateTime delivered = DeliveryWindow.shiftIntoWindow(desired);
+    tz.TZDateTime delivered = DeliveryWindow.shiftIntoWindow(desired);
+    // Short custom leads can otherwise be shifted past an early/all-day event.
+    // Use the latest 20:00 boundary that remains before the event rather than
+    // notifying after it has begun. For a 21:00 event that is 20:00 on the
+    // same day; for an early or all-day event it is the previous day.
+    if (!delivered.isBefore(start)) {
+      final tz.TZDateTime eventDayEnd = tz.TZDateTime(
+        location,
+        start.year,
+        start.month,
+        start.day,
+        DeliveryWindow.endHour,
+      );
+      desired = eventDayEnd.isBefore(start)
+          ? eventDayEnd
+          : tz.TZDateTime(
+              location,
+              start.year,
+              start.month,
+              start.day - 1,
+              DeliveryWindow.endHour,
+            );
+      delivered = desired;
+    }
     if (!delivered.isAfter(now)) continue;
 
     final bool onEventDay =
@@ -217,10 +246,11 @@ final Provider<List<NotificationRequest>> eventReminderCandidatesProvider =
       final tz.Location? location = ref
           .watch(notificationLocationProvider)
           .value;
-      // Without a resolved zone there is no such thing as "24 hours before,
-      // shifted into 07:00–20:00 local". The plan is empty until it arrives.
+      // Without a resolved zone there is no local 07:00–20:00 window. The
+      // plan is empty until it arrives.
       if (location == null) return const <NotificationRequest>[];
 
+      final preferences = ref.watch(notificationSettingsProvider);
       return eventReminderRequests(
         entries: ref.watch(notificationEventEntriesProvider),
         now: tz.TZDateTime.from(
@@ -228,6 +258,8 @@ final Provider<List<NotificationRequest>> eventReminderCandidatesProvider =
           location,
         ),
         copy: ref.watch(eventReminderCopyProvider),
+        defaultLead: Duration(minutes: preferences.eventReminderMinutes),
+        overrides: preferences.eventReminderOverrides,
       );
     });
 

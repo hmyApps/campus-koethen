@@ -38,6 +38,11 @@ class HsaMailProfile {
       uri.query.isEmpty &&
       uri.fragment.isEmpty;
 
+  /// Pinned Exchange Web Services endpoint used only for ResolveNames against
+  /// the user's contacts and the university Global Address List. Same pinned
+  /// mail host as [exchangeCalendarUri].
+  Uri get ewsUri => Uri.https(imapHost, '/EWS/Exchange.asmx');
+
   /// Official HSA webmail, opened externally through the safe launcher only.
   String get webmailUrl => 'https://mail.hs-anhalt.de/';
 }

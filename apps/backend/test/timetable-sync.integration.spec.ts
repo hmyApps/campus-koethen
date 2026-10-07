@@ -75,6 +75,7 @@ describe('TimetableSyncService (integration)', () => {
   const counts = async () => ({
     groups: await prisma.timetableGroup.count(),
     activeGroups: await prisma.timetableGroup.count({ where: { active: true } }),
+    contextLinks: await prisma.timetableContextGroup.count(),
     entries: await prisma.timetableEntry.count(),
     links: await prisma.timetableEntryGroup.count(),
   });
@@ -126,9 +127,10 @@ describe('TimetableSyncService (integration)', () => {
   describe('group catalogue', () => {
     it('imports the catalogue', async () => {
       await seedCatalogue();
-      const { groups, activeGroups } = await counts();
+      const { groups, activeGroups, contextLinks } = await counts();
       expect(groups).toBeGreaterThan(0);
       expect(activeGroups).toBe(groups);
+      expect(contextLinks).toBe(groups);
     });
 
     it('repeating the import creates no duplicates', async () => {
@@ -150,6 +152,7 @@ describe('TimetableSyncService (integration)', () => {
       expect(await counts()).toMatchObject({
         groups: before.groups,
         activeGroups: before.activeGroups,
+        contextLinks: before.contextLinks,
       });
     });
 

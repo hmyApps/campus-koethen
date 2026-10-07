@@ -89,12 +89,21 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Nicht-Bild-Anhänge automatisch für die Offline-Nutzung geladen. Ist sie aus, lädt ein bewusster
   Tipp den fehlenden Anhang live vom Mailserver, legt ihn für die INBOX im verschlüsselten Cache
   ab und öffnet ihn anschließend. Bilder werden ohnehin inline aus dem Speicher angezeigt.
-- **Empfängervorschläge:** Beim Verfassen schlägt das An-/Cc-Feld Adressen aus der
-  gecachten Mailhistorie (From/To/Cc) vor.
+- **Empfängervorschläge:** Beim Verfassen durchsucht das An-/Cc-Feld nach 250 ms Debounce direkt
+  das authentifizierte Exchange-Adressbuch per EWS `ResolveNames` und mischt die Treffer mit
+  Adressen aus der verschlüsselt gecachten Mailhistorie (From/To/Cc). Schlägt EWS fehl oder ist
+  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar.
+- **Neue-Mail-Hinweis:** Ein IDLE-Signal allein genügt nicht. Erst wenn der anschließende
+  INBOX-Abgleich eine bisher unbekannte UID bestätigt, entsteht bei aktivem globalem Opt-in und
+  aktiver Kategorie eine lokale Benachrichtigung. Titel und Text nennen weder Absender noch
+  Betreff; der Payload enthält nur die IMAP-UID. Der erste Sync setzt ausschließlich die Basis und
+  meldet vorhandene Nachrichten nicht nachträglich.
 
 > Anmerkung: Es gibt **kein** Sync, während die App vollständig geschlossen ist — dafür
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP
-> bewusst nicht einbindet. Sync läuft, solange die App läuft, plus beim nächsten Start.
+> bewusst nicht einbindet. Mobile Betriebssysteme erhalten auch eine offene IDLE-Verbindung im
+> Hintergrund nicht zuverlässig. „Live“ gilt deshalb für den Vordergrund; Start und Resume holen
+> verpasste Änderungen nach.
 
 ## Optionaler Exchange-Kalender
 
@@ -156,7 +165,8 @@ features/mail/
                   Sent-Kopie geteilt), MailAttachmentPicker (kapselt file_selector),
                   SecureMailCredentialStore, EncryptedMailCache, MailCacheManager,
                   MailLocalDataCoordinator, html_to_text
-  application/    Riverpod-Controller: Account, Inbox, Compose, Search (lokal + Server),
+  application/    Riverpod-Controller: Account, Inbox, Live-Sync, Compose,
+                  Suche (lokal + Server), Empfängervorschläge,
                   Provider
   presentation/   Screens: Setup, Inbox, Message, Compose + Fehler-Mapping
 ```
@@ -204,14 +214,16 @@ flutter test test/features/mail/
   keine Anhangbytes, Header-Rekonstruktion, keine Body-Entschlüsselung pro Suche), Retention nach
   Anzahl/Bytes sowie die getrennte Offline-Bereinigung.
 - `mail_controller_test.dart` — Anmelden/Abmelden, unvollständigen Wipe erneut versuchen,
-  Write-Fence bei laufendem Sync, Inbox-Laden, typisierte Fehler, Doppel-Send-Schutz (auch mit
+  Write-Fence bei laufendem Sync, Inbox-Laden, Löschen erst serverseitig, Live-Sync ohne
+  Benachrichtigung beim ersten Basisabgleich, typisierte Fehler, Doppel-Send-Schutz (auch mit
   Anhängen), Sent-Kopie-Ergebnis, dass Anhänge unverändert bis zum Gateway durchgereicht werden,
   sowie die Suche: lokaler Treffer ohne IMAP-Aufruf, deutsche Groß-/Kleinschreibung und
   Leerzeichen, Nichttreffer, nicht gecachter Ordner, Deduplizierung Cache↔IMAP, IMAP-Fehler mit
   erhaltenen lokalen Treffern und Retry, verworfene verspätete Antwort, Kontoentfernung sowie das
   auf 20 Bodies begrenzte Hintergrund-Vorladen.
 - `mail_ui_test.dart` — Gate (Setup ↔ Inbox), Anmeldeformular-Validierung, Account
-  entfernen, Nachricht anzeigen (+ als gelesen markieren), Verfassen/Senden inkl. Anhänge:
+  entfernen, Nachricht anzeigen (+ als gelesen markieren und nach Bestätigung löschen),
+  Verfassen/Senden inkl. Anhänge:
   auswählen und mit Name/Größe anzeigen, vor dem Senden entfernen, abgebrochener Picker lässt
   den Entwurf unverändert, gesendete Nachricht enthält den Anhang, eine beim Senden nicht mehr
   lesbare oder zu große Datei zeigt einen verständlichen Fehler und lässt Screen/Entwurf
@@ -220,6 +232,10 @@ flutter test test/features/mail/
   deaktiviert Anhang-Auswahl und Entfernen-Buttons; Suche: gecachter Treffer ohne Serverkontakt,
   zusätzliche Servertreffer ohne Dubletten, IMAP-Fehler mit erhaltenen lokalen Treffern und
   Retry, klarer Leerzustand, Öffnen eines nur serverseitigen Treffers (wird dabei gecacht).
+- `enough_mail_gateway_test.dart` — reale IMAP-Kommandos gegen einen lokalen Testserver,
+  einschließlich UID-basiertem `MOVE` nach `\Trash` und erfolgreichem Eintritt in IMAP IDLE.
+- `exchange_directory_gateway_test.dart` — fester EWS-Endpunkt, Basic Auth ausschließlich über
+  TLS, XML-Escaping, Deduplizierung sowie geschlossene Fehlerabbildung.
 
 ## Manuelle Testcheckliste (echter Server, echtes Konto)
 
@@ -259,6 +275,11 @@ Posteingang / Detail
       Nachladen erscheint der Button erneut, solange eine volle Seite geliefert wurde.
 - [ ] Ungelesene sind nicht nur über Farbe erkennbar (Icon/Fettung).
 - [ ] Öffnen einer Nachricht zeigt reinen Text; sie wird als gelesen markiert.
+- [ ] Löschen fragt nach Bestätigung und verschiebt per UID in den serverseitigen Papierkorb;
+      aus dem Papierkorb wird UID-spezifisch endgültig gelöscht. Ohne sichere UIDPLUS-/MOVE-
+      Möglichkeit bricht die App ab, statt fremde als gelöscht markierte Nachrichten zu expungen.
+- [ ] Während die App sichtbar ist, erscheint „Live-Synchronisierung aktiv“; eine neue Testmail
+      taucht ohne manuelles Aktualisieren auf. Nach Pause/Resume wird die Verbindung neu aufgebaut.
 - [ ] HTML-Mail wird als Text dargestellt; entfernte Bilder werden **nicht** geladen.
 - [ ] Mail mit Anhang zeigt die Anhänge; empfangene Bild-Anhänge (mit lokalen Bytes)
       erscheinen unabhängig vom Absender automatisch inline; fehlerhafte Bilddaten
@@ -305,6 +326,8 @@ Verfassen / Senden
       „Gesendet” wird im Hintergrund abgelegt, ein Hinweis erscheint nur, wenn das
       nicht klappt.
 - [ ] Mehrere Empfänger in „An”/„Cc” mit Komma getrennt werden alle adressiert.
+- [ ] Ab zwei Zeichen erscheinen Treffer aus Exchange-Kontakten/GAL und lokaler Mailhistorie;
+      Flugmodus lässt lokale Vorschläge und direkte Eingabe weiter funktionieren.
 - [ ] Schnelles Doppeltippen auf „Senden” verschickt **nur einmal**.
 - [ ] Ungültiger Empfänger → Validierung, kein Sendeversuch.
 - [ ] „Datei anhängen” öffnet den OS-Dateidialog **ohne** Typfilter; mehrere Dateien lassen
@@ -335,8 +358,9 @@ Barrierefreiheit / i18n
 
 ## Bekannte Grenzen (bewusst)
 
-Kein Hintergrund-Sync, kein IMAP IDLE, kein Verschieben/Löschen, keine Ordnerverwaltung
-(nur Lesen/Wechseln, kein Anlegen/Umbenennen), keine mehrfachen Konten. Empfangene Anhänge
+Kein zuverlässiger Live-Sync bei pausierter oder vollständig geschlossener App, keine
+Ordnerverwaltung (kein Anlegen/Umbenennen), keine mehrfachen Konten. IMAP IDLE läuft nur im
+Vordergrund; Start und Resume gleichen verpasste Änderungen ab. Empfangene Anhänge
 werden **angezeigt** und lassen sich **in der App öffnen** (Bilder, PDF, Text) sowie über das
 OS-Menü teilen/speichern. Beim Verfassen lassen sich beliebige Dateien über den OS-Dateidialog
 anhängen (kein Typfilter, kein Upload-Limit über die Gerätespeichergrenzen hinaus) — es gibt

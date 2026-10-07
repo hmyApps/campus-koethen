@@ -471,6 +471,11 @@ class _NotificationStep extends StatelessWidget {
                 icon: AppIcons.restaurant_outlined,
                 text: l10n.onboardingNotificationsCanteen,
               ),
+              const SizedBox(height: AppSpacing.md),
+              _NotificationFeature(
+                icon: AppIcons.mail_outline,
+                text: l10n.onboardingNotificationsMail,
+              ),
             ],
           ),
         ),

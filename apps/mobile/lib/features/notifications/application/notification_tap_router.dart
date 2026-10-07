@@ -155,8 +155,18 @@ class NotificationTapRouter {
         return const NotificationTapTarget(location: AppRoutes.moodle);
       case NotificationCategory.gradeChange:
         return const NotificationTapTarget(location: AppRoutes.grades);
+      case NotificationCategory.newMail:
+        if (!_mailUid.hasMatch(payload.target)) {
+          return const NotificationTapTarget(
+            location: AppRoutes.mail,
+            resolved: false,
+          );
+        }
+        return const NotificationTapTarget(location: AppRoutes.mail);
     }
   }
+
+  static final RegExp _mailUid = RegExp(r'^\d{1,20}$');
 
   /// `<slug>:<YYYY-MM-DD>` with an optional `:<dish name>` tail.
   static final RegExp _canteenTarget = RegExp(

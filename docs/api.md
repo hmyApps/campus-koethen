@@ -669,6 +669,79 @@ hat dieselbe öffentliche Gruppenform und dieselben Zeitraum-/Freshness-Metadate
 wie der Katalog, aber keinen Pagination-Block. Unbekannte oder syntaktisch
 ungültige UUIDs liefern den unten beschriebenen Fehlervertrag. Externe IDs
 werden auch hier nie ausgegeben.
+### `GET /v1/timetable/periods`
+
+Liefert bis zu acht synchronisierte Semesterkataloge in chronologischer Reihenfolge. Der
+Semester-Assistent nutzt die Zuordnung ausschließlich, um nach Ende des gewählten Zeitraums einen
+neuen Hauptkurs vorzuschlagen; ein Wechsel erfolgt nie automatisch. Deaktiviertes WebUntis liefert
+eine leere Liste. Schuljahres- und Klassen-IDs der Quelle bleiben serverintern.
+
+```jsonc
+{
+  "data": [
+    {
+      "id": "6ca8…",
+      "name": "2026/2027",
+      "validFrom": "2026-10-05",
+      "validTo": "2027-03-31",
+      "groups": [
+        {
+          "id": "8f1c…",
+          "shortName": "AIN3",
+          "longName": "Angewandte Informatik 3. Semester",
+          "department": "FB5",
+        },
+      ],
+    },
+  ],
+  "meta": {
+    "requestedLocale": "de",
+    "resolvedLocale": "de",
+    "translationFallback": false,
+    "featureEnabled": true,
+    "lastSuccessfulSyncAt": "…",
+    "dataStale": false,
+  },
+}
+```
+
+Ein vollständiger, nicht-leerer Kataloglauf aktualisiert die Gruppen-Zuordnung eines Zeitraums
+transaktional. Eine leere, teilweise nicht persistierbare oder fehlgeschlagene Antwort behält die
+letzte erfolgreiche Zuordnung.
+
+### `GET /v1/timetable/modules`
+
+`groupId` ist erforderlich und muss eine Campus-UUID sein; unbekannte Gruppen liefern
+`404 TIMETABLE_GROUP_NOT_FOUND`. Der Endpunkt listet die bereits für diese Studiengruppe
+beobachteten Module aus dem operativen Campus-Datenbestand. Er löst keinen WebUntis-Aufruf aus und
+liefert weder Schuljahres-, Klassen- noch andere interne Quell-IDs.
+
+```jsonc
+{
+  "data": [
+    {
+      "subjectCode": "MATH2",
+      "title": "Mathematik 2",
+    },
+    {
+      "subjectCode": null,
+      "title": "Wahlpflichtfach Robotik",
+    },
+  ],
+  "meta": {
+    "requestedLocale": "de",
+    "resolvedLocale": "de",
+    "translationFallback": false,
+    "featureEnabled": true,
+    "lastSuccessfulSyncAt": "…",
+    "dataStale": false,
+  },
+}
+```
+
+Codes und Titel stammen unverändert aus der Quelle. Die App bildet daraus nur lokal einen stabilen
+Auswahlschlüssel, lädt den Zeitplan der zugehörigen Studiengruppe über deren Campus-UUID und lässt
+bei einem Modul-Abo alle nicht gewählten Module dieser Gruppe aus der Zusammenführung heraus.
 
 ### `GET /v1/timetable/entries`
 

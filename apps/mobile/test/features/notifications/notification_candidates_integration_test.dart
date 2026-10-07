@@ -21,7 +21,7 @@ NotificationRequest request(NotificationCategory category) =>
     );
 
 void main() {
-  test('the aggregate keeps every approved category after parallel merges', () {
+  test('the aggregate keeps every scheduled category after parallel merges', () {
     final ProviderContainer container = ProviderContainer(
       overrides: [
         eventReminderCandidatesProvider.overrideWithValue(<NotificationRequest>[
@@ -44,10 +44,12 @@ void main() {
       container
           .read(notificationCandidatesProvider)
           .map((NotificationRequest candidate) => candidate.category),
-      NotificationCategory.values.where(
-        (NotificationCategory category) =>
-            category != NotificationCategory.gradeChange,
-      ),
+      const <NotificationCategory>[
+        NotificationCategory.eventReminder,
+        NotificationCategory.dailySummary,
+        NotificationCategory.canteenFavourite,
+        NotificationCategory.moodleDeadline,
+      ],
     );
   });
 }

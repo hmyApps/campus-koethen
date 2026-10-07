@@ -44,6 +44,63 @@ void main() {
     );
   });
 
+  test(
+    'the default and one per-event reminder rule survive a restart',
+    () async {
+      final KeyValueStore store = InMemoryKeyValueStore();
+      final NotificationSettingsController controller = containerWith(
+        store,
+      ).read(notificationSettingsProvider.notifier);
+      await controller.setEventReminderMinutes(6 * 60);
+      await controller.setEventReminderOverride('publicCalendar:fsr:1', -1);
+
+      final NotificationPreferences restarted = containerWith(
+        store,
+      ).read(notificationSettingsProvider);
+      expect(restarted.eventReminderMinutes, 6 * 60);
+      expect(restarted.eventReminderOverrides, <String, int>{
+        'publicCalendar:fsr:1': -1,
+      });
+    },
+  );
+
+  test('corrupted event rules are rejected closed', () {
+    final KeyValueStore store = InMemoryKeyValueStore(<String, Object>{
+      PreferenceKeys.notificationEventReminderMinutes: 17,
+      PreferenceKeys.notificationEventReminderOverrides: <String>[
+        'valid=17',
+        '=60',
+        'publicCalendar:ok=60',
+      ],
+    });
+    final NotificationPreferences preferences = containerWith(
+      store,
+    ).read(notificationSettingsProvider);
+    expect(preferences.eventReminderMinutes, 24 * 60);
+    expect(preferences.eventReminderOverrides, <String, int>{
+      'publicCalendar:ok': 60,
+    });
+  });
+
+  test('event rules stay bounded and evict the oldest override', () async {
+    final KeyValueStore store = InMemoryKeyValueStore();
+    final NotificationSettingsController controller = containerWith(
+      store,
+    ).read(notificationSettingsProvider.notifier);
+    for (int index = 0; index < 200; index++) {
+      await controller.setEventReminderOverride('event-$index', 60);
+    }
+
+    await controller.setEventReminderOverride('new-event', 360);
+
+    final NotificationPreferences preferences = containerWith(
+      store,
+    ).read(notificationSettingsProvider);
+    expect(preferences.eventReminderOverrides, hasLength(200));
+    expect(preferences.eventReminderOverrides, isNot(contains('event-0')));
+    expect(preferences.eventReminderOverrides['new-event'], 360);
+  });
+
   test('an invalid stored overview time falls back to 08:00', () {
     final KeyValueStore store = InMemoryKeyValueStore(<String, Object>{
       PreferenceKeys.notificationsDailySummaryMinutes: 24 * 60,

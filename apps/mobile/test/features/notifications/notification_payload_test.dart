@@ -81,6 +81,15 @@ void main() {
       }
     });
 
+    test('new-mail payload carries only an IMAP UID', () {
+      const NotificationPayload payload = NotificationPayload(
+        category: NotificationCategory.newMail,
+        target: '4711',
+      );
+      expect(payload.toStorage(), 'v1|mail.new|4711');
+      expect(payload.toStorage(), isNot(contains('@')));
+    });
+
     test('the diagnostic form names the category and nothing else', () {
       const NotificationPayload payload = NotificationPayload(
         category: NotificationCategory.canteenFavourite,

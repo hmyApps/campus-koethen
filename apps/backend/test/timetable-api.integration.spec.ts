@@ -19,6 +19,7 @@ describe('/v1/timetable (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
   let groupId: string;
+  let periodId: string;
 
   beforeAll(async () => {
     process.env['WEBUNTIS_ENABLED'] = 'true';
@@ -50,6 +51,19 @@ describe('/v1/timetable (integration)', () => {
       },
     });
     groupId = group.id;
+
+    const period = await prisma.timetableContext.create({
+      data: {
+        externalId: '49',
+        name: '2026/2026',
+        validFrom: new Date('2026-04-07T00:00:00.000Z'),
+        validTo: new Date('2026-09-30T00:00:00.000Z'),
+      },
+    });
+    periodId = period.id;
+    await prisma.timetableContextGroup.create({
+      data: { contextId: period.id, groupId },
+    });
 
     await prisma.timetableGroup.create({
       data: { externalId: '15027', shortName: 'AR2Ü1', longName: '2. AR Gr. 1', department: 'FB1' },
@@ -161,6 +175,51 @@ describe('/v1/timetable (integration)', () => {
       expect(JSON.stringify(res.body)).not.toContain('14622');
       expect(res.body.meta.from).toBeTruthy();
       expect(res.body.meta.to).toBeTruthy();
+    });
+  });
+
+  describe('GET /v1/timetable/periods', () => {
+    it('lists semester catalogues without upstream identifiers', async () => {
+      const res = await request(app.getHttpServer()).get('/v1/timetable/periods').expect(200);
+
+      expect(res.body.data).toEqual([
+        expect.objectContaining({
+          id: periodId,
+          name: '2026/2026',
+          validFrom: '2026-04-07',
+          validTo: '2026-09-30',
+          groups: [expect.objectContaining({ id: groupId, shortName: 'AIN2 - BT' })],
+        }),
+      ]);
+      const body = JSON.stringify(res.body);
+      expect(body).not.toContain('externalId');
+      expect(body).not.toContain('webuntis');
+    });
+  });
+
+  describe('GET /v1/timetable/modules', () => {
+    it('lists observed module labels without upstream identifiers', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/v1/timetable/modules?groupId=${groupId}`)
+        .expect(200);
+
+      expect(res.body.data).toEqual([
+        {
+          subjectCode: 'Englisch als Fremdsp',
+          title: 'Englisch als Fremdsprache',
+        },
+      ]);
+      expect(res.body.meta.featureEnabled).toBe(true);
+      const body = JSON.stringify(res.body);
+      expect(body).not.toContain('externalId');
+      expect(body).not.toContain('14622');
+    });
+
+    it('rejects upstream ids and unknown Campus groups', async () => {
+      await request(app.getHttpServer()).get('/v1/timetable/modules?groupId=14622').expect(400);
+      await request(app.getHttpServer())
+        .get('/v1/timetable/modules?groupId=00000000-0000-4000-8000-000000000000')
+        .expect(404);
     });
   });
 

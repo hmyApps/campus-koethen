@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/enough_mail_gateway.dart';
+import '../data/exchange_directory_gateway.dart';
 import '../data/mail_cache.dart';
 import '../data/mail_local_data_coordinator.dart';
 import '../data/secure_mail_credential_store.dart';
@@ -11,6 +12,7 @@ import '../domain/hsa_mail_profile.dart';
 import '../domain/mail_cache_store.dart';
 import '../domain/mail_credential_store.dart';
 import '../domain/mail_gateway.dart';
+import '../domain/mail_directory_gateway.dart';
 
 /// The pinned HSA connection profile.
 final Provider<HsaMailProfile> hsaMailProfileProvider =
@@ -24,6 +26,11 @@ final Provider<MailCredentialStore> mailCredentialStoreProvider =
 final Provider<MailGateway> mailGatewayProvider = Provider<MailGateway>(
   (Ref ref) => EnoughMailGateway(ref.watch(hsaMailProfileProvider)),
 );
+
+final Provider<MailDirectoryGateway> mailDirectoryGatewayProvider =
+    Provider<MailDirectoryGateway>(
+      (Ref ref) => ExchangeDirectoryGateway(ref.watch(hsaMailProfileProvider)),
+    );
 
 /// Last-resort UI boundary for a sign-in verification.
 ///

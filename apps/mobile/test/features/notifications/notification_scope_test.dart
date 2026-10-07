@@ -123,6 +123,7 @@ void main() {
           'canteen.favourite',
           'moodle.deadline',
           'grade.change',
+          'mail.new',
         ],
       );
     });

@@ -18,9 +18,12 @@ import '../../timetable/application/timetable_providers.dart';
 import '../../timetable/data/timetable_models.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
 import '../../timetable/presentation/timetable_lesson_info_filter_sheet.dart';
+import '../../timetable/presentation/timetable_subscriptions_sheet.dart';
 import '../application/calendar_providers.dart';
+import '../application/calendar_color_preferences.dart';
 import '../domain/calendar_entry.dart';
 import 'public_calendar_list.dart';
+import 'calendar_color_picker.dart';
 
 /// Opens the list of everything the calendar is merged from.
 ///
@@ -105,6 +108,10 @@ class _SourcesSheet extends ConsumerWidget {
         const Divider(),
         const ExchangeCalendarSwitch(),
         const SavedEventsCalendarSwitch(),
+        CalendarColorTile(
+          styleKey: CalendarColorKeys.source(CalendarSource.savedEvents),
+          label: l10n.calendarSourceSavedEvents,
+        ),
         const CanteenFavouriteMealsSwitch(),
       ],
     );
@@ -331,6 +338,10 @@ class _TimetableSourceSheet extends ConsumerWidget {
           subtitle: Text(l10n.calendarTimetableGroupLabel),
         ),
         const CalendarSourceVisibilitySwitch(source: CalendarSource.timetable),
+        CalendarColorTile(
+          styleKey: CalendarColorKeys.source(CalendarSource.timetable),
+          label: l10n.calendarSourceTimetable,
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: OutlinedButton.icon(
@@ -343,6 +354,16 @@ class _TimetableSourceSheet extends ConsumerWidget {
             label: Text(l10n.timetableGroupPickerTitle),
           ),
         ),
+        if (groupId != null)
+          ListTile(
+            leading: const Icon(AppIcons.add_circle_outline),
+            title: Text(l10n.timetableSubscriptionsTitle),
+            trailing: const Icon(AppIcons.chevron_right),
+            onTap: () {
+              Navigator.of(context).pop();
+              showAdditionalTimetableGroupsSheet(context);
+            },
+          ),
         if (groupId != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -412,6 +433,10 @@ class _MoodleSourceSheet extends ConsumerWidget {
             ),
           ),
           const CalendarSourceVisibilitySwitch(source: CalendarSource.moodle),
+          CalendarColorTile(
+            styleKey: CalendarColorKeys.source(CalendarSource.moodle),
+            label: l10n.calendarSourceMoodle,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: OutlinedButton.icon(

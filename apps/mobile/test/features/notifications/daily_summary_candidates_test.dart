@@ -100,23 +100,25 @@ class _FakeCanteenFilter extends CanteenFilterController {
 
 Loaded<T> loaded<T>(T value) => Loaded<T>(value: value, meta: const ApiMeta());
 
-Timetable timetableWith(List<DateTime> starts) => Timetable(
-  group: const TimetableGroup(id: kGroupId, shortName: 'INF 24'),
-  days: <TimetableDay>[
-    for (final DateTime start in starts)
-      TimetableDay(
-        date: DateTime(start.year, start.month, start.day),
-        entries: <TimetableEntry>[
-          TimetableEntry(
-            id: start.toIso8601String(),
-            start: start,
-            end: start.add(const Duration(minutes: 90)),
-            title: 'Analysis I',
+Timetable timetableWith(List<DateTime> starts, {String? lessonInfo}) =>
+    Timetable(
+      group: const TimetableGroup(id: kGroupId, shortName: 'INF 24'),
+      days: <TimetableDay>[
+        for (final DateTime start in starts)
+          TimetableDay(
+            date: DateTime(start.year, start.month, start.day),
+            entries: <TimetableEntry>[
+              TimetableEntry(
+                id: start.toIso8601String(),
+                start: start,
+                end: start.add(const Duration(minutes: 90)),
+                title: 'Analysis I',
+                lessonInfo: lessonInfo,
+              ),
+            ],
           ),
-        ],
-      ),
-  ],
-);
+      ],
+    );
 
 CalendarEntry publicEvent(DateTime start, {String id = 'pc1'}) => CalendarEntry(
   id: 'publicCalendar:campus:$id',
@@ -167,12 +169,19 @@ Future<ProviderContainer> harness({
   Locale locale = const Locale('de'),
   DateTime? now,
   Set<String> hiddenCourses = const <String>{},
+  Set<String> disabledLessonInfo = const <String>{},
 }) async {
   final KeyValueStore store = InMemoryKeyValueStore(<String, Object>{
     PreferenceKeys.preferredTimetableGroup: ?groupId,
     if (groupId != null && hiddenCourses.isNotEmpty)
       PreferenceKeys.timetableHiddenCourses(groupId): hiddenCourses.toList(),
   });
+  if (groupId != null && disabledLessonInfo.isNotEmpty) {
+    await store.setStringList(
+      PreferenceKeys.timetableLessonInfoDisabled(groupId),
+      disabledLessonInfo.toList(growable: false),
+    );
+  }
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       keyValueStoreProvider.overrideWithValue(store),
@@ -385,6 +394,17 @@ void main() {
         candidatesOf(container).single.body,
         'Heute 1 Vorlesung (erste um 10:15 Uhr).',
       );
+    });
+
+    test('a hidden primary-group lesson stays out of the overview', () async {
+      final ProviderContainer container = await harness(
+        timetable: timetableWith(<DateTime>[
+          DateTime(2026, 8, 25, 8, 30),
+        ], lessonInfo: 'P1'),
+        disabledLessonInfo: const <String>{'P1'},
+      );
+
+      expect(candidatesOf(container), isEmpty);
     });
 
     test('a saved event alone fills a day', () async {

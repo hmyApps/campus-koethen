@@ -28,6 +28,7 @@ import '../../timetable/data/timetable_models.dart';
 import '../domain/calendar_entry.dart';
 import '../domain/public_calendar.dart';
 import 'calendar_merge.dart';
+import 'calendar_color_preferences.dart';
 import 'public_calendar_providers.dart';
 
 /// Day agenda or month list — the two explicit calendar views.
@@ -652,6 +653,9 @@ CalendarData _buildCalendarData(
   final TimetableLessonInfoFilter lessonInfoFilter = ref.watch(
     timetableLessonInfoFilterProvider,
   );
+  final Map<String, Set<String>> moduleKeysByGroup = ref.watch(
+    selectedTimetableModuleKeysByGroupProvider,
+  );
 
   // --- Source 1: timetable (Campus API), one week provider per visible week.
   final List<CalendarEntry> timetableEntries = <CalendarEntry>[];
@@ -661,8 +665,8 @@ CalendarData _buildCalendarData(
   CalendarTimetableState timetableState = CalendarTimetableState.hidden;
   if (enabled.contains(CalendarSource.timetable)) {
     timetableState = CalendarTimetableState.loading;
-    final String? groupId = ref.watch(selectedTimetableGroupIdProvider);
-    if (groupId == null) {
+    final List<String> groupIds = ref.watch(selectedTimetableGroupIdsProvider);
+    if (groupIds.isEmpty) {
       // Without a selection, the small status endpoint answers availability;
       // opening the calendar must not download the group catalogue.
       final AsyncValue<Loaded<TimetableStatus>> status = ref.watch(
@@ -693,11 +697,18 @@ CalendarData _buildCalendarData(
           : timetableMetadataLoading
           ? CalendarTimetableState.loading
           : CalendarTimetableState.ready;
-      void takeLoaded(Loaded<Timetable> loaded) {
+      void takeLoaded(Loaded<Timetable> loaded, String groupId) {
         timetableEntries.addAll(
           timetableToCalendarEntries(
             loaded.value,
-            include: lessonInfoFilter.acceptsEntry,
+            include: (TimetableEntry entry) =>
+                (moduleKeysByGroup[groupId] == null ||
+                    (entry.moduleKey != null &&
+                        moduleKeysByGroup[groupId]!.contains(
+                          entry.moduleKey,
+                        ))) &&
+                (groupId != lessonInfoFilter.groupId ||
+                    lessonInfoFilter.acceptsEntry(entry)),
           ),
         );
         final CalendarTimetableState loadedState =
@@ -716,57 +727,61 @@ CalendarData _buildCalendarData(
 
       if (timetableRanges != null) {
         for (final CalendarDateWindow range in timetableRanges) {
-          final AsyncValue<Loaded<Timetable>> result = ref.watch(
-            timetableRangeProvider(
-              TimetableRangeRequest(
-                groupId: groupId,
-                from: range.from,
-                to: range.to,
+          for (final String groupId in groupIds) {
+            final AsyncValue<Loaded<Timetable>> result = ref.watch(
+              timetableRangeProvider(
+                TimetableRangeRequest(
+                  groupId: groupId,
+                  from: range.from,
+                  to: range.to,
+                ),
               ),
-            ),
-          );
-          result.when(
-            data: takeLoaded,
-            loading: () {
-              timetableLoading = true;
-              timetableState = _mergeTimetableState(
-                timetableState,
-                CalendarTimetableState.loading,
-              );
-            },
-            error: (_, _) {
-              timetableError = true;
-              timetableState = _mergeTimetableState(
-                timetableState,
-                CalendarTimetableState.unavailable,
-              );
-            },
-          );
+            );
+            result.when(
+              data: (Loaded<Timetable> loaded) => takeLoaded(loaded, groupId),
+              loading: () {
+                timetableLoading = true;
+                timetableState = _mergeTimetableState(
+                  timetableState,
+                  CalendarTimetableState.loading,
+                );
+              },
+              error: (_, _) {
+                timetableError = true;
+                timetableState = _mergeTimetableState(
+                  timetableState,
+                  CalendarTimetableState.unavailable,
+                );
+              },
+            );
+          }
         }
       } else {
         for (final DateTime weekStart in timetableWeekStarts) {
-          final AsyncValue<Loaded<Timetable>> week = ref.watch(
-            timetableWeekProvider(
-              TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
-            ),
-          );
-          week.when(
-            data: takeLoaded,
-            loading: () {
-              timetableLoading = true;
-              timetableState = _mergeTimetableState(
-                timetableState,
-                CalendarTimetableState.loading,
-              );
-            },
-            error: (_, _) {
-              timetableError = true;
-              timetableState = _mergeTimetableState(
-                timetableState,
-                CalendarTimetableState.unavailable,
-              );
-            },
-          );
+          for (final String groupId in groupIds) {
+            final AsyncValue<Loaded<Timetable>> week = ref.watch(
+              timetableWeekProvider(
+                TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
+              ),
+            );
+            week.when(
+              data: (Loaded<Timetable> loaded) => takeLoaded(loaded, groupId),
+              loading: () {
+                timetableLoading = true;
+                timetableState = _mergeTimetableState(
+                  timetableState,
+                  CalendarTimetableState.loading,
+                );
+              },
+              error: (_, _) {
+                timetableError = true;
+                timetableState = _mergeTimetableState(
+                  timetableState,
+                  CalendarTimetableState.unavailable,
+                );
+              },
+            );
+          }
         }
       }
     }
@@ -918,14 +933,17 @@ CalendarData _buildCalendarData(
     if (exchangeEnabled) CalendarSource.exchangeCalendar,
   };
 
-  final List<CalendarEntry> merged = mergeCalendarEntries(<CalendarEntry>[
-    ...timetableEntries,
-    ...moodleEntries,
-    ...publicEntries,
-    ...savedEventEntries,
-    ...canteenFavouriteEntries,
-    ...exchangeEntries,
-  ]);
+  final List<CalendarEntry> merged = applyCalendarColorPreferences(
+    mergeCalendarEntries(<CalendarEntry>[
+      ...timetableEntries,
+      ...moodleEntries,
+      ...publicEntries,
+      ...savedEventEntries,
+      ...canteenFavouriteEntries,
+      ...exchangeEntries,
+    ]),
+    ref.watch(calendarColorPreferencesProvider),
+  );
   return CalendarData(
     entries: windowFrom == null
         ? merged

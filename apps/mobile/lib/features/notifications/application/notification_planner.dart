@@ -167,7 +167,7 @@ tz.TZDateTime _resolveTrigger(
   switch (trigger) {
     case AbsoluteTrigger(:final DateTime instant):
       // An instant is an instant; reading it in the device zone is a display
-      // question, and the 24-hour lead of P3 has already been applied to it as
+      // question, and the configured lead has already been applied to it as
       // an absolute duration by the contributor.
       return tz.TZDateTime.from(instant, location);
     case LocalTimeTrigger(

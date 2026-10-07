@@ -39,12 +39,12 @@ void main() {
       final List<String> offenders = <String>[];
       for (final FileSystemEntity entity in lib.listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        final String path = entity.path.replaceAll('\\', '/');
-        if (path.endsWith('core/security/app_secure_storage.dart')) {
+        final String portablePath = entity.path.replaceAll('\\', '/');
+        if (portablePath.endsWith('core/security/app_secure_storage.dart')) {
           continue;
         }
         if (entity.readAsStringSync().contains('FlutterSecureStorage(')) {
-          offenders.add(entity.path);
+          offenders.add(portablePath);
         }
       }
 

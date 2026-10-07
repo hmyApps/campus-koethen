@@ -196,6 +196,137 @@ describe('TimetableService lesson information choices', () => {
   });
 });
 
+describe('TimetableService module catalogue', () => {
+  it('deduplicates modules by code and keeps code-less subjects distinct', async () => {
+    const groupId = '43a7302c-19ce-4fd7-a06e-003599fd75d0';
+    const findMany = jest.fn().mockResolvedValue([
+      { subjectCode: ' MATH2 ', title: 'Mathematik II' },
+      { subjectCode: 'MATH2', title: 'Mathematik 2' },
+      { subjectCode: null, title: 'Wahlpflichtfach Robotik' },
+      { subjectCode: '  ', title: 'Wahlpflichtfach Robotik' },
+      { subjectCode: null, title: '  ' },
+    ]);
+    const prisma = {
+      timetableGroup: { findFirst: jest.fn().mockResolvedValue({ id: groupId }) },
+      timetableEntry: { findMany },
+      timetableSyncRun: {
+        findFirst: jest.fn().mockResolvedValue({
+          finishedAt: new Date('2026-10-07T10:00:00.000Z'),
+        }),
+      },
+    };
+    const service = new TimetableService(
+      prisma as unknown as PrismaService,
+      {
+        WEBUNTIS_ENABLED: true,
+        USER_TEST_DATA_ENABLED: false,
+        WEBUNTIS_STALE_AFTER_MINUTES: 180,
+      } as Env,
+    );
+
+    const result = await service.listModules(groupId, {
+      requestedLocale: 'de',
+      resolvedLocale: 'de',
+    });
+
+    expect(result.data).toEqual([
+      { subjectCode: 'MATH2', title: 'Mathematik II' },
+      { subjectCode: null, title: 'Wahlpflichtfach Robotik' },
+    ]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { groups: { some: { groupId } } },
+      orderBy: { startsAt: 'desc' },
+      select: { subjectCode: true, title: true },
+      take: 2000,
+    });
+  });
+});
+
+describe('TimetableService semester catalogues', () => {
+  it('does not expose retained catalogues while the feature is disabled', async () => {
+    const timetableContext = { findMany: jest.fn() };
+    const prisma = {
+      timetableContext,
+      timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TimetableService(
+      prisma as unknown as PrismaService,
+      {
+        WEBUNTIS_ENABLED: false,
+        USER_TEST_DATA_ENABLED: false,
+        WEBUNTIS_STALE_AFTER_MINUTES: 180,
+      } as Env,
+    );
+
+    expect(await service.listPeriods()).toEqual({
+      data: [],
+      lastSyncAt: null,
+      stale: true,
+    });
+    expect(timetableContext.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns Campus ids and groups in chronological order', async () => {
+    const timetableContext = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: '20000000-0000-4000-8000-000000000002',
+          name: '2026/2027',
+          validFrom: new Date('2026-10-05T00:00:00.000Z'),
+          validTo: new Date('2027-03-31T00:00:00.000Z'),
+          groups: [
+            {
+              group: {
+                id: '30000000-0000-4000-8000-000000000002',
+                shortName: 'AIN3',
+                longName: 'Angewandte Informatik 3. Semester',
+                department: 'FB5',
+              },
+            },
+          ],
+        },
+        {
+          id: '20000000-0000-4000-8000-000000000001',
+          name: '2026/2026',
+          validFrom: new Date('2026-04-07T00:00:00.000Z'),
+          validTo: new Date('2026-09-30T00:00:00.000Z'),
+          groups: [],
+        },
+      ]),
+    };
+    const prisma = {
+      timetableContext,
+      timetableSyncRun: {
+        findFirst: jest.fn().mockResolvedValue({ finishedAt: new Date() }),
+      },
+    };
+    const service = new TimetableService(
+      prisma as unknown as PrismaService,
+      {
+        WEBUNTIS_ENABLED: true,
+        USER_TEST_DATA_ENABLED: false,
+        WEBUNTIS_STALE_AFTER_MINUTES: 180,
+      } as Env,
+    );
+
+    const result = await service.listPeriods();
+
+    expect(result.data.map((period) => period.name)).toEqual(['2026/2026', '2026/2027']);
+    expect(result.data[result.data.length - 1]!.groups[0]).toEqual({
+      id: '30000000-0000-4000-8000-000000000002',
+      shortName: 'AIN3',
+      longName: 'Angewandte Informatik 3. Semester',
+      department: 'FB5',
+    });
+    expect(timetableContext.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { groups: { some: {} } },
+        take: 8,
+      }),
+    );
+  });
+});
+
 /**
  * Cost contract of the sync-run lookups behind /v1/timetable/status.
  *

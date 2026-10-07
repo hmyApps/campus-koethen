@@ -127,7 +127,12 @@ class FakeMailGateway implements MailGateway {
   int appendCalls = 0;
   bool lastIncludeAttachmentBytes = false;
   final List<String> markedSeen = <String>[];
+  final List<({String mailboxPath, String id})> deletedMessages =
+      <({String mailboxPath, String id})>[];
   final List<String> fetchedMailboxes = <String>[];
+  final StreamController<MailLiveSignal> liveSignals =
+      StreamController<MailLiveSignal>.broadcast();
+  int watchInboxCalls = 0;
   String? lastFetchHeadersBeforeId;
   int? lastFetchHeadersLimit;
   List<String> lastFetchMessageIds = <String>[];
@@ -228,6 +233,21 @@ class FakeMailGateway implements MailGateway {
   }) async {
     if (markSeenError != null) throw markSeenError!;
     markedSeen.add(id);
+  }
+
+  @override
+  Future<void> deleteMessage(
+    MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+  }) async {
+    deletedMessages.add((mailboxPath: mailboxPath, id: id));
+  }
+
+  @override
+  Stream<MailLiveSignal> watchInbox(MailCredentials credentials) {
+    watchInboxCalls++;
+    return liveSignals.stream;
   }
 
   @override

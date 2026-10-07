@@ -2,9 +2,14 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:campus_koethen/features/notifications/data/local_notification_gateway.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_category.dart';
+import 'package:campus_koethen/features/notifications/domain/immediate_notification.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_payload.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_request.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide NotificationVisibility;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -55,4 +60,37 @@ void main() {
       );
     },
   );
+
+  test('an immediate mail notification reaches the platform once', () async {
+    final List<MethodCall> calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+          calls.add(call);
+          if (call.method == 'initialize') return true;
+          return null;
+        });
+    final LocalNotificationGateway gateway = LocalNotificationGateway(
+      targetPlatform: TargetPlatform.android,
+    );
+    await gateway.initialize(onNotificationTapped: (_) {});
+    await gateway.showNow(
+      const ImmediateNotification(
+        key: 'n4:4711',
+        category: NotificationCategory.newMail,
+        title: 'Neue E-Mail',
+        body: 'Eine neue Nachricht ist eingegangen.',
+        payload: NotificationPayload(
+          category: NotificationCategory.newMail,
+          target: '4711',
+        ),
+        visibility: NotificationVisibility.neutral,
+      ),
+    );
+
+    final List<MethodCall> showCalls = calls
+        .where((MethodCall call) => call.method == 'show')
+        .toList();
+    expect(showCalls, hasLength(1));
+    expect(showCalls.single.arguments.toString(), contains('v1|mail.new|4711'));
+  });
 }

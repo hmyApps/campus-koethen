@@ -15,13 +15,22 @@ import '../../calendar/domain/calendar_entry.dart';
 import '../../calendar/presentation/calendar_entry_sheet.dart';
 import '../../canteen/application/canteen_providers.dart';
 import '../../canteen/domain/meal_highlight.dart';
+import '../../mail/application/mail_folders.dart';
+import '../../mail/application/mail_providers.dart';
+import '../../mail/application/mail_sync_controller.dart';
+import '../../mail/domain/mail_folder.dart';
 import '../application/daily_summary_providers.dart';
 import '../application/event_reminder_candidates.dart';
 import '../application/notification_providers.dart';
+import '../application/notification_settings_controller.dart';
 import '../application/notification_tap_router.dart';
 import '../domain/notification_category.dart';
+import '../domain/immediate_notification.dart';
 import '../domain/notification_gateway.dart';
+import '../domain/notification_payload.dart';
 import '../domain/notification_plan.dart';
+import '../domain/notification_permission.dart';
+import '../domain/notification_request.dart';
 
 /// Keeps the operating system's pending notifications equal to the current
 /// plan, and turns a tap on one of them into navigation.
@@ -58,6 +67,8 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
   DateTime? _plannedForDay;
   bool _launchPayloadHandled = false;
   bool _gatewayReady = false;
+  int _lastMailEventSerial = 0;
+  MailNewMessageEvent? _pendingMailEvent;
   Future<void> _channelSetup = Future<void>.value();
 
   @override
@@ -77,6 +88,7 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
   Future<void> _initializeGateway() async {
     try {
       final NotificationGateway gateway = ref.read(notificationGatewayProvider);
+      final timeZoneResolver = ref.read(timeZoneResolverProvider);
       await gateway.initialize(onNotificationTapped: _handlePayload);
       // A cold start from a notification: the tap happened before this widget
       // existed, so the platform kept the payload for exactly this question.
@@ -84,12 +96,14 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         _launchPayloadHandled = true;
         _handlePayload(await gateway.takeLaunchPayload());
       }
-      _timeZoneName = await ref
-          .read(timeZoneResolverProvider)
-          .deviceTimeZoneName();
+      _timeZoneName = await timeZoneResolver.deviceTimeZoneName();
+      if (!mounted) return;
       _timeZoneOffset = DateTime.now().timeZoneOffset;
       _scheduleDayRollover();
-      if (mounted) setState(() => _gatewayReady = true);
+      setState(() => _gatewayReady = true);
+      final MailNewMessageEvent? pending = _pendingMailEvent;
+      _pendingMailEvent = null;
+      if (pending != null) unawaited(_showNewMailNotification(pending));
     } catch (error) {
       // Some devices reject plugin startup transiently. Keep the plan pending;
       // the next resume retries initialization instead of cancelling entries.
@@ -143,6 +157,61 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
     if (!_gatewayReady) return;
     await _channelSetup;
     await ref.read(notificationSchedulerProvider).apply(plan);
+  }
+
+  Future<void> _showNewMailNotification(MailNewMessageEvent event) async {
+    if (event.serial <= _lastMailEventSerial) return;
+    if (event.sessionGeneration != ref.read(mailSessionGenerationProvider)) {
+      return;
+    }
+    if (!_gatewayReady) {
+      final MailNewMessageEvent? pending = _pendingMailEvent;
+      if (pending == null || event.serial > pending.serial) {
+        _pendingMailEvent = event;
+      }
+      return;
+    }
+    _lastMailEventSerial = event.serial;
+    final preferences = ref.read(notificationSettingsProvider);
+    if (!preferences.optedIn ||
+        !preferences.isCategoryEnabled(NotificationCategory.newMail)) {
+      return;
+    }
+    final NotificationPermissionStatus permission = await ref.read(
+      notificationPermissionProvider.future,
+    );
+    if (!mounted ||
+        event.sessionGeneration != ref.read(mailSessionGenerationProvider) ||
+        !permission.allowsDelivery) {
+      return;
+    }
+    if (!RegExp(r'^\d{1,20}$').hasMatch(event.newestMessageId)) return;
+    await _channelSetup;
+    // Channel creation crosses an asynchronous platform boundary. The mail
+    // account may have been signed out or replaced while it was pending, so
+    // fence the event once more before exposing even a generic notification.
+    if (!mounted ||
+        event.sessionGeneration != ref.read(mailSessionGenerationProvider)) {
+      return;
+    }
+    final AppLocalizations l10n = context.l10n;
+    await ref
+        .read(notificationGatewayProvider)
+        .showNow(
+          ImmediateNotification(
+            key:
+                '${NotificationCategory.newMail.keyPrefix}:'
+                '${event.newestMessageId}',
+            category: NotificationCategory.newMail,
+            title: l10n.mailNewNotificationTitle,
+            body: l10n.mailNewNotificationBody(event.count),
+            payload: NotificationPayload(
+              category: NotificationCategory.newMail,
+              target: event.newestMessageId,
+            ),
+            visibility: NotificationVisibility.neutral,
+          ),
+        );
   }
 
   /// Re-plans when the calendar day has moved on.
@@ -225,6 +294,11 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
           }
         }
       }
+      if (target.location == AppRoutes.mail) {
+        ref
+            .read(selectedMailboxProvider.notifier)
+            .select(const MailFolder.inbox());
+      }
       ref.read(appRouterProvider).go(target.location);
 
       if (!target.resolved) {
@@ -283,6 +357,11 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         name: l10n.notificationChannelGradeChangeName,
         description: l10n.notificationChannelGradeChangeDescription,
       ),
+      NotificationChannelSpec(
+        category: NotificationCategory.newMail,
+        name: l10n.notificationChannelMailName,
+        description: l10n.notificationChannelMailDescription,
+      ),
     ];
     final String signature = channels
         .map((NotificationChannelSpec c) => '${c.category.channelId}:${c.name}')
@@ -300,6 +379,17 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
     ) {
       if (previous == next) return;
       unawaited(_applyPlan(next));
+    });
+    ref.listen<MailNewMessageEvent?>(mailNewMessageEventProvider, (
+      MailNewMessageEvent? previous,
+      MailNewMessageEvent? next,
+    ) {
+      if (next == null) {
+        _pendingMailEvent = null;
+        _lastMailEventSerial = 0;
+      } else if (next.serial != previous?.serial) {
+        unawaited(_showNewMailNotification(next));
+      }
     });
     // The first plan too: `listen` only fires on a change, and the very first
     // value of an app start is not one.

@@ -103,6 +103,11 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSettings(tester, permission: NotificationPermissionStatus.denied);
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsCategoryDailySummary),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     final Switch summary = tester.widget<Switch>(
       switchFor(de.notificationsCategoryDailySummary),

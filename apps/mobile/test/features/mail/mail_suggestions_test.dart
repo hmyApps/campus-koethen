@@ -30,6 +30,23 @@ void main() {
     test('respects the limit', () {
       expect(suggestRecipients(all, 'hs-anhalt', limit: 1), hasLength(1));
     });
+
+    test('merges Exchange and local results without duplicate addresses', () {
+      final List<MailAddressEntry> result = mergeRecipientSuggestions(
+        const <MailAddressEntry>[MailAddressEntry(email: 'alice@hs-anhalt.de')],
+        const <MailAddressEntry>[
+          MailAddressEntry(email: 'ALICE@hs-anhalt.de', name: 'Alice Example'),
+          MailAddressEntry(email: 'alina@hs-anhalt.de', name: 'Alina'),
+        ],
+        'ali',
+      );
+
+      expect(result.map((MailAddressEntry entry) => entry.email), <String>[
+        'ALICE@hs-anhalt.de',
+        'alina@hs-anhalt.de',
+      ]);
+      expect(result.first.name, 'Alice Example');
+    });
   });
 
   group('known-address index', () {

@@ -92,7 +92,7 @@ class FakeNotificationGateway implements NotificationGateway {
 
   @override
   Future<void> showNow(ImmediateNotification notification) async {
-    calls.add('show:${notification.key}');
+    calls.add('showNow:${notification.key}');
     shown.add(notification);
   }
 

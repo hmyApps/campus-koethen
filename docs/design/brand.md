@@ -21,6 +21,11 @@ gleichwertige Akzentfamilien bereit.
 
 Die neutralen und semantischen Rollen bleiben akzentübergreifend stabil:
 
+Davon getrennt sind semantische **Kalender-Inhaltsfarben**: Nutzer können aus einer zentral
+definierten, kontrastgeprüften Palette Farben für Stundenplan, Moodle, gemerkte Events und einzelne
+öffentliche Kalender wählen. Das ändert weder die App-Akzentfarbe noch das Light-/Dark-Theme;
+Kalendername, Text und Icon bleiben stets zusätzliche, nichtfarbliche Unterscheidungsmerkmale.
+
 | Rolle            | Light     | Dark      |
 | ---------------- | --------- | --------- |
 | Himmel-Container | `#E0F2FE` | `#15384E` |

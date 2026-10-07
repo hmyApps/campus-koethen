@@ -606,6 +606,42 @@
         ]
       }
     },
+    "/v1/timetable/periods": {
+      "get": {
+        "description": "Contains Campus UUIDs only. WebUntis school-year and class identifiers remain server-internal.",
+        "operationId": "TimetableController_periods_v1",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "de",
+                "en"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetablePeriodsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List semester catalogues available to the timetable assistant.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
     "/v1/timetable/lesson-info": {
       "get": {
         "description": "Reads the last successfully imported timetable window from the Campus database. No WebUntis request is triggered.",
@@ -645,6 +681,50 @@
           }
         },
         "summary": "List exact lesson information texts for a selected timetable group.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/v1/timetable/modules": {
+      "get": {
+        "description": "Reads retained Campus timetable rows only. Module names and codes are source-provided; no upstream identifiers or live request are exposed.",
+        "operationId": "TimetableController_modules_v1",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "de",
+                "en"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableModulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List modules observed for one selectable study group.",
         "tags": [
           "timetable"
         ]
@@ -2409,6 +2489,61 @@
           "meta"
         ]
       },
+      "TimetablePeriodDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable Campus identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Source-provided semester label. Never translated."
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-05"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date",
+            "example": "2027-03-31"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimetableGroupDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "validFrom",
+          "validTo",
+          "groups"
+        ]
+      },
+      "TimetablePeriodsResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimetablePeriodDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
       "TimetableLessonInfoDto": {
         "type": "object",
         "properties": {
@@ -2434,6 +2569,42 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/TimetableLessonInfoDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "TimetableModuleDto": {
+        "type": "object",
+        "properties": {
+          "subjectCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Source-provided module code."
+          },
+          "title": {
+            "type": "string",
+            "description": "Source-provided module title. Never translated."
+          }
+        },
+        "required": [
+          "subjectCode",
+          "title"
+        ]
+      },
+      "TimetableModulesResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimetableModuleDto"
+            }
           },
           "meta": {
             "$ref": "#/components/schemas/ResponseMetaDto"
