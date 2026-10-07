@@ -7,15 +7,14 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 
-/// Dedicated consent screen shown before HSA-GPT is ever connected.
-///
-/// HSA-GPT gets its own screen instead of a checkbox in the generic
-/// multi-service onboarding wizard (`DirectService.onboardingWizardServices`)
-/// because connecting it has a materially different privacy shape from mail,
-/// Moodle or grades: the device talks straight to `ki.hs-anhalt.de`, the
-/// replies are HSA-GPT's own and not Campus Köthen's, and only a revocable
-/// token — never the password — is kept afterwards. That needs explaining
-/// once, clearly, before the user types anything.
+/// Dedicated consent screen for connecting HSA-GPT outside the first-run
+/// wizard — e.g. from the university-account card's `+` button, reached via
+/// [connectHsaKiWithOnboarding]. The first-run wizard itself
+/// (`OnboardingUniversityServicesStep`) shows a condensed inline version of
+/// this same explanation next to its own checkbox instead of pushing this
+/// screen, but the content — what HSA-GPT is, that the device talks straight
+/// to `ki.hs-anhalt.de`, that only a revocable token is kept — is the same
+/// either way.
 class HsaKiOnboardingScreen extends StatelessWidget {
   const HsaKiOnboardingScreen({super.key});
 

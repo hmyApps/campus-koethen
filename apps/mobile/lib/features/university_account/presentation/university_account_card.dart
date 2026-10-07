@@ -96,10 +96,11 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     }
   }
 
-  /// HSA-GPT's `+` always opens its own dedicated consent screen first — see
-  /// `AGENTS.md` §2 and `DirectService.onboardingWizardServices` for why it
-  /// is kept out of the generic flow everywhere else. Disconnecting needs no
-  /// special case and falls through to the generic path above.
+  /// HSA-GPT's `+` on this card always opens its own dedicated consent screen
+  /// first — see `AGENTS.md` §2. The first-run onboarding wizard shows the
+  /// same consent inline instead (`OnboardingUniversityServicesStep`), since
+  /// it already has its own explicit per-step confirmation. Disconnecting
+  /// needs no special case and falls through to the generic path above.
   Future<void> _connectHsaKi() async {
     const DirectService service = DirectService.hsaKi;
     setState(() {

@@ -235,7 +235,7 @@ class _OnboardingUniversityServicesStepState
       universityServiceConnectorProvider,
     );
     try {
-      for (final DirectService service in DirectService.onboardingWizardServices) {
+      for (final DirectService service in DirectService.values) {
         if (!_selected.contains(service) || _connectedHere.contains(service)) {
           continue;
         }
@@ -311,7 +311,7 @@ class _OnboardingUniversityServicesStepState
       children: <Widget>[
         if (!canUseIdentity)
           Panel(child: Text(l10n.onboardingUniversityMissingDraft)),
-        for (final DirectService service in DirectService.onboardingWizardServices) ...<Widget>[
+        for (final DirectService service in DirectService.values) ...<Widget>[
           CheckboxListTile(
             value:
                 alreadyConnected.contains(service) ||
@@ -369,6 +369,22 @@ class _OnboardingUniversityServicesStepState
                   helperText: l10n.mailSetupNameHint,
                   helperMaxLines: 2,
                   isDense: true,
+                ),
+              ),
+            ),
+          if (service == DirectService.hsaKi &&
+              _selected.contains(DirectService.hsaKi) &&
+              !alreadyConnected.contains(DirectService.hsaKi))
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.xl,
+                right: AppSpacing.md,
+                bottom: AppSpacing.sm,
+              ),
+              child: Text(
+                l10n.hsaKiOnboardingIntro,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: context.colors.textSecondary,
                 ),
               ),
             ),
@@ -432,8 +448,6 @@ class _OnboardingUniversityServicesStepState
     DirectService.moodle => AppIcons.school_outlined,
     DirectService.grades => AppIcons.grade_outlined,
     DirectService.nextcloud => AppIcons.cloud_outlined,
-    // Never actually rendered — excluded from onboardingWizardServices —
-    // but the switch must stay exhaustive.
     DirectService.hsaKi => AppIcons.message_2,
   };
 }
