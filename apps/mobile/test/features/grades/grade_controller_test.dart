@@ -788,7 +788,252 @@ void main() {
     );
   });
 
+  // D-01: the "new grade" diff and the empty-report guard compare against the
+  // PERSISTED last successful report (docs/grades.md), never against whatever
+  // happens to be in memory at the moment a sync starts.
+  group('the sync baseline is the persisted cache', () {
+    GradeChangeNotification notificationService(
+      FakeNotificationGateway gateway,
+    ) => GradeChangeNotification(
+      gateway: gateway,
+      preferences: const NotificationPreferences(optedIn: true),
+      permission: NotificationPermissionStatus.granted,
+      title: 'Neue Note eingetragen',
+      body: 'Notenspiegel öffnen',
+    );
+
+    GradeReport pendingReport() => GradeReport(<GradeEntry>[
+      GradeEntry(
+        examNumber: '1',
+        title: 'Grundlagen',
+        grade: const Grade.none(),
+        status: ExamStatus.present,
+        statusText: 'vorhanden',
+      ),
+    ]);
+
+    test('an automatic sync started before the screen state finished loading '
+        'never lets an empty answer replace the cached grades', () async {
+      final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+      await cache.writeReport(sampleReport('Grundlagen'));
+      final FakeGradesGateway gateway = FakeGradesGateway(
+        report: const GradeReport(<GradeEntry>[]),
+      );
+      final ProviderContainer c = _container(
+        gateway: gateway,
+        store: InMemoryGradeCredentialStore()..write(_creds),
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+      await c.read(gradeAccountControllerProvider.future);
+      c.listen(gradesControllerProvider, (_, _) {});
+
+      // Exactly what the overview screen's post-frame callback does: no
+      // prior `await future`, so build() may still be reading the cache.
+      await c.read(gradesControllerProvider.notifier).maybeAutoSync();
+
+      expect(gateway.fetchCalls, 1);
+      expect((await cache.readReport())!.entries.single.title, 'Grundlagen');
+      expect(cache.reportWrites, 1, reason: 'only the seeded write');
+      final GradesViewState s = c.read(gradesControllerProvider).requireValue;
+      expect(s.error?.kind, GradeFailureKind.portalStructureChanged);
+      expect(s.report!.entries.single.title, 'Grundlagen');
+    });
+
+    test('an automatic sync started before the screen state finished loading '
+        'still announces a newly entered grade', () async {
+      final FakeNotificationGateway notifications = FakeNotificationGateway();
+      final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+      await cache.writeReport(pendingReport());
+      final ProviderContainer c = _container(
+        gateway: FakeGradesGateway(report: sampleReport()),
+        store: InMemoryGradeCredentialStore()..write(_creds),
+        cache: cache,
+        clock: MutableClock(t0),
+        gradeChangeNotification: notificationService(notifications),
+      );
+      await c.read(gradeAccountControllerProvider.future);
+      c.listen(gradesControllerProvider, (_, _) {});
+
+      await c.read(gradesControllerProvider.notifier).maybeAutoSync();
+
+      expect(notifications.shown, hasLength(1));
+    });
+
+    test('after a portal switch an empty first report becomes the new baseline '
+        'instead of being reported as a structure change', () async {
+      final FakeGradesGateway gateway = FakeGradesGateway(
+        report: sampleReport('Altes Portal'),
+      );
+      final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+      final InMemoryGradePortalStore portalStore = InMemoryGradePortalStore();
+      final ProviderContainer c = _container(
+        gateway: gateway,
+        store: InMemoryGradeCredentialStore(),
+        cache: cache,
+        clock: MutableClock(t0),
+        portalStore: portalStore,
+      );
+      await c.read(gradeAccountControllerProvider.future);
+      await c
+          .read(gradeAccountControllerProvider.notifier)
+          .signIn(username: _creds.username, password: _creds.password);
+      c.listen(gradesControllerProvider, (_, _) {});
+      await c.read(gradesControllerProvider.future);
+      final GradePortal before = c
+          .read(gradeAccountControllerProvider)
+          .requireValue
+          .activePortal!;
+
+      await c
+          .read(gradeAccountControllerProvider.notifier)
+          .switchPortal(
+            before == GradePortal.hisInOne
+                ? GradePortal.hisQisLegacy
+                : GradePortal.hisInOne,
+          );
+      gateway.report = const GradeReport(<GradeEntry>[]);
+      // Exactly what the overview screen does right after the switch.
+      await c.read(gradesControllerProvider.notifier).refresh();
+
+      final GradesViewState s = c.read(gradesControllerProvider).requireValue;
+      expect(s.error, isNull);
+      expect(s.report!.isEmpty, isTrue);
+      expect(s.lastSuccessfulSync, t0);
+      expect((await cache.readReport())!.isEmpty, isTrue);
+    });
+
+    test(
+      'after a portal switch the previous portal report is never the baseline '
+      'for "new grade" notices',
+      () async {
+        final FakeNotificationGateway notifications = FakeNotificationGateway();
+        final FakeGradesGateway gateway = FakeGradesGateway(
+          report: pendingReport(),
+        );
+        final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+        final ProviderContainer c = _container(
+          gateway: gateway,
+          store: InMemoryGradeCredentialStore(),
+          cache: cache,
+          clock: MutableClock(t0),
+          gradeChangeNotification: notificationService(notifications),
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: _creds.username, password: _creds.password);
+        c.listen(gradesControllerProvider, (_, _) {});
+        await c.read(gradesControllerProvider.future);
+        final GradePortal before = c
+            .read(gradeAccountControllerProvider)
+            .requireValue
+            .activePortal!;
+
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .switchPortal(
+              before == GradePortal.hisInOne
+                  ? GradePortal.hisQisLegacy
+                  : GradePortal.hisInOne,
+            );
+        gateway.report = sampleReport();
+        await c.read(gradesControllerProvider.notifier).refresh();
+
+        expect(
+          notifications.shown,
+          isEmpty,
+          reason: 'the first report of the new portal is only a baseline',
+        );
+        expect((await cache.readReport())!.entries.single.grade.isEmpty, false);
+      },
+    );
+  });
+
   group('re-authentication after a password change', () {
+    // D-05: re-authentication only replaces the credentials. Report, diff and
+    // the empty-report guard belong to the regular refresh().
+    test(
+      'never writes the verification report — an empty answer cannot replace '
+      'the cached grades',
+      () async {
+        final FakeGradesGateway gateway = FakeGradesGateway(
+          report: sampleReport('Grundlagen'),
+        );
+        final InMemoryGradeCredentialStore store =
+            InMemoryGradeCredentialStore();
+        final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+        final MutableClock clock = MutableClock(t0);
+        final ProviderContainer c = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+          clock: clock,
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: _creds.username, password: _creds.password);
+        final int writesBefore = cache.reportWrites;
+
+        gateway.report = const GradeReport(<GradeEntry>[]);
+        clock.advance(const Duration(days: 1));
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .reauthenticate(password: 'new-pw');
+
+        expect((await store.read())?.password, 'new-pw');
+        expect(cache.reportWrites, writesBefore);
+        expect((await cache.readReport())!.entries.single.title, 'Grundlagen');
+        expect(await cache.readLastSuccessfulSync(), t0);
+        expect(await cache.readLastAttemptedSync(), t0);
+      },
+    );
+
+    test(
+      'a grade entered while the password was outdated is still announced by '
+      'the refresh that follows',
+      () async {
+        final FakeNotificationGateway notifications = FakeNotificationGateway();
+        final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+        await cache.writeReport(
+          GradeReport(<GradeEntry>[
+            GradeEntry(
+              examNumber: '1',
+              title: 'Grundlagen',
+              grade: const Grade.none(),
+              status: ExamStatus.present,
+              statusText: 'vorhanden',
+            ),
+          ]),
+        );
+        final ProviderContainer c = _container(
+          gateway: FakeGradesGateway(report: sampleReport()),
+          store: InMemoryGradeCredentialStore()..write(_creds),
+          cache: cache,
+          clock: MutableClock(t0),
+          gradeChangeNotification: GradeChangeNotification(
+            gateway: notifications,
+            preferences: const NotificationPreferences(optedIn: true),
+            permission: NotificationPermissionStatus.granted,
+            title: 'Neue Note eingetragen',
+            body: 'Notenspiegel öffnen',
+          ),
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        c.listen(gradesControllerProvider, (_, _) {});
+        await c.read(gradesControllerProvider.future);
+
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .reauthenticate(password: 'new-pw');
+        // Exactly what the overview screen does after a successful re-login.
+        await c.read(gradesControllerProvider.notifier).refresh();
+
+        expect(notifications.shown, hasLength(1));
+      },
+    );
+
     test(
       'keeps the cached report and the portal, and rewrites credentials',
       () async {

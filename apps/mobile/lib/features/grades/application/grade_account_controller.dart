@@ -198,19 +198,16 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
   Future<GradeReport> _persist(
     GradePortal portal,
     GradeCredentials credentials,
-    GradeReport report, {
-    bool replaceAccount = true,
-  }) async {
+    GradeReport report,
+  ) async {
     final bool wasSignedIn = state.value?.isSignedIn ?? false;
     try {
       await _sessions.invalidateAndWait();
-      if (replaceAccount) {
-        // Clear grades' own report before publishing or persisting the new
-        // account. Otherwise a failed write could leave account B paired with
-        // account A's last successful report on disk.
-        await _cache.clear();
-        await _wipeLinkedPersonalData();
-      }
+      // Clear grades' own report before publishing or persisting the new
+      // account. Otherwise a failed write could leave account B paired with
+      // account A's last successful report on disk.
+      await _cache.clear();
+      await _wipeLinkedPersonalData();
       await _store.write(credentials);
       await _portalStore.write(portal);
       final DateTime now = _clock.now();
@@ -246,13 +243,20 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
   /// the portal the account is already on, rewrites only the credentials, and
   /// leaves the cached report, its key and every timestamp untouched.
   ///
+  /// The report fetched for that verification is deliberately discarded: the
+  /// caller follows up with `gradesControllerProvider.notifier.refresh()`,
+  /// whose empty-report guard and "new grade" diff against the persisted
+  /// cache are the only path that may replace the cached report. Writing it
+  /// here bypassed both — an empty answer could wipe the grades, and a grade
+  /// entered while the password was outdated was never announced.
+  ///
   /// The portal is NOT re-detected. A password change does not move an
   /// account between portals, and re-running detection here would spend a
   /// second login attempt on the wrong host.
   ///
   /// Throws [GradeFailure] and writes nothing when the portal rejects the new
   /// password.
-  Future<GradeReport> reauthenticate({required String password}) async {
+  Future<void> reauthenticate({required String password}) async {
     final GradeAccountState current = state.value ?? const GradeAccountState();
     final String? username = current.username;
     final GradePortal? portal = current.activePortal;
@@ -268,10 +272,21 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
     );
     // Verified before it is persisted, exactly as in setup: a password that
     // the portal rejects is never written to secure storage.
-    final GradeReport report = await _gatewayFor(
-      portal,
-    ).fetchGrades(credentials);
-    return _persist(portal, credentials, report, replaceAccount: false);
+    await _gatewayFor(portal).fetchGrades(credentials);
+
+    // A sync still running with the outdated password must neither publish
+    // its failure over the fresh credentials nor keep the follow-up refresh
+    // from starting, so it is drained first.
+    await _sessions.invalidateAndWait();
+    try {
+      await _store.write(credentials);
+    } catch (error, stackTrace) {
+      // A failed secure-storage write can leave no usable credentials
+      // behind. Never keep presenting the account as connected over that.
+      state = AsyncError<GradeAccountState>(error, stackTrace);
+      rethrow;
+    }
+    _sessions.activate((username: username, portal: portal));
   }
 
   /// Switches to the other exam portal. Persists the new choice, discards the
