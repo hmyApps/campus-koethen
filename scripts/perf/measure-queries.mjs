@@ -34,7 +34,7 @@ const arg = (name, fallback) => {
 
 const baseUrl = (arg('base-url', 'http://127.0.0.1:3099') ?? '').replace(/\/+$/, '');
 const container = arg('container', 'campus-perf-pg');
-const database = arg('database', 'campus_app_local');
+const database = arg('database', 'campus_app_perf');
 const outFile = arg('out', '');
 
 const ROUTES = [
