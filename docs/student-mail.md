@@ -89,7 +89,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   bis zu 100 Header vor der ältesten bereits sichtbaren IMAP-UID. Weitere Seiten werden
   mit demselben Button geladen. Die UID dient als stabiler Cursor; neue oder gelöschte
   Nachrichten verschieben die Seite daher nicht. INBOX-Header werden verschlüsselt lokal
-  ergänzt, der vollständige Inhalt einer älteren Nachricht erst beim Öffnen geladen.
+  ergänzt, der vollständige Inhalt einer älteren Nachricht erst beim Öffnen geladen. Header, die
+  die Cache-Grenzen (365 Tage, 500 Header) nicht aufnehmen, bleiben für die laufende Sitzung nur
+  im Arbeitsspeicher sichtbar; der Cursor setzt unter ihnen fort, statt dieselbe Seite erneut zu
+  laden.
 - **Anhänge herunterladen** ist optional und wird sowohl bei der Mail-Einrichtung als auch unter
   Einstellungen → Studentische E-Mail angeboten. Nur bei aktivierter Einstellung werden
   Nicht-Bild-Anhänge automatisch für die Offline-Nutzung geladen. Ist sie aus, lädt ein bewusster

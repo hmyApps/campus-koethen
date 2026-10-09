@@ -66,6 +66,81 @@ mailPaginationProvider =
       MailPaginationController.new,
     );
 
+/// INBOX headers loaded through "older mails" during this session.
+///
+/// Each page is also offered to the persistent cache, but the cache's
+/// retention drops headers older than a year or beyond its cap. Kept here
+/// in memory only, such a page stays visible and the UID cursor continues
+/// below it instead of reloading the same page forever. Reset with the
+/// session and whenever another mailbox is selected.
+class MailOlderInboxHeaders extends Notifier<List<MailMessageHeader>> {
+  @override
+  List<MailMessageHeader> build() {
+    ref.watch(mailSessionGenerationProvider);
+    ref.watch(selectedMailboxProvider);
+    return const <MailMessageHeader>[];
+  }
+
+  void add(List<MailMessageHeader> headers) {
+    if (headers.isNotEmpty) state = mergeInboxHeaders(state, headers);
+  }
+
+  /// Applies the same authoritative-window rule as the cache merge, so a
+  /// message deleted elsewhere cannot survive here after a sync removed it.
+  void reconcile(
+    List<MailMessageHeader> latest, {
+    required int fetchedLimit,
+    required int mailboxSize,
+  }) {
+    if (state.isEmpty) return;
+    final Set<String> kept = mergeInboxHeaders(
+      state,
+      latest,
+      fetchedLimit: fetchedLimit,
+      mailboxSize: mailboxSize,
+    ).map((MailMessageHeader header) => header.id).toSet();
+    final List<MailMessageHeader> next = state
+        .where((MailMessageHeader header) => kept.contains(header.id))
+        .toList(growable: false);
+    if (next.length != state.length) state = next;
+  }
+
+  void remove(String id) {
+    if (state.any((MailMessageHeader header) => header.id == id)) {
+      state = state
+          .where((MailMessageHeader header) => header.id != id)
+          .toList(growable: false);
+    }
+  }
+
+  void markSeen(String id) {
+    if (state.any((MailMessageHeader h) => h.id == id && !h.isSeen)) {
+      state = <MailMessageHeader>[
+        for (final MailMessageHeader h in state)
+          h.id == id ? h.copyWith(isSeen: true) : h,
+      ];
+    }
+  }
+
+  void clear() => state = const <MailMessageHeader>[];
+}
+
+final NotifierProvider<MailOlderInboxHeaders, List<MailMessageHeader>>
+mailOlderInboxHeadersProvider =
+    NotifierProvider<MailOlderInboxHeaders, List<MailMessageHeader>>(
+      MailOlderInboxHeaders.new,
+    );
+
+/// The cached INBOX plus the older pages loaded in this session; the cached
+/// copy wins on conflicts because the sync keeps its flags current.
+Future<List<MailMessageHeader>> _visibleInboxHeaders(Ref ref) async {
+  final List<MailMessageHeader> older = ref.read(mailOlderInboxHeadersProvider);
+  final List<MailMessageHeader> cached = await ref
+      .read(mailCacheStoreProvider)
+      .readHeaders();
+  return older.isEmpty ? cached : mergeInboxHeaders(older, cached);
+}
+
 /// Provides the message list of the currently selected mailbox.
 ///
 /// The INBOX is served from the offline cache, so it appears instantly and
@@ -84,7 +159,8 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
     if (folder.isInbox) {
       // Rebuild whenever the cache changes; read from the cache (offline-first).
       ref.watch(mailCacheRevisionProvider);
-      return ref.read(mailCacheStoreProvider).readHeaders();
+      ref.watch(mailOlderInboxHeadersProvider);
+      return _visibleInboxHeaders(ref);
     }
 
     // Other folders: online, uncached.
@@ -134,7 +210,7 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
     if (pagination.isLoading || !pagination.hasMore) return;
     final MailFolder folder = ref.read(selectedMailboxProvider);
     final List<MailMessageHeader>? current = folder.isInbox
-        ? await ref.read(mailCacheStoreProvider).readHeaders()
+        ? await _visibleInboxHeaders(ref)
         : state.value;
     if (ref.read(selectedMailboxProvider).path != folder.path) return;
     if (current == null || current.isEmpty) return;
@@ -187,6 +263,10 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
         if (ref.read(selectedMailboxProvider).path != folder.path) return;
         await cache.saveHeaders(merged);
         if (!accountController.isSessionCurrent(generation)) return;
+        if (ref.read(selectedMailboxProvider).path != folder.path) return;
+        // The cache may drop part of the page; the in-memory copy keeps it
+        // visible and moves the cursor below it.
+        ref.read(mailOlderInboxHeadersProvider.notifier).add(older);
         ref.read(mailCacheRevisionProvider.notifier).bump();
       } else {
         state = AsyncData<List<MailMessageHeader>>(
@@ -262,6 +342,7 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
       if (!accountController.isSessionCurrent(generation)) {
         throw const MailFailure(MailFailureKind.sessionClosed);
       }
+      ref.read(mailOlderInboxHeadersProvider.notifier).remove(message.id);
       ref.read(mailCacheRevisionProvider.notifier).bump();
     } else {
       state = AsyncData<List<MailMessageHeader>>(
@@ -344,6 +425,7 @@ final mailMessageProvider =
 /// reflects "read" immediately after opening — no sync required. A no-op when
 /// the header isn't cached (nothing to show yet) or is already marked seen.
 Future<void> _markSeenLocally(Ref ref, MailMessageRef message) async {
+  ref.read(mailOlderInboxHeadersProvider.notifier).markSeen(message.id);
   final cache = ref.read(mailCacheStoreProvider);
   final List<MailMessageHeader> headers = await cache.readHeaders();
   final int index = headers.indexWhere(

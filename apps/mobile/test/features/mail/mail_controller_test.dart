@@ -522,6 +522,86 @@ void main() {
       expect(container.read(mailPaginationProvider).hasMore, isFalse);
     });
 
+    test('older pages beyond the header retention still advance the cursor '
+        '(VC-N02)', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: () => DateTime.utc(2026, 8, 1));
+      // A synced cache: the newest 50 UIDs, all recent.
+      await cache.saveHeaders(<MailMessageHeader>[
+        for (int id = 300; id > 250; id--) _hdr('$id'),
+      ]);
+      final DateTime yearsAgo = DateTime.utc(2024, 1, 1);
+      final gateway = FakeMailGateway(
+        messagesExists: 300,
+        olderInbox: <MailMessageHeader>[
+          for (int id = 250; id > 150; id--) _hdrAt('$id', yearsAgo),
+        ],
+      );
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      await container.read(mailInboxControllerProvider.future);
+
+      await container.read(mailInboxControllerProvider.notifier).loadOlder();
+      expect(gateway.lastFetchHeadersBeforeId, '251');
+      expect(
+        await container.read(mailInboxControllerProvider.future),
+        hasLength(150),
+        reason: 'the loaded page is shown even though it is not persisted',
+      );
+
+      gateway.olderInbox = <MailMessageHeader>[
+        for (int id = 150; id > 120; id--) _hdrAt('$id', yearsAgo),
+      ];
+      await container.read(mailInboxControllerProvider.notifier).loadOlder();
+
+      expect(
+        gateway.lastFetchHeadersBeforeId,
+        '151',
+        reason: 'the next page continues instead of reloading the same one',
+      );
+      expect(
+        await container.read(mailInboxControllerProvider.future),
+        hasLength(180),
+      );
+      expect(container.read(mailPaginationProvider).hasMore, isFalse);
+    });
+
+    test('in-memory older pages follow deletions and seen flags', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway();
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: MemoryMailCache(),
+      );
+      await container.read(mailAccountControllerProvider.future);
+      final MailOlderInboxHeaders older = container.read(
+        mailOlderInboxHeadersProvider.notifier,
+      )..add(<MailMessageHeader>[_hdr('5'), _hdr('4'), _hdr('3')]);
+
+      older.markSeen('5');
+      await container.read(mailInboxControllerProvider.notifier).deleteMessage((
+        mailboxPath: kInboxPath,
+        id: '4',
+      ));
+      // A later sync sees the whole (now one-message) mailbox.
+      older.reconcile(
+        <MailMessageHeader>[_hdr('5')],
+        fetchedLimit: kInboxLimit,
+        mailboxSize: 1,
+      );
+
+      final List<MailMessageHeader> left = container.read(
+        mailOlderInboxHeadersProvider,
+      );
+      expect(left.map((MailMessageHeader h) => h.id), <String>['5']);
+      expect(left.single.isSeen, isTrue);
+    });
+
     test(
       'opening a cached message marks it seen locally and rebuilds the list',
       () async {

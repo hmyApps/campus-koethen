@@ -259,6 +259,13 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         await cache.removeMessage(removedId);
       }
       if (!accountController.isSessionCurrent(generation)) return;
+      ref
+          .read(mailOlderInboxHeadersProvider.notifier)
+          .reconcile(
+            latest,
+            fetchedLimit: kInboxLimit,
+            mailboxSize: page.messagesExists,
+          );
       ref.read(mailCacheRevisionProvider.notifier).bump();
       if (hadBaseline && newMessages.isNotEmpty) {
         ref.read(mailNewMessageEventProvider.notifier).publish(newMessages);
