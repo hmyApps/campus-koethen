@@ -516,7 +516,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 
 | Parameter | Typ          | Standard         | Regeln                                              |
 | --------- | ------------ | ---------------- | --------------------------------------------------- |
-| `from`    | `YYYY-MM-DD` | heute            |                                                     |
+| `from`    | `YYYY-MM-DD` | heute            | „heute“ ist der Kalendertag in `Europe/Berlin`      |
 | `to`      | `YYYY-MM-DD` | `from` + 13 Tage | `to >= from`, Spanne **max. 31 Tage** ⇒ sonst `400` |
 | `locale`  | `de` \| `en` | `de`             |                                                     |
 
@@ -625,8 +625,9 @@ Liefert den vollständigen sichtbaren Katalog **paginiert** und ohne feste
 Gesamtkappung. `query` wird serverseitig ausgewertet, damit auch Treffer hinter
 der ersten Seite auffindbar sind. Sortierung: `shortName`, `longName`,
 `department`, `id` jeweils aufsteigend. Exakte, anhand ihrer Stundenplandaten
-bestätigte Aliasse werden auf einen sichtbaren Eintrag konsolidiert; Gruppen mit
-abweichenden Plänen bleiben auch bei gleichem Namen getrennt sichtbar.
+bestätigte Aliasse werden innerhalb desselben Semesterkatalogs auf einen sichtbaren
+Eintrag konsolidiert; Gruppen mit abweichenden Plänen bleiben auch bei gleichem Namen
+getrennt sichtbar, ebenso gleichnamige Gruppen verschiedener Semester.
 
 ```jsonc
 {
@@ -664,7 +665,8 @@ Es gibt **kein** Feld mit der WebUntis-ID.
 Löst eine bereits gespeicherte **Campus-UUID** einzeln auf. Dadurch müssen
 Kaltstart, Einstellungen und Kalender nicht den Gruppenkatalog laden. Ein durch
 die Dublettenprüfung ausgeblendeter Alt-Alias liefert seinen sichtbaren
-Vertreter; der Client kann die lokale Campus-UUID darauf migrieren. Die Antwort
+Vertreter aus demselben Semesterkatalog, nie eine gleichnamige Gruppe eines
+anderen Semesters; der Client kann die lokale Campus-UUID darauf migrieren. Die Antwort
 hat dieselbe öffentliche Gruppenform und dieselben Zeitraum-/Freshness-Metadaten
 wie der Katalog, aber keinen Pagination-Block. Unbekannte oder syntaktisch
 ungültige UUIDs liefern den unten beschriebenen Fehlervertrag. Externe IDs
