@@ -102,6 +102,7 @@ class MemoryMailCache implements MailCacheStore {
         .where((MailMessageHeader header) => header.id != id)
         .toList(growable: false);
     _messages.remove(id);
+    _storedAt.remove(id);
     _addresses.clear();
     for (final MailMessageDetail message in _messages.values) {
       for (final MailAddress address in addressesOf(message)) {
@@ -364,6 +365,13 @@ class EncryptedMailCache implements MailCacheStore {
     );
     await _box.delete('$_messagePrefix$id');
 
+    // The compact search document holds the message's normalised text; it has
+    // to go with the body, or a deleted mail stays findable (and counted).
+    final _MailCacheIndexes indexes = await _loadIndexes();
+    final bool hadMetadata = indexes.metadata.remove(id) != null;
+    final bool hadSearchDocument = indexes.search.remove(id) != null;
+    if (hadMetadata || hadSearchDocument) await _writeIndexes(indexes);
+
     final Map<String, MailAddressEntry> index = <String, MailAddressEntry>{};
     for (final String remainingId in await cachedMessageIds()) {
       final Object? decoded = await _decodedMessage(remainingId);
@@ -552,7 +560,16 @@ class EncryptedMailCache implements MailCacheStore {
     );
     bool changed = false;
     final DateTime now = _now().toUtc();
-    for (final String id in await cachedMessageIds()) {
+    final Set<String> bodyIds = await cachedMessageIds();
+    // An index entry without its body (an interrupted removal, or one written
+    // by an older build) would keep a deleted mail searchable and counted.
+    for (final Map<String, Map<String, dynamic>> index
+        in <Map<String, Map<String, dynamic>>>[metadata, search]) {
+      final int before = index.length;
+      index.removeWhere((String id, _) => !bodyIds.contains(id));
+      if (index.length != before) changed = true;
+    }
+    for (final String id in bodyIds) {
       if (metadata.containsKey(id) && search.containsKey(id)) continue;
       final String? raw = await _box.read('$_messagePrefix$id');
       final Object? decoded = _decode(raw);

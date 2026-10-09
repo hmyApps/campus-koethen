@@ -523,6 +523,90 @@ void main() {
       },
     );
   });
+
+  group('message removal keeps the derived indexes consistent (C-07)', () {
+    MailMessageDetail message(String id, String body) => MailMessageDetail(
+      id: id,
+      subject: 'Subject $id',
+      from: const MailAddress(email: 'alice@example.test'),
+      to: const <MailAddress>[MailAddress(email: 'student@example.test')],
+      date: DateTime.utc(2026, 8, 19),
+      body: body,
+    );
+
+    MailMessageHeader headerOf(MailMessageDetail m) => MailMessageHeader(
+      id: m.id,
+      subject: m.subject,
+      from: m.from,
+      date: m.date,
+      isSeen: false,
+      hasAttachments: false,
+    );
+
+    Future<EncryptedBox> openBox() async {
+      final EncryptedBox box = EncryptedBox(
+        boxName: MailCacheManager.secureBoxName,
+        keyStorageKey: MailCacheManager.keyStorageKey,
+        storage: _storage,
+        hive: Hive,
+        initializeHive: () async {},
+      );
+      expect((await box.openChecked()).isOpen, isTrue);
+      return box;
+    }
+
+    test(
+      'a removed message leaves neither search hits nor statistics',
+      () async {
+        final EncryptedBox box = await openBox();
+        final EncryptedMailCache cache = EncryptedMailCache(
+          box,
+          now: () => DateTime.utc(2026, 9, 1),
+        );
+        final MailMessageDetail removed = message('1', 'Geheimes Protokoll');
+        final MailMessageDetail kept = message('2', 'Offene Sprechstunde');
+        await cache.saveHeaders(<MailMessageHeader>[
+          headerOf(kept),
+          headerOf(removed),
+        ]);
+        await cache.saveMessages(<MailMessageDetail>[removed, kept]);
+        expect(await cache.searchHeaders('protokoll'), hasLength(1));
+
+        await cache.removeMessage('1');
+
+        expect(await cache.searchHeaders('protokoll'), isEmpty);
+        expect(await cache.searchHeaders('sprechstunde'), hasLength(1));
+        expect((await cache.stats()).bodyCount, 1);
+        final Map<String, dynamic> search =
+            jsonDecode((await box.read('search.v1'))!) as Map<String, dynamic>;
+        final Map<String, dynamic> metadata =
+            jsonDecode((await box.read('metadata.v1'))!)
+                as Map<String, dynamic>;
+        expect(search.keys, <String>['2']);
+        expect(metadata.keys, <String>['2']);
+      },
+    );
+
+    test('orphaned index entries without a body are discarded', () async {
+      final EncryptedBox box = await openBox();
+      final EncryptedMailCache cache = EncryptedMailCache(
+        box,
+        now: () => DateTime.utc(2026, 9, 1),
+      );
+      await cache.saveMessages(<MailMessageDetail>[
+        message('1', 'Geheimes Protokoll'),
+        message('2', 'Offene Sprechstunde'),
+      ]);
+      // An index written by an older build, whose body is already gone.
+      await box.delete('msg.1');
+
+      expect(await cache.searchHeaders('protokoll'), isEmpty);
+      expect((await cache.stats()).bodyCount, 1);
+      final Map<String, dynamic> search =
+          jsonDecode((await box.read('search.v1'))!) as Map<String, dynamic>;
+      expect(search.keys, <String>['2']);
+    });
+  });
 }
 
 /// Records which keys were written so the batching guarantee is observable.
