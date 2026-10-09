@@ -75,6 +75,9 @@ class MemoryMailCache implements MailCacheStore {
   }
 
   @override
+  bool retainsBody(DateTime? date) => policy.retainsBodyDated(date, _now());
+
+  @override
   Future<void> saveMessage(MailMessageDetail message) async {
     _messages[message.id] = message;
     _storedAt[message.id] = _now().toUtc();
@@ -169,14 +172,14 @@ class MemoryMailCache implements MailCacheStore {
   @override
   Future<void> prune() async {
     if (_messages.isEmpty) return;
-    final DateTime cutoff = _now().toUtc().subtract(policy.bodyRetention);
+    final DateTime now = _now();
     final List<String> ids = _messages.keys.toList(growable: true);
     final String newestId = ids.last;
     for (final String id in ids.toList()) {
       final MailMessageDetail? message = _messages[id];
       final DateTime effective =
-          message?.date?.toUtc() ?? _storedAt[id] ?? _now().toUtc();
-      if (id != newestId && effective.isBefore(cutoff)) {
+          message?.date?.toUtc() ?? _storedAt[id] ?? now.toUtc();
+      if (id != newestId && !policy.retainsBodyDated(effective, now)) {
         _messages.remove(id);
         _storedAt.remove(id);
         ids.remove(id);
@@ -297,6 +300,9 @@ class EncryptedMailCache implements MailCacheStore {
 
   Future<Object?> _decodedMessage(String id) async =>
       _decode(await _box.read('$_messagePrefix$id'));
+
+  @override
+  bool retainsBody(DateTime? date) => policy.retainsBodyDated(date, _now());
 
   @override
   Future<void> saveMessage(MailMessageDetail message) =>
@@ -494,7 +500,6 @@ class EncryptedMailCache implements MailCacheStore {
   Future<void> prune() async {
     final _MailCacheIndexes indexes = await _loadIndexes();
     final DateTime now = _now().toUtc();
-    final DateTime cutoff = now.subtract(policy.bodyRetention);
     final List<_MailBodyRecord> records = <_MailBodyRecord>[];
     for (final MapEntry<String, Map<String, dynamic>> entry
         in indexes.metadata.entries) {
@@ -522,7 +527,9 @@ class EncryptedMailCache implements MailCacheStore {
     );
     final Set<String> remove = <String>{
       for (final _MailBodyRecord record in records)
-        if (record.id != newest.id && record.date.isBefore(cutoff)) record.id,
+        if (record.id != newest.id &&
+            !policy.retainsBodyDated(record.date, now))
+          record.id,
     };
     final List<_MailBodyRecord> live = records
         .where((_MailBodyRecord record) => !remove.contains(record.id))
@@ -821,6 +828,9 @@ class MailCacheManager implements MailCacheStore {
           () => _delegate.stats(),
           const MailCacheStats(headerCount: 0, bodyCount: 0, byteCount: 0),
         );
+
+  @override
+  bool retainsBody(DateTime? date) => _delegate.retainsBody(date);
 
   @override
   Future<void> saveHeaders(List<MailMessageHeader> headers) =>

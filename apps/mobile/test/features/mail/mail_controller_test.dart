@@ -54,13 +54,23 @@ MailMessageHeader _hdr(String id) => MailMessageHeader(
   hasAttachments: false,
 );
 
-MailMessageDetail _dtl(String id) => MailMessageDetail(
+MailMessageDetail _dtl(String id, {DateTime? date}) => MailMessageDetail(
   id: id,
   subject: 'Subject $id',
   from: const MailAddress(email: 'alice@hs-anhalt.de', name: 'Alice'),
   to: const <MailAddress>[MailAddress(email: 'stud@hs-anhalt.de')],
-  date: DateTime.utc(2026, 7, 20, 9, int.parse(id)),
+  date: date ?? DateTime.utc(2026, 7, 20, 9, int.parse(id)),
   body: 'Body $id',
+);
+
+/// A header dated [date] instead of the recent default of [_hdr].
+MailMessageHeader _hdrAt(String id, DateTime date) => MailMessageHeader(
+  id: id,
+  subject: 'Subject $id',
+  from: const MailAddress(email: 'alice@hs-anhalt.de', name: 'Alice'),
+  date: date,
+  isSeen: false,
+  hasAttachments: false,
 );
 
 void main() {
@@ -862,6 +872,45 @@ void main() {
       expect(gateway.lastFetchMessageIds.last, '11');
       expect(await cache.cachedMessageIds(), hasLength(kMailBodyPrefetchLimit));
     });
+
+    test(
+      'never prefetches bodies the age retention would delete again (C-05)',
+      () async {
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        // Bodies older than 180 days are pruned right after saving.
+        final cache = MemoryMailCache(now: () => DateTime.utc(2026, 8, 1));
+        final DateTime old = DateTime.utc(2025, 1, 1);
+        final gateway = FakeMailGateway(
+          inbox: <MailMessageHeader>[
+            _hdr('3'),
+            _hdrAt('2', old),
+            _hdrAt('1', old),
+          ],
+          detailsById: <String, MailMessageDetail>{
+            '3': _dtl('3'),
+            '2': _dtl('2', date: old),
+            '1': _dtl('1', date: old),
+          },
+        );
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        await container.read(mailAccountControllerProvider.future);
+
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+        expect(gateway.lastFetchMessageIds, <String>['3']);
+
+        gateway.lastFetchMessageIds = <String>[];
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+        expect(
+          gateway.lastFetchMessageIds,
+          isEmpty,
+          reason: 'no full download is repeated on every sync',
+        );
+      },
+    );
   });
 
   group('local search', () {

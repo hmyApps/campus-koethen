@@ -497,6 +497,32 @@ void main() {
       },
     );
 
+    test('retainsBody predicts exactly what the age pruning keeps', () async {
+      final _CountingBox box = openBox();
+      expect((await box.openChecked()).isOpen, isTrue);
+      final EncryptedMailCache cache = EncryptedMailCache(
+        box,
+        now: () => DateTime.utc(2026, 9, 1),
+      );
+      MailMessageDetail dated(String id, DateTime date) => MailMessageDetail(
+        id: id,
+        subject: 'Subject $id',
+        from: const MailAddress(email: 'a@example.test'),
+        to: const <MailAddress>[],
+        date: date,
+        body: 'Body $id',
+      );
+      final MailMessageDetail recent = dated('3', DateTime.utc(2026, 8, 30));
+      final MailMessageDetail old = dated('1', DateTime.utc(2025, 1, 1));
+
+      expect(cache.retainsBody(recent.date), isTrue);
+      expect(cache.retainsBody(old.date), isFalse);
+      expect(cache.retainsBody(null), isTrue);
+
+      await cache.saveMessages(<MailMessageDetail>[recent, old]);
+      expect(await cache.cachedMessageIds(), <String>{'3'});
+    });
+
     test(
       'clearing offline bodies retains the lightweight header list',
       () async {

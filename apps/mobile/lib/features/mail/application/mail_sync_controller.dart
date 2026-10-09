@@ -250,11 +250,14 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         ref.read(mailNewMessageEventProvider.notifier).publish(newMessages);
       }
 
-      // 2) Prefetch full bodies for messages not yet cached.
+      // 2) Prefetch full bodies for messages not yet cached. Bodies the age
+      //    retention would prune straight away are skipped: downloading them
+      //    would only repeat on every sync. Opening one still loads it.
       final Set<String> cachedIds = await cache.cachedMessageIds();
       final List<String> missing = latest
+          .where((MailMessageHeader h) => !cachedIds.contains(h.id))
+          .where((MailMessageHeader h) => cache.retainsBody(h.date))
           .map((MailMessageHeader h) => h.id)
-          .where((String id) => !cachedIds.contains(id))
           .take(kMailBodyPrefetchLimit)
           .toList();
       if (missing.isNotEmpty) {

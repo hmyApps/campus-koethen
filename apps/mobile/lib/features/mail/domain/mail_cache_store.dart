@@ -22,6 +22,12 @@ class MailCachePolicy {
   final Duration headerRetention;
   final Duration bodyRetention;
   final int prefetchBodies;
+
+  /// Whether a body dated [date] survives the age-based pruning at [now].
+  /// An undated body ages from the moment it is stored, so it always does.
+  bool retainsBodyDated(DateTime? date, DateTime now) =>
+      date == null ||
+      !date.toUtc().isBefore(now.toUtc().subtract(bodyRetention));
 }
 
 class MailCacheStats {
@@ -58,6 +64,13 @@ abstract interface class MailCacheStore {
 
   /// A cached full message, or null if only its header (or nothing) is known.
   Future<MailMessageDetail?> readMessage(String id);
+
+  /// Whether a body dated [date] would outlive the next age-based [prune].
+  ///
+  /// A background prefetch must skip bodies for which this is false: storing
+  /// them only to delete them again would repeat the full download on every
+  /// sync. Opening such a message still loads it on demand.
+  bool retainsBody(DateTime? date);
 
   /// Stores a full message (and updates the known-address index from it).
   Future<void> saveMessage(MailMessageDetail message);
