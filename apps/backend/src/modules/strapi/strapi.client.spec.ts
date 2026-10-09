@@ -1,3 +1,6 @@
+import { Logger } from '@nestjs/common';
+import { createServer, Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Env } from '../../config/env.schema';
 import { StrapiClient, StrapiRequestError } from './strapi.client';
 
@@ -113,6 +116,118 @@ describe('StrapiClient', () => {
     // A body that is too large is a deterministic answer; asking again would
     // only pull the same flood a second and third time.
     expect(calls).toBe(1);
+  });
+
+  /**
+   * Which failures are worth asking again.
+   *
+   * Only the upstream saying "not now" — a timeout, a broken connection, a 5xx
+   * or a 429 — is transient. A 4xx or a redirect is the same answer on every
+   * attempt; retrying it only added ~600 ms of backoff in front of a 503 and
+   * reported a client-side rejection as an outage.
+   */
+  describe('retry policy', () => {
+    const retrying: Env = { ...env, STRAPI_RETRY_ATTEMPTS: 2 };
+    let warn: jest.SpyInstance;
+
+    beforeEach(() => {
+      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    function answerEveryAttemptWith(status: number): () => number {
+      let calls = 0;
+      fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: { status } }), { status });
+      });
+      return () => calls;
+    }
+
+    it.each([400, 404])('reports a %i as rejected and does not ask again', async (status) => {
+      const calls = answerEveryAttemptWith(status);
+
+      await expect(new StrapiClient(retrying).get('/api/posts')).rejects.toMatchObject({
+        kind: 'rejected',
+        status,
+      });
+      expect(calls()).toBe(1);
+    });
+
+    it.each([500, 503, 429])('retries a transient %i', async (status) => {
+      const calls = answerEveryAttemptWith(status);
+      const once: Env = { ...env, STRAPI_RETRY_ATTEMPTS: 1 };
+
+      await expect(new StrapiClient(once).get('/api/posts')).rejects.toMatchObject({
+        kind: 'unavailable',
+        status,
+      });
+      expect(calls()).toBe(2);
+    });
+
+    it('retries a broken connection', async () => {
+      let calls = 0;
+      fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        calls += 1;
+        throw new TypeError('fetch failed', {
+          cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+        });
+      });
+      const once: Env = { ...env, STRAPI_RETRY_ATTEMPTS: 1 };
+
+      await expect(new StrapiClient(once).get('/api/posts')).rejects.toMatchObject({
+        kind: 'unavailable',
+      });
+      expect(calls).toBe(2);
+    });
+
+    describe('against a real HTTP server', () => {
+      // No fetch mock here on purpose: how a refused redirect surfaces is
+      // decided by the runtime's fetch implementation, and a stub would only
+      // assert what the test author believed it to be.
+      let server: Server;
+      let hits = 0;
+
+      beforeAll(async () => {
+        server = createServer((_request, response) => {
+          hits += 1;
+          response.writeHead(302, { Location: 'http://elsewhere.invalid/api/posts' });
+          response.end();
+        });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      });
+
+      afterAll(async () => {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      });
+
+      it('reports a refused redirect as rejected and does not ask again', async () => {
+        hits = 0;
+        const { port } = server.address() as AddressInfo;
+        const client = new StrapiClient({
+          ...retrying,
+          STRAPI_BASE_URL: `http://127.0.0.1:${port}`,
+        });
+
+        await expect(client.get('/api/posts')).rejects.toMatchObject({ kind: 'rejected' });
+        expect(hits).toBe(1);
+      });
+    });
+
+    it('logs the number of attempts actually made, not the configured maximum', async () => {
+      answerEveryAttemptWith(404);
+
+      await expect(new StrapiClient(retrying).get('/api/posts')).rejects.toBeInstanceOf(
+        StrapiRequestError,
+      );
+
+      const messages = warn.mock.calls.map((call: unknown[]) => String(call[0]));
+      expect(messages.some((message) => message.includes('after 1 attempt(s)'))).toBe(true);
+      expect(messages.some((message) => message.includes('after 3 attempt(s)'))).toBe(false);
+    });
   });
   /**
    * The readiness probe reaches the same upstream and was missed when the read
