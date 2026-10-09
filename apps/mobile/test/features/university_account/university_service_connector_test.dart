@@ -7,6 +7,11 @@ import 'package:campus_koethen/features/settings/application/sign_out_everywhere
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
+import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_providers.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_account.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_chat.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_failure.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_gateway.dart';
 import 'package:campus_koethen/features/mail/application/mail_providers.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/university_account/application/university_account_controller.dart';
@@ -94,12 +99,71 @@ class _RecordingAdapter implements UniversityServiceAdapter {
   }
 }
 
+const HsaKiCredential _hsaKiCredential = HsaKiCredential(
+  token: 'tok-1',
+  tokenId: '7',
+  username: 'student@hs-anhalt.de',
+);
+
+class _MemoryHsaKiCredentialStore implements HsaKiCredentialStore {
+  HsaKiCredential? value;
+
+  @override
+  Future<HsaKiCredential?> read() async => value;
+
+  @override
+  Future<void> write(HsaKiCredential credential) async => value = credential;
+
+  @override
+  Future<void> clear() async => value = null;
+}
+
+/// HAWKI as seen by the real HSA-GPT controller: it either rejects every
+/// login or mints [_hsaKiCredential].
+class _HsaKiGateway implements HsaKiGateway {
+  _HsaKiGateway({this.rejectLogin = false});
+
+  final bool rejectLogin;
+  int connectCalls = 0;
+
+  @override
+  Future<HsaKiCredential> connect({
+    required String username,
+    required String password,
+  }) async {
+    connectCalls++;
+    if (rejectLogin) {
+      throw const HsaKiFailure(HsaKiFailureKind.invalidCredentials);
+    }
+    return _hsaKiCredential;
+  }
+
+  @override
+  Future<void> revoke(
+    HsaKiCredential credential, {
+    required String password,
+  }) async {}
+
+  @override
+  Future<List<HsaKiModel>> listModels(HsaKiCredential credential) async =>
+      const <HsaKiModel>[];
+
+  @override
+  Future<String> sendMessage(
+    HsaKiCredential credential, {
+    required String modelId,
+    required List<HsaKiMessage> messages,
+  }) async => '';
+}
+
 ProviderContainer _container(
   _MemoryIdentityStore store,
   Map<DirectService, _RecordingAdapter> adapters, {
   UniversityServiceConnectionSnapshot? snapshot,
+  List<Override> extraOverrides = const <Override>[],
 }) => ProviderContainer(
   overrides: <Override>[
+    ...extraOverrides,
     universityIdentityStoreProvider.overrideWithValue(store),
     if (snapshot != null)
       universityServiceConnectionSnapshotProvider.overrideWithValue(snapshot),
@@ -554,6 +618,88 @@ void main() {
       },
     );
   }
+
+  test('a password HAWKI rejects is never retained through the real HSA-GPT '
+      'controller', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore();
+    final _HsaKiGateway gateway = _HsaKiGateway(rejectLogin: true);
+    final _MemoryHsaKiCredentialStore hsaKiStore =
+        _MemoryHsaKiCredentialStore();
+    final ProviderContainer container = _container(
+      store,
+      const <DirectService, _RecordingAdapter>{},
+      extraOverrides: <Override>[
+        hsaKiGatewayProvider.overrideWithValue(gateway),
+        hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container
+          .read(universityServiceConnectorProvider)
+          .connectAndRetain(DirectService.hsaKi, _identity),
+      throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+    );
+
+    expect(gateway.connectCalls, 1);
+    expect(store.value, isNull);
+    expect(store.writes, 0);
+    expect(hsaKiStore.value, isNull);
+  });
+
+  test(
+    'an already connected HSA-GPT never vouches for an unchecked replacement '
+    'identity',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            DirectService.mail: _RecordingAdapter(),
+            DirectService.moodle: _RecordingAdapter(),
+            DirectService.grades: _RecordingAdapter(),
+            DirectService.nextcloud: _RecordingAdapter(),
+          };
+      final _HsaKiGateway gateway = _HsaKiGateway(rejectLogin: true);
+      final _MemoryHsaKiCredentialStore hsaKiStore =
+          _MemoryHsaKiCredentialStore()..value = _hsaKiCredential;
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{
+            DirectService.mail,
+            DirectService.grades,
+            DirectService.hsaKi,
+          },
+        ),
+        extraOverrides: <Override>[
+          hsaKiGatewayProvider.overrideWithValue(gateway),
+          hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(
+              DirectService.hsaKi,
+              _replacementIdentity,
+            ),
+        throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+      );
+
+      expect(gateway.connectCalls, 1);
+      expect(store.value, _identity);
+      expect(store.writes, 0);
+      expect(hsaKiStore.value, same(_hsaKiCredential));
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    },
+  );
 
   test('failed validation never stores the central password', () async {
     final _MemoryIdentityStore store = _MemoryIdentityStore();
