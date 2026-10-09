@@ -41,7 +41,14 @@ class CanteenRepository {
     DateTime? from,
   }) {
     final DateTime start = _atMidnight(from ?? DateTime.now());
-    final DateTime end = start.add(const Duration(days: cachedWindowDays - 1));
+    // Calendar days, not 24-hour blocks: across the end of daylight saving
+    // time `add(Duration(days: 13))` lands at 23:00 on the 13th day and the
+    // window lost its last day (G-05). The constructor normalises overflow.
+    final DateTime end = DateTime(
+      start.year,
+      start.month,
+      start.day + cachedWindowDays - 1,
+    );
     return _endpoint.load<CanteenMenu>(
       path: '/canteens/$slug/menu',
       cacheKey: CacheKeys.canteenMenu(locale, slug),
