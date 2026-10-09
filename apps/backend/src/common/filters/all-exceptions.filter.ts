@@ -35,6 +35,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const rawLocale = asString(request.query?.['locale']).toLowerCase();
     const locale: Locale = isSupportedLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
+    // An error answer is never worth keeping — not by a client, not by the
+    // edge cache. This also overrides a long-lived Cache-Control a route set
+    // before it failed: Nest applies @Header() decorators BEFORE the handler
+    // runs, so a 404 or 503 would otherwise leave with the success header.
+    response.setHeader('Cache-Control', 'no-store');
+
     if (exception instanceof ApiError) {
       const body = exception.getResponse() as { error: Record<string, unknown> };
       response.status(exception.getStatus()).json({

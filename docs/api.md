@@ -1107,7 +1107,10 @@ Regeln, die der Endpunkt durchsetzt:
   Container; sie ein zweites Mal durch `gzip` zu schicken kostet auf beiden Seiten Rechenzeit und
   liefert ein eher größeres Ergebnis.
 - `Cache-Control: public, max-age=86400` — ein ausgetauschtes Bild bekommt vom CMS einen neuen
-  Dateinamen, sodass ein langer Cache nichts veraltet.
+  Dateinamen, sodass ein langer Cache nichts veraltet. Das gilt **nur** für `200` und `304`.
+  Fehlerantworten (`404`, `503`, …) tragen wie jede Fehlerantwort der API
+  `Cache-Control: no-store`, damit ein kurzer CMS-Ausfall kein Bild für einen Tag verschwinden
+  lässt.
 
 #### Revalidierung mit `If-None-Match`
 
