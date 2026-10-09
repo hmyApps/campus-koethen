@@ -287,8 +287,9 @@ List<MoodleFile> _parseModuleContents(Object? json) {
 
 List<MoodleAssignment> parseAssignments(Object? json) {
   final Map<String, Object?> map = _asMap(json);
-  final Object? courses = map['courses'];
-  if (courses is! List) return const <MoodleAssignment>[];
+  // A missing or mistyped course list is a broken answer, not "no
+  // assignments": reading it as empty would overwrite the cached list.
+  final List<Object?> courses = _asList(map['courses']);
   final List<MoodleAssignment> out = <MoodleAssignment>[];
   for (final Object? rawCourse in courses) {
     if (rawCourse is! Map) continue;
@@ -366,9 +367,11 @@ MoodleSubmissionStatus parseSubmissionStatus(Object? json) {
 // ---------------------------------------------------------------------------
 
 List<int> parseNewsForumIds(Object? json) {
-  if (json is! List) return const <int>[];
+  // `mod_forum_get_forums_by_courses` answers with a bare list. Anything else
+  // is invalid and must not read as "this course has no announcements".
+  final List<Object?> forums = _asList(json);
   final List<int> ids = <int>[];
-  for (final Object? raw in json) {
+  for (final Object? raw in forums) {
     if (raw is! Map) continue;
     final Map<String, Object?> m = raw.cast<String, Object?>();
     if (_asString(m['type']) != 'news') continue;
@@ -382,13 +385,11 @@ List<MoodleAnnouncement> parseDiscussions(
   Object? json, {
   required int courseId,
 }) {
-  Object? discussions;
-  if (json is Map) {
-    discussions = json['discussions'];
-  } else if (json is List) {
-    discussions = json;
-  }
-  if (discussions is! List) return const <MoodleAnnouncement>[];
+  // Same rule as above: only a real discussion list — possibly empty — is a
+  // result. A missing or mistyped one throws so the cache is kept.
+  final List<Object?> discussions = json is List
+      ? json
+      : _asList(_asMap(json)['discussions']);
   final List<MoodleAnnouncement> out = <MoodleAnnouncement>[];
   for (final Object? raw in discussions) {
     if (raw is! Map) continue;

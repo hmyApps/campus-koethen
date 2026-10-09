@@ -234,9 +234,16 @@ class MoodleHttpClient implements MoodleApiClient {
   }
 
   Object? _decode(Object? data) {
-    if (data == null) return null;
+    // Every whitelisted function answers with a JSON structure. A missing or
+    // blank 200 body is therefore a broken answer, never an empty result —
+    // reading it as one let it replace good cached data (AGENTS §4).
+    if (data == null) {
+      throw const MoodleFailure(MoodleFailureKind.invalidResponse);
+    }
     if (data is String) {
-      if (data.trim().isEmpty) return null;
+      if (data.trim().isEmpty) {
+        throw const MoodleFailure(MoodleFailureKind.invalidResponse);
+      }
       try {
         return jsonDecode(data);
       } on FormatException {
