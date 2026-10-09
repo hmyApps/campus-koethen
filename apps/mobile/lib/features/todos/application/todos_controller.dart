@@ -108,29 +108,51 @@ class TodosController extends AsyncNotifier<List<Todo>> {
     await _commit(_replace(changed), () => _store.upsertTodo(changed));
   }
 
-  Future<void> clearFolder(String folderId) async {
+  /// Moves every task of [folderId] back to "no folder".
+  ///
+  /// Returns whether the task list is in the requested state afterwards —
+  /// `false` when it could not be read, so the caller must not treat the
+  /// folder as empty. A read still in flight is awaited first: an empty
+  /// [_current] during loading says nothing about the stored tasks.
+  Future<bool> clearFolder(String folderId) async {
+    if (!await _settled()) return false;
     final List<Todo> changed = _current
         .where((Todo todo) => todo.folderId == folderId)
         .map((Todo todo) => todo.copyWith(folderId: null))
         .toList();
-    if (changed.isEmpty) return;
+    if (changed.isEmpty) return true;
     final Map<String, Todo> byId = <String, Todo>{
       for (final Todo todo in changed) todo.id: todo,
     };
-    await _commit(<Todo>[
+    return _commit(<Todo>[
       for (final Todo todo in _current) byId[todo.id] ?? todo,
     ], () => _store.upsertTodos(changed));
   }
 
-  Future<void> removeByFolder(String folderId) async {
+  /// Deletes every task of [folderId]. Same contract as [clearFolder].
+  Future<bool> removeByFolder(String folderId) async {
+    if (!await _settled()) return false;
     final List<Todo> removed = _current
         .where((Todo todo) => todo.folderId == folderId)
         .toList();
-    if (removed.isEmpty) return;
-    await _commit(
+    if (removed.isEmpty) return true;
+    return _commit(
       _current.where((Todo todo) => todo.folderId != folderId).toList(),
       () => _store.deleteTodos(removed.map((Todo todo) => todo.id)),
     );
+  }
+
+  /// Waits for a read still in flight and reports whether the list is
+  /// usable afterwards.
+  Future<bool> _settled() async {
+    if (state.isLoading) {
+      try {
+        await future;
+      } catch (_) {
+        // Reported from the settled state below.
+      }
+    }
+    return state.hasValue;
   }
 
   Todo? _find(String id) {

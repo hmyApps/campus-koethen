@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/features/todos/application/todo_folders_controller.dart';
 import 'package:campus_koethen/features/todos/application/todos_controller.dart';
 import 'package:campus_koethen/features/todos/domain/todo.dart';
@@ -113,4 +115,177 @@ void main() {
       expect(remaining.single.title, 'Woanders');
     },
   );
+
+  group('a failed or unfinished read never destroys the stored folders', () {
+    // F-03. Every folder mutation writes the WHOLE list back. With a failed
+    // read the controller's view of it is empty, so creating one folder used
+    // to persist a list of exactly that folder — every folder actually on the
+    // device was gone.
+    final List<TodoFolder> stored = <TodoFolder>[
+      TodoFolder(id: 'f1', name: 'Uni', createdAt: DateTime(2026)),
+      TodoFolder(id: 'f2', name: 'Privat', createdAt: DateTime(2026)),
+    ];
+
+    test('create is refused while the folders could not be read', () async {
+      final _UnreadableFolderStore broken = _UnreadableFolderStore(stored);
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[todoStoreProvider.overrideWithValue(broken)],
+      );
+      addTearDown(c.dispose);
+      await expectLater(
+        c.read(todoFoldersControllerProvider.future),
+        throwsA(isA<StateError>()),
+      );
+
+      await expectLater(
+        c.read(todoFoldersControllerProvider.notifier).create('Neu'),
+        throwsA(isA<TodoStoreFailure>()),
+      );
+
+      expect(broken.folders, stored);
+      expect(broken.folderWrites, 0);
+    });
+
+    test('rename and delete are refused too', () async {
+      final _UnreadableFolderStore broken = _UnreadableFolderStore(stored);
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[todoStoreProvider.overrideWithValue(broken)],
+      );
+      addTearDown(c.dispose);
+      await expectLater(
+        c.read(todoFoldersControllerProvider.future),
+        throwsA(isA<StateError>()),
+      );
+      final TodoFoldersController folders = c.read(
+        todoFoldersControllerProvider.notifier,
+      );
+
+      await expectLater(
+        folders.rename('f1', 'Neu'),
+        throwsA(isA<TodoStoreFailure>()),
+      );
+      await expectLater(
+        folders.delete('f1', TodoFolderDeleteAction.moveToUnfiled),
+        throwsA(isA<TodoStoreFailure>()),
+      );
+
+      expect(broken.folders, stored);
+      expect(broken.folderWrites, 0);
+    });
+
+    test('create waits for a read still in flight instead of writing over '
+        'it', () async {
+      final _SlowFolderStore slow = _SlowFolderStore(stored);
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[todoStoreProvider.overrideWithValue(slow)],
+      );
+      addTearDown(c.dispose);
+      c.listen(todoFoldersControllerProvider, (_, _) {});
+      expect(c.read(todoFoldersControllerProvider).isLoading, isTrue);
+
+      final Future<void> creating = c
+          .read(todoFoldersControllerProvider.notifier)
+          .create('Neu');
+      slow.releaseRead();
+      await creating;
+
+      expect((await slow.readFolders()).map((TodoFolder f) => f.name), <String>[
+        'Uni',
+        'Privat',
+        'Neu',
+      ]);
+      expect(
+        c
+            .read(todoFoldersControllerProvider)
+            .requireValue
+            .map((TodoFolder f) => f.name),
+        <String>['Uni', 'Privat', 'Neu'],
+      );
+    });
+
+    test('delete keeps the folder when its tasks could not be detached', () async {
+      // The to-do list failed to load, so `clearFolder` cannot touch the tasks
+      // that still point at this folder. Removing the folder anyway would leave
+      // them filed under a folder that no longer exists.
+      final _UnreadableTodosStore broken = _UnreadableTodosStore(stored);
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[todoStoreProvider.overrideWithValue(broken)],
+      );
+      addTearDown(c.dispose);
+      await c.read(todoFoldersControllerProvider.future);
+      await expectLater(
+        c.read(todosControllerProvider.future),
+        throwsA(isA<StateError>()),
+      );
+
+      for (final TodoFolderDeleteAction action
+          in TodoFolderDeleteAction.values) {
+        await expectLater(
+          c.read(todoFoldersControllerProvider.notifier).delete('f1', action),
+          throwsA(isA<TodoStoreFailure>()),
+          reason: '$action',
+        );
+      }
+
+      expect(broken.folders, stored);
+      expect(c.read(todoFoldersControllerProvider).requireValue, hasLength(2));
+    });
+  });
+}
+
+/// Folders cannot be read; tasks are an empty, healthy list.
+class _UnreadableFolderStore extends InMemoryTodoStore {
+  _UnreadableFolderStore(this.folders);
+
+  List<TodoFolder> folders;
+  int folderWrites = 0;
+
+  @override
+  Future<List<TodoFolder>> readFolders() async =>
+      throw StateError('box unavailable');
+
+  @override
+  Future<void> writeFolders(List<TodoFolder> next) async {
+    folderWrites++;
+    folders = List<TodoFolder>.of(next);
+  }
+}
+
+/// Folders are readable, but only once [releaseRead] is called.
+class _SlowFolderStore extends InMemoryTodoStore {
+  _SlowFolderStore(List<TodoFolder> folders) {
+    _folders = List<TodoFolder>.of(folders);
+  }
+
+  late List<TodoFolder> _folders;
+  final Completer<void> _gate = Completer<void>();
+
+  void releaseRead() => _gate.complete();
+
+  @override
+  Future<List<TodoFolder>> readFolders() async {
+    await _gate.future;
+    return List<TodoFolder>.of(_folders);
+  }
+
+  @override
+  Future<void> writeFolders(List<TodoFolder> next) async =>
+      _folders = List<TodoFolder>.of(next);
+}
+
+/// Folders are readable; the task list is not.
+class _UnreadableTodosStore extends InMemoryTodoStore {
+  _UnreadableTodosStore(this.folders);
+
+  List<TodoFolder> folders;
+
+  @override
+  Future<List<Todo>> readAll() async => throw StateError('box unavailable');
+
+  @override
+  Future<List<TodoFolder>> readFolders() async => List<TodoFolder>.of(folders);
+
+  @override
+  Future<void> writeFolders(List<TodoFolder> next) async =>
+      folders = List<TodoFolder>.of(next);
 }

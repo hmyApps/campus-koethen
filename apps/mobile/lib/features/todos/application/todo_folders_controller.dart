@@ -30,6 +30,26 @@ class TodoFoldersController extends AsyncNotifier<List<TodoFolder>> {
 
   List<TodoFolder> get _current => state.value ?? const <TodoFolder>[];
 
+  /// Every mutation writes the WHOLE folder list back, so it must start from
+  /// the list actually stored. A read still in flight is awaited; a read that
+  /// failed refuses the write with a typed failure instead of persisting a
+  /// list that only contains this one change (F-03).
+  Future<void> _ensureReadable() async {
+    if (state.isLoading) {
+      try {
+        await future;
+      } catch (_) {
+        // Reported below from the settled state.
+      }
+    }
+    if (!state.hasValue) {
+      throw TodoStoreFailure(
+        TodoStoreOperation.read,
+        state.error ?? StateError('Folder list not loaded'),
+      );
+    }
+  }
+
   Future<void> _persist(List<TodoFolder> next) async {
     await _store.writeFolders(next);
     state = AsyncData<List<TodoFolder>>(next);
@@ -41,6 +61,7 @@ class TodoFoldersController extends AsyncNotifier<List<TodoFolder>> {
   Future<void> create(String name) async {
     final String trimmed = name.trim();
     if (trimmed.isEmpty) return;
+    await _ensureReadable();
     final TodoFolder folder = TodoFolder(
       id: _newId(),
       name: trimmed,
@@ -53,6 +74,7 @@ class TodoFoldersController extends AsyncNotifier<List<TodoFolder>> {
   Future<void> rename(String id, String name) async {
     final String trimmed = name.trim();
     if (trimmed.isEmpty) return;
+    await _ensureReadable();
     await _persist(<TodoFolder>[
       for (final TodoFolder f in _current)
         if (f.id == id) f.copyWith(name: trimmed) else f,
@@ -61,19 +83,31 @@ class TodoFoldersController extends AsyncNotifier<List<TodoFolder>> {
 
   /// Deletes the folder with [id]. [action] decides what happens to the
   /// to-dos that were in it.
+  ///
+  /// The folder is only removed once its tasks were actually moved or
+  /// deleted. If the task list could not be read, nothing changes and a typed
+  /// failure is thrown — otherwise those tasks would stay filed under a folder
+  /// that no longer exists.
   Future<void> delete(String id, TodoFolderDeleteAction action) async {
-    switch (action) {
-      case TodoFolderDeleteAction.moveToUnfiled:
-        await ref.read(todosControllerProvider.notifier).clearFolder(id);
-      case TodoFolderDeleteAction.deleteTasks:
-        await ref.read(todosControllerProvider.notifier).removeByFolder(id);
+    await _ensureReadable();
+    final TodosController todos = ref.read(todosControllerProvider.notifier);
+    final bool tasksHandled = switch (action) {
+      TodoFolderDeleteAction.moveToUnfiled => await todos.clearFolder(id),
+      TodoFolderDeleteAction.deleteTasks => await todos.removeByFolder(id),
+    };
+    if (!tasksHandled) {
+      throw TodoStoreFailure(
+        TodoStoreOperation.read,
+        StateError('Task list not loaded'),
+      );
     }
     await _persist(_current.where((TodoFolder f) => f.id != id).toList());
   }
 }
 
 /// Riverpod 3 auto-retries erroring providers with a backoff timer; that timer
-/// outlives widget tests. Disable it — a failed local read just yields empty.
+/// outlives widget tests. Disable it — a failed local read stays an error and
+/// refuses every write until the reader retries.
 final AsyncNotifierProvider<TodoFoldersController, List<TodoFolder>>
 todoFoldersControllerProvider =
     AsyncNotifierProvider<TodoFoldersController, List<TodoFolder>>(
