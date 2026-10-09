@@ -129,6 +129,55 @@ describe('parseIcs — single timed events', () => {
   });
 });
 
+describe('parseIcs — floating times on DST change days', () => {
+  /** One zone-less event at `local`, read in the Europe/Berlin fallback. */
+  function floatingStart(local: string): string {
+    const events = parseIcs(
+      ics([
+        ...VCAL_OPEN,
+        'BEGIN:VEVENT',
+        `UID:evt-floating-${local}`,
+        'DTSTAMP:20260301T120000Z',
+        `DTSTART:${local}`,
+        'DURATION:PT30M',
+        'SUMMARY:Ohne Zeitzone',
+        'END:VEVENT',
+        ...VCAL_CLOSE,
+      ]),
+      baseOptions(),
+    );
+    return first(events).start.toISOString();
+  }
+
+  // A single offset lookup at "wall clock read as UTC" lands on the wrong side
+  // of the change whenever the change happens between the two readings —
+  // in Berlin that is 01:00–01:59 local on both change days.
+  it('reads 01:30 on the spring-forward day as CET (+01:00)', () => {
+    expect(floatingStart('20260329T013000')).toBe('2026-03-29T00:30:00.000Z');
+  });
+
+  it('reads 01:30 on the fall-back day as CEST (+02:00)', () => {
+    expect(floatingStart('20261025T013000')).toBe('2026-10-24T23:30:00.000Z');
+  });
+
+  it('reads a time inside the spring-forward gap with the offset before the gap', () => {
+    // RFC 5545 §3.3.5: 02:30 does not exist; it means 03:30 CEST.
+    expect(floatingStart('20260329T023000')).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  it('reads an ambiguous fall-back time as its first occurrence', () => {
+    // RFC 5545 §3.3.5: 02:30 occurs twice; it means the first, still CEST.
+    expect(floatingStart('20261025T023000')).toBe('2026-10-25T00:30:00.000Z');
+  });
+
+  it('is unchanged away from the change', () => {
+    expect(floatingStart('20260329T033000')).toBe('2026-03-29T01:30:00.000Z');
+    expect(floatingStart('20261025T033000')).toBe('2026-10-25T02:30:00.000Z');
+    expect(floatingStart('20260115T120000')).toBe('2026-01-15T11:00:00.000Z');
+    expect(floatingStart('20260715T120000')).toBe('2026-07-15T10:00:00.000Z');
+  });
+});
+
 describe('parseIcs — all-day events', () => {
   it('treats VALUE=DATE as a local calendar day with an EXCLUSIVE end date', () => {
     const events = parseIcs(

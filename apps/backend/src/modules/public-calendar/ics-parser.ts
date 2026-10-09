@@ -158,7 +158,19 @@ function tzOffsetMs(instant: Date, tz: string): number {
   return asUtc - instant.getTime();
 }
 
-/** Interprets a wall-clock time in `tz` as an absolute instant (DST-correct). */
+const DAY_MS = 86_400_000;
+
+/**
+ * Interprets a wall-clock time in `tz` as an absolute instant (DST-correct).
+ *
+ * A single offset lookup at "the wall clock read as UTC" is wrong whenever the
+ * zone changes its offset between that reading and the real instant — in
+ * Europe/Berlin 01:00–01:59 local on both change days. Instead the offsets in
+ * force a day before and a day after are both tried, and an offset only counts
+ * if the instant it yields really carries it. Per RFC 5545 §3.3.5 a wall clock
+ * that occurs twice means the FIRST occurrence, and one inside a gap is read
+ * with the offset from before the gap.
+ */
 function zonedWallClockToUtc(
   y: number,
   month1: number,
@@ -168,9 +180,21 @@ function zonedWallClockToUtc(
   s: number,
   tz: string,
 ): Date {
-  const guess = Date.UTC(y, month1 - 1, d, h, mi, s);
-  const offset = tzOffsetMs(new Date(guess), tz);
-  return new Date(guess - offset);
+  const wall = Date.UTC(y, month1 - 1, d, h, mi, s);
+  const before = tzOffsetMs(new Date(wall - DAY_MS), tz);
+  const after = tzOffsetMs(new Date(wall + DAY_MS), tz);
+  // No change around this day: the one offset is the answer.
+  if (before === after) return new Date(wall - before);
+
+  let earliest: number | null = null;
+  for (const offset of [before, after]) {
+    const instant = wall - offset;
+    if (tzOffsetMs(new Date(instant), tz) === offset) {
+      earliest = earliest === null ? instant : Math.min(earliest, instant);
+    }
+  }
+  // Neither offset fits: the wall clock falls into the gap.
+  return new Date(earliest ?? wall - before);
 }
 
 interface AbsoluteTime {
