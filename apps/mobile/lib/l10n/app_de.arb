@@ -2901,6 +2901,14 @@
   "@notificationEventReminderTitleToday": {
     "placeholders": { "title": { "type": "String" } }
   },
+  "notificationEventReminderTitleOnDate": "{date}: {title}",
+  "@notificationEventReminderTitleOnDate": {
+    "description": "Title of an event reminder delivered two or more days ahead; date is weekday plus day and month, e.g. 'Mittwoch, 22. Juli'.",
+    "placeholders": {
+      "date": { "type": "String" },
+      "title": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrow": "Morgen um {time} Uhr",
   "@notificationEventReminderWhenTomorrow": {
     "placeholders": { "time": { "type": "String" } }
@@ -2909,10 +2917,21 @@
   "@notificationEventReminderWhenToday": {
     "placeholders": { "time": { "type": "String" } }
   },
+  "notificationEventReminderWhenOnDate": "{date} um {time} Uhr",
+  "@notificationEventReminderWhenOnDate": {
+    "placeholders": {
+      "date": { "type": "String" },
+      "time": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrowAllDay": "Morgen, ganztägig",
   "@notificationEventReminderWhenTomorrowAllDay": {},
   "notificationEventReminderWhenTodayAllDay": "Heute, ganztägig",
   "@notificationEventReminderWhenTodayAllDay": {},
+  "notificationEventReminderWhenOnDateAllDay": "{date}, ganztägig",
+  "@notificationEventReminderWhenOnDateAllDay": {
+    "placeholders": { "date": { "type": "String" } }
+  },
   "notificationEventReminderBody": "{when}.",
   "@notificationEventReminderBody": {
     "placeholders": { "when": { "type": "String" } }

@@ -195,9 +195,12 @@ Planer verschiebt über `DeliveryWindow.shiftIntoWindowBefore` **nie auf oder hi
 Eine Abgabe um 23:59 Uhr mit 1 Stunde Vorlauf wird deshalb um 20:00 Uhr desselben Abends
 erinnert, nicht um 07:00 Uhr am Folgetag nach Fristende.
 
-**Text.** „Erinnerung morgen: …" beziehungsweise „Erinnerung heute: …", wenn das Zustellfenster den
-Hinweis auf den Eventtag selbst geschoben hat. Beide Seiten — Text und Zeitpunkt — fragen dieselbe
-`DeliveryWindow`, können also nicht auseinanderlaufen.
+**Text.** „Morgen: …" beziehungsweise „Heute: …", wenn der Hinweis am Eventtag selbst zugestellt
+wird; liegt das Event zwei oder mehr Kalendertage nach der Zustellung (Vorlauf „2 Tage" oder
+„1 Woche"), nennt der Text Wochentag und Datum („Mittwoch, 22. Juli: …", lokalisiert über `intl`).
+Gezählt werden **Kalendertage** zwischen Zustellung und Eventbeginn, nicht 24-Stunden-Blöcke — über
+eine Zeitumstellung hinweg bleibt „morgen" also morgen. Beide Seiten — Text und Zeitpunkt — fragen
+dieselbe `DeliveryWindow`, können also nicht auseinanderlaufen.
 
 **Tap.** Der Payload trägt die `CalendarEntry.id` und sonst nichts. `NotificationTapRouter` löst
 sie über den zusammengeführten Bestand auf, fokussiert den Tag **des Eintrags** (nicht einen Tag

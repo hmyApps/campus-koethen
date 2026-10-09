@@ -2,6 +2,8 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:meta/meta.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/locale/formatters.dart';
@@ -50,13 +52,50 @@ const Duration kEventReminderLead = Duration(hours: 24);
 /// [eventReminderRequests] stays a pure function that can be tested with
 /// fixed strings — the planner's own convention, one level up.
 abstract interface class EventReminderCopy {
-  /// `Morgen: Campus Sommerfest 2026`, or the `Heute` variant when
-  /// the delivery window moved the reminder onto the day of the event itself.
-  String title(CalendarEntry entry, {required bool onEventDay});
+  /// `Morgen: Campus Sommerfest 2026`, the `Heute` variant when the reminder
+  /// is delivered on the day of the event itself, or
+  /// `Mittwoch, 22. Juli: Campus Sommerfest 2026` when it is delivered two or
+  /// more days ahead.
+  String title(CalendarEntry entry, {required EventReminderDay day});
 
   /// `Morgen um 16:00 Uhr, Campuswiese.`
-  String body(CalendarEntry entry, {required bool onEventDay});
+  String body(CalendarEntry entry, {required EventReminderDay day});
 }
+
+/// The event's day, seen from the day the reminder is delivered on.
+@immutable
+class EventReminderDay {
+  const EventReminderDay({required this.daysAhead, required this.date});
+
+  /// Calendar days from delivery to the event: `0` today, `1` tomorrow.
+  ///
+  /// Counted on the calendar, not in 24-hour blocks: a reminder at 20:00 the
+  /// evening before a 19:30 event on the night the clocks go forward is only
+  /// 22.5 hours ahead, and still "tomorrow".
+  final int daysAhead;
+
+  /// The event's calendar day; only its date parts are meaningful.
+  final DateTime date;
+
+  @override
+  bool operator ==(Object other) =>
+      other is EventReminderDay &&
+      other.daysAhead == daysAhead &&
+      other.date == date;
+
+  @override
+  int get hashCode => Object.hash(daysAhead, date);
+}
+
+/// Whole calendar days from the date of [from] to the date of [to].
+///
+/// Built from the date parts in UTC, where every day has 24 hours, so a
+/// daylight-saving change in between never turns into a day more or less.
+int calendarDaysBetween(DateTime from, DateTime to) => DateTime.utc(
+  to.year,
+  to.month,
+  to.day,
+).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
 
 /// The sources N1 is allowed to read (ADR-0001 § 7.2).
 ///
@@ -126,10 +165,15 @@ List<NotificationRequest> eventReminderRequests({
     );
     if (!delivered.isAfter(now)) continue;
 
-    final bool onEventDay =
-        delivered.year == start.year &&
-        delivered.month == start.month &&
-        delivered.day == start.day;
+    // An all-day date is read from its own fields, exactly as the calendar
+    // shows it (`calendarDayOf`); a timed event on the dial of the device zone.
+    final DateTime eventDate = entry.allDay
+        ? calendarDayOf(entry.start, allDay: true)
+        : DateTime(start.year, start.month, start.day);
+    final EventReminderDay day = EventReminderDay(
+      daysAhead: calendarDaysBetween(delivered, eventDate),
+      date: eventDate,
+    );
 
     requests.add(
       NotificationRequest(
@@ -138,8 +182,8 @@ List<NotificationRequest> eventReminderRequests({
         // and source-prefixed (ADR-0001 § 4.1, § 7.6).
         target: entry.id,
         trigger: AbsoluteTrigger(desired, before: start),
-        title: copy.title(entry, onEventDay: onEventDay),
-        body: copy.body(entry, onEventDay: onEventDay),
+        title: copy.title(entry, day: day),
+        body: copy.body(entry, day: day),
         // Public campus data: title, time and place may show on the lock
         // screen (P9, ADR-0001 § 7.7).
         visibility: NotificationVisibility.publicContent,
@@ -270,25 +314,38 @@ class LocalisedEventReminderCopy implements EventReminderCopy {
   final String localeCode;
 
   @override
-  String title(CalendarEntry entry, {required bool onEventDay}) => onEventDay
-      ? l10n.notificationEventReminderTitleToday(entry.title)
-      : l10n.notificationEventReminderTitleTomorrow(entry.title);
+  String title(CalendarEntry entry, {required EventReminderDay day}) =>
+      switch (day.daysAhead) {
+        0 => l10n.notificationEventReminderTitleToday(entry.title),
+        1 => l10n.notificationEventReminderTitleTomorrow(entry.title),
+        _ => l10n.notificationEventReminderTitleOnDate(_date(day), entry.title),
+      };
 
   @override
-  String body(CalendarEntry entry, {required bool onEventDay}) {
-    final String when = switch ((entry.allDay, onEventDay)) {
-      (true, true) => l10n.notificationEventReminderWhenTodayAllDay,
-      (true, false) => l10n.notificationEventReminderWhenTomorrowAllDay,
-      (false, true) => l10n.notificationEventReminderWhenToday(
-        AppDateFormats.time(entry.start, localeCode),
-      ),
-      (false, false) => l10n.notificationEventReminderWhenTomorrow(
-        AppDateFormats.time(entry.start, localeCode),
-      ),
-    };
+  String body(CalendarEntry entry, {required EventReminderDay day}) {
+    final String when;
+    if (entry.allDay) {
+      when = switch (day.daysAhead) {
+        0 => l10n.notificationEventReminderWhenTodayAllDay,
+        1 => l10n.notificationEventReminderWhenTomorrowAllDay,
+        _ => l10n.notificationEventReminderWhenOnDateAllDay(_date(day)),
+      };
+    } else {
+      final String time = AppDateFormats.time(entry.start, localeCode);
+      when = switch (day.daysAhead) {
+        0 => l10n.notificationEventReminderWhenToday(time),
+        1 => l10n.notificationEventReminderWhenTomorrow(time),
+        _ => l10n.notificationEventReminderWhenOnDate(_date(day), time),
+      };
+    }
     final String? place = entry.location?.trim();
     return place == null || place.isEmpty
         ? l10n.notificationEventReminderBody(when)
         : l10n.notificationEventReminderBodyWithLocation(when, place);
   }
+
+  /// `Mittwoch, 22. Juli` · `Wednesday, July 22` — weekday and date, no year:
+  /// the longest lead is a week.
+  String _date(EventReminderDay day) =>
+      DateFormat.MMMMEEEEd(localeCode).format(day.date);
 }
