@@ -298,6 +298,11 @@ Ersetzen und Stornieren sind keine eigenen Codepfade, sondern das Ergebnis davon
 einen abgesagten, gelöschten oder verschobenen Eintrag beim nächsten Lauf schlicht nicht mehr
 beziehungsweise anders erzeugt.
 
+**Präzisierung (2026-10, Audit F-01):** „Alles verwerfen" meint ausschließlich die **vorgemerkten**
+Einträge. Bereits zugestellte Benachrichtigungen bleiben in der Mitteilungsleiste; die Umsetzung
+nutzt dafür `cancelAllPendingNotifications()` statt `cancelAll()` des Plugins, das auch Angezeigtes
+entfernt. Wo unten `cancelAll()` steht, ist dieses Verwerfen des Vorgemerkten gemeint.
+
 **Auslöser einer Neuplanung**
 
 - App-Start und Rückkehr in den Vordergrund

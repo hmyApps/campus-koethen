@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'package:campus_koethen/features/notifications/application/notification_scheduler.dart';
+import 'package:campus_koethen/features/notifications/domain/immediate_notification.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_category.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_payload.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_plan.dart';
@@ -54,10 +55,42 @@ void main() {
     );
 
     expect(gateway.calls, <String>[
-      'cancelAll',
+      'cancelAllPending',
       'schedule:n1:a',
       'schedule:n1:b',
     ]);
+  });
+
+  test('delivered notifications stay in the shade across re-plans and an '
+      'empty plan (F-01)', () async {
+    final FakeNotificationGateway gateway = FakeNotificationGateway();
+    final NotificationScheduler scheduler = NotificationScheduler(gateway);
+
+    await scheduler.apply(planOf(<PlannedNotification>[entry('a')]));
+    // The reminder fires; then an immediate mail hint arrives.
+    gateway.deliverPending('n1:a');
+    await gateway.showNow(
+      const ImmediateNotification(
+        key: 'n6:4711',
+        category: NotificationCategory.newMail,
+        title: 'Neue E-Mail',
+        body: 'Eine neue Nachricht ist eingegangen.',
+        payload: NotificationPayload(
+          category: NotificationCategory.newMail,
+          target: '4711',
+        ),
+        visibility: NotificationVisibility.neutral,
+      ),
+    );
+
+    // The reader opens the app: a resume re-plans, then notifications are
+    // switched off and the plan becomes empty.
+    await scheduler.apply(planOf(<PlannedNotification>[entry('b')]));
+    await scheduler.apply(const NotificationPlan.empty());
+    expect(await scheduler.cancelAllPending(), isTrue);
+
+    expect(gateway.pending, isEmpty);
+    expect(gateway.delivered, <String>['n1:a', 'n6:4711']);
   });
 
   test('planning the same state twice leaves no duplicates', () async {
@@ -99,14 +132,14 @@ void main() {
         'n1:x',
         'n1:y',
       ]);
-      // The second cancelAll comes after the first run finished scheduling —
+      // The second cancelAllPending comes after the first run finished scheduling —
       // that is what "serialised" means, and it is invisible in the end state.
       expect(gateway.calls, <String>[
-        'cancelAll',
+        'cancelAllPending',
         'schedule:n1:a',
         'schedule:n1:b',
         'schedule:n1:c',
-        'cancelAll',
+        'cancelAllPending',
         'schedule:n1:x',
         'schedule:n1:y',
       ]);
@@ -126,7 +159,10 @@ void main() {
 
       expect(gateway.pending, isEmpty);
       expect(result.cancelledOnly, isTrue);
-      expect(gateway.calls.where((String c) => c == 'cancelAll'), hasLength(2));
+      expect(
+        gateway.calls.where((String c) => c == 'cancelAllPending'),
+        hasLength(2),
+      );
     },
   );
 
@@ -166,9 +202,9 @@ void main() {
         'n1:old',
       ]);
       expect(gateway.calls, <String>[
-        'cancelAll',
+        'cancelAllPending',
         'schedule:n1:old',
-        'cancelAll',
+        'cancelAllPending',
       ]);
 
       gateway.failCancellation = false;
@@ -184,7 +220,7 @@ void main() {
     final FakeNotificationGateway gateway = FakeNotificationGateway();
     final NotificationScheduler scheduler = NotificationScheduler(gateway);
 
-    // cancelAll on the fake never throws, so the failure is provoked through a
+    // cancelAllPending on the fake never throws, so the failure is provoked through a
     // schedule call — and the run after it must still complete.
     gateway.failScheduleForKeys = <String>{'n1:a'};
     await scheduler.apply(planOf(<PlannedNotification>[entry('a')]));
