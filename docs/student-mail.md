@@ -92,7 +92,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 - **Empfängervorschläge:** Beim Verfassen durchsucht das An-/Cc-Feld nach 250 ms Debounce direkt
   das authentifizierte Exchange-Adressbuch per EWS `ResolveNames` und mischt die Treffer mit
   Adressen aus der verschlüsselt gecachten Mailhistorie (From/To/Cc). Schlägt EWS fehl oder ist
-  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar.
+  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar. Lehnt Exchange
+  die Zugangsdaten ab (HTTP 401/403), stellt die App in dieser Mailsitzung keine weiteren
+  EWS-Anfragen für Vorschläge mehr — jede wäre ein weiterer Fehl-Login am zentralen
+  Hochschulkonto; erst eine erneute Anmeldung hebt die Sperre auf.
 - **Neue-Mail-Hinweis:** Ein IDLE-Signal allein genügt nicht. Erst wenn der anschließende
   INBOX-Abgleich eine bisher unbekannte UID bestätigt, entsteht bei aktivem globalem Opt-in und
   aktiver Kategorie eine lokale Benachrichtigung. Titel und Text nennen weder Absender noch
