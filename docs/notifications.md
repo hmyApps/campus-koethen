@@ -180,6 +180,12 @@ Planer an. Würde das Fenster einen kurzen Vorlauf hinter den Eventbeginn schieb
 letzte zulässige 20:00-Grenze vor dem Event zurückgefallen. Stundenplan- und Moodle-Einträge
 erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon.
 
+Dieselbe Regel gilt für die Moodle-Fristerinnerung (`moodle.deadline`): Der Auslöser beider
+Kategorien nennt sein Ziel (`AbsoluteTrigger.before` = Eventbeginn beziehungsweise Frist), und der
+Planer verschiebt über `DeliveryWindow.shiftIntoWindowBefore` **nie auf oder hinter** dieses Ziel.
+Eine Abgabe um 23:59 Uhr mit 1 Stunde Vorlauf wird deshalb um 20:00 Uhr desselben Abends
+erinnert, nicht um 07:00 Uhr am Folgetag nach Fristende.
+
 **Text.** „Erinnerung morgen: …" beziehungsweise „Erinnerung heute: …", wenn das Zustellfenster den
 Hinweis auf den Eventtag selbst geschoben hat. Beide Seiten — Text und Zeitpunkt — fragen dieselbe
 `DeliveryWindow`, können also nicht auseinanderlaufen.

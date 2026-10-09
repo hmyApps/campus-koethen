@@ -114,9 +114,10 @@ List<PlannedNotification> planned(
   ),
   NotificationPermissionStatus permission =
       NotificationPermissionStatus.granted,
+  Duration defaultLead = kEventReminderLead,
 }) {
   final NotificationPlan plan = planNotifications(
-    candidates: requestsIn(location, now, entries),
+    candidates: requestsIn(location, now, entries, defaultLead: defaultLead),
     preferences: preferences,
     permission: permission,
     now: now,
@@ -422,20 +423,34 @@ void main() {
 
     test('a short lead for an early event is moved before, never after it', () {
       final tz.TZDateTime start = at(berlin, 2026, 7, 22, 6);
-      final NotificationRequest request = requestsIn(
+      final List<PlannedNotification> out = planned(
         berlin,
         at(berlin, 2026, 7, 1),
         <CalendarEntry>[publicEvent(start: start)],
         defaultLead: const Duration(minutes: 15),
-      ).single;
+      );
 
-      final tz.TZDateTime desired =
-          (request.trigger as AbsoluteTrigger).instant as tz.TZDateTime;
-      expect(desired, at(berlin, 2026, 7, 21, 20));
-      expect(desired.isBefore(start), isTrue);
+      expect(out.single.scheduledAt, at(berlin, 2026, 7, 21, 20));
+      expect(out.single.scheduledAt.isBefore(start), isTrue);
+      expect(out.single.title, startsWith('tomorrow'));
     });
 
     test('a short lead for a late event uses 20:00 on the same day', () {
+      final tz.TZDateTime start = at(berlin, 2026, 7, 22, 21);
+      final List<PlannedNotification> out = planned(
+        berlin,
+        at(berlin, 2026, 7, 22, 12),
+        <CalendarEntry>[publicEvent(start: start)],
+        defaultLead: const Duration(minutes: 15),
+      );
+
+      expect(out.single.scheduledAt, at(berlin, 2026, 7, 22, 20));
+      expect(out.single.scheduledAt.isBefore(start), isTrue);
+      expect(out.single.title, startsWith('today'));
+    });
+
+    test('the trigger names the event start, so the planner can never shift '
+        'the reminder past it (F-02)', () {
       final tz.TZDateTime start = at(berlin, 2026, 7, 22, 21);
       final NotificationRequest request = requestsIn(
         berlin,
@@ -444,10 +459,7 @@ void main() {
         defaultLead: const Duration(minutes: 15),
       ).single;
 
-      final tz.TZDateTime desired =
-          (request.trigger as AbsoluteTrigger).instant as tz.TZDateTime;
-      expect(desired, at(berlin, 2026, 7, 22, 20));
-      expect(desired.isBefore(start), isTrue);
+      expect((request.trigger as AbsoluteTrigger).before, start);
     });
   });
 

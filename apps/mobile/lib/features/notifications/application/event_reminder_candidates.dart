@@ -113,34 +113,17 @@ List<NotificationRequest> eventReminderRequests({
         ? defaultLead
         : Duration(minutes: overrideMinutes);
 
-    tz.TZDateTime desired = start.subtract(lead);
-    // The same shift the planner will apply — asked here only to choose
-    // between "morgen" and "heute". Both call [DeliveryWindow], so the text
-    // and the schedule cannot disagree about which day the reminder lands on.
-    tz.TZDateTime delivered = DeliveryWindow.shiftIntoWindow(desired);
-    // Short custom leads can otherwise be shifted past an early/all-day event.
-    // Use the latest 20:00 boundary that remains before the event rather than
-    // notifying after it has begun. For a 21:00 event that is 20:00 on the
-    // same day; for an early or all-day event it is the previous day.
-    if (!delivered.isBefore(start)) {
-      final tz.TZDateTime eventDayEnd = tz.TZDateTime(
-        location,
-        start.year,
-        start.month,
-        start.day,
-        DeliveryWindow.endHour,
-      );
-      desired = eventDayEnd.isBefore(start)
-          ? eventDayEnd
-          : tz.TZDateTime(
-              location,
-              start.year,
-              start.month,
-              start.day - 1,
-              DeliveryWindow.endHour,
-            );
-      delivered = desired;
-    }
+    final tz.TZDateTime desired = start.subtract(lead);
+    // The same shift the planner will apply to this trigger — asked here only
+    // to choose the wording of the day. Both call [DeliveryWindow] with the
+    // event start as the target, so the text and the schedule cannot disagree
+    // about which day the reminder lands on, and a short lead before an early,
+    // late or all-day event falls back to the latest 20:00 before it rather
+    // than arriving after it has begun.
+    final tz.TZDateTime delivered = DeliveryWindow.shiftIntoWindowBefore(
+      desired,
+      start,
+    );
     if (!delivered.isAfter(now)) continue;
 
     final bool onEventDay =
@@ -154,7 +137,7 @@ List<NotificationRequest> eventReminderRequests({
         // Taken over, never re-derived: `CalendarEntry.id` is already stable
         // and source-prefixed (ADR-0001 § 4.1, § 7.6).
         target: entry.id,
-        trigger: AbsoluteTrigger(desired),
+        trigger: AbsoluteTrigger(desired, before: start),
         title: copy.title(entry, onEventDay: onEventDay),
         body: copy.body(entry, onEventDay: onEventDay),
         // Public campus data: title, time and place may show on the lock

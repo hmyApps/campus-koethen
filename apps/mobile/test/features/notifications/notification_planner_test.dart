@@ -1,7 +1,10 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'package:campus_koethen/features/moodle/domain/moodle_deadline.dart';
+import 'package:campus_koethen/features/notifications/application/moodle_deadline_candidates.dart';
 import 'package:campus_koethen/features/notifications/application/notification_planner.dart';
+import 'package:campus_koethen/features/notifications/domain/delivery_window.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_category.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_plan.dart';
@@ -46,6 +49,16 @@ NotificationRequest summary(DateTime day) => NotificationRequest(
   body: '3 lectures today',
   visibility: NotificationVisibility.neutral,
 );
+
+class _MoodleCopy implements MoodleDeadlineReminderCopy {
+  const _MoodleCopy();
+
+  @override
+  String get title => 'Moodle deadline approaching';
+
+  @override
+  String get body => 'Open Moodle to view the deadline.';
+}
 
 NotificationPlan planIn(
   tz.Location location,
@@ -180,6 +193,188 @@ void main() {
         ),
         0,
       );
+    });
+  });
+
+  group('DeliveryWindow.shiftIntoWindowBefore', () {
+    tz.TZDateTime b(int month, int day, int hour, [int minute = 0]) =>
+        tz.TZDateTime(berlin, 2026, month, day, hour, minute);
+
+    test('a moment inside the window and before the target is kept', () {
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 2, 16), b(9, 3, 16)),
+        b(9, 2, 16),
+      );
+    });
+
+    test('the regular shift is kept while it still precedes the target', () {
+      // 05:30 → 07:00, still before a 09:00 target.
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 3, 5, 30), b(9, 3, 9)),
+        b(9, 3, 7),
+      );
+      // 22:00 → 07:00 next day, still before a 12:00 target.
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 2, 22), b(9, 3, 12)),
+        b(9, 3, 7),
+      );
+    });
+
+    test('a target after 20:00 falls back to 20:00 the same evening', () {
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 3, 22, 59), b(9, 3, 23, 59)),
+        b(9, 3, 20),
+      );
+    });
+
+    test('a target at or before 20:00 falls back to the evening before', () {
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 3, 6, 45), b(9, 3, 7)),
+        b(9, 2, 20),
+      );
+      // Exactly 20:00 is not strictly before a 20:00 target.
+      expect(
+        DeliveryWindow.shiftIntoWindowBefore(b(9, 3, 20, 0), b(9, 3, 20)),
+        b(9, 2, 20),
+      );
+    });
+
+    test('the fallback is 20:00 on the dial on a daylight-saving day', () {
+      // 2026-10-25: the clocks go back at 03:00. 2027-03-28: forward at 02:00.
+      for (final (int year, int month, int day) in <(int, int, int)>[
+        (2026, 10, 25),
+        (2027, 3, 28),
+      ]) {
+        final tz.TZDateTime target = tz.TZDateTime(
+          berlin,
+          year,
+          month,
+          day,
+          23,
+          30,
+        );
+        final tz.TZDateTime out = DeliveryWindow.shiftIntoWindowBefore(
+          target.subtract(const Duration(minutes: 30)),
+          target,
+        );
+        expect(out, tz.TZDateTime(berlin, year, month, day, 20));
+        expect(out.hour, 20);
+      }
+    });
+
+    test(
+      'a target given as a UTC instant is read in the zone of the moment',
+      () {
+        // 21:30 UTC is 23:30 in Berlin (CEST).
+        final tz.TZDateTime out = DeliveryWindow.shiftIntoWindowBefore(
+          b(9, 3, 22, 30),
+          DateTime.utc(2026, 9, 3, 21, 30),
+        );
+        expect(out, b(9, 3, 20));
+        expect(out.location, berlin);
+      },
+    );
+  });
+
+  group('a shifted reminder never lands on or after its target (F-02)', () {
+    List<PlannedNotification> moodleIn(
+      tz.Location location,
+      tz.TZDateTime now,
+      DateTime dueAt,
+      Duration lead,
+    ) => planIn(
+      location,
+      now,
+      moodleDeadlineRequests(
+        deadlines: <MoodleDeadline>[
+          MoodleDeadline(id: 7, title: 'Demo-Abgabe', dueAt: dueAt),
+        ],
+        now: now,
+        lead: lead,
+        copy: const _MoodleCopy(),
+      ),
+    ).notifications;
+
+    test('a deadline at 23:59 with a one-hour lead is reminded at 20:00 the '
+        'same evening, not at 07:00 after it has passed', () {
+      final tz.TZDateTime due = tz.TZDateTime(berlin, 2026, 9, 3, 23, 59);
+
+      final List<PlannedNotification> out = moodleIn(
+        berlin,
+        tz.TZDateTime(berlin, 2026, 9, 1, 9),
+        due,
+        const Duration(hours: 1),
+      );
+
+      expect(out.single.category, NotificationCategory.moodleDeadline);
+      expect(out.single.scheduledAt, tz.TZDateTime(berlin, 2026, 9, 3, 20));
+      expect(out.single.scheduledAt.isBefore(due), isTrue);
+    });
+
+    test('a deadline before 07:00 is reminded the evening before', () {
+      final tz.TZDateTime due = tz.TZDateTime(berlin, 2026, 9, 3, 6, 30);
+
+      final List<PlannedNotification> out = moodleIn(
+        berlin,
+        tz.TZDateTime(berlin, 2026, 9, 1, 9),
+        due,
+        const Duration(minutes: 15),
+      );
+
+      expect(out.single.scheduledAt, tz.TZDateTime(berlin, 2026, 9, 2, 20));
+    });
+
+    test('every quarter hour of a day, every lead, both daylight-saving '
+        'changes: inside the window and strictly before the deadline', () {
+      const List<Duration> leads = <Duration>[
+        Duration(minutes: 15),
+        Duration(hours: 1),
+        Duration(hours: 6),
+        Duration(days: 1),
+        Duration(days: 2),
+        Duration(days: 7),
+      ];
+      for (final DateTime day in <DateTime>[
+        DateTime(2026, 9, 15),
+        DateTime(2026, 10, 25),
+        DateTime(2027, 3, 28),
+      ]) {
+        final tz.TZDateTime now = tz.TZDateTime(
+          berlin,
+          day.year,
+          day.month,
+          day.day - 10,
+        );
+        for (int minute = 0; minute < 24 * 60; minute += 15) {
+          final tz.TZDateTime due = tz.TZDateTime(
+            berlin,
+            day.year,
+            day.month,
+            day.day,
+            0,
+            minute,
+          );
+          for (final Duration lead in leads) {
+            for (final PlannedNotification n in moodleIn(
+              berlin,
+              now,
+              due,
+              lead,
+            )) {
+              expect(
+                n.scheduledAt.isBefore(due),
+                isTrue,
+                reason: 'due $due, lead $lead → ${n.scheduledAt}',
+              );
+              expect(
+                DeliveryWindow.allows(n.scheduledAt),
+                isTrue,
+                reason: 'due $due, lead $lead → ${n.scheduledAt}',
+              );
+            }
+          }
+        }
+      }
     });
   });
 

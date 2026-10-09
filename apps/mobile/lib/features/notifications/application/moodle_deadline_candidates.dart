@@ -24,6 +24,9 @@ abstract interface class MoodleDeadlineReminderCopy {
 /// The opaque target is only a deterministic deduplication key. The tap target
 /// is the Moodle overview, where the authenticated local cache can resolve the
 /// actual deadline safely.
+///
+/// The trigger names the deadline as its target, so the planner's delivery
+/// window can never move the reminder onto or past it (F-02).
 List<NotificationRequest> moodleDeadlineRequests({
   required Iterable<MoodleDeadline> deadlines,
   required DateTime now,
@@ -40,7 +43,7 @@ List<NotificationRequest> moodleDeadlineRequests({
       NotificationRequest(
         category: NotificationCategory.moodleDeadline,
         target: _anonymousDeadlineKey(deadline),
-        trigger: AbsoluteTrigger(reminderAt),
+        trigger: AbsoluteTrigger(reminderAt, before: deadline.dueAt),
         title: copy.title,
         body: copy.body,
         visibility: NotificationVisibility.neutral,
