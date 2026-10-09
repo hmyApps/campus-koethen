@@ -154,8 +154,16 @@ class FakeMailGateway implements MailGateway {
     return folders;
   }
 
+  /// IMAP EXISTS reported with every header page. Unset, the fake's [inbox]
+  /// is the whole mailbox; a test modelling a mailbox larger than the fetched
+  /// window sets it explicitly.
+  int? messagesExists;
+
+  /// UIDVALIDITY reported with every header page (null: not reported).
+  int? uidValidity;
+
   @override
-  Future<List<MailMessageHeader>> fetchHeaders(
+  Future<MailHeaderPage> fetchHeaders(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     int limit = 50,
@@ -176,7 +184,11 @@ class FakeMailGateway implements MailGateway {
       await fetchOlderHeadersGate?.future;
     }
     if (fetchInboxError != null) throw fetchInboxError!;
-    return beforeId == null ? inbox : olderInbox;
+    return MailHeaderPage(
+      headers: beforeId == null ? inbox : olderInbox,
+      messagesExists: messagesExists ?? inbox.length,
+      uidValidity: uidValidity,
+    );
   }
 
   @override

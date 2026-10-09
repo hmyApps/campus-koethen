@@ -214,11 +214,12 @@ class MailSyncController extends Notifier<MailSyncStatus> {
       final List<MailMessageHeader> cachedBefore = await cache.readHeaders();
       final bool hadBaseline =
           cachedBefore.isNotEmpty || state.lastSyncedAt != null;
-      final List<MailMessageHeader> latest = await gateway.fetchHeaders(
+      final MailHeaderPage page = await gateway.fetchHeaders(
         credentials,
         mailboxPath: kInboxPath,
         limit: kInboxLimit,
       );
+      final List<MailMessageHeader> latest = page.headers;
       if (!accountController.isSessionCurrent(generation)) return;
       final Set<String> knownIds = cachedBefore
           .map((MailMessageHeader header) => header.id)

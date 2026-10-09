@@ -244,34 +244,43 @@ class EnoughMailGateway implements MailGateway {
   }
 
   @override
-  Future<List<model.MailMessageHeader>> fetchHeaders(
+  Future<MailHeaderPage> fetchHeaders(
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     int limit = 50,
     String? beforeId,
   }) async {
     return _guard(() async {
-      return _withImap<List<model.MailMessageHeader>>(credentials, (
-        ImapClient client,
-      ) async {
+      return _withImap<MailHeaderPage>(credentials, (ImapClient client) async {
         final Mailbox inbox = mailboxPath == kInboxPath
             ? await client.selectInbox()
             : await client.selectMailboxByPath(mailboxPath);
-        if (inbox.messagesExists == 0) return <model.MailMessageHeader>[];
+        // EXISTS and UIDVALIDITY come from this very SELECT, so the caller can
+        // tell a complete mailbox from a window and a reused UID from the
+        // message it cached under that UID.
+        MailHeaderPage pageOf(List<model.MailMessageHeader> headers) =>
+            MailHeaderPage(
+              headers: headers,
+              messagesExists: inbox.messagesExists,
+              uidValidity: inbox.uidValidity,
+            );
+        if (inbox.messagesExists == 0) {
+          return pageOf(<model.MailMessageHeader>[]);
+        }
 
         if (beforeId != null) {
           final int? beforeUid = int.tryParse(beforeId);
           if (beforeUid == null) {
             throw const MailFailure(MailFailureKind.protocol);
           }
-          if (beforeUid <= 1) return <model.MailMessageHeader>[];
+          if (beforeUid <= 1) return pageOf(<model.MailMessageHeader>[]);
           final SearchImapResult search = await client.uidSearchMessages(
             searchCriteria: 'UID 1:${beforeUid - 1}',
             responseTimeout: _commandTimeout,
           );
           final MessageSequence? matches = search.matchingSequence;
           if (matches == null || matches.isEmpty) {
-            return <model.MailMessageHeader>[];
+            return pageOf(<model.MailMessageHeader>[]);
           }
           final List<int> uids = matches.toList()..sort();
           final List<int> page = uids.reversed.take(limit).toList();
@@ -280,7 +289,9 @@ class EnoughMailGateway implements MailGateway {
             '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
             responseTimeout: _commandTimeout,
           );
-          return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+          return pageOf(
+            result.messages.map(_toHeader).toList()..sort(_newestFirst),
+          );
         }
 
         final int upper = inbox.messagesExists;
@@ -292,7 +303,9 @@ class EnoughMailGateway implements MailGateway {
           '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
           responseTimeout: _commandTimeout,
         );
-        return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+        return pageOf(
+          result.messages.map(_toHeader).toList()..sort(_newestFirst),
+        );
       });
     });
   }

@@ -77,22 +77,72 @@ void main() {
         }),
       );
 
-      final List<MailMessageHeader> result = await gateway.fetchHeaders(
+      final MailHeaderPage result = await gateway.fetchHeaders(
         _credentials,
         beforeId: '4',
         limit: 2,
       );
 
-      expect(result.map((MailMessageHeader header) => header.id), <String>[
-        '3',
-        '2',
-      ]);
+      expect(
+        result.headers.map((MailMessageHeader header) => header.id),
+        <String>['3', '2'],
+      );
       expect(
         server.receivedCommands.singleWhere(
           (String command) => command.contains('UID SEARCH'),
         ),
         contains('UID 1:3'),
       );
+    });
+
+    test('reports EXISTS and UIDVALIDITY of the same SELECT', () async {
+      server = await FakeImapServer.start((String tag, String command) {
+        if (command.startsWith('LOGIN ')) {
+          return <String>['$tag OK LOGIN completed'];
+        }
+        if (command.startsWith('LIST')) {
+          return <String>[
+            '* LIST (\\HasNoChildren) "/" "INBOX"',
+            '$tag OK LIST completed',
+          ];
+        }
+        if (command.startsWith('SELECT')) {
+          return <String>[
+            '* 2 EXISTS',
+            '* OK [UIDVALIDITY 4242] UIDs valid',
+            '* FLAGS (\\Seen)',
+            '$tag OK [READ-WRITE] SELECT completed',
+          ];
+        }
+        if (command.startsWith('FETCH 1:2')) {
+          return <String>[
+            for (final (int seq, int uid) in <(int, int)>[(1, 10), (2, 11)])
+              '* $seq FETCH (UID $uid FLAGS (\\Seen) '
+                  'ENVELOPE ("Mon, 1 Jun 2026 08:00:00 +0200" "Subject $uid" '
+                  '(("A" NIL "a" "hs-anhalt.de")) (("A" NIL "a" "hs-anhalt.de")) '
+                  '(("A" NIL "a" "hs-anhalt.de")) NIL NIL NIL NIL "<$uid@x>") '
+                  'BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL '
+                  '"7BIT" 100 5))',
+            '$tag OK FETCH completed',
+          ];
+        }
+        if (command.startsWith('LOGOUT')) {
+          return <String>['* BYE logging out', '$tag OK LOGOUT completed'];
+        }
+        return <String>['$tag OK done'];
+      });
+      final EnoughMailGateway gateway = EnoughMailGateway(
+        _LoopbackMailProfile(server.port),
+      );
+
+      final MailHeaderPage page = await gateway.fetchHeaders(_credentials);
+
+      expect(page.messagesExists, 2);
+      expect(page.uidValidity, 4242);
+      expect(page.headers.map((MailMessageHeader h) => h.id).toSet(), <String>{
+        '10',
+        '11',
+      });
     });
   });
 

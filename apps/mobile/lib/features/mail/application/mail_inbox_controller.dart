@@ -9,6 +9,7 @@ import '../../../core/prefs/settings_controller.dart';
 import '../domain/mail_credentials.dart';
 import '../domain/mail_folder.dart';
 import '../domain/mail_failure.dart';
+import '../domain/mail_gateway.dart';
 import '../domain/mail_message.dart';
 import 'mail_account_controller.dart';
 import 'mail_folders.dart';
@@ -89,13 +90,14 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
     final credentials = await ref
         .read(mailAccountControllerProvider.notifier)
         .requireCredentials();
-    return ref
+    final MailHeaderPage page = await ref
         .read(mailGatewayProvider)
         .fetchHeaders(
           credentials,
           mailboxPath: folder.path,
           limit: kInboxLimit,
         );
+    return page.headers;
   }
 
   /// Manual refresh. For the INBOX this triggers a background sync (which
@@ -112,13 +114,14 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
       final credentials = await ref
           .read(mailAccountControllerProvider.notifier)
           .requireCredentials();
-      return ref
+      final MailHeaderPage page = await ref
           .read(mailGatewayProvider)
           .fetchHeaders(
             credentials,
             mailboxPath: folder.path,
             limit: kInboxLimit,
           );
+      return page.headers;
     });
   }
 
@@ -161,7 +164,7 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
         mailAccountControllerProvider.notifier,
       );
       final int generation = accountController.sessionGeneration;
-      final List<MailMessageHeader> older = await ref
+      final MailHeaderPage page = await ref
           .read(mailGatewayProvider)
           .fetchHeaders(
             credentials,
@@ -169,6 +172,7 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
             limit: kOlderMailPageSize,
             beforeId: oldestUid.toString(),
           );
+      final List<MailMessageHeader> older = page.headers;
       if (!accountController.isSessionCurrent(generation)) return;
       if (ref.read(selectedMailboxProvider).path != folder.path) return;
 
