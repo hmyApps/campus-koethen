@@ -77,6 +77,8 @@ class FakeMailGateway implements MailGateway {
     this.markSeenError,
     this.sendGate,
     this.sendStarted,
+    this.messagesExists,
+    this.uidValidity,
   });
 
   MailFailure? verifyError;

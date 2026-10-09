@@ -23,25 +23,37 @@ const int kMailBodyPrefetchLimit = MailCachePolicy.defaultPrefetchBodies;
 /// Accumulates on purpose: a message that has scrolled out of the fetched
 /// server window stays cached. When [fetchedLimit] proves a non-empty response
 /// authoritative for a UID range, messages deleted or moved elsewhere are
-/// removed inside that range. An empty response is always non-destructive.
-/// Newest first; [latest] wins on conflicts (updated \Seen flag etc.).
+/// removed inside that range. When [mailboxSize] (the server's EXISTS count)
+/// shows that the window covered the whole mailbox, every cached message
+/// missing from it is gone and removed. An empty response is always
+/// non-destructive. Newest first; [latest] wins on conflicts (updated \Seen
+/// flag etc.).
 List<MailMessageHeader> mergeInboxHeaders(
   List<MailMessageHeader> cached,
   List<MailMessageHeader> latest, {
   int? fetchedLimit,
+  int? mailboxSize,
 }) {
   Set<String>? retainedCachedIds;
+  final bool coversMailbox =
+      fetchedLimit != null &&
+      mailboxSize != null &&
+      mailboxSize > 0 &&
+      mailboxSize <= fetchedLimit;
   if (latest.isNotEmpty &&
       fetchedLimit != null &&
       fetchedLimit > 0 &&
-      latest.length >= fetchedLimit) {
+      (coversMailbox || latest.length >= fetchedLimit)) {
     final Set<String> latestIds = latest
         .map((MailMessageHeader header) => header.id)
         .toSet();
     final List<int?> parsed = latest
         .map((MailMessageHeader header) => int.tryParse(header.id))
         .toList(growable: false);
-    if (parsed.every((int? uid) => uid != null && uid > 0)) {
+    if (coversMailbox) {
+      // Nothing older exists on the server, so nothing older may stay.
+      retainedCachedIds = latestIds;
+    } else if (parsed.every((int? uid) => uid != null && uid > 0)) {
       final int oldestFetchedUid = parsed.cast<int>().reduce(
         (int a, int b) => a < b ? a : b,
       );
@@ -231,6 +243,7 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         cachedBefore,
         latest,
         fetchedLimit: kInboxLimit,
+        mailboxSize: page.messagesExists,
       );
       final Set<String> retainedIds = merged
           .map((MailMessageHeader header) => header.id)

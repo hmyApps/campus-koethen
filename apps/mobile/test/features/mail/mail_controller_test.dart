@@ -727,8 +727,11 @@ void main() {
         );
         expect(await cache.cachedMessageIds(), <String>{'1'});
 
-        // The server now shows a newer message and message 1 has scrolled off.
-        gateway.inbox = <MailMessageHeader>[_hdr('2')];
+        // The server now shows a newer message and message 1 has scrolled off
+        // the fetched window of a mailbox larger than that window.
+        gateway
+          ..inbox = <MailMessageHeader>[_hdr('2')]
+          ..messagesExists = 120;
         gateway.detailsById = <String, MailMessageDetail>{'2': _dtl('2')};
         await container.read(mailSyncControllerProvider.notifier).syncNow();
 
@@ -742,6 +745,57 @@ void main() {
         expect(await cache.cachedMessageIds(), <String>{'1', '2'});
       },
     );
+
+    test('removes mails deleted elsewhere when the window is the whole mailbox '
+        '(C-06)', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache();
+      final gateway = FakeMailGateway(
+        inbox: <MailMessageHeader>[_hdr('3'), _hdr('2'), _hdr('1')],
+        detailsById: <String, MailMessageDetail>{
+          '3': _dtl('3'),
+          '2': _dtl('2'),
+          '1': _dtl('1'),
+        },
+      );
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+      expect(await cache.cachedMessageIds(), <String>{'1', '2', '3'});
+
+      // Deleted in webmail: the mailbox now holds two of fewer than 50 mails.
+      gateway
+        ..inbox = <MailMessageHeader>[_hdr('3'), _hdr('1')]
+        ..messagesExists = 2;
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['3', '1'],
+      );
+      expect(await cache.cachedMessageIds(), <String>{'1', '3'});
+    });
+
+    test('an empty mailbox page never erases the cached inbox', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache();
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('2'), _hdr('1')]);
+      final gateway = FakeMailGateway(messagesExists: 0);
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+      expect(await cache.readHeaders(), hasLength(2));
+    });
 
     test(
       'publishes only messages arriving after the initial baseline',
@@ -1326,6 +1380,26 @@ void main() {
         '3',
         '1',
       ]);
+    });
+
+    test('a window covering the whole mailbox is authoritative (C-06)', () {
+      final List<MailMessageHeader> merged = mergeInboxHeaders(
+        <MailMessageHeader>[_hdr('1'), _hdr('2'), _hdr('3'), _hdr('4')],
+        <MailMessageHeader>[_hdr('4'), _hdr('2')],
+        fetchedLimit: 50,
+        mailboxSize: 2,
+      );
+      expect(merged.map((MailMessageHeader h) => h.id), <String>['4', '2']);
+    });
+
+    test('a smaller page of a larger mailbox removes nothing', () {
+      final List<MailMessageHeader> merged = mergeInboxHeaders(
+        <MailMessageHeader>[_hdr('1'), _hdr('3')],
+        <MailMessageHeader>[_hdr('3')],
+        fetchedLimit: 50,
+        mailboxSize: 120,
+      );
+      expect(merged.map((MailMessageHeader h) => h.id), <String>['3', '1']);
     });
 
     test('an empty server page never erases the last good cache', () {
