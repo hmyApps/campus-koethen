@@ -231,6 +231,32 @@ void main() {
       expect(c.read(todoFoldersControllerProvider).requireValue, hasLength(2));
     });
   });
+
+  test('overlapping folder mutations never lose an update (F-09)', () async {
+    // Both creates used to compute "current + mine" from the same snapshot,
+    // so the second whole-list write silently dropped the first folder.
+    await build();
+    final Future<void> first = controller().create('Uni');
+    final Future<void> second = controller().create('Privat');
+    await Future.wait(<Future<void>>[first, second]);
+
+    expect(current().map((TodoFolder f) => f.name), <String>['Uni', 'Privat']);
+    expect((await store.readFolders()).map((TodoFolder f) => f.name), <String>[
+      'Uni',
+      'Privat',
+    ]);
+
+    final String uniId = current().first.id;
+    final Future<void> renaming = controller().rename(uniId, 'Studium');
+    final Future<void> creating = controller().create('Sport');
+    await Future.wait(<Future<void>>[renaming, creating]);
+
+    expect((await store.readFolders()).map((TodoFolder f) => f.name), <String>[
+      'Studium',
+      'Privat',
+      'Sport',
+    ]);
+  });
 }
 
 /// Folders cannot be read; tasks are an empty, healthy list.
