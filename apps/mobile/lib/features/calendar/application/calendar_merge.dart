@@ -203,6 +203,11 @@ List<CalendarEntry> publicCalendarEventsToCalendarEntries(
 /// Maps a saved snapshot ("Meine gemerkten Events") to its calendar entry, so
 /// a bookmarked event shows up in the cross-source calendar with its own
 /// source and a bookmark to mark it apart from a live entry.
+///
+/// Location, description and the cancelled flag were copied into the
+/// snapshot precisely so it still says where and whether the event happens;
+/// they are carried over the same way the public-calendar mapper flattens
+/// them (F-04).
 CalendarEntry savedEventSnapshotToCalendarEntry(SavedEventSnapshot snapshot) =>
     CalendarEntry(
       id: 'savedEvent:${snapshot.eventRef}',
@@ -211,6 +216,9 @@ CalendarEntry savedEventSnapshotToCalendarEntry(SavedEventSnapshot snapshot) =>
       start: snapshot.start,
       end: snapshot.end,
       allDay: snapshot.allDay,
+      subtitle: snapshot.description,
+      location: snapshot.location,
+      isCancelled: snapshot.isCancelled,
       calendarSlug: snapshot.calendarSlug,
       colorArgb: snapshot.colorArgb,
       sourceLabel: snapshot.sourceLabel == null
