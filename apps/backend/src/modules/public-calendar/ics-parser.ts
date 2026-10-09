@@ -419,10 +419,12 @@ export function parseIcs(raw: string, options: ParseOptions): ParsedEvent[] {
   };
 
   for (const [uid, masterComp] of masters) {
-    const event = new ICAL.Event(masterComp);
-    for (const override of overrides.get(uid) ?? []) {
-      event.relateException(override);
-    }
+    // The overrides are handed over explicitly. Without the option ical.js
+    // relates EVERY RECURRENCE-ID component of the calendar to this master,
+    // whatever its UID, so two series sharing a slot time would both pick up
+    // the one override — a foreign move or cancellation, under a duplicate
+    // occurrence key.
+    const event = new ICAL.Event(masterComp, { exceptions: overrides.get(uid) ?? [] });
 
     if (!event.isRecurring()) {
       emit(
@@ -440,6 +442,15 @@ export function parseIcs(raw: string, options: ParseOptions): ParsedEvent[] {
     // window, and those steps must not count against the per-event budget.
     const iterator = event.iterator();
     let relevant = 0;
+    const countRelevant = (): void => {
+      relevant += 1;
+      if (relevant > options.maxOccurrencesPerEvent) {
+        throw new IcsParseError(
+          'recurrenceLimitExceeded',
+          'A recurrence rule expanded past the per-event limit.',
+        );
+      }
+    };
     let next: ICAL.Time | null;
     while ((next = iterator.next())) {
       scanned += 1;
@@ -451,19 +462,37 @@ export function parseIcs(raw: string, options: ParseOptions): ParsedEvent[] {
       }
       const details = event.getOccurrenceDetails(next);
       const abs = toAbsolute(details.startDate, options.fallbackTimeZone);
-      if (abs.date.getTime() >= windowEnd) break; // iteration is monotonic
+      // The iteration is monotonic in the ORIGINAL slot, not in the start an
+      // override may have moved it to. Only the slot may end the walk; a
+      // single occurrence moved past the window must not take every later
+      // regular one with it. A regular occurrence starts on its slot, so the
+      // conversion is only repeated for a moved one.
+      const slot =
+        details.startDate === next
+          ? abs.date.getTime()
+          : toAbsolute(next, options.fallbackTimeZone).date.getTime();
+      if (slot >= windowEnd) break;
+      if (abs.date.getTime() >= windowEnd) continue; // moved past the window
       const absEnd = toAbsolute(details.endDate, options.fallbackTimeZone);
       if (absEnd.date.getTime() <= windowStart) continue; // entirely before the window
-      relevant += 1;
-      if (relevant > options.maxOccurrencesPerEvent) {
-        throw new IcsParseError(
-          'recurrenceLimitExceeded',
-          'A recurrence rule expanded past the per-event limit.',
-        );
-      }
+      countRelevant();
       // `details.item` is the override for this slot when one exists (moved or
       // cancelled), otherwise the master — so title/status reflect the override.
       emit(details.item, abs, absEnd, details.recurrenceId);
+    }
+
+    // The walk above stops at the first slot past the window, so an override
+    // whose slot lies there but which was moved INTO the window is never
+    // reached. Those are checked against the window on their own. Overrides
+    // with an earlier slot were already handled by the walk.
+    for (const override of Object.values(event.exceptions)) {
+      const slotTime = override.recurrenceId;
+      if (toAbsolute(slotTime, options.fallbackTimeZone).date.getTime() < windowEnd) continue;
+      const abs = toAbsolute(override.startDate, options.fallbackTimeZone);
+      const absEnd = toAbsolute(override.endDate, options.fallbackTimeZone);
+      if (abs.date.getTime() >= windowEnd || absEnd.date.getTime() <= windowStart) continue;
+      countRelevant();
+      emit(override, abs, absEnd, slotTime);
     }
   }
 
