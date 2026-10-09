@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
+import 'package:campus_koethen/features/moodle/data/secure_moodle_token_store.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_cache.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
@@ -16,6 +17,7 @@ import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_moodle.dart';
@@ -36,6 +38,29 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
 
   @override
   Future<void> clear() async => value = null;
+}
+
+/// A keychain that can be made to fail every read, like a locked keystore.
+class _FlakySecureStorage extends FlutterSecureStorage {
+  _FlakySecureStorage(this.values);
+
+  final Map<String, String> values;
+  Object? readError;
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    final Object? error = readError;
+    if (error != null) throw error;
+    return values[key];
+  }
 }
 
 List<Override> _overrides({
@@ -224,6 +249,47 @@ void main() {
       }
     }
   });
+
+  testWidgets(
+    'an unreadable keychain shows a retryable error, not the setup form',
+    (WidgetTester tester) async {
+      final _FlakySecureStorage storage = _FlakySecureStorage(<String, String>{
+        'moodle.token': 'tok',
+        'moodle.userid': '7',
+      })..readError = StateError('keystore locked');
+      final cache = InMemoryMoodleCacheStore()
+        ..courses = <MoodleCourse>[
+          const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+        ]
+        ..marks = MoodleSyncMarks(lastAttempt: t0);
+
+      await pumpScreen(
+        tester,
+        const MoodleScreen(),
+        overrides: <Override>[
+          moodleApiClientProvider.overrideWithValue(FakeMoodleApiClient()),
+          moodleTokenStoreProvider.overrideWithValue(
+            SecureMoodleTokenStore(storage),
+          ),
+          moodleCacheStoreProvider.overrideWithValue(cache),
+          moodleClockProvider.overrideWithValue(MutableClock(t0)),
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Moodle konnte nicht geöffnet werden'), findsOneWidget);
+      expect(find.text('Mit Moodle verbinden'), findsNothing);
+      expect(cache.clears, 0);
+
+      // Once the keychain answers again, retry restores the connection.
+      storage.readError = null;
+      await tester.tap(find.text('Aktualisieren'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beispielkurs Informatik'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('shows cached courses when connected', (
     WidgetTester tester,
