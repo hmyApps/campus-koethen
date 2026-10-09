@@ -7,6 +7,9 @@ import 'mail_search_match.dart';
 class MailCachePolicy {
   static const int defaultPrefetchBodies = 20;
 
+  /// Size of the newest-headers window every INBOX sync fetches.
+  static const int defaultWindowHeaders = 50;
+
   const MailCachePolicy({
     this.maxHeaders = 500,
     this.maxBodies = 200,
@@ -14,8 +17,14 @@ class MailCachePolicy {
     this.headerRetention = const Duration(days: 365),
     this.bodyRetention = const Duration(days: 180),
     this.prefetchBodies = defaultPrefetchBodies,
+    this.windowHeaders = defaultWindowHeaders,
   });
 
+  /// The [windowHeaders] headers with the highest IMAP UIDs — exactly the
+  /// server window of the last sync — are exempt from [headerRetention] and
+  /// [maxHeaders]: dropping one would hide a current mail and make the next
+  /// sync report it as new again.
+  final int windowHeaders;
   final int maxHeaders;
   final int maxBodies;
   final int maxBodyBytes;

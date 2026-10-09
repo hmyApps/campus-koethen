@@ -780,6 +780,45 @@ void main() {
       expect(await cache.cachedMessageIds(), <String>{'1', '3'});
     });
 
+    test('an unchanged inbox with year-old mails is never reported as new '
+        '(C-04)', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: () => DateTime.utc(2026, 8, 1));
+      final DateTime yearsAgo = DateTime.utc(2024, 1, 1);
+      final gateway = FakeMailGateway(
+        inbox: <MailMessageHeader>[
+          _hdr('3'),
+          _hdrAt('2', yearsAgo),
+          _hdrAt('1', yearsAgo),
+        ],
+        detailsById: <String, MailMessageDetail>{'3': _dtl('3')},
+      );
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      final List<MailNewMessageEvent> events = <MailNewMessageEvent>[];
+      container.listen<MailNewMessageEvent?>(mailNewMessageEventProvider, (
+        _,
+        MailNewMessageEvent? next,
+      ) {
+        if (next != null) events.add(next);
+      });
+
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+      await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+      expect(events, isEmpty);
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['3', '2', '1'],
+        reason: 'the current server window is shown whatever its age',
+      );
+    });
+
     test('an empty mailbox page never erases the cached inbox', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
       final cache = MemoryMailCache();

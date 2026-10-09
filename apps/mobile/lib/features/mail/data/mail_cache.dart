@@ -213,16 +213,35 @@ List<MailMessageHeader> _retainedHeaders(
 ) {
   if (headers.isEmpty) return <MailMessageHeader>[];
   final DateTime cutoff = now.toUtc().subtract(policy.headerRetention);
-  final List<MailMessageHeader> retained = <MailMessageHeader>[
-    headers.first,
-    ...headers
-        .skip(1)
-        .where(
-          (MailMessageHeader header) =>
-              header.date == null || !header.date!.toUtc().isBefore(cutoff),
-        ),
-  ];
-  return retained.take(policy.maxHeaders).toList(growable: false);
+  // IMAP UIDs ascend with arrival, so the highest ones are the server window
+  // the last sync fetched — whatever their Date header says.
+  final List<(int, String)> byUid = <(int, String)>[
+    for (final MailMessageHeader header in headers)
+      if (int.tryParse(header.id) case final int uid) (uid, header.id),
+  ]..sort(((int, String) a, (int, String) b) => b.$1.compareTo(a.$1));
+  final int windowSize = policy.windowHeaders.clamp(0, policy.maxHeaders);
+  final Set<String> window = <String>{
+    for (final (int, String) entry in byUid.take(windowSize)) entry.$2,
+  };
+  final int otherBudget = policy.maxHeaders - window.length;
+  int others = 0;
+  final List<MailMessageHeader> retained = <MailMessageHeader>[];
+  for (int index = 0; index < headers.length; index++) {
+    final MailMessageHeader header = headers[index];
+    if (window.contains(header.id)) {
+      retained.add(header);
+      continue;
+    }
+    final bool fresh =
+        index == 0 ||
+        header.date == null ||
+        !header.date!.toUtc().isBefore(cutoff);
+    if (fresh && others < otherBudget) {
+      retained.add(header);
+      others++;
+    }
+  }
+  return List<MailMessageHeader>.of(retained, growable: false);
 }
 
 /// Mail cache serialization on top of the app's only at-rest crypto primitive.

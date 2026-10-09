@@ -46,6 +46,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Adresse und Passwort bleiben getrennte Secure-Storage-Daten und liegen **nie** im Cache.
   Der Cache ist auf 500 Header, 200 vollständige Nachrichten und 100 MiB Nachrichtendaten begrenzt;
   Header älter als 365 Tage und Bodies älter als 180 Tage werden bei der Bereinigung entfernt.
+  Ausgenommen davon sind die Header des aktuellen Serverfensters (die 50 höchsten IMAP-UIDs):
+  Sie werden unabhängig von Alter und Header-Obergrenze behalten, damit die neuesten Mails
+  sichtbar bleiben und beim nächsten Sync nicht erneut als neu gelten. Bodies, die die
+  Altersgrenze sofort wieder entfernen würde, werden nicht vorgeladen.
   Einstellungen → Studentische E-Mail zeigt Belegung und Anzahl und kann die vollständigen
   Offline-Inhalte samt abgeleiteten Indizes löschen, ohne den Account oder die Headerliste zu
   entfernen.
@@ -76,7 +80,9 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   (`kMailSyncInterval`, geplant im App-Shell) und **manuell** (Sync-Button /
   Pull-to-Refresh).
 - Der Sync holt die **50 neuesten** INBOX-Header und führt sie mit dem lokalen Bestand zusammen.
-  Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Pro Lauf werden höchstens die
+  Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Umfasst das Fenster laut
+  IMAP-`EXISTS` das ganze Postfach, entfernt der Sync jede gecachte Nachricht, die dort fehlt
+  (etwa im Webmail gelöscht); eine leere Serverantwort löscht nie. Pro Lauf werden höchstens die
   **20 neuesten** noch fehlenden Inhalte vorgeladen; ältere Inhalte lädt das Öffnen der Nachricht
   bei Bedarf direkt vom IMAP-Server.
 - Am Ende der Nachrichtenliste lädt „100 ältere E-Mails laden“ die jeweils nächsten

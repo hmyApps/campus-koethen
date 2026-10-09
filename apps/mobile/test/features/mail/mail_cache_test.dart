@@ -550,6 +550,68 @@ void main() {
     );
   });
 
+  group('header retention never drops the newest UID window (C-04)', () {
+    MailMessageHeader header(String id, DateTime date) => MailMessageHeader(
+      id: id,
+      subject: 'Subject $id',
+      from: const MailAddress(email: 'alice@example.test'),
+      date: date,
+      isSeen: true,
+      hasAttachments: false,
+    );
+    final DateTime now = DateTime.utc(2026, 9, 1);
+    final DateTime recent = DateTime.utc(2026, 8, 30);
+    final DateTime yearsAgo = DateTime.utc(2024, 1, 1);
+
+    Future<EncryptedMailCache> open(MailCachePolicy policy) async {
+      final EncryptedBox box = EncryptedBox(
+        boxName: MailCacheManager.secureBoxName,
+        keyStorageKey: MailCacheManager.keyStorageKey,
+        storage: _storage,
+        hive: Hive,
+        initializeHive: () async {},
+      );
+      expect((await box.openChecked()).isOpen, isTrue);
+      return EncryptedMailCache(box, policy: policy, now: () => now);
+    }
+
+    test('old headers inside the window survive, older ones age out', () async {
+      final EncryptedMailCache cache = await open(
+        const MailCachePolicy(windowHeaders: 2),
+      );
+
+      await cache.saveHeaders(<MailMessageHeader>[
+        header('4', recent),
+        header('3', yearsAgo),
+        header('2', yearsAgo),
+        header('1', yearsAgo),
+      ]);
+
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['4', '3'],
+      );
+    });
+
+    test('the header cap never evicts the window either', () async {
+      final EncryptedMailCache cache = await open(
+        const MailCachePolicy(maxHeaders: 2, windowHeaders: 2),
+      );
+
+      // UID 9 arrived last but carries an ancient Date header.
+      await cache.saveHeaders(<MailMessageHeader>[
+        header('5', recent),
+        header('4', recent),
+        header('9', yearsAgo),
+      ]);
+
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['5', '9'],
+      );
+    });
+  });
+
   group('message removal keeps the derived indexes consistent (C-07)', () {
     MailMessageDetail message(String id, String body) => MailMessageDetail(
       id: id,

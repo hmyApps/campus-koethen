@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/prefs/settings_controller.dart';
+import '../domain/mail_cache_store.dart';
 import '../domain/mail_credentials.dart';
 import '../domain/mail_folder.dart';
 import '../domain/mail_failure.dart';
@@ -16,7 +17,7 @@ import 'mail_folders.dart';
 import 'mail_providers.dart';
 import 'mail_sync_controller.dart';
 
-const int kInboxLimit = 50;
+const int kInboxLimit = MailCachePolicy.defaultWindowHeaders;
 const int kOlderMailPageSize = 100;
 
 class MailPaginationStatus {
