@@ -210,6 +210,9 @@ describe('TimetableSyncService entry write phase', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       timetableEntryGroup: {
+        // No stored links: what gets withdrawn is covered state-based in
+        // timetable-sync.links.spec.ts.
+        findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
