@@ -66,6 +66,65 @@ void main() {
     test('returns null for a normal payload', () {
       expect(moodleExceptionOf(decode('{"userid":1}')), isNull);
     });
+
+    test('keeps an expired token classified as expired', () {
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"moodle_exception","errorcode":"expiredtoken","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.tokenExpired),
+      );
+    });
+
+    test('a rejected request parameter is not a rejected sign-in', () {
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"invalid_parameter_exception","errorcode":"invalidparameter","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.invalidResponse),
+      );
+    });
+
+    test('an unknown exception is unknown, not a rejected sign-in', () {
+      // For example a course that was deleted in the meantime.
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"dml_missing_record_exception","errorcode":"invalidrecord","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.unknown),
+      );
+    });
+
+    test('an exception without an error code is unknown', () {
+      expect(
+        moodleExceptionOf(decode('{"exception":"moodle_exception"}')),
+        const MoodleFailure(MoodleFailureKind.unknown),
+      );
+    });
+
+    test('a suspended or deleted Moodle account rejects the sign-in', () {
+      for (final String code in <String>[
+        'wsaccessusersuspended',
+        'wsaccessuserdeleted',
+        'wsaccessusernologin',
+      ]) {
+        expect(
+          moodleExceptionOf(
+            decode(
+              '{"exception":"moodle_exception","errorcode":"$code","message":"x"}',
+            ),
+          ),
+          const MoodleFailure(MoodleFailureKind.tokenRejected),
+          reason: code,
+        );
+      }
+    });
   });
 
   group('parseSiteInfo', () {

@@ -110,16 +110,25 @@ String parseToken(Object? json) {
 
 /// Returns a classified failure when [json] is a Moodle exception envelope,
 /// else null. Moodle returns these with HTTP 200.
+///
+/// Only errors about the token or the Moodle account itself are reported as a
+/// rejected sign-in. Everything else — a request parameter Moodle refuses, a
+/// course deleted in the meantime, a code this app does not know — used to
+/// tell the user to reconnect, which cannot fix any of them.
 MoodleFailure? moodleExceptionOf(Object? json) {
   if (json is! Map) return null;
   if (!json.containsKey('exception')) return null;
   final String? code = _asStringOrNull(json['errorcode']);
   switch (code) {
     case 'invalidtoken':
-    case 'invalidparameter':
+    case 'wsaccessusersuspended':
+    case 'wsaccessuserdeleted':
+    case 'wsaccessusernologin':
       return const MoodleFailure(MoodleFailureKind.tokenRejected);
     case 'expiredtoken':
       return const MoodleFailure(MoodleFailureKind.tokenExpired);
+    case 'invalidparameter':
+      return const MoodleFailure(MoodleFailureKind.invalidResponse);
     case 'accessexception':
     case 'nopermissions':
     case 'requireloginerror':
@@ -129,7 +138,7 @@ MoodleFailure? moodleExceptionOf(Object? json) {
     case 'sitemaintenance':
       return const MoodleFailure(MoodleFailureKind.serviceUnavailable);
     default:
-      return const MoodleFailure(MoodleFailureKind.tokenRejected);
+      return const MoodleFailure(MoodleFailureKind.unknown);
   }
 }
 
