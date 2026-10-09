@@ -183,4 +183,71 @@ void main() {
       });
     });
   });
+
+  group('MailLiveSyncController after a new sign-in', () {
+    Future<({ProviderContainer container, FakeMailGateway gateway})>
+    liveConnected() async {
+      final InMemoryMailCredentialStore store = InMemoryMailCredentialStore()
+        ..write(_creds);
+      final FakeMailGateway gateway = FakeMailGateway();
+      final ProviderContainer container = ProviderContainer(
+        overrides: <Override>[
+          mailGatewayProvider.overrideWithValue(gateway),
+          mailCredentialStoreProvider.overrideWithValue(store),
+          mailCacheStoreProvider.overrideWithValue(MemoryMailCache()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(mailAccountControllerProvider.future);
+      await container.read(mailLiveSyncControllerProvider.notifier).start();
+      gateway.liveSignals.add(MailLiveSignal.connected);
+      await pumpEventQueue();
+      expect(gateway.watchInboxCalls, 1);
+      return (container: container, gateway: gateway);
+    }
+
+    Future<void> signInAgain(ProviderContainer container) async {
+      await container
+          .read(mailAccountControllerProvider.notifier)
+          .signIn(email: _creds.emailAddress, password: 'new-pw');
+      await pumpEventQueue();
+    }
+
+    test('reconnects the live connection with the new session', () async {
+      final (:container, :gateway) = await liveConnected();
+
+      await signInAgain(container);
+
+      expect(gateway.watchInboxCalls, 2);
+      expect(
+        _live(container).connection,
+        isNot(MailLiveConnection.stopped),
+        reason: 'IDLE must not wait for the next app resume',
+      );
+    });
+
+    test('a new sign-in lifts a rejected-password stop', () async {
+      final (:container, :gateway) = await liveConnected();
+      gateway.liveSignals.addError(
+        const MailFailure(MailFailureKind.invalidCredentials),
+      );
+      await pumpEventQueue();
+      expect(_live(container).connection, MailLiveConnection.authRequired);
+
+      await signInAgain(container);
+
+      expect(gateway.watchInboxCalls, 2);
+      expect(_live(container).connection, MailLiveConnection.connecting);
+    });
+
+    test('does not connect while the app is in the background', () async {
+      final (:container, :gateway) = await liveConnected();
+      await container.read(mailLiveSyncControllerProvider.notifier).stop();
+
+      await signInAgain(container);
+
+      expect(gateway.watchInboxCalls, 1);
+      expect(_live(container).connection, MailLiveConnection.stopped);
+    });
+  });
 }

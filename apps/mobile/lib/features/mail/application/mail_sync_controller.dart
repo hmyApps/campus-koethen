@@ -357,6 +357,11 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   /// The server rejected this session's password.
   MailFailure? _credentialsRejected;
 
+  /// The session was replaced while a live connection was wanted. The new
+  /// account is published only after its credentials are stored, so the
+  /// reconnect waits for that instead of racing the replacement.
+  bool _reconnectForNewSession = false;
+
   @override
   MailLiveSyncStatus build() {
     ref.listen<int>(mailSessionGenerationProvider, (_, _) {
@@ -364,8 +369,22 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
       // backoff of the replaced one.
       _credentialsRejected = null;
       _failedAttempts = 0;
+      _reconnectForNewSession = _wanted;
       unawaited(_disconnect());
       state = const MailLiveSyncStatus();
+    });
+    ref.listen<AsyncValue<MailAccountState>>(mailAccountControllerProvider, (
+      _,
+      AsyncValue<MailAccountState> next,
+    ) {
+      if (!_reconnectForNewSession || next is! AsyncData<MailAccountState>) {
+        return;
+      }
+      // Re-signing in while already signed in never flips the account from
+      // signed out to signed in, so the app shell's start trigger stays
+      // silent; reconnect here instead of waiting for the next resume.
+      _reconnectForNewSession = false;
+      if (_wanted && next.value.isSignedIn) unawaited(start());
     });
     ref.onDispose(() {
       _generation++;
@@ -494,6 +513,7 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
 
   Future<void> stop() async {
     _wanted = false;
+    _reconnectForNewSession = false;
     final Future<void> closed = _disconnect();
     state = const MailLiveSyncStatus();
     await closed;
