@@ -633,7 +633,9 @@ export class TimetableSyncService {
    * The first query carries only ~500 small group rows. Entry ids are loaded
    * only for exact duplicate labels, not for the whole catalogue. A same-name
    * group with a different long name or department never enters that second
-   * query and therefore remains independently selectable.
+   * query and therefore remains independently selectable. Aliases are decided
+   * per semester catalogue, so a same-named group of another semester stays
+   * selectable too.
    */
   async reconcileGroupCatalogue(rangeStart: Date, rangeEnd: Date): Promise<void> {
     const rawGroups = await this.prisma.timetableGroup.findMany({
@@ -644,6 +646,7 @@ export class TimetableSyncService {
         longName: true,
         department: true,
         catalogVisible: true,
+        contexts: { select: { contextId: true } },
       },
     });
     // Unit doubles written before catalogue visibility existed only project
@@ -683,6 +686,11 @@ export class TimetableSyncService {
       shortName: group.shortName,
       longName: group.longName,
       department: group.department,
+      // Doubles written before semester catalogues existed carry no
+      // relation; real Prisma rows always do.
+      contextIds: Array.isArray(group.contexts)
+        ? group.contexts.map((context) => context.contextId)
+        : [],
       entryIds: entryIdsByGroup.get(group.id) ?? [],
     }));
     const visibility = resolveTimetableGroupVisibility(evidence);
