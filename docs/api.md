@@ -406,6 +406,11 @@ Kontaktperson ist gültig (`personCount: 0`) und muss im Client vollständig nut
 Zusätzlich `description` (Blocks, gleiche Regeln wie News-`content`) und `persons` — nur aktive
 Personen, sortiert nach `sortOrder`, dann `name`.
 
+Welche Personen ein Bereich hat, bestimmt in jeder Sprache die kanonische deutsche Fassung — dieselbe
+Quelle, aus der die Liste `personCount` zählt; das gilt auch für den Suchindex. Aus der
+Übersetzung kommen nur `role` und `description`. Fehlt dort ein gepflegter Text, bleibt der
+deutsche stehen und `translationFallback` ist `true`.
+
 ```jsonc
 {
   "data": {
