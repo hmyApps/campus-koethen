@@ -55,7 +55,10 @@ class HsaKiOnboardingScreen extends StatelessWidget {
                         color: colors.primary,
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Text(l10n.hsaKiOnboardingTitle, style: text.headlineMedium),
+                      Text(
+                        l10n.hsaKiOnboardingTitle,
+                        style: text.headlineMedium,
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       Text(l10n.hsaKiOnboardingIntro, style: text.bodyMedium),
                       const SizedBox(height: AppSpacing.lg),
@@ -94,7 +97,10 @@ class HsaKiOnboardingScreen extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Icon(AppIcons.warning_amber_outlined, color: colors.error),
+                          Icon(
+                            AppIcons.warning_amber_outlined,
+                            color: colors.error,
+                          ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(

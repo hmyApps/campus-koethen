@@ -194,22 +194,25 @@ void main() {
       );
     });
 
-    test('a value serialized to the wire format and parsed back still '
-        'decrypts correctly — proves the wire format round-trip is lossless', () {
-      final Uint8List key = HawkiCrypto.deriveKey(
-        passphrase: 'pw',
-        label: 'keychain_encryptor',
-        serverSalt: 'salt',
-      );
-      final Uint8List plaintext = Uint8List.fromList(utf8.encode('hello'));
-      final SymmetricCryptoValue encrypted = HawkiCrypto.encrypt(
-        plaintext,
-        key,
-      );
-      final SymmetricCryptoValue roundTripped = SymmetricCryptoValue.parse(
-        encrypted.serialize(),
-      );
-      expect(HawkiCrypto.decrypt(roundTripped, key), plaintext);
-    });
+    test(
+      'a value serialized to the wire format and parsed back still '
+      'decrypts correctly — proves the wire format round-trip is lossless',
+      () {
+        final Uint8List key = HawkiCrypto.deriveKey(
+          passphrase: 'pw',
+          label: 'keychain_encryptor',
+          serverSalt: 'salt',
+        );
+        final Uint8List plaintext = Uint8List.fromList(utf8.encode('hello'));
+        final SymmetricCryptoValue encrypted = HawkiCrypto.encrypt(
+          plaintext,
+          key,
+        );
+        final SymmetricCryptoValue roundTripped = SymmetricCryptoValue.parse(
+          encrypted.serialize(),
+        );
+        expect(HawkiCrypto.decrypt(roundTripped, key), plaintext);
+      },
+    );
   });
 }

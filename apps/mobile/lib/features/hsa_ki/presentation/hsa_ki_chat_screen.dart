@@ -192,7 +192,10 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
           ),
         Expanded(
           child: state == null || state.messages.isEmpty
-              ? EmptyView(icon: AppIcons.message_2, message: l10n.hsaKiEmptyState)
+              ? EmptyView(
+                  icon: AppIcons.message_2,
+                  message: l10n.hsaKiEmptyState,
+                )
               : ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -263,9 +266,9 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
           ),
           child: Text(
             l10n.hsaKiDisclaimerFooter,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
         ),
       ],
@@ -296,7 +299,9 @@ class _MessageBubble extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isUser ? colors.primaryContainer : colors.surfaceContainerHighest,
+          color: isUser
+              ? colors.primaryContainer
+              : colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(AppSpacing.md),
         ),
         child: Text(

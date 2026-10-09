@@ -73,30 +73,10 @@ void main() {
     expect(state.selectedModelId, isNull);
   });
 
-  test('sending without a selected model is refused before any gateway call', () async {
-    final _Gateway gateway = _Gateway();
-    final ProviderContainer container = _container(
-      store: _MemoryCredentialStore()..value = _credential,
-      gateway: gateway,
-    );
-    addTearDown(container.dispose);
-    await container.read(hsaKiChatControllerProvider.future);
-
-    await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
-
-    final HsaKiChatState state = container
-        .read(hsaKiChatControllerProvider)
-        .value!;
-    expect(state.messages, isEmpty);
-    expect(state.lastError, HsaKiFailureKind.portalStructureChanged);
-    expect(gateway.sendMessageCalls, 0);
-  });
-
   test(
-    'send appends the user turn optimistically, then the reply once it '
-    'arrives',
+    'sending without a selected model is refused before any gateway call',
     () async {
-      final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!');
+      final _Gateway gateway = _Gateway();
       final ProviderContainer container = _container(
         store: _MemoryCredentialStore()..value = _credential,
         gateway: gateway,
@@ -109,42 +89,59 @@ void main() {
       final HsaKiChatState state = container
           .read(hsaKiChatControllerProvider)
           .value!;
-      expect(state.messages, hasLength(2));
-      expect(state.messages[0].role, HsaKiMessageRole.user);
-      expect(state.messages[0].text, 'Hallo');
-      expect(state.messages[1].role, HsaKiMessageRole.assistant);
-      expect(state.messages[1].text, 'Moin!');
-      expect(state.isSending, isFalse);
+      expect(state.messages, isEmpty);
+      expect(state.lastError, HsaKiFailureKind.portalStructureChanged);
+      expect(gateway.sendMessageCalls, 0);
     },
   );
 
-  test(
-    'a reply that arrives after the session generation advanced (e.g. the '
-    'user disconnected mid-send) is discarded, never appended',
-    () async {
-      final _Gateway gateway = _Gateway(models: _models, blockSend: true);
-      final ProviderContainer container = _container(
-        store: _MemoryCredentialStore()..value = _credential,
-        gateway: gateway,
-      );
-      addTearDown(container.dispose);
-      await container.read(hsaKiChatControllerProvider.future);
+  test('send appends the user turn optimistically, then the reply once it '
+      'arrives', () async {
+    final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!');
+    final ProviderContainer container = _container(
+      store: _MemoryCredentialStore()..value = _credential,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiChatControllerProvider.future);
 
-      final Future<void> sending = container
-          .read(hsaKiChatControllerProvider.notifier)
-          .send('Hallo');
-      await gateway.sendEntered.future;
-      container.read(hsaKiSessionGenerationProvider.notifier).advance();
-      gateway.releaseSend.complete();
-      await sending;
+    await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
 
-      final HsaKiChatState state = container
-          .read(hsaKiChatControllerProvider)
-          .value!;
-      expect(state.messages, hasLength(1));
-      expect(state.messages.single.role, HsaKiMessageRole.user);
-    },
-  );
+    final HsaKiChatState state = container
+        .read(hsaKiChatControllerProvider)
+        .value!;
+    expect(state.messages, hasLength(2));
+    expect(state.messages[0].role, HsaKiMessageRole.user);
+    expect(state.messages[0].text, 'Hallo');
+    expect(state.messages[1].role, HsaKiMessageRole.assistant);
+    expect(state.messages[1].text, 'Moin!');
+    expect(state.isSending, isFalse);
+  });
+
+  test('a reply that arrives after the session generation advanced (e.g. the '
+      'user disconnected mid-send) is discarded, never appended', () async {
+    final _Gateway gateway = _Gateway(models: _models, blockSend: true);
+    final ProviderContainer container = _container(
+      store: _MemoryCredentialStore()..value = _credential,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiChatControllerProvider.future);
+
+    final Future<void> sending = container
+        .read(hsaKiChatControllerProvider.notifier)
+        .send('Hallo');
+    await gateway.sendEntered.future;
+    container.read(hsaKiSessionGenerationProvider.notifier).advance();
+    gateway.releaseSend.complete();
+    await sending;
+
+    final HsaKiChatState state = container
+        .read(hsaKiChatControllerProvider)
+        .value!;
+    expect(state.messages, hasLength(1));
+    expect(state.messages.single.role, HsaKiMessageRole.user);
+  });
 }
 
 ProviderContainer _container({
@@ -194,7 +191,10 @@ class _Gateway implements HsaKiGateway {
   }) async => throw UnimplementedError();
 
   @override
-  Future<void> revoke(HsaKiCredential credential, {required String password}) async {}
+  Future<void> revoke(
+    HsaKiCredential credential, {
+    required String password,
+  }) async {}
 
   @override
   Future<List<HsaKiModel>> listModels(HsaKiCredential credential) async {

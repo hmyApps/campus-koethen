@@ -29,8 +29,7 @@ Future<bool> connectHsaKiWithOnboarding(
   if (!proceed || !context.mounted) return false;
 
   final bool hasIdentity =
-      ref.read(universityAccountControllerProvider).value?.hasIdentity ??
-      false;
+      ref.read(universityAccountControllerProvider).value?.hasIdentity ?? false;
   if (!hasIdentity) {
     await showUniversityAccountSetupSheet(
       context,
@@ -38,6 +37,8 @@ Future<bool> connectHsaKiWithOnboarding(
     );
     return true;
   }
-  await ref.read(universityServiceConnectorProvider).connect(DirectService.hsaKi);
+  await ref
+      .read(universityServiceConnectorProvider)
+      .connect(DirectService.hsaKi);
   return true;
 }

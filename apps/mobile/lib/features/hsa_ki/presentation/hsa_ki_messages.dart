@@ -19,8 +19,7 @@ String hsaKiFailureMessage(AppLocalizations l10n, Object error) {
     HsaKiFailureKind.networkUnavailable => l10n.hsaKiErrorNetwork,
     HsaKiFailureKind.externalAccessDisabled =>
       l10n.hsaKiErrorExternalAccessDisabled,
-    HsaKiFailureKind.secureStorageUnavailable =>
-      l10n.hsaKiErrorSecureStorage,
+    HsaKiFailureKind.secureStorageUnavailable => l10n.hsaKiErrorSecureStorage,
     HsaKiFailureKind.notConnected => l10n.hsaKiErrorNotConnected,
     HsaKiFailureKind.unknown => l10n.hsaKiErrorUnknown,
   };

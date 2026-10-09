@@ -25,12 +25,11 @@ const String _profilePageHtml = '''
   <body></body></html>
 ''';
 
-FakeHtmlResponse _json(Object body, {int statusCode = 200}) =>
-    FakeHtmlResponse(
-      jsonEncode(body),
-      statusCode: statusCode,
-      contentType: 'application/json',
-    );
+FakeHtmlResponse _json(Object body, {int statusCode = 200}) => FakeHtmlResponse(
+  jsonEncode(body),
+  statusCode: statusCode,
+  contentType: 'application/json',
+);
 
 /// A scripted happy path for the whole login → mint-token round trip.
 FakeHtmlResponse _connectScript(
@@ -116,49 +115,42 @@ void main() {
         ),
       );
       expect(
-        adapter.urls.any(
-          (String u) => u.contains('/req/profile/create-token'),
-        ),
+        adapter.urls.any((String u) => u.contains('/req/profile/create-token')),
         isFalse,
       );
     });
 
-    test(
-      'treats a redirectUri of /register as not-yet-registered, never '
-      'minting a token for a session the login endpoint never actually '
-      'authenticated',
-      () async {
-        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
-          if (o.uri.path == '/login' && o.method == 'GET') {
-            return const FakeHtmlResponse(_loginPageHtml);
-          }
-          if (o.uri.path == '/req/login') {
-            return _json(<String, dynamic>{
-              'success': true,
-              'redirectUri': '/register',
-            });
-          }
-          return const FakeHtmlResponse('not found', statusCode: 404);
-        });
+    test('treats a redirectUri of /register as not-yet-registered, never '
+        'minting a token for a session the login endpoint never actually '
+        'authenticated', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        if (o.uri.path == '/login' && o.method == 'GET') {
+          return const FakeHtmlResponse(_loginPageHtml);
+        }
+        if (o.uri.path == '/req/login') {
+          return _json(<String, dynamic>{
+            'success': true,
+            'redirectUri': '/register',
+          });
+        }
+        return const FakeHtmlResponse('not found', statusCode: 404);
+      });
 
-        await expectLater(
-          HawkiGateway(adapter).connect(username: 'new-student', password: 'y'),
-          throwsA(
-            isA<HsaKiFailure>().having(
-              (HsaKiFailure e) => e.kind,
-              'kind',
-              HsaKiFailureKind.notRegistered,
-            ),
+      await expectLater(
+        HawkiGateway(adapter).connect(username: 'new-student', password: 'y'),
+        throwsA(
+          isA<HsaKiFailure>().having(
+            (HsaKiFailure e) => e.kind,
+            'kind',
+            HsaKiFailureKind.notRegistered,
           ),
-        );
-        expect(
-          adapter.urls.any(
-            (String u) => u.contains('/req/profile/create-token'),
-          ),
-          isFalse,
-        );
-      },
-    );
+        ),
+      );
+      expect(
+        adapter.urls.any((String u) => u.contains('/req/profile/create-token')),
+        isFalse,
+      );
+    });
 
     test(
       'reports portalStructureChanged when the token response has no token',
@@ -185,7 +177,9 @@ void main() {
 
     test('maps a connection error to networkUnavailable', () async {
       final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
-        if (o.uri.path == '/login') return const FakeHtmlResponse(_loginPageHtml);
+        if (o.uri.path == '/login') {
+          return const FakeHtmlResponse(_loginPageHtml);
+        }
         throw DioException(
           requestOptions: o,
           type: DioExceptionType.connectionError,
@@ -238,20 +232,25 @@ void main() {
       expect(revoke.data, <String, dynamic>{'tokenId': 7});
     });
 
-    test('a network failure during revoke is classified, not rethrown raw', () async {
-      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
-        if (o.uri.path == '/login') return const FakeHtmlResponse(_loginPageHtml);
-        throw DioException(
-          requestOptions: o,
-          type: DioExceptionType.connectionError,
-        );
-      });
+    test(
+      'a network failure during revoke is classified, not rethrown raw',
+      () async {
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+          if (o.uri.path == '/login') {
+            return const FakeHtmlResponse(_loginPageHtml);
+          }
+          throw DioException(
+            requestOptions: o,
+            type: DioExceptionType.connectionError,
+          );
+        });
 
-      await expectLater(
-        HawkiGateway(adapter).revoke(credential, password: 'secret'),
-        throwsA(isA<HsaKiFailure>()),
-      );
-    });
+        await expectLater(
+          HawkiGateway(adapter).revoke(credential, password: 'secret'),
+          throwsA(isA<HsaKiFailure>()),
+        );
+      },
+    );
   });
 
   group('listModels', () {
@@ -261,41 +260,44 @@ void main() {
       username: 'mmustermann',
     );
 
-    test('parses the JSON:API attributes, skipping malformed entries', () async {
-      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
-        expect(o.headers['Authorization'], 'Bearer bearer-tok');
-        return _json(<String, dynamic>{
-          'data': <dynamic>[
-            <String, dynamic>{
-              'attributes': <String, dynamic>{
-                'model_id': 'gpt-4',
-                'label': 'GPT-4',
-                'active': true,
+    test(
+      'parses the JSON:API attributes, skipping malformed entries',
+      () async {
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+          expect(o.headers['Authorization'], 'Bearer bearer-tok');
+          return _json(<String, dynamic>{
+            'data': <dynamic>[
+              <String, dynamic>{
+                'attributes': <String, dynamic>{
+                  'model_id': 'gpt-4',
+                  'label': 'GPT-4',
+                  'active': true,
+                },
               },
-            },
-            <String, dynamic>{
-              'attributes': <String, dynamic>{
-                'model_id': 'gpt-3',
-                'active': false,
+              <String, dynamic>{
+                'attributes': <String, dynamic>{
+                  'model_id': 'gpt-3',
+                  'active': false,
+                },
               },
-            },
-            <String, dynamic>{'attributes': <String, dynamic>{}},
-          ],
+              <String, dynamic>{'attributes': <String, dynamic>{}},
+            ],
+          });
         });
-      });
 
-      final List<HsaKiModel> models = await HawkiGateway(
-        adapter,
-      ).listModels(credential);
+        final List<HsaKiModel> models = await HawkiGateway(
+          adapter,
+        ).listModels(credential);
 
-      expect(models, hasLength(2));
-      expect(models[0].modelId, 'gpt-4');
-      expect(models[0].label, 'GPT-4');
-      expect(models[0].active, isTrue);
-      // No label in the fixture: the model id itself is the fallback label.
-      expect(models[1].label, 'gpt-3');
-      expect(models[1].active, isFalse);
-    });
+        expect(models, hasLength(2));
+        expect(models[0].modelId, 'gpt-4');
+        expect(models[0].label, 'GPT-4');
+        expect(models[0].active, isTrue);
+        // No label in the fixture: the model id itself is the fallback label.
+        expect(models[1].label, 'gpt-3');
+        expect(models[1].active, isFalse);
+      },
+    );
 
     test('maps a 401 to notConnected', () async {
       final FakeHtmlAdapter adapter = FakeHtmlAdapter(
@@ -340,38 +342,41 @@ void main() {
       username: 'mmustermann',
     );
 
-    test('posts the stateless payload shape and returns the reply text', () async {
-      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
-        // Confirmed 2026-10-06 against the real, currently deployed
-        // instance: `ai-req` is NOT under the JSON:API `/hawki/v1` prefix
-        // (that prefix only exists for `ai-models` and similar JSON:API
-        // resources) — `/api/hawki/v1/ai-req` 404s for real, `/api/ai-req`
-        // answers 401 Unauthenticated (route exists, needs a token).
-        expect(o.uri.path, '/api/ai-req');
-        expect(o.data, <String, dynamic>{
-          'payload': <String, dynamic>{
-            'model': 'gpt-4',
-            'messages': <dynamic>[
-              <String, dynamic>{
-                'role': 'user',
-                'content': <String, dynamic>{'text': 'Hallo'},
-              },
-            ],
-          },
+    test(
+      'posts the stateless payload shape and returns the reply text',
+      () async {
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+          // Confirmed 2026-10-06 against the real, currently deployed
+          // instance: `ai-req` is NOT under the JSON:API `/hawki/v1` prefix
+          // (that prefix only exists for `ai-models` and similar JSON:API
+          // resources) — `/api/hawki/v1/ai-req` 404s for real, `/api/ai-req`
+          // answers 401 Unauthenticated (route exists, needs a token).
+          expect(o.uri.path, '/api/ai-req');
+          expect(o.data, <String, dynamic>{
+            'payload': <String, dynamic>{
+              'model': 'gpt-4',
+              'messages': <dynamic>[
+                <String, dynamic>{
+                  'role': 'user',
+                  'content': <String, dynamic>{'text': 'Hallo'},
+                },
+              ],
+            },
+          });
+          return _json(<String, dynamic>{'success': true, 'content': 'Moin!'});
         });
-        return _json(<String, dynamic>{'success': true, 'content': 'Moin!'});
-      });
 
-      final String reply = await HawkiGateway(adapter).sendMessage(
-        credential,
-        modelId: 'gpt-4',
-        messages: const <HsaKiMessage>[
-          HsaKiMessage(role: HsaKiMessageRole.user, text: 'Hallo'),
-        ],
-      );
+        final String reply = await HawkiGateway(adapter).sendMessage(
+          credential,
+          modelId: 'gpt-4',
+          messages: const <HsaKiMessage>[
+            HsaKiMessage(role: HsaKiMessageRole.user, text: 'Hallo'),
+          ],
+        );
 
-      expect(reply, 'Moin!');
-    });
+        expect(reply, 'Moin!');
+      },
+    );
 
     test('reports portalStructureChanged when success is not true', () async {
       final FakeHtmlAdapter adapter = FakeHtmlAdapter(

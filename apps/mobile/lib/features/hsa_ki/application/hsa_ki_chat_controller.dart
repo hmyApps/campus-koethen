@@ -46,9 +46,9 @@ class HsaKiChatState {
 class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
   @override
   Future<HsaKiChatState> build() async {
-    final HsaKiCredential? credential = await ref.read(
-      hsaKiCredentialStoreProvider,
-    ).read();
+    final HsaKiCredential? credential = await ref
+        .read(hsaKiCredentialStoreProvider)
+        .read();
     if (credential == null) return const HsaKiChatState();
     try {
       final List<HsaKiModel> models = await ref
@@ -105,9 +105,9 @@ class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
     );
 
     try {
-      final HsaKiCredential? credential = await ref.read(
-        hsaKiCredentialStoreProvider,
-      ).read();
+      final HsaKiCredential? credential = await ref
+          .read(hsaKiCredentialStoreProvider)
+          .read();
       if (credential == null) {
         throw const HsaKiFailure(HsaKiFailureKind.notConnected);
       }
