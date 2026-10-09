@@ -76,6 +76,17 @@ class _ScriptedEventPages {
   });
 }
 
+/// An in-memory cache that remembers which keys were written.
+class _RecordingContentCache extends MemoryContentCache {
+  final List<String> writtenKeys = <String>[];
+
+  @override
+  Future<void> write(String key, Map<String, dynamic> payload) {
+    writtenKeys.add(key);
+    return super.write(key, payload);
+  }
+}
+
 EventPostsRepository _repository(
   FakeHttpAdapter adapter, {
   ContentCache? cache,
@@ -234,6 +245,23 @@ void main() {
       );
       expect(cached.fromCache, isTrue);
       expect(cached.articles.single.slug, 'cached');
+    });
+
+    test('only page 1 is ever written to the cache (VG-N02)', () async {
+      // Later pages have no cache fallback, so a stored copy of one is never
+      // read again — it only takes a slot in the range budget it shares with
+      // timetable and calendar weeks, and pushes those out.
+      final _RecordingContentCache cache = _RecordingContentCache();
+      final _ScriptedEventPages pages = _ScriptedEventPages(totalPages: 3);
+
+      final EventPostsResult result = await _repository(
+        pages.adapter,
+        cache: cache,
+      ).fetchAllEventPosts(locale: 'de');
+
+      expect(result.articles, hasLength(3));
+      expect(cache.writtenKeys, hasLength(1));
+      expect(cache.writtenKeys.single, endsWith('.p1'));
     });
 
     test('rethrows when neither the network nor the cache can serve', () async {
