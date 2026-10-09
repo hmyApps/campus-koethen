@@ -61,6 +61,24 @@ const TAGS_CACHE_TTL_MS = 60_000;
  */
 const POSTS_CACHE_TTL_MS = 30_000;
 
+/**
+ * Strapi filter fragment: the post's publication window contains `now`.
+ *
+ * A post under embargo (`validFrom` in the future) or already withdrawn
+ * (`validUntil` in the past) does not exist for a reader. This is the ONE
+ * definition of that rule; every public read path — feed, event list and
+ * detail — spreads it into its `$and`, so the routes cannot drift apart again.
+ */
+function validityFilter(now: string): Array<Record<string, unknown>> {
+  return [
+    { $or: [{ validFrom: { $null: true } }, { validFrom: { $lte: now } }] },
+    { $or: [{ validUntil: { $null: true } }, { validUntil: { $gte: now } }] },
+  ];
+}
+
+/** Strapi filter fragment: at least one of the post's channels is switched on. */
+const ACTIVE_CHANNEL_FILTER = { isActive: { $eq: true } } as const;
+
 @Injectable()
 export class PostsService {
   private readonly logger = new Logger(PostsService.name);
@@ -319,18 +337,14 @@ export class PostsService {
       };
     }
 
-    const now = new Date().toISOString();
     const filters: Record<string, unknown> = {
-      $and: [
-        { $or: [{ validFrom: { $null: true } }, { validFrom: { $lte: now } }] },
-        { $or: [{ validUntil: { $null: true } }, { validUntil: { $gte: now } }] },
-      ],
+      $and: validityFilter(new Date().toISOString()),
     };
 
     if (query.channels.length > 0) {
       filters['channels'] = { slug: { $in: query.channels } };
     } else {
-      filters['channels'] = { isActive: { $eq: true } };
+      filters['channels'] = ACTIVE_CHANNEL_FILTER;
     }
 
     if (query.tags.length > 0) {
@@ -471,6 +485,7 @@ export class PostsService {
     const filters: Record<string, unknown> = {
       tag: { slug: { $eq: 'event' }, isActive: { $eq: true } },
       $and: [
+        ...validityFilter(new Date().toISOString()),
         { eventStart: { $lte: toDate } },
         {
           $or: [
@@ -484,7 +499,7 @@ export class PostsService {
     if (query.channels.length > 0) {
       filters['channels'] = { slug: { $in: query.channels } };
     } else {
-      filters['channels'] = { isActive: { $eq: true } };
+      filters['channels'] = ACTIVE_CHANNEL_FILTER;
     }
 
     const baseQuery = {
@@ -601,17 +616,26 @@ export class PostsService {
       heroImage: { fields: ['url', 'alternativeText', 'width', 'height'] },
     };
 
+    // Same visibility rules as the feed: a slug alone must not reach a post
+    // under embargo, a withdrawn one, or one whose channels are all switched
+    // off. Validity and channels are not localised, so both reads share them.
+    const filters = {
+      slug: { $eq: slug },
+      channels: ACTIVE_CHANNEL_FILTER,
+      $and: validityFilter(new Date().toISOString()),
+    };
+
     const needsTranslation = locale.resolvedLocale !== CANONICAL_LOCALE;
     const [canonical, translated] = await Promise.all([
       this.fetch('/api/posts', {
-        filters: { slug: { $eq: slug } },
+        filters,
         populate,
         pagination: { pageSize: 1 },
         locale: CANONICAL_LOCALE,
       }),
       needsTranslation
         ? this.fetch('/api/posts', {
-            filters: { slug: { $eq: slug } },
+            filters,
             populate,
             pagination: { pageSize: 1 },
             locale: locale.resolvedLocale,

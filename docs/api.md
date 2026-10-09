@@ -310,12 +310,16 @@ Reiner Event-Feed für Beiträge mit dem Tag `event`.
 | `locale`   | `de` \| `en`  | `de`               |                                                                               |
 
 Das Abfrageintervall ist als **Überlappung** definiert: `eventStart <= to AND (eventEnd ?? eventStart) >= from`.
+Wie im Feed nur zeitlich gültige Beiträge (`validFrom` <= jetzt <= `validUntil`).
 Sortierung: `eventStart` ASC, dann `slug` ASC (deterministisch).
 
 ### `GET /v1/posts/:slug`
 
 Liefert genau denselben Aufbau wie ein Listeneintrag.
-Unbekannter Slug ⇒ `404 POST_NOT_FOUND`.
+Es gelten dieselben Sichtbarkeitsregeln wie im Feed: Der Beitrag muss zeitlich gültig sein
+(`validFrom` <= jetzt <= `validUntil`) und in mindestens einem **aktiven** Kanal liegen.
+Unbekannter, gesperrter (Embargo), abgelaufener oder nur in inaktiven Kanälen liegender Slug ⇒
+`404 POST_NOT_FOUND` — bewusst ununterscheidbar.
 
 ```jsonc
 {
@@ -669,6 +673,7 @@ hat dieselbe öffentliche Gruppenform und dieselben Zeitraum-/Freshness-Metadate
 wie der Katalog, aber keinen Pagination-Block. Unbekannte oder syntaktisch
 ungültige UUIDs liefern den unten beschriebenen Fehlervertrag. Externe IDs
 werden auch hier nie ausgegeben.
+
 ### `GET /v1/timetable/periods`
 
 Liefert bis zu acht synchronisierte Semesterkataloge in chronologischer Reihenfolge. Der
