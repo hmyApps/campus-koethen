@@ -645,6 +645,7 @@
   "mailLivePolling": "Automatic sync active",
   "mailLiveConnecting": "Connecting live sync …",
   "mailLiveRetrying": "Restoring live connection …",
+  "mailLiveAuthRequired": "Live sync paused: {reason}",
   "mailSearchTooltip": "Search mail",
   "mailSearchHint": "Search sender or content",
   "mailSearchPrompt": "Searches the mail stored on this device right away — offline too. You can then search the server as well.",

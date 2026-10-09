@@ -1052,6 +1052,15 @@
   "@mailLiveConnecting": {},
   "mailLiveRetrying": "Live-Verbindung wird wiederhergestellt …",
   "@mailLiveRetrying": {},
+  "mailLiveAuthRequired": "Live-Synchronisierung angehalten: {reason}",
+  "@mailLiveAuthRequired": {
+    "description": "Shown when the live mail connection was stopped and is not retried automatically; reason is the localized mail error.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "mailSearchTooltip": "Mails durchsuchen",
   "@mailSearchTooltip": {},
   "mailSearchHint": "Nach Absender oder Inhalt suchen",

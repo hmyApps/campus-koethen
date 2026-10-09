@@ -98,6 +98,13 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   aktiver Kategorie eine lokale Benachrichtigung. Titel und Text nennen weder Absender noch
   Betreff; der Payload enthält nur die IMAP-UID. Der erste Sync setzt ausschließlich die Basis und
   meldet vorhandene Nachrichten nicht nachträglich.
+- **Live-Verbindung (IMAP IDLE):** Bricht sie ab, verbindet die App mit exponentiellem Backoff
+  neu (15 s, 30 s, 1 min … höchstens 30 min); erst eine Verbindung, die mindestens zwei Minuten
+  stabil war, setzt den Backoff zurück. Lehnt der Server das Passwort ab oder scheitert die
+  gesicherte Verbindung, verbindet die App **nicht** automatisch neu — jeder weitere Versuch wäre
+  ein Fehl-Login am zentralen Hochschulkonto. Der Posteingang zeigt dann „Live-Synchronisierung
+  angehalten“ mit dem Grund. Nach einem abgelehnten Passwort bleibt die Live-Verbindung bis zur
+  erneuten Anmeldung aus, auch über Pause/Resume hinweg.
 
 > Anmerkung: Es gibt **kein** Sync, während die App vollständig geschlossen ist — dafür
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP
