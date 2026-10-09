@@ -116,6 +116,67 @@ void main() {
       },
     );
 
+    // D-06: a keystore read failure must reach the account screen's error
+    // branch. Reading it as "signed out" ran the catch-up wipe of the wallet
+    // and student-service data, and silently moved HISinOne accounts to the
+    // legacy portal.
+    test(
+      'a credential read failure is an account error and wipes nothing',
+      () async {
+        int wipes = 0;
+        final InMemoryGradeCredentialStore store =
+            InMemoryGradeCredentialStore()
+              ..write(_creds)
+              ..readError = const GradeFailure(
+                GradeFailureKind.secureStorageUnavailable,
+              );
+        final ProviderContainer c = _container(
+          gateway: FakeGradesGateway(),
+          store: store,
+          cache: InMemoryGradeCacheStore(),
+          clock: MutableClock(t0),
+          wipers: <GradeLinkedPersonalDataWiper>[() async => wipes++],
+        );
+
+        await expectLater(
+          c.read(gradeAccountControllerProvider.future),
+          throwsA(
+            const GradeFailure(GradeFailureKind.secureStorageUnavailable),
+          ),
+        );
+        expect(wipes, 0, reason: 'no confirmed absence, no catch-up wipe');
+      },
+    );
+
+    test('a portal-choice read failure is an account error, never a silent '
+        'fallback to the legacy portal', () async {
+      final InMemoryGradePortalStore portalStore = InMemoryGradePortalStore()
+        ..write(GradePortal.hisInOne)
+        ..readError = const GradeFailure(
+          GradeFailureKind.secureStorageUnavailable,
+        );
+      final ProviderContainer c = _container(
+        gateway: FakeGradesGateway(),
+        store: InMemoryGradeCredentialStore()..write(_creds),
+        cache: InMemoryGradeCacheStore(),
+        clock: MutableClock(t0),
+        portalStore: portalStore,
+      );
+
+      await expectLater(
+        c.read(gradeAccountControllerProvider.future),
+        throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+      );
+
+      // The screen's retry re-reads once the keystore is available again.
+      portalStore.readError = null;
+      c.invalidate(gradeAccountControllerProvider);
+      final GradeAccountState s = await c.read(
+        gradeAccountControllerProvider.future,
+      );
+      expect(s.activePortal, GradePortal.hisInOne);
+    });
+
     test('restores a stored account (username only, no password)', () async {
       final store = InMemoryGradeCredentialStore()..write(_creds);
       final c = _container(

@@ -308,6 +308,11 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
   ohne jede Note zurück.
 - Das Ergebnis wird persistiert (`GradePortalStore`, **dieselbe** sichere Ablage wie die
   Zugangsdaten) — jede weitere Synchronisation spricht nur noch dieses eine Portal an.
+- Nur ein **bestätigt fehlender** Portalwert (Altkonto aus der Zeit vor der Portalwahl) fällt auf
+  `hisQisLegacy` zurück. Ein Lesefehler des Keychain/Keystore oder ein unbekannter gespeicherter
+  Wert ergibt dagegen den klassifizierten Fehler `secureStorageUnavailable` mit „Erneut
+  versuchen“ — nie „abgemeldet“, nie einen stillen Portalwechsel und nie den Nachhol-Wipe von
+  Wallet und Studienservice-Cache, der nur bei bestätigt fehlenden Zugangsdaten läuft.
 - Im Notenbereich gibt es einen sichtbaren, faktischen Umschalter „Prüfungsportal wechseln" mit
   Anzeige des aktiven Hosts. Ein Wechsel verwirft den lokalen Cache und synchronisiert neu.
 - „Noten-Verbindung und lokale Noten löschen" entfernt auch die Portalwahl in **einem** Schritt,
