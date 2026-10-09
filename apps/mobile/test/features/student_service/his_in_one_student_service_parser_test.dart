@@ -218,7 +218,7 @@ void main() {
     });
   });
 
-  group('buildJobConfigurationSubmitRequest', () {
+  group('readJobConfiguration', () {
     test('builds the full, non-AJAX submission with the pre-selected semester', () {
       const TabSwitchRequest base = TabSwitchRequest(
         action:
@@ -229,14 +229,16 @@ void main() {
           'javax.faces.ViewState': 'e1s2',
         },
       );
-      final TabSwitchRequest? request =
-          HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+      final JobConfiguration configuration =
+          HisInOneStudentServiceParser.readJobConfiguration(
             partialResponseNeedsConfiguration(),
             base,
           );
 
-      expect(request, isNotNull);
-      expect(request!.action, base.action);
+      expect(configuration, isA<JobConfigurationSubmit>());
+      final TabSwitchRequest request =
+          (configuration as JobConfigurationSubmit).request;
+      expect(request.action, base.action);
       // Every hidden field from the original page is carried through.
       expect(request.formData['authenticity_token'], 'auth-token');
       // The portal's own pre-selected option (the current semester) is
@@ -252,19 +254,56 @@ void main() {
       expect(request.formData['activePageElementId'], startJobId);
     });
 
+    test('a job that starts directly (no configuration overlay) is reported as '
+        'having none', () {
+      const TabSwitchRequest base = TabSwitchRequest(
+        action: '/qisserver/pages/cm/stu/studyService/start.xhtml',
+        formData: <String, String>{},
+      );
+      for (final String response in <String>[
+        partialResponseFinished(),
+        partialResponseStarted(),
+      ]) {
+        expect(
+          HisInOneStudentServiceParser.readJobConfiguration(response, base),
+          isA<NoJobConfiguration>(),
+        );
+      }
+    });
+
+    // D-08: an overlay that is recognisably there but cannot be read
+    // completely must never be mistaken for "the job started directly" —
+    // that sent the app polling for a minute against a job never started.
     test(
-      'a job that starts directly (no configuration overlay) yields null',
+      'a recognised but incomplete overlay is unrecognised, never absent',
       () {
         const TabSwitchRequest base = TabSwitchRequest(
           action: '/qisserver/pages/cm/stu/studyService/start.xhtml',
           formData: <String, String>{},
         );
-        final TabSwitchRequest? request =
-            HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
-              partialResponseFinished(),
+        final String full = partialResponseNeedsConfiguration();
+        final Map<String, String> incomplete = <String, String>{
+          'no pre-selected option': full.replaceAll(' selected="selected"', ''),
+          'no select': full.replaceAll(
+            RegExp(r'<select.*?</select>', dotAll: true),
+            '',
+          ),
+          'no start button': full.replaceAll(RegExp(r'<button[^\n]*'), ''),
+          'start button without value': full.replaceAll(
+            'value="PDF erstellen"',
+            '',
+          ),
+        };
+        for (final MapEntry<String, String> variant in incomplete.entries) {
+          expect(
+            HisInOneStudentServiceParser.readJobConfiguration(
+              variant.value,
               base,
-            );
-        expect(request, isNull);
+            ),
+            isA<UnrecognisedJobConfiguration>(),
+            reason: variant.key,
+          );
+        }
       },
     );
   });

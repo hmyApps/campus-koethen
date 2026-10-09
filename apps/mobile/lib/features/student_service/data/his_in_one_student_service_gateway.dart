@@ -214,16 +214,26 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       // Only that overlay's own "PDF erstellen" button — a plain
       // `type="submit"` with no AJAX at all — actually starts the job, via a
       // full page POST/redirect/GET exactly like the grades feature's print
-      // buttons. `buildJobConfigurationSubmitRequest` returns `null` when no
+      // buttons. `readJobConfiguration` reports `NoJobConfiguration` when no
       // such overlay is present, which is the normal case for a job that
-      // starts right away (e.g. "Gebührenbescheinigung").
+      // starts right away (e.g. "Gebührenbescheinigung"); an overlay that is
+      // there but not completely readable fails closed — polling a job that
+      // was never started would only time out after a minute.
       if (downloadUrl == null) {
-        final TabSwitchRequest? configSubmit =
-            HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+        final JobConfiguration configuration =
+            HisInOneStudentServiceParser.readJobConfiguration(
               started.raw,
               ajaxForm,
             );
-        if (configSubmit != null) {
+        if (configuration is UnrecognisedJobConfiguration) {
+          throw const StudentServiceFailure(
+            StudentServiceFailureKind.portalStructureChanged,
+            stage: 'jobConfiguration',
+          );
+        }
+        if (configuration case JobConfigurationSubmit(
+          request: final TabSwitchRequest configSubmit,
+        )) {
           final HisInOnePage submitted = await session.postForm(
             configSubmit.action,
             configSubmit.formData,
