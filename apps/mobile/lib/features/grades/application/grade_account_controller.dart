@@ -296,6 +296,8 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
   Future<void> switchPortal(GradePortal target) async {
     final GradeAccountState current = state.value ?? const GradeAccountState();
     if (!current.isSignedIn) return;
+    final String username = current.username!;
+    final GradePortal? previous = current.activePortal;
 
     await _sessions.invalidateAndWait();
 
@@ -304,12 +306,35 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
     // follow-up sync then failed too, which offline it will — showed the
     // previous portal's grades under the new portal's name. That is exactly
     // the confusion `docs/grades.md` rules out.
-    await _cache.clear();
-    await _wipeLinkedPersonalData();
-    await _portalStore.write(target);
-    _sessions.activate((username: current.username!, portal: target));
+    try {
+      await _cache.clear();
+      await _wipeLinkedPersonalData();
+    } catch (_) {
+      // The switch is abandoned before the portal choice moved, so the
+      // account is still exactly what it was. Re-activate its session —
+      // otherwise every later refresh silently did nothing — and republish
+      // the unchanged state so linked features (student service, wallet)
+      // rebuild and re-activate the guards the wipe already invalidated.
+      if (previous != null) {
+        _sessions.activate((username: username, portal: previous));
+      }
+      state = AsyncData(
+        GradeAccountState(username: username, activePortal: previous),
+      );
+      rethrow;
+    }
+    try {
+      await _portalStore.write(target);
+    } catch (error, stackTrace) {
+      // A failed secure-storage write leaves the stored choice unknown.
+      // Neither portal may be presented as current; the account screen's
+      // retry re-reads the authoritative value from secure storage.
+      state = AsyncError<GradeAccountState>(error, stackTrace);
+      rethrow;
+    }
+    _sessions.activate((username: username, portal: target));
     state = AsyncData(
-      GradeAccountState(username: current.username, activePortal: target),
+      GradeAccountState(username: username, activePortal: target),
     );
   }
 

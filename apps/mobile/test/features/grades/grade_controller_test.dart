@@ -33,9 +33,12 @@ ProviderContainer _container({
   required MutableClock clock,
   InMemoryGradePortalStore? portalStore,
   GradeChangeNotification? gradeChangeNotification,
+  List<GradeLinkedPersonalDataWiper>? wipers,
 }) {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
+      if (wipers != null)
+        gradeLinkedPersonalDataWipersProvider.overrideWith((Ref ref) => wipers),
       // Setup tries the per-portal gateways in order; pointing BOTH at the
       // same fake keeps every existing single-portal test scenario intact
       // (the first portal tried always answers deterministically).
@@ -786,6 +789,143 @@ void main() {
         );
       },
     );
+
+    // R3-2-N02: an abandoned switch must not leave the grades session
+    // deactivated — refresh used to do nothing at all until an app restart.
+    test(
+      'an aborted switchPortal (cache clear failed) leaves refresh working on '
+      'the unchanged portal',
+      () async {
+        final FakeGradesGateway gateway = FakeGradesGateway(
+          report: sampleReport(),
+        );
+        final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+        final ProviderContainer c = _container(
+          gateway: gateway,
+          store: InMemoryGradeCredentialStore(),
+          cache: cache,
+          clock: MutableClock(t0),
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: _creds.username, password: _creds.password);
+        c.listen(gradesControllerProvider, (_, _) {});
+        await c.read(gradesControllerProvider.future);
+        final GradePortal before = c
+            .read(gradeAccountControllerProvider)
+            .requireValue
+            .activePortal!;
+
+        cache.clearError = StateError('cache locked');
+        await expectLater(
+          c
+              .read(gradeAccountControllerProvider.notifier)
+              .switchPortal(
+                before == GradePortal.hisInOne
+                    ? GradePortal.hisQisLegacy
+                    : GradePortal.hisInOne,
+              ),
+          throwsA(isA<StateError>()),
+        );
+        cache.clearError = null;
+        final int callsBefore = gateway.fetchCalls;
+
+        await c.read(gradesControllerProvider.notifier).refresh();
+
+        expect(gateway.fetchCalls, callsBefore + 1);
+        expect(c.read(gradesControllerProvider).requireValue.error, isNull);
+      },
+    );
+
+    test(
+      'an aborted switchPortal (linked wipe failed) re-activates the session '
+      'and keeps the stored portal choice',
+      () async {
+        final FakeGradesGateway gateway = FakeGradesGateway(
+          report: sampleReport(),
+        );
+        final InMemoryGradePortalStore portalStore = InMemoryGradePortalStore();
+        bool failWipe = false;
+        final ProviderContainer c = _container(
+          gateway: gateway,
+          store: InMemoryGradeCredentialStore(),
+          cache: InMemoryGradeCacheStore(),
+          clock: MutableClock(t0),
+          portalStore: portalStore,
+          wipers: <GradeLinkedPersonalDataWiper>[
+            () async {
+              if (failWipe) throw StateError('wallet locked');
+            },
+          ],
+        );
+        await c.read(gradeAccountControllerProvider.future);
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: _creds.username, password: _creds.password);
+        c.listen(gradesControllerProvider, (_, _) {});
+        await c.read(gradesControllerProvider.future);
+        final GradePortal before = portalStore.lastWritten!;
+        final int writesBefore = portalStore.writes;
+
+        failWipe = true;
+        await expectLater(
+          c
+              .read(gradeAccountControllerProvider.notifier)
+              .switchPortal(
+                before == GradePortal.hisInOne
+                    ? GradePortal.hisQisLegacy
+                    : GradePortal.hisInOne,
+              ),
+          throwsA(const GradeFailure(GradeFailureKind.cacheUnavailable)),
+        );
+        final int callsBefore = gateway.fetchCalls;
+
+        await c.read(gradesControllerProvider.notifier).refresh();
+
+        expect(portalStore.writes, writesBefore);
+        expect(
+          c.read(gradeAccountControllerProvider).requireValue.activePortal,
+          before,
+        );
+        expect(gateway.fetchCalls, callsBefore + 1);
+      },
+    );
+
+    test('a switchPortal whose portal-choice write fails is surfaced as an '
+        'account error instead of a silently dead session', () async {
+      final InMemoryGradePortalStore portalStore = InMemoryGradePortalStore();
+      final ProviderContainer c = _container(
+        gateway: FakeGradesGateway(report: sampleReport()),
+        store: InMemoryGradeCredentialStore(),
+        cache: InMemoryGradeCacheStore(),
+        clock: MutableClock(t0),
+        portalStore: portalStore,
+      );
+      await c.read(gradeAccountControllerProvider.future);
+      await c
+          .read(gradeAccountControllerProvider.notifier)
+          .signIn(username: _creds.username, password: _creds.password);
+      final GradePortal before = portalStore.lastWritten!;
+
+      portalStore.writeError = const GradeFailure(
+        GradeFailureKind.secureStorageUnavailable,
+      );
+      await expectLater(
+        c
+            .read(gradeAccountControllerProvider.notifier)
+            .switchPortal(
+              before == GradePortal.hisInOne
+                  ? GradePortal.hisQisLegacy
+                  : GradePortal.hisInOne,
+            ),
+        throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+      );
+
+      // The stored choice is now unknown; the screen's retry re-reads it
+      // from secure storage instead of trusting either portal.
+      expect(c.read(gradeAccountControllerProvider).hasError, isTrue);
+    });
   });
 
   // D-01: the "new grade" diff and the empty-report guard compare against the

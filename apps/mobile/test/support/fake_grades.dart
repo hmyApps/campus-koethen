@@ -35,10 +35,17 @@ class InMemoryGradeCredentialStore implements GradeCredentialStore {
   int clears = 0;
   Object? clearError;
 
+  /// When set, [read] throws — a keystore that failed to open, which is not
+  /// the same as "no credentials stored".
+  Object? readError;
+
   GradeCredentials? get lastWritten => _stored;
 
   @override
-  Future<GradeCredentials?> read() async => _stored;
+  Future<GradeCredentials?> read() async {
+    if (readError != null) throw readError!;
+    return _stored;
+  }
 
   @override
   Future<void> write(GradeCredentials credentials) async {
@@ -63,13 +70,24 @@ class InMemoryGradePortalStore implements GradePortalStore {
   int writes = 0;
   int clears = 0;
 
+  /// When set, [read] throws — a keystore that failed to open, which is not
+  /// the same as "no portal choice stored".
+  Object? readError;
+
+  /// When set, [write] throws without storing anything.
+  Object? writeError;
+
   GradePortal? get lastWritten => _stored;
 
   @override
-  Future<GradePortal?> read() async => _stored;
+  Future<GradePortal?> read() async {
+    if (readError != null) throw readError!;
+    return _stored;
+  }
 
   @override
   Future<void> write(GradePortal portal) async {
+    if (writeError != null) throw writeError!;
     _stored = portal;
     writes++;
   }
