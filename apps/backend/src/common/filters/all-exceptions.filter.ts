@@ -75,9 +75,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    // The Error itself, never `exception.stack` as text: a string is free text
+    // to the logger, so its production rule for errors (name and code only —
+    // no message, no stack) would not apply, and a stack starts with the
+    // message. A thrown non-Error is described by its type alone for the same
+    // reason.
     this.logger.error(
       `Unhandled exception on ${request.method} ${request.path} (requestId=${requestId})`,
-      exception instanceof Error ? exception.stack : String(exception),
+      exception instanceof Error ? exception : { thrownType: typeof exception },
     );
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

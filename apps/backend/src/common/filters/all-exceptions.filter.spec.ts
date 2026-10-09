@@ -1,6 +1,7 @@
-import { HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { ConsoleLogger, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
 import { ApiError } from '../errors/api-error';
+import { JsonLogger } from '../logger/json-logger.service';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
 interface Captured {
@@ -108,6 +109,64 @@ describe('AllExceptionsFilter', () => {
     new AllExceptionsFilter().catch(exception, host);
 
     expect(captured().headers['cache-control']).toBe('no-store');
+  });
+
+  /**
+   * The stack used to be handed to the logger as a STRING. A string is free
+   * text to the logger, so the production rule for errors (no stack, no
+   * message) never applied — and a stack starts with the message.
+   */
+  describe('logging an unexpected exception', () => {
+    it('hands the logger the Error itself, never its stack as text', () => {
+      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const { host } = hostFor();
+      const thrown = new Error('lookup failed for demo-person@example.invalid');
+
+      new AllExceptionsFilter().catch(thrown, host);
+
+      expect(error).toHaveBeenCalledTimes(1);
+      const [message, detail] = error.mock.calls[0]! as unknown[];
+      expect(detail).toBe(thrown);
+      expect(String(message)).not.toContain('demo-person@example.invalid');
+    });
+
+    it('does not turn a thrown non-Error value into log text', () => {
+      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const { host } = hostFor();
+
+      new AllExceptionsFilter().catch('raw value demo-person@example.invalid', host);
+
+      expect(JSON.stringify(error.mock.calls)).not.toContain('demo-person@example.invalid');
+    });
+
+    it('writes neither message nor stack in production, end to end', () => {
+      const originalNodeEnv = process.env['NODE_ENV'];
+      process.env['NODE_ENV'] = 'production';
+      const written: string[] = [];
+      const capture = (chunk: unknown): boolean => {
+        written.push(String(chunk));
+        return true;
+      };
+      jest.spyOn(process.stdout, 'write').mockImplementation(capture);
+      jest.spyOn(process.stderr, 'write').mockImplementation(capture);
+      Logger.overrideLogger(new JsonLogger());
+      try {
+        const { host } = hostFor();
+        new AllExceptionsFilter().catch(
+          new Error('lookup failed for demo-person@example.invalid'),
+          host,
+        );
+      } finally {
+        // Back to Nest's default, so no later test in this file logs as JSON.
+        Logger.overrideLogger(new ConsoleLogger());
+        process.env['NODE_ENV'] = originalNodeEnv;
+      }
+
+      const output = written.join('');
+      expect(output).toContain('Unhandled exception');
+      expect(output).not.toContain('demo-person@example.invalid');
+      expect(output).not.toMatch(/\bat .+\(.+:\d+:\d+\)/);
+    });
   });
 
   it('answers an unexpected exception generically and never leaks the cause', () => {

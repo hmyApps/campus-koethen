@@ -54,6 +54,43 @@ describe('redactValue', () => {
     expect(redactValue(42)).toBe(42);
     expect(redactValue(null)).toBeNull();
   });
+
+  describe('an Error', () => {
+    const originalNodeEnv = process.env['NODE_ENV'];
+
+    afterEach(() => {
+      process.env['NODE_ENV'] = originalNodeEnv;
+    });
+
+    function failure(): Error {
+      // The message is the sensitive part: it is free text that can carry
+      // whatever the failing code interpolated — a query value, an address.
+      return Object.assign(new Error('lookup failed for demo-person@example.invalid'), {
+        code: 'P2025',
+      });
+    }
+
+    it('is reduced to its name and code in production — no message, no stack', () => {
+      process.env['NODE_ENV'] = 'production';
+
+      const out = redactValue(failure());
+
+      expect(out).toEqual({ name: 'Error', code: 'P2025' });
+      expect(JSON.stringify(out)).not.toContain('demo-person@example.invalid');
+    });
+
+    it('keeps message and stack outside production, still redacted', () => {
+      process.env['NODE_ENV'] = 'development';
+      const error = new Error('connecting to postgresql://campus_app:s3cr3t-pw@db:5432/campus');
+
+      const out = redactValue(error) as Record<string, unknown>;
+
+      expect(out['name']).toBe('Error');
+      expect(String(out['message'])).not.toContain('s3cr3t-pw');
+      expect(String(out['message'])).toContain('[redacted]');
+      expect(typeof out['stack']).toBe('string');
+    });
+  });
 });
 
 describe('JsonLogger', () => {
