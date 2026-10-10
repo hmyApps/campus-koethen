@@ -101,7 +101,20 @@ Die Antwort enthält `statusUrl`, `receiptPdfUrl` und optional `number`. Danach 
 5. Sofort versuchen, den Status zu laden; scheitert das, bleibt die Einreichung trotzdem gespeichert.
 
 Scheitert Schritt 2, bleibt der Entwurf **mit seinem Schlüssel** erhalten und die App sagt deutlich,
-dass der Vorgang existiert, der Zugang aber verloren gehen könnte.
+dass der Vorgang existiert, der Zugang aber verloren gehen könnte. Der Entwurf wird dabei
+**eingefroren**: Der Server kennt den Schlüssel jetzt, also darf nur noch ein unveränderter Retry
+folgen, der den Link als Replay erneut abholt — ein geänderter bekäme `409`.
+
+Besteht Schritt 1 nicht — `200`/`201`, aber ein Link fehlt, ist kein HTTPS oder gehört zu einem
+fremden Origin —, gilt der Ausgang als **unbekannt**, nicht als gescheitert: Der Vorgang existiert
+sehr wahrscheinlich. Ohne verwendbaren Link wird nichts gespeichert, und der Entwurf wird wie nach
+einem Timeout eingefroren.
+
+Vor dem Senden prüft die App, ob die gespeicherten Vorgänge lesbar sind. Ist das nicht der Fall,
+wird **nichts** gesendet — sonst ginge der Statuslink der Antwort mangels Speicherziel verloren.
+Solange ein Entwurf gesendet wird, lässt er sich weder ändern noch löschen, seine Dateien nicht
+ersetzen und kein zweiter Versand starten — auch nicht aus einer zweiten Instanz des Formulars; die
+Liste kennzeichnet ihn als „Wird übermittelt …“.
 
 ## 6. Der Statuslink ist ein Bearer-Credential
 
@@ -161,6 +174,13 @@ daraus eine Löschung abzuleiten würde einen Vorgang unerreichbar machen.
 
 Der AES-Schlüssel liegt ausschließlich im Keychain/Keystore. **Nichts** davon landet in
 SharedPreferences oder einer unverschlüsselten Hive-Box.
+
+**Lesefehler sind keine leere Liste.** Lässt sich die Box nicht öffnen oder eine gespeicherte Liste
+nicht dekodieren, zeigt die App einen Fehler mit „Erneut laden“ und schreibt **nichts** — sonst
+würde der nächste Schreibvorgang alle Statuslinks überschreiben. Eine Box, die ihr gültiger
+Schlüssel nicht öffnen kann, wird für diese Daten nicht wie ein Cache gelöscht, sondern bleibt bis
+zum nächsten Versuch oder zur ausdrücklichen Löschung liegen. Einzelne Einträge, die dieser Build
+nicht versteht, werden bei jedem Schreiben unverändert mitgeführt.
 
 Die Dateigröße wird über die Picker-Metadaten geprüft, **bevor** Inhalt gelesen wird. Neue Anhänge
 werden in verschlüsselten Blöcken von 256 KiB abgelegt und beim Multipart-Upload blockweise wieder
