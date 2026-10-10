@@ -58,8 +58,15 @@ abstract interface class StudentServiceGateway {
   /// Every step after login is a single HISinOne session: starting the job,
   /// polling and fetching the document all happen before that session's
   /// logout, because the download link is scoped to it.
+  ///
+  /// [isCancelled] is checked before every poll tick and before the document
+  /// fetch. Once it reports `true` the job is abandoned (the session still
+  /// logs out) and [CertificateUnavailable] with reason `cancelled` is
+  /// returned — so deleting the grades connection never waits out the whole
+  /// polling budget.
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  );
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  });
 }
