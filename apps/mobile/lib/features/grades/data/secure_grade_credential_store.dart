@@ -23,16 +23,23 @@ class SecureGradeCredentialStore implements GradeCredentialStore {
   static const String _userKey = 'grades.qis.username';
   static const String _passwordKey = 'grades.qis.password';
 
+  /// Returns `null` ONLY for a confirmed absence. A keystore that fails to
+  /// read throws [GradeFailureKind.secureStorageUnavailable]: reporting that
+  /// as "signed out" sent the account controller down its signed-out path,
+  /// whose catch-up wipe deletes the wallet and student-service data of an
+  /// account that still exists.
   @override
   Future<GradeCredentials?> read() async {
+    final String? username;
+    final String? password;
     try {
-      final String? username = await _storage.read(key: _userKey);
-      final String? password = await _storage.read(key: _passwordKey);
-      if (username == null || password == null) return null;
-      return GradeCredentials(username: username, password: password);
+      username = await _storage.read(key: _userKey);
+      password = await _storage.read(key: _passwordKey);
     } catch (_) {
-      return null;
+      throw const GradeFailure(GradeFailureKind.secureStorageUnavailable);
     }
+    if (username == null || password == null) return null;
+    return GradeCredentials(username: username, password: password);
   }
 
   @override

@@ -155,6 +155,28 @@ describe('date range parsing', () => {
     expect(parse({ from: '2026-03-01', to: '2026-04-01' }).success).toBe(true);
   });
 
+  /**
+   * "Today" is the campus day, not the UTC day. Between midnight and 01:00
+   * (winter) or 02:00 (summer) Berlin time the UTC date is still yesterday, so
+   * a default taken from `toISOString()` started the menu one day early.
+   */
+  describe('default window', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it.each([
+      ['summer time, 00:30 CEST', '2026-07-19T22:30:00.000Z', '2026-07-20', '2026-08-03'],
+      ['winter time, 00:30 CET', '2026-01-14T23:30:00.000Z', '2026-01-15', '2026-01-29'],
+      ['the middle of a Berlin day', '2026-07-20T12:00:00.000Z', '2026-07-20', '2026-08-03'],
+    ])('starts on the Berlin calendar day (%s)', (_label, now, from, to) => {
+      jest.useFakeTimers().setSystemTime(new Date(now));
+
+      const result = parse({});
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ from, to });
+    });
+  });
+
   describe('parseIsoDayUtc', () => {
     it('returns midnight UTC for a real day', () => {
       expect(parseIsoDayUtc('2026-03-01')).toBe(Date.UTC(2026, 2, 1));

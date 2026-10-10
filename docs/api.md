@@ -310,12 +310,16 @@ Reiner Event-Feed für Beiträge mit dem Tag `event`.
 | `locale`   | `de` \| `en`  | `de`               |                                                                               |
 
 Das Abfrageintervall ist als **Überlappung** definiert: `eventStart <= to AND (eventEnd ?? eventStart) >= from`.
+Wie im Feed nur zeitlich gültige Beiträge (`validFrom` <= jetzt <= `validUntil`).
 Sortierung: `eventStart` ASC, dann `slug` ASC (deterministisch).
 
 ### `GET /v1/posts/:slug`
 
 Liefert genau denselben Aufbau wie ein Listeneintrag.
-Unbekannter Slug ⇒ `404 POST_NOT_FOUND`.
+Es gelten dieselben Sichtbarkeitsregeln wie im Feed: Der Beitrag muss zeitlich gültig sein
+(`validFrom` <= jetzt <= `validUntil`) und in mindestens einem **aktiven** Kanal liegen.
+Unbekannter, gesperrter (Embargo), abgelaufener oder nur in inaktiven Kanälen liegender Slug ⇒
+`404 POST_NOT_FOUND` — bewusst ununterscheidbar.
 
 ```jsonc
 {
@@ -401,6 +405,11 @@ Kontaktperson ist gültig (`personCount: 0`) und muss im Client vollständig nut
 
 Zusätzlich `description` (Blocks, gleiche Regeln wie News-`content`) und `persons` — nur aktive
 Personen, sortiert nach `sortOrder`, dann `name`.
+
+Welche Personen ein Bereich hat, bestimmt in jeder Sprache die kanonische deutsche Fassung — dieselbe
+Quelle, aus der die Liste `personCount` zählt; das gilt auch für den Suchindex. Aus der
+Übersetzung kommen nur `role` und `description`. Fehlt dort ein gepflegter Text, bleibt der
+deutsche stehen und `translationFallback` ist `true`.
 
 ```jsonc
 {
@@ -516,7 +525,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 
 | Parameter | Typ          | Standard         | Regeln                                              |
 | --------- | ------------ | ---------------- | --------------------------------------------------- |
-| `from`    | `YYYY-MM-DD` | heute            |                                                     |
+| `from`    | `YYYY-MM-DD` | heute            | „heute“ ist der Kalendertag in `Europe/Berlin`      |
 | `to`      | `YYYY-MM-DD` | `from` + 13 Tage | `to >= from`, Spanne **max. 31 Tage** ⇒ sonst `400` |
 | `locale`  | `de` \| `en` | `de`             |                                                     |
 
@@ -625,8 +634,9 @@ Liefert den vollständigen sichtbaren Katalog **paginiert** und ohne feste
 Gesamtkappung. `query` wird serverseitig ausgewertet, damit auch Treffer hinter
 der ersten Seite auffindbar sind. Sortierung: `shortName`, `longName`,
 `department`, `id` jeweils aufsteigend. Exakte, anhand ihrer Stundenplandaten
-bestätigte Aliasse werden auf einen sichtbaren Eintrag konsolidiert; Gruppen mit
-abweichenden Plänen bleiben auch bei gleichem Namen getrennt sichtbar.
+bestätigte Aliasse werden innerhalb desselben Semesterkatalogs auf einen sichtbaren
+Eintrag konsolidiert; Gruppen mit abweichenden Plänen bleiben auch bei gleichem Namen
+getrennt sichtbar, ebenso gleichnamige Gruppen verschiedener Semester.
 
 ```jsonc
 {
@@ -664,11 +674,13 @@ Es gibt **kein** Feld mit der WebUntis-ID.
 Löst eine bereits gespeicherte **Campus-UUID** einzeln auf. Dadurch müssen
 Kaltstart, Einstellungen und Kalender nicht den Gruppenkatalog laden. Ein durch
 die Dublettenprüfung ausgeblendeter Alt-Alias liefert seinen sichtbaren
-Vertreter; der Client kann die lokale Campus-UUID darauf migrieren. Die Antwort
+Vertreter aus demselben Semesterkatalog, nie eine gleichnamige Gruppe eines
+anderen Semesters; der Client kann die lokale Campus-UUID darauf migrieren. Die Antwort
 hat dieselbe öffentliche Gruppenform und dieselben Zeitraum-/Freshness-Metadaten
 wie der Katalog, aber keinen Pagination-Block. Unbekannte oder syntaktisch
 ungültige UUIDs liefern den unten beschriebenen Fehlervertrag. Externe IDs
 werden auch hier nie ausgegeben.
+
 ### `GET /v1/timetable/periods`
 
 Liefert bis zu acht synchronisierte Semesterkataloge in chronologischer Reihenfolge. Der
@@ -1097,7 +1109,10 @@ Regeln, die der Endpunkt durchsetzt:
   Container; sie ein zweites Mal durch `gzip` zu schicken kostet auf beiden Seiten Rechenzeit und
   liefert ein eher größeres Ergebnis.
 - `Cache-Control: public, max-age=86400` — ein ausgetauschtes Bild bekommt vom CMS einen neuen
-  Dateinamen, sodass ein langer Cache nichts veraltet.
+  Dateinamen, sodass ein langer Cache nichts veraltet. Das gilt **nur** für `200` und `304`.
+  Fehlerantworten (`404`, `503`, …) tragen wie jede Fehlerantwort der API
+  `Cache-Control: no-store`, damit ein kurzer CMS-Ausfall kein Bild für einen Tag verschwinden
+  lässt.
 
 #### Revalidierung mit `If-None-Match`
 

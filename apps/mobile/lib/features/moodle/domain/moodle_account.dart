@@ -76,6 +76,8 @@ class MoodleSiteInfo {
 /// by the platform secure storage. No SharedPreferences, no plain Hive, no
 /// in-memory-only Riverpod state, no static field.
 abstract interface class MoodleTokenStore {
+  /// Null means "no token stored". A secure backend that cannot be read throws
+  /// a `MoodleFailure` instead, so it is never mistaken for a disconnect.
   Future<MoodleToken?> read();
   Future<void> write(MoodleToken token);
   Future<void> clear();

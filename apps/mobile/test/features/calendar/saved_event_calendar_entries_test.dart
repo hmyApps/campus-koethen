@@ -172,4 +172,35 @@ void main() {
       expect(out, hasLength(1));
     });
   });
+
+  group('the calendar entry of a saved snapshot keeps what it was saved '
+      'with (F-04)', () {
+    SavedEventSnapshot withDetails({bool isCancelled = false}) =>
+        SavedEventSnapshot(
+          eventRef: 'post:demo-sommerfest',
+          kind: UnifiedEventKind.postEvent,
+          title: 'Demo-Sommerfest',
+          start: DateTime.utc(2026, 8, 10, 18),
+          savedAt: DateTime.utc(2026, 8, 1),
+          location: 'Demo-Hörsaal 1',
+          description: 'Demo-Beschreibung',
+          isCancelled: isCancelled,
+        );
+
+    test('location and description reach the calendar entry', () {
+      final CalendarEntry entry = savedEventSnapshotToCalendarEntry(
+        withDetails(),
+      );
+      expect(entry.location, 'Demo-Hörsaal 1');
+      expect(entry.subtitle, 'Demo-Beschreibung');
+      expect(entry.isCancelled, isFalse);
+    });
+
+    test('a cancelled snapshot stays marked as cancelled', () {
+      final CalendarEntry entry = savedEventSnapshotToCalendarEntry(
+        withDetails(isCancelled: true),
+      );
+      expect(entry.isCancelled, isTrue);
+    });
+  });
 }

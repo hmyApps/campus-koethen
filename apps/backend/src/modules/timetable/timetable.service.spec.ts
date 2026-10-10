@@ -83,7 +83,12 @@ describe('TimetableService group catalogue', () => {
     };
     const prisma = {
       timetableGroup: {
-        findFirst: jest.fn().mockResolvedValue({ ...publicGroup, externalId: 'secret-source-id' }),
+        findFirst: jest.fn().mockResolvedValue({
+          ...publicGroup,
+          externalId: 'secret-source-id',
+          catalogVisible: true,
+          contexts: [{ contextId: 'context-internal' }],
+        }),
       },
       timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
     };
@@ -93,6 +98,8 @@ describe('TimetableService group catalogue', () => {
 
     expect(result.data).toEqual(publicGroup);
     expect(JSON.stringify(result)).not.toContain('secret-source-id');
+    expect(JSON.stringify(result)).not.toContain('context-internal');
+    expect(prisma.timetableGroup.findFirst).toHaveBeenCalledTimes(1);
     expect(prisma.timetableGroup.findFirst).toHaveBeenCalledWith({
       where: { id: publicGroup.id },
       select: {
@@ -101,26 +108,38 @@ describe('TimetableService group catalogue', () => {
         longName: true,
         department: true,
         catalogVisible: true,
+        contexts: { select: { contextId: true } },
       },
     });
   });
 
-  it('migrates a saved hidden alias to its visible public representative', async () => {
-    const hidden = {
-      id: '43a7302c-19ce-4fd7-a06e-003599fd75d0',
-      shortName: 'AIN2 - BT',
-      longName: 'Angewandte Informatik',
-      department: 'FB5',
-      catalogVisible: false,
-    };
-    const visible = {
-      ...hidden,
-      id: '11111111-1111-4111-8111-111111111111',
-      catalogVisible: true,
-    };
+  const hidden = {
+    id: '43a7302c-19ce-4fd7-a06e-003599fd75d0',
+    shortName: 'AIN2 - BT',
+    longName: 'Angewandte Informatik',
+    department: 'FB5',
+    catalogVisible: false,
+  };
+  const visible = {
+    ...hidden,
+    id: '11111111-1111-4111-8111-111111111111',
+    catalogVisible: true,
+  };
+  const publicSelect = {
+    id: true,
+    shortName: true,
+    longName: true,
+    department: true,
+    catalogVisible: true,
+  };
+
+  it('migrates a saved hidden alias to its visible representative of the same semester', async () => {
     const prisma = {
       timetableGroup: {
-        findFirst: jest.fn().mockResolvedValueOnce(hidden).mockResolvedValueOnce(visible),
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ ...hidden, contexts: [{ contextId: 'context-ss' }] })
+          .mockResolvedValueOnce(visible),
       },
       timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
     };
@@ -128,7 +147,14 @@ describe('TimetableService group catalogue', () => {
 
     const result = await service.getGroup(locale, hidden.id);
 
-    expect(result.data.id).toBe(visible.id);
+    expect(result.data).toEqual({
+      id: visible.id,
+      shortName: visible.shortName,
+      longName: visible.longName,
+      department: visible.department,
+    });
+    // Never resolved across semesters: a same-named group of another
+    // semester catalogue is a different cohort, not an alias.
     expect(prisma.timetableGroup.findFirst.mock.calls[1]![0]).toEqual({
       where: {
         active: true,
@@ -136,16 +162,34 @@ describe('TimetableService group catalogue', () => {
         shortName: hidden.shortName,
         longName: hidden.longName,
         department: hidden.department,
+        contexts: { some: { contextId: { in: ['context-ss'] } } },
       },
       orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        shortName: true,
-        longName: true,
-        department: true,
-        catalogVisible: true,
-      },
+      select: publicSelect,
     });
+  });
+
+  it('resolves a hidden alias without any semester only among groups without one', async () => {
+    const prisma = {
+      timetableGroup: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ ...hidden, contexts: [] })
+          .mockResolvedValueOnce(null),
+      },
+      timetableSyncRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TimetableService(prisma as unknown as PrismaService, env);
+
+    const result = await service.getGroup(locale, hidden.id);
+
+    // Nothing matched: the saved group answers for itself.
+    expect(result.data.id).toBe(hidden.id);
+    expect(prisma.timetableGroup.findFirst.mock.calls[1]![0]).toEqual(
+      expect.objectContaining({
+        where: expect.objectContaining({ contexts: { none: {} } }),
+      }),
+    );
   });
 });
 

@@ -10,9 +10,13 @@
  * SAFETY: every row this writes carries the marker source `perf-baseline` or
  * the slug prefix `perf-`. `--reset` deletes exactly those rows and nothing
  * else, so the script can never remove imported or editorial data. It refuses
- * to run against NODE_ENV=production.
+ * to run against NODE_ENV=production, and it only connects to a dedicated
+ * performance database: PERF_DATABASE_URL, named campus_app_perf[_<run-id>],
+ * with DATABASE_URL set to the very same value (perf-database-url.ts).
  *
- * Usage (from the repository root):
+ * Usage (from the repository root, see docs/performance-baseline.md §11):
+ *   export PERF_DATABASE_URL="postgresql://campus_app:<lokal>@127.0.0.1:5443/campus_app_perf"
+ *   export DATABASE_URL="$PERF_DATABASE_URL"
  *   pnpm --filter @campus/backend exec ts-node --project ../../scripts/perf/tsconfig.json \
  *     ../../scripts/perf/seed-perf-dataset.ts --profile realistic --reset
  */
@@ -20,6 +24,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../apps/backend/src/generated/prisma/client';
 import { DatasetProfile, PROFILES, ProfileName, expectedRowCounts } from './dataset-profiles';
+import { requirePerfDatabaseUrl } from './perf-database-url';
 
 /** Fixed anchor so dates — and therefore query plans — repeat exactly. */
 const BASE_DATE = new Date('2026-03-02T00:00:00.000Z');
@@ -362,6 +367,10 @@ async function seedPublicCalendars(prisma: PrismaClient, p: DatasetProfile): Pro
         nameEn: i % 3 === 0 ? null : `Perf Calendar ${i}`,
         colorHex: '#3366CC',
         sortOrder: i * 10,
+        // Active on purpose: the public calendar routes serve active calendars
+        // only, so inactive rows would benchmark an empty answer. These rows
+        // only ever exist in the guarded performance database, where no worker
+        // runs that could try to sync the `.invalid` ids.
         isActive: true,
         defaultSubscribed: i < 3,
         // Both on, so an event carries its description and location and the
@@ -416,13 +425,9 @@ async function seedPublicCalendars(prisma: PrismaClient, p: DatasetProfile): Pro
 }
 
 async function main(): Promise<void> {
-  if (process.env['NODE_ENV'] === 'production') {
-    throw new Error('seed-perf-dataset refuses to run with NODE_ENV=production');
-  }
-  const databaseUrl = process.env['DATABASE_URL'];
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required');
-  }
+  // Never the ordinary DATABASE_URL on its own: only a dedicated, name-checked
+  // performance database (see perf-database-url.ts).
+  const databaseUrl = requirePerfDatabaseUrl();
 
   const args = process.argv.slice(2);
   const profileArg = (args[args.indexOf('--profile') + 1] ?? 'realistic') as ProfileName;

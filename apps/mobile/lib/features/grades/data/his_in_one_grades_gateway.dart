@@ -197,7 +197,7 @@ class HisInOneGradesGateway implements GradesGateway, ExamReportGateway {
     final Response<ResponseBody> response = await session.postFormStream(
       request.action,
       request.formData,
-      allowsTarget: _profile.allowsDocumentDownload,
+      allowsTarget: _profile.examReportDownloadRoute(),
     );
     if ((response.statusCode ?? 0) != 200) {
       return ExamReportUnavailable('http-${response.statusCode}');

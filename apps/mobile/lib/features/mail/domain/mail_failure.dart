@@ -24,6 +24,11 @@ enum MailFailureKind {
   /// sent people off to re-enter a password that was never rejected.
   sessionClosed,
 
+  /// The server renumbered the mailbox (its UIDVALIDITY changed) since the
+  /// message ids in use were read, so an id may now name another message.
+  /// Destructive actions refuse to run; a refresh rebuilds the list.
+  mailboxChanged,
+
   /// A file picked for an outgoing message could not be read at send time
   /// (e.g. it was deleted, moved, or revoked access in between). Never
   /// carries the path or the raw I/O error.

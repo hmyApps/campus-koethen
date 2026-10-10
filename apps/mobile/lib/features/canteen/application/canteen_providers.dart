@@ -47,16 +47,50 @@ final canteenMenuProvider = FutureProvider.family<Loaded<CanteenMenu>, String>((
       .fetchMenu(locale: locale, slug: slug);
 });
 
+/// The clock the canteen's "today" is read from. Overridden in tests, same
+/// convention as `savedEventsClockProvider`.
+final Provider<DateTime Function()> canteenClockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
 /// The day the canteen screen currently shows. Defaults to today.
+///
+/// "Today" is a moving target: the menu window is re-requested from the
+/// current date on every refresh, so a selection left on yesterday after
+/// midnight points at a day the menu no longer holds (G-04). As long as the
+/// reader has not picked another day on purpose, [followToday] moves the
+/// selection along with the calendar.
 class SelectedMenuDayController extends Notifier<DateTime> {
+  /// Whether the selection is "today" rather than one particular date.
+  bool _followsToday = true;
+
   @override
   DateTime build() {
-    final DateTime now = DateTime.now();
+    _followsToday = true;
+    return _today();
+  }
+
+  DateTime _today() {
+    final DateTime now = ref.read(canteenClockProvider)();
     return DateTime(now.year, now.month, now.day);
   }
 
   void select(DateTime date) {
     state = DateTime(date.year, date.month, date.day);
+    // Going back to today is a choice to follow it again.
+    _followsToday = state == _today();
+  }
+
+  /// Moves a selection that follows today on to the current date.
+  ///
+  /// A day the reader chose deliberately stays — unless the calendar has
+  /// caught up with it, from which point it is simply today again.
+  void followToday() {
+    final DateTime today = _today();
+    if (state == today) {
+      _followsToday = true;
+      return;
+    }
+    if (_followsToday) state = today;
   }
 
   /// Moves [days] days, DST-safe.

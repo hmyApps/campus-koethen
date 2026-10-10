@@ -157,8 +157,57 @@ describe('/v1/media (integration)', () => {
   it('still refuses a path outside the upload directory', async () => {
     fetchMock = jest.spyOn(globalThis, 'fetch');
 
-    await request(app.getHttpServer()).get('/v1/media/uploads/..%2F..%2Fetc%2Fpasswd').expect(404);
+    const res = await request(app.getHttpServer())
+      .get('/v1/media/uploads/..%2F..%2Fetc%2Fpasswd')
+      .expect(404);
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  /**
+   * Only an image may be cached for a day.
+   *
+   * The day-long header used to be a handler decorator, which Nest applies
+   * BEFORE the handler runs — so a 404 or a 503 left with it too, and the edge
+   * cache prefers the upstream header over its own `proxy_cache_valid`. One
+   * request during a CMS hiccup kept an image missing for 24 hours.
+   */
+  describe('error answers are never cacheable', () => {
+    it('marks a missing image no-store', async () => {
+      fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => new Response('not found', { status: 404 }));
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/media/uploads/foto_5a141d3978.png')
+        .expect(404);
+
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+
+    it('marks an unreachable CMS no-store', async () => {
+      fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        throw new TypeError('fetch failed');
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/media/uploads/foto_5a141d3978.png')
+        .expect(503);
+
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+
+    it('keeps the security headers on an error answer', async () => {
+      fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => new Response('not found', { status: 404 }));
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/media/uploads/foto_5a141d3978.png')
+        .expect(404);
+
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
   });
 });

@@ -454,21 +454,26 @@ erfundener Wert wäre schlimmer als eine offene Stelle.
 # 1. Isolierte Messdatenbank (nicht den Entwicklungsstack benutzen)
 docker run -d --name campus-perf-pg \
   -e POSTGRES_DB=postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD="<lokal>" \
-  -e APP_DB_NAME=campus_app_local -e APP_DB_USER=campus_app -e APP_DB_PASSWORD="<lokal>" \
+  -e APP_DB_NAME=campus_app_perf -e APP_DB_USER=campus_app -e APP_DB_PASSWORD="<lokal>" \
   -e CMS_DB_NAME=campus_cms_local -e CMS_DB_USER=campus_cms -e CMS_DB_PASSWORD="<lokal>" \
   -e POSTGRES_INITDB_ARGS='--data-checksums' \
   -p 127.0.0.1:5443:5432 \
   -v "$PWD/infrastructure/local/initdb:/docker-entrypoint-initdb.d:ro" \
   postgres:16-alpine
 
-# 2. Schema + Datenprofil
+# 2. Schema + Datenprofil — Ziel AUSDRÜCKLICH setzen. Ohne gesetztes DATABASE_URL lädt
+#    `prisma migrate deploy` per dotenv die Entwicklungsdatenbank aus apps/backend/.env.
+#    Der Seed liest nur PERF_DATABASE_URL, verlangt den Namen campus_app_perf[_<run-id>]
+#    und bricht ab, wenn DATABASE_URL nicht exakt denselben Wert hat.
+export PERF_DATABASE_URL="postgresql://campus_app:<lokal>@127.0.0.1:5443/campus_app_perf"
+export DATABASE_URL="$PERF_DATABASE_URL"
 pnpm --filter @campus/backend exec prisma migrate deploy
 pnpm --filter @campus/backend exec ts-node \
   --project ../../scripts/perf/tsconfig.json \
   ../../scripts/perf/seed-perf-dataset.ts --profile realistic --reset
 
 # 3. Zeilenzahlen gegen das Profil prüfen — Abweichung = Lauf verwerfen
-docker exec campus-perf-pg psql -U postgres -d campus_app_local -c \
+docker exec campus-perf-pg psql -U postgres -d campus_app_perf -c \
   "select 'meals',count(*) from meals union all select 'sync_runs',count(*) from sync_runs \
    union all select 'cal_events',count(*) from public_calendar_events;"
 
@@ -479,8 +484,10 @@ docker exec campus-perf-pg psql -U postgres -d campus_app_local -c \
 #    Abschnitt 6 und 7 sind mit gesetztem Flag entstanden. Der Sync selbst wird
 #    dadurch nicht ausgelöst — das ist Sache des Workers, und
 #    WEBUNTIS_SYNC_ON_BOOT bleibt aus.
+#    DATABASE_URL steht hier noch einmal ausdrücklich, damit die API auch in einer neuen Shell
+#    nie die Entwicklungsdatenbank misst.
 node scripts/perf/strapi-stub.mjs --port 4599 &
-NODE_ENV=production STRAPI_BASE_URL=http://127.0.0.1:4599 \
+NODE_ENV=production DATABASE_URL="$PERF_DATABASE_URL" STRAPI_BASE_URL=http://127.0.0.1:4599 \
   STRAPI_API_TOKEN=<beliebig, nur "gesetzt" zählt> WEBUNTIS_ENABLED=true \
   PORT=3099 HOST=127.0.0.1 LOG_LEVEL=warn \
   node apps/backend/dist/main.js &

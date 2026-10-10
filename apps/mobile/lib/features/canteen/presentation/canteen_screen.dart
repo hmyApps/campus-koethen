@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -97,6 +99,14 @@ class _CanteenScreenState extends ConsumerState<CanteenScreen>
   }
 
   Future<void> _refresh() async {
+    // Every refresh — on opening, on resume and on the foreground timer —
+    // requests the menu from today on, so it is also where a new calendar day
+    // has to reach the selected day (G-04). The first refresh runs inside
+    // initState, where Riverpod forbids modifying a provider, hence the
+    // microtask.
+    scheduleMicrotask(() {
+      if (mounted) ref.read(selectedMenuDayProvider.notifier).followToday();
+    });
     final String? slug = ref.read(selectedCanteenSlugProvider);
     ref.invalidate(canteensProvider);
     if (slug != null) ref.invalidate(canteenMenuProvider(slug));

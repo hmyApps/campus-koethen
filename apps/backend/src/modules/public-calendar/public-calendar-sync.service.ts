@@ -44,6 +44,37 @@ export interface EventOutcome {
 
 const PUBLIC_CALENDAR_FEED_CONCURRENCY = 4;
 
+const DAY_MS = 86_400_000;
+
+/** Owner of the rows the catalogue mirrors from Strapi. */
+const STRAPI_SOURCE = 'strapi';
+
+/**
+ * RFC 2606 reserves `.invalid`; no real Google calendar id can end in it. The
+ * synthetic user-test and performance datasets use it, and their rows must
+ * never turn into a request to Google.
+ */
+const RESERVED_ID_SUFFIX = '.invalid';
+
+/** Validators that let a run skip downloading or parsing an unchanged feed. */
+const VALIDATOR_RESET = { lastEtag: null, lastModified: null, lastContentHash: null };
+
+/** Everything a previous feed left behind, for a calendar that now reads another one. */
+const FEED_RESET = {
+  ...VALIDATOR_RESET,
+  lastExpandedTo: null,
+  lastSuccessfulSyncAt: null,
+  operationalStatus: 'pending',
+};
+
+/** The columns that decide what a feed parses into. */
+interface ParseShape {
+  id: string;
+  googleCalendarId: string;
+  includeEventDescription: boolean;
+  includeEventLocation: boolean;
+}
+
 @Injectable()
 export class PublicCalendarSyncService {
   private readonly logger = new Logger(PublicCalendarSyncService.name);
@@ -99,19 +130,60 @@ export class PublicCalendarSyncService {
 
       const now = new Date();
       await this.prisma.$transaction(async (tx) => {
+        const previous = new Map(
+          (
+            await tx.publicCalendar.findMany({
+              where: { slug: { in: definitions.map((d) => d.slug) } },
+              select: {
+                id: true,
+                slug: true,
+                googleCalendarId: true,
+                includeEventDescription: true,
+                includeEventLocation: true,
+              },
+            })
+          ).map((row) => [row.slug, row]),
+        );
+
         for (const def of definitions) {
+          const before = previous.get(def.slug);
+          // A 304 or an unchanged hash would otherwise keep serving what the
+          // OLD settings parsed: a description the editor switched off stays
+          // public, one switched on never appears. A different feed under the
+          // same slug shares nothing with the old one, so its validators,
+          // expansion, success stamp and every stored occurrence go too.
+          const feedChanged =
+            before !== undefined && before.googleCalendarId !== def.googleCalendarId;
+          const textChanged =
+            before !== undefined &&
+            (before.includeEventDescription !== def.includeEventDescription ||
+              before.includeEventLocation !== def.includeEventLocation);
           await tx.publicCalendar.upsert({
             where: { slug: def.slug },
             create: { ...this.toRow(def), operationalStatus: 'pending', lastCatalogSyncAt: now },
-            update: { ...this.toRow(def), isActive: true, lastCatalogSyncAt: now },
+            update: {
+              ...this.toRow(def),
+              isActive: true,
+              lastCatalogSyncAt: now,
+              ...(feedChanged ? FEED_RESET : textChanged ? VALIDATOR_RESET : {}),
+            },
           });
+          if (feedChanged) {
+            await tx.publicCalendarEvent.deleteMany({ where: { calendarId: before.id } });
+          }
         }
       });
 
       // Only after a complete, non-empty success may a calendar that Strapi no
-      // longer publishes be retired. It is deactivated, never deleted.
+      // longer publishes be retired. It is deactivated, never deleted. Rows
+      // Strapi never owned (the synthetic user-test calendars) are not its to
+      // retire.
       const retired = await this.prisma.publicCalendar.updateMany({
-        where: { isActive: true, slug: { notIn: definitions.map((d) => d.slug) } },
+        where: {
+          isActive: true,
+          source: STRAPI_SOURCE,
+          slug: { notIn: definitions.map((d) => d.slug) },
+        },
         data: { isActive: false },
       });
 
@@ -159,6 +231,9 @@ export class PublicCalendarSyncService {
   private toRow(def: CalendarDefinition) {
     return {
       slug: def.slug,
+      // Strapi publishing a slug makes the row Strapi's, even one the
+      // synthetic seed wrote before.
+      source: STRAPI_SOURCE,
       googleCalendarId: def.googleCalendarId,
       channelSlug: def.channelSlug,
       nameDe: def.nameDe,
@@ -208,7 +283,11 @@ export class PublicCalendarSyncService {
     // run — including `lastEtag`, `lastModified` and `lastContentHash`, the
     // columns that carry the most text — and discarding the first copy.
     const calendars = await this.prisma.publicCalendar.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        source: STRAPI_SOURCE,
+        NOT: { googleCalendarId: { endsWith: RESERVED_ID_SUFFIX, mode: 'insensitive' } },
+      },
       orderBy: { sortOrder: 'asc' },
       select: { slug: true },
     });
@@ -272,7 +351,35 @@ export class PublicCalendarSyncService {
       );
     }
 
+    if (!PublicCalendarSyncService.isSyncable(calendar)) {
+      return this.recordEventMetric(
+        {
+          slug,
+          status: 'failed',
+          received: 0,
+          written: 0,
+          removed: 0,
+          errorCode: 'notSyncable',
+        },
+        responseBytes,
+        startedAt,
+      );
+    }
+
     const win = this.window();
+    // The 304 and unchanged-hash shortcuts are only sound while the stored
+    // rows ARE the last feed, expanded for (nearly) this window. A withdrawn
+    // feed has no rows left, and once the window has moved on, a series needs
+    // its occurrences at the far edge expanded. Both download unconditionally
+    // and parse in full.
+    const servable =
+      calendar.operationalStatus === 'ready' || calendar.operationalStatus === 'stale';
+    const expandedFarEnough =
+      calendar.lastExpandedTo !== null &&
+      win.to.getTime() - calendar.lastExpandedTo.getTime() <= DAY_MS;
+    const mayShortCut = servable && expandedFarEnough;
+    const shape = PublicCalendarSyncService.parseShape(calendar);
+
     const run = await this.prisma.publicCalendarSyncRun.create({
       data: {
         kind: 'events',
@@ -284,39 +391,30 @@ export class PublicCalendarSyncService {
     });
 
     try {
-      const fetched = await this.ics.fetchCalendar(calendar.googleCalendarId, {
-        etag: calendar.lastEtag,
-        lastModified: calendar.lastModified,
-      });
+      const fetched = await this.ics.fetchCalendar(
+        calendar.googleCalendarId,
+        mayShortCut ? { etag: calendar.lastEtag, lastModified: calendar.lastModified } : {},
+      );
 
       if (fetched.kind === 'notModified') {
-        await this.prisma.publicCalendar.update({
-          where: { id: calendar.id },
-          data: { lastSuccessfulSyncAt: new Date(), operationalStatus: 'ready' },
-        });
-        await this.finishRun(run.id, { status: 'notModified' });
-        return this.recordEventMetric(
-          { slug, status: 'notModified', received: 0, written: 0, removed: 0 },
-          responseBytes,
-          startedAt,
-        );
+        if (!mayShortCut) {
+          // Nothing was conditional, so there is nothing a 304 could confirm.
+          throw new IcsClientError(
+            'invalidResponse',
+            'The feed answered an unconditional request with 304.',
+          );
+        }
+        return this.finishUnchanged(run.id, slug, shape, {}, responseBytes, startedAt);
       }
 
       responseBytes = Buffer.byteLength(fetched.body, 'utf8');
       const contentHash = createHash('sha256').update(fetched.body).digest('hex');
-      if (contentHash === calendar.lastContentHash) {
-        await this.prisma.publicCalendar.update({
-          where: { id: calendar.id },
-          data: {
-            lastSuccessfulSyncAt: new Date(),
-            operationalStatus: 'ready',
-            lastEtag: fetched.etag,
-            lastModified: fetched.lastModified,
-          },
-        });
-        await this.finishRun(run.id, { status: 'notModified', feedBytes: responseBytes });
-        return this.recordEventMetric(
-          { slug, status: 'notModified', received: 0, written: 0, removed: 0 },
+      if (mayShortCut && contentHash === calendar.lastContentHash) {
+        return this.finishUnchanged(
+          run.id,
+          slug,
+          shape,
+          { lastEtag: fetched.etag, lastModified: fetched.lastModified },
           responseBytes,
           startedAt,
         );
@@ -335,18 +433,18 @@ export class PublicCalendarSyncService {
         maxTextLength: this.env.PUBLIC_CALENDAR_MAX_TEXT_LENGTH,
       });
 
-      const removed = await this.reconcile(calendar.id, win, events);
-
-      await this.prisma.publicCalendar.update({
-        where: { id: calendar.id },
-        data: {
-          operationalStatus: 'ready',
-          lastEtag: fetched.etag,
-          lastModified: fetched.lastModified,
-          lastContentHash: contentHash,
-          lastSuccessfulSyncAt: new Date(),
-        },
+      const removed = await this.reconcile(shape, win, events, {
+        operationalStatus: 'ready',
+        lastEtag: fetched.etag,
+        lastModified: fetched.lastModified,
+        lastContentHash: contentHash,
+        lastExpandedTo: win.to,
+        lastSuccessfulSyncAt: new Date(),
       });
+      if (removed === null) {
+        return this.finishChanged(run.id, slug, responseBytes, startedAt);
+      }
+
       await this.finishRun(run.id, {
         status: events.length === 0 ? 'empty' : 'success',
         feedBytes: responseBytes,
@@ -368,7 +466,7 @@ export class PublicCalendarSyncService {
     } catch (error) {
       const outcome = await this.handleEventFailure(
         run.id,
-        calendar.id,
+        shape,
         slug,
         calendar.operationalStatus,
         calendar.lastSuccessfulSyncAt,
@@ -376,6 +474,74 @@ export class PublicCalendarSyncService {
       );
       return this.recordEventMetric(outcome, responseBytes, startedAt);
     }
+  }
+
+  /** Only Strapi-owned rows with a real (non-reserved) calendar id are ever downloaded. */
+  private static isSyncable(calendar: { source: string; googleCalendarId: string }): boolean {
+    return (
+      calendar.source === STRAPI_SOURCE &&
+      !calendar.googleCalendarId.toLowerCase().endsWith(RESERVED_ID_SUFFIX)
+    );
+  }
+
+  /**
+   * The row filter every write of an event run is conditional on: the calendar
+   * as long as it still has the shape this run read.
+   *
+   * The catalogue job runs independently and may switch a flag or the feed
+   * while a download is in flight. Writing this run's validators over its
+   * reset would make the next run skip the very re-parse the reset asked for.
+   */
+  private static parseShape(calendar: ParseShape): ParseShape {
+    return {
+      id: calendar.id,
+      googleCalendarId: calendar.googleCalendarId,
+      includeEventDescription: calendar.includeEventDescription,
+      includeEventLocation: calendar.includeEventLocation,
+    };
+  }
+
+  /** Records a 304 / unchanged-hash run, unless the catalogue changed the calendar meanwhile. */
+  private async finishUnchanged(
+    runId: string,
+    slug: string,
+    shape: ParseShape,
+    validators: { lastEtag?: string | null; lastModified?: string | null },
+    responseBytes: number,
+    startedAt: number,
+  ): Promise<EventOutcome> {
+    const claimed = await this.prisma.publicCalendar.updateMany({
+      where: shape,
+      data: { lastSuccessfulSyncAt: new Date(), operationalStatus: 'ready', ...validators },
+    });
+    if (claimed.count === 0) {
+      return this.finishChanged(runId, slug, responseBytes, startedAt);
+    }
+    await this.finishRun(runId, { status: 'notModified', feedBytes: responseBytes });
+    return this.recordEventMetric(
+      { slug, status: 'notModified', received: 0, written: 0, removed: 0 },
+      responseBytes,
+      startedAt,
+    );
+  }
+
+  /** A run whose calendar the catalogue changed mid-flight stores nothing; the next run redoes it. */
+  private async finishChanged(
+    runId: string,
+    slug: string,
+    responseBytes: number,
+    startedAt: number,
+  ): Promise<EventOutcome> {
+    await this.finishRun(runId, {
+      status: 'failed',
+      feedBytes: responseBytes,
+      errorCode: 'calendarChanged',
+    });
+    return this.recordEventMetric(
+      { slug, status: 'failed', received: 0, written: 0, removed: 0, errorCode: 'calendarChanged' },
+      responseBytes,
+      startedAt,
+    );
   }
 
   /**
@@ -448,14 +614,32 @@ export class PublicCalendarSyncService {
    * update each, all inside one transaction. So the stored window is read once
    * and only the genuine differences are written; everything else just gets the
    * same `lastSeenAt` stamp the upsert wrote, in one statement.
+   *
+   * The calendar's own status and validators are written in the same
+   * transaction, first and conditional on `shape`: the row lock then also
+   * orders this run against a concurrent catalogue change. Returns null —
+   * having written nothing — when the catalogue changed the calendar after
+   * this run read it.
    */
   private async reconcile(
-    calendarId: string,
+    shape: ParseShape,
     win: { from: Date; to: Date },
     events: ParsedEvent[],
-  ): Promise<number> {
+    status: {
+      operationalStatus: string;
+      lastEtag: string | null;
+      lastModified: string | null;
+      lastContentHash: string;
+      lastExpandedTo: Date;
+      lastSuccessfulSyncAt: Date;
+    },
+  ): Promise<number | null> {
+    const calendarId = shape.id;
     return this.prisma.$transaction(
       async (tx) => {
+        const claimed = await tx.publicCalendar.updateMany({ where: shape, data: status });
+        if (claimed.count === 0) return null;
+
         const keptKeys = events.map((event) => event.occurrenceKey);
         const now = new Date();
 
@@ -559,7 +743,7 @@ export class PublicCalendarSyncService {
 
   private async handleEventFailure(
     runId: string,
-    calendarId: string,
+    shape: ParseShape,
     slug: string,
     currentStatus: string,
     hadSuccess: Date | null,
@@ -573,10 +757,27 @@ export class PublicCalendarSyncService {
       errorCode = error.kind;
       if (error.kind === 'feedNotFound' || error.kind === 'permissionRevoked') {
         // The feed is gone / no longer public: block it and clear its events so
-        // stale data is not served indefinitely.
+        // stale data is not served indefinitely. Rows, validators and status
+        // change together: validators left behind let the same feed come back
+        // as a 304 or an equal hash, and the calendar would report "ready"
+        // with no events at all.
         nextStatus = error.kind === 'feedNotFound' ? 'unavailable' : 'revoked';
         runStatus = 'revoked';
-        await this.prisma.publicCalendarEvent.deleteMany({ where: { calendarId } });
+        await this.prisma.$transaction(async (tx) => {
+          const claimed = await tx.publicCalendar.updateMany({
+            where: shape,
+            data: { operationalStatus: nextStatus, ...VALIDATOR_RESET, lastExpandedTo: null },
+          });
+          if (claimed.count > 0) {
+            await tx.publicCalendarEvent.deleteMany({ where: { calendarId: shape.id } });
+          }
+        });
+        await this.finishRun(runId, {
+          status: runStatus,
+          errorCode,
+          errorMessage: this.redact(error),
+        });
+        return { slug, status: runStatus, received: 0, written: 0, removed: 0, errorCode };
       } else {
         // Temporary transport error: keep the last good events, mark stale.
         nextStatus = hadSuccess ? 'stale' : 'pending';
@@ -589,8 +790,8 @@ export class PublicCalendarSyncService {
       runStatus = 'stale';
     }
 
-    await this.prisma.publicCalendar.update({
-      where: { id: calendarId },
+    await this.prisma.publicCalendar.updateMany({
+      where: shape,
       data: { operationalStatus: nextStatus },
     });
     await this.finishRun(runId, { status: runStatus, errorCode, errorMessage: this.redact(error) });

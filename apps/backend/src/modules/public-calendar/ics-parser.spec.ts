@@ -129,6 +129,55 @@ describe('parseIcs — single timed events', () => {
   });
 });
 
+describe('parseIcs — floating times on DST change days', () => {
+  /** One zone-less event at `local`, read in the Europe/Berlin fallback. */
+  function floatingStart(local: string): string {
+    const events = parseIcs(
+      ics([
+        ...VCAL_OPEN,
+        'BEGIN:VEVENT',
+        `UID:evt-floating-${local}`,
+        'DTSTAMP:20260301T120000Z',
+        `DTSTART:${local}`,
+        'DURATION:PT30M',
+        'SUMMARY:Ohne Zeitzone',
+        'END:VEVENT',
+        ...VCAL_CLOSE,
+      ]),
+      baseOptions(),
+    );
+    return first(events).start.toISOString();
+  }
+
+  // A single offset lookup at "wall clock read as UTC" lands on the wrong side
+  // of the change whenever the change happens between the two readings —
+  // in Berlin that is 01:00–01:59 local on both change days.
+  it('reads 01:30 on the spring-forward day as CET (+01:00)', () => {
+    expect(floatingStart('20260329T013000')).toBe('2026-03-29T00:30:00.000Z');
+  });
+
+  it('reads 01:30 on the fall-back day as CEST (+02:00)', () => {
+    expect(floatingStart('20261025T013000')).toBe('2026-10-24T23:30:00.000Z');
+  });
+
+  it('reads a time inside the spring-forward gap with the offset before the gap', () => {
+    // RFC 5545 §3.3.5: 02:30 does not exist; it means 03:30 CEST.
+    expect(floatingStart('20260329T023000')).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  it('reads an ambiguous fall-back time as its first occurrence', () => {
+    // RFC 5545 §3.3.5: 02:30 occurs twice; it means the first, still CEST.
+    expect(floatingStart('20261025T023000')).toBe('2026-10-25T00:30:00.000Z');
+  });
+
+  it('is unchanged away from the change', () => {
+    expect(floatingStart('20260329T033000')).toBe('2026-03-29T01:30:00.000Z');
+    expect(floatingStart('20261025T033000')).toBe('2026-10-25T02:30:00.000Z');
+    expect(floatingStart('20260115T120000')).toBe('2026-01-15T11:00:00.000Z');
+    expect(floatingStart('20260715T120000')).toBe('2026-07-15T10:00:00.000Z');
+  });
+});
+
 describe('parseIcs — all-day events', () => {
   it('treats VALUE=DATE as a local calendar day with an EXCLUSIVE end date', () => {
     const events = parseIcs(
@@ -352,6 +401,140 @@ describe('parseIcs — recurrence', () => {
     expect(events.filter((e) => e.start.toISOString() === '2026-06-08T08:00:00.000Z')).toHaveLength(
       0,
     );
+  });
+
+  it('keeps expanding a series after one occurrence was moved past the window end', () => {
+    // The loop used to stop at the first occurrence whose (moved) START lay
+    // past the window, as if iteration were monotonic in the moved start. It
+    // is only monotonic in the original slot, so every later regular
+    // occurrence silently disappeared.
+    const events = parseIcs(
+      ics([
+        ...VCAL_OPEN,
+        'BEGIN:VEVENT',
+        'UID:evt-moved-out',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260601T080000Z',
+        'DTEND:20260601T090000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=12',
+        'SUMMARY:Serie',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:evt-moved-out',
+        'RECURRENCE-ID:20260608T080000Z',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260901T080000Z',
+        'DTEND:20260901T090000Z',
+        'SUMMARY:Weit verschoben',
+        'END:VEVENT',
+        ...VCAL_CLOSE,
+      ]),
+      baseOptions({
+        windowStart: new Date('2026-06-01T00:00:00.000Z'),
+        windowEnd: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+
+    expect(events.map((e) => e.start.toISOString())).toEqual([
+      '2026-06-01T08:00:00.000Z',
+      '2026-06-15T08:00:00.000Z',
+      '2026-06-22T08:00:00.000Z',
+      '2026-06-29T08:00:00.000Z',
+      '2026-07-06T08:00:00.000Z',
+      '2026-07-13T08:00:00.000Z',
+      '2026-07-20T08:00:00.000Z',
+      '2026-07-27T08:00:00.000Z',
+    ]);
+    expect(events.some((e) => e.title === 'Weit verschoben')).toBe(false);
+  });
+
+  it('emits an occurrence moved INTO the window from a slot after it', () => {
+    const events = parseIcs(
+      ics([
+        ...VCAL_OPEN,
+        'BEGIN:VEVENT',
+        'UID:evt-moved-in',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260601T080000Z',
+        'DTEND:20260601T090000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=12',
+        'SUMMARY:Serie',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:evt-moved-in',
+        'RECURRENCE-ID:20260810T080000Z',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260701T140000Z',
+        'DTEND:20260701T150000Z',
+        'SUMMARY:Vorgezogen',
+        'END:VEVENT',
+        ...VCAL_CLOSE,
+      ]),
+      baseOptions({
+        windowStart: new Date('2026-06-01T00:00:00.000Z'),
+        windowEnd: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+
+    const moved = events.find((e) => e.title === 'Vorgezogen');
+    expect(moved).toBeDefined();
+    expect(moved?.start.toISOString()).toBe('2026-07-01T14:00:00.000Z');
+    expect(moved?.recurrenceId).toBe('2026-08-10T08:00:00.000Z');
+    expect(moved?.occurrenceKey).toBe('evt-moved-in::2026-08-10T08:00:00.000Z');
+    // The nine regular occurrences inside the window are all still there.
+    expect(events.filter((e) => e.title === 'Serie')).toHaveLength(9);
+    expect(new Set(events.map((e) => e.occurrenceKey)).size).toBe(events.length);
+  });
+
+  it('never applies one series’ override to another series sharing the slot', () => {
+    // ical.js relates EVERY RECURRENCE-ID component of the calendar to a
+    // master unless it is handed the exceptions explicitly. Two series that
+    // share a slot time then both picked up the one override — the other
+    // series showed a foreign cancellation, under a duplicate occurrence key.
+    const events = parseIcs(
+      ics([
+        ...VCAL_OPEN,
+        'BEGIN:VEVENT',
+        'UID:series-a',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260601T080000Z',
+        'DTEND:20260601T090000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=3',
+        'SUMMARY:Serie A',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:series-b',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260601T080000Z',
+        'DTEND:20260601T090000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=3',
+        'SUMMARY:Serie B',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:series-a',
+        'RECURRENCE-ID:20260608T080000Z',
+        'DTSTAMP:20260301T120000Z',
+        'DTSTART:20260608T140000Z',
+        'DTEND:20260608T150000Z',
+        'STATUS:CANCELLED',
+        'SUMMARY:A entfällt',
+        'END:VEVENT',
+        ...VCAL_CLOSE,
+      ]),
+      baseOptions({
+        windowStart: new Date('2026-06-01T00:00:00.000Z'),
+        windowEnd: new Date('2026-06-30T00:00:00.000Z'),
+      }),
+    );
+
+    const seriesB = events.filter((e) => e.uid === 'series-b');
+    expect(seriesB.map((e) => [e.title, e.status, e.start.toISOString()])).toEqual([
+      ['Serie B', 'confirmed', '2026-06-01T08:00:00.000Z'],
+      ['Serie B', 'confirmed', '2026-06-08T08:00:00.000Z'],
+      ['Serie B', 'confirmed', '2026-06-15T08:00:00.000Z'],
+    ]);
+    expect(events.filter((e) => e.title === 'A entfällt')).toHaveLength(1);
+    expect(new Set(events.map((e) => e.occurrenceKey)).size).toBe(events.length);
   });
 
   it('marks a cancelled whole event', () => {

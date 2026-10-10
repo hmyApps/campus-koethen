@@ -40,10 +40,12 @@ final FutureProvider<EventPostsResult> eventPostsOverviewProvider =
       final EventPostsResult result = await ref
           .watch(eventPostsRepositoryProvider)
           .fetchAllEventPosts(locale: locale);
-      // Only a genuine live success (never a cache fallback served after a
-      // failed request) may touch the saved list's orphan flag — see the
-      // repository-level rule this delegates to.
-      if (!result.fromCache) {
+      // Only a genuine, COMPLETE live success may touch the saved list's
+      // orphan flag — see the repository-level rule this delegates to. A
+      // cache fallback is no evidence, and neither is a truncated load: when a
+      // later page failed or the 10×50 ceiling was reached, a saved post that
+      // is missing may simply sit on a page that never arrived (VG-N01).
+      if (!result.fromCache && !result.isTruncated) {
         await _reconcileSavedPostEvents(ref, result);
       }
       return result;
@@ -108,7 +110,9 @@ eventCalendarsOverviewProvider =
       final Loaded<List<PublicCalendarEvent>> loaded = await ref
           .watch(publicCalendarsRepositoryProvider)
           .fetchEventsDefaultWindow(locale: locale, slugs: slugs);
-      if (!loaded.fromCache) {
+      // Same rule as for the posts: a list the server cut at its event
+      // ceiling (`meta.truncated`) is incomplete and proves no removal.
+      if (!loaded.fromCache && !loaded.meta.truncated) {
         await _reconcileSavedCalendarEvents(ref, loaded);
       }
       return loaded;

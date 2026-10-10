@@ -167,11 +167,21 @@ class EnoughMailGateway implements MailGateway {
   static const String _hostnameForEhlo = 'campus-koethen.localhost';
 
   /// Selects [mailboxPath], taking the cheap INBOX shortcut when possible.
-  Future<void> _select(ImapClient client, String mailboxPath) async {
-    if (mailboxPath == kInboxPath) {
-      await client.selectInbox();
-    } else {
-      await client.selectMailboxByPath(mailboxPath);
+  ///
+  /// With [expectedUidValidity], fails closed when the mailbox reports another
+  /// UIDVALIDITY: the caller's UID may then name a different message, so no
+  /// command addressing it may follow.
+  Future<void> _select(
+    ImapClient client,
+    String mailboxPath, {
+    int? expectedUidValidity,
+  }) async {
+    final Mailbox selected = mailboxPath == kInboxPath
+        ? await client.selectInbox()
+        : await client.selectMailboxByPath(mailboxPath);
+    if (expectedUidValidity != null &&
+        selected.uidValidity != expectedUidValidity) {
+      throw const MailFailure(MailFailureKind.mailboxChanged);
     }
   }
 
@@ -244,34 +254,43 @@ class EnoughMailGateway implements MailGateway {
   }
 
   @override
-  Future<List<model.MailMessageHeader>> fetchHeaders(
+  Future<MailHeaderPage> fetchHeaders(
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     int limit = 50,
     String? beforeId,
   }) async {
     return _guard(() async {
-      return _withImap<List<model.MailMessageHeader>>(credentials, (
-        ImapClient client,
-      ) async {
+      return _withImap<MailHeaderPage>(credentials, (ImapClient client) async {
         final Mailbox inbox = mailboxPath == kInboxPath
             ? await client.selectInbox()
             : await client.selectMailboxByPath(mailboxPath);
-        if (inbox.messagesExists == 0) return <model.MailMessageHeader>[];
+        // EXISTS and UIDVALIDITY come from this very SELECT, so the caller can
+        // tell a complete mailbox from a window and a reused UID from the
+        // message it cached under that UID.
+        MailHeaderPage pageOf(List<model.MailMessageHeader> headers) =>
+            MailHeaderPage(
+              headers: headers,
+              messagesExists: inbox.messagesExists,
+              uidValidity: inbox.uidValidity,
+            );
+        if (inbox.messagesExists == 0) {
+          return pageOf(<model.MailMessageHeader>[]);
+        }
 
         if (beforeId != null) {
           final int? beforeUid = int.tryParse(beforeId);
           if (beforeUid == null) {
             throw const MailFailure(MailFailureKind.protocol);
           }
-          if (beforeUid <= 1) return <model.MailMessageHeader>[];
+          if (beforeUid <= 1) return pageOf(<model.MailMessageHeader>[]);
           final SearchImapResult search = await client.uidSearchMessages(
             searchCriteria: 'UID 1:${beforeUid - 1}',
             responseTimeout: _commandTimeout,
           );
           final MessageSequence? matches = search.matchingSequence;
           if (matches == null || matches.isEmpty) {
-            return <model.MailMessageHeader>[];
+            return pageOf(<model.MailMessageHeader>[]);
           }
           final List<int> uids = matches.toList()..sort();
           final List<int> page = uids.reversed.take(limit).toList();
@@ -280,7 +299,9 @@ class EnoughMailGateway implements MailGateway {
             '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
             responseTimeout: _commandTimeout,
           );
-          return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+          return pageOf(
+            result.messages.map(_toHeader).toList()..sort(_newestFirst),
+          );
         }
 
         final int upper = inbox.messagesExists;
@@ -292,7 +313,9 @@ class EnoughMailGateway implements MailGateway {
           '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
           responseTimeout: _commandTimeout,
         );
-        return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+        return pageOf(
+          result.messages.map(_toHeader).toList()..sort(_newestFirst),
+        );
       });
     });
   }
@@ -403,10 +426,15 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final int uid = int.parse(id);
         await client.uidMarkSeen(
           MessageSequence.fromRange(uid, uid, isUidSequence: true),
@@ -420,6 +448,7 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
@@ -438,7 +467,11 @@ class EnoughMailGateway implements MailGateway {
                   box.name == 'Papierkorb',
             )
             .firstOrNull;
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final MessageSequence sequence = MessageSequence.fromRange(
           uid,
           uid,

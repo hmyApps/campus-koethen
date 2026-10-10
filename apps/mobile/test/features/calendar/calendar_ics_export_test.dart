@@ -87,6 +87,68 @@ void main() {
     expect(ics, contains('DTEND;VALUE=DATE:20261026\r\n'));
   });
 
+  group('an all-day DTEND is always the exclusive day after the last day '
+      '(VF-N02)', () {
+    String exportOf(CalendarEntry entry) => icsFromCalendarEntries(
+      <CalendarEntry>[entry],
+      calendarName: 'Campus Köthen',
+      now: _now,
+    );
+
+    CalendarEntry allDay(DateTime start, DateTime? end) => CalendarEntry(
+      id: 'publicCalendar:demo:1',
+      source: CalendarSource.publicCalendar,
+      title: 'Demo-Termin',
+      start: start,
+      end: end,
+      allDay: true,
+    );
+
+    test('an end on the start day never yields DTEND <= DTSTART', () {
+      final String ics = exportOf(
+        allDay(DateTime(2026, 2, 3), DateTime(2026, 2, 3, 23, 59)),
+      );
+      expect(ics, contains('DTSTART;VALUE=DATE:20260203\r\n'));
+      expect(ics, contains('DTEND;VALUE=DATE:20260204\r\n'));
+    });
+
+    test('an end equal to the start still spans that one day', () {
+      final String ics = exportOf(
+        allDay(DateTime.utc(2026, 2, 3), DateTime.utc(2026, 2, 3)),
+      );
+      expect(ics, contains('DTSTART;VALUE=DATE:20260203\r\n'));
+      expect(ics, contains('DTEND;VALUE=DATE:20260204\r\n'));
+    });
+
+    test('a multi-day entry ending 23:59 keeps its last day', () {
+      final String ics = exportOf(
+        allDay(DateTime(2026, 2, 2), DateTime(2026, 2, 6, 23, 59)),
+      );
+      expect(ics, contains('DTSTART;VALUE=DATE:20260202\r\n'));
+      expect(ics, contains('DTEND;VALUE=DATE:20260207\r\n'));
+    });
+
+    test('an already exclusive UTC-midnight end is kept as it is', () {
+      final String ics = exportOf(
+        allDay(DateTime.utc(2026, 2, 2), DateTime.utc(2026, 2, 7)),
+      );
+      expect(ics, contains('DTSTART;VALUE=DATE:20260202\r\n'));
+      expect(ics, contains('DTEND;VALUE=DATE:20260207\r\n'));
+    });
+
+    test('the day after is counted in calendar days across DST', () {
+      final tz.Location berlin = tz.getLocation('Europe/Berlin');
+      final String ics = exportOf(
+        allDay(
+          tz.TZDateTime(berlin, 2026, 3, 27),
+          tz.TZDateTime(berlin, 2026, 3, 29, 23, 59),
+        ),
+      );
+      expect(ics, contains('DTSTART;VALUE=DATE:20260327\r\n'));
+      expect(ics, contains('DTEND;VALUE=DATE:20260330\r\n'));
+    });
+  });
+
   test('a cancelled entry is marked STATUS:CANCELLED', () {
     final CalendarEntry entry = CalendarEntry(
       id: 'timetable:e2',

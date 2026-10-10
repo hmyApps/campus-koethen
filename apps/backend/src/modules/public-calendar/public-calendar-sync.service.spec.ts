@@ -49,6 +49,8 @@ describe('PublicCalendarSyncService reconciliation', () => {
     lastEtag: null,
     lastModified: null,
     lastContentHash: null,
+    lastExpandedTo: null,
+    source: 'strapi',
     includeEventDescription: false,
     includeEventLocation: false,
     operationalStatus: 'ready',
@@ -61,6 +63,9 @@ describe('PublicCalendarSyncService reconciliation', () => {
    */
   async function run(body: string | Error, stored: Array<Record<string, unknown>>) {
     const tx = {
+      publicCalendar: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       publicCalendarEvent: {
         findMany: jest.fn().mockResolvedValue(stored),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -72,7 +77,7 @@ describe('PublicCalendarSyncService reconciliation', () => {
     const prisma = {
       publicCalendar: {
         findUnique: jest.fn().mockResolvedValue(calendarRow),
-        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       publicCalendarSyncRun: {
         create: jest.fn().mockResolvedValue({ id: 'run-1' }),

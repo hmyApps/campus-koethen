@@ -497,6 +497,32 @@ void main() {
       },
     );
 
+    test('retainsBody predicts exactly what the age pruning keeps', () async {
+      final _CountingBox box = openBox();
+      expect((await box.openChecked()).isOpen, isTrue);
+      final EncryptedMailCache cache = EncryptedMailCache(
+        box,
+        now: () => DateTime.utc(2026, 9, 1),
+      );
+      MailMessageDetail dated(String id, DateTime date) => MailMessageDetail(
+        id: id,
+        subject: 'Subject $id',
+        from: const MailAddress(email: 'a@example.test'),
+        to: const <MailAddress>[],
+        date: date,
+        body: 'Body $id',
+      );
+      final MailMessageDetail recent = dated('3', DateTime.utc(2026, 8, 30));
+      final MailMessageDetail old = dated('1', DateTime.utc(2025, 1, 1));
+
+      expect(cache.retainsBody(recent.date), isTrue);
+      expect(cache.retainsBody(old.date), isFalse);
+      expect(cache.retainsBody(null), isTrue);
+
+      await cache.saveMessages(<MailMessageDetail>[recent, old]);
+      expect(await cache.cachedMessageIds(), <String>{'3'});
+    });
+
     test(
       'clearing offline bodies retains the lightweight header list',
       () async {
@@ -522,6 +548,175 @@ void main() {
         expect(await cache.readHeaders(), hasLength(1));
       },
     );
+  });
+
+  group('header retention never drops the newest UID window (C-04)', () {
+    MailMessageHeader header(String id, DateTime date) => MailMessageHeader(
+      id: id,
+      subject: 'Subject $id',
+      from: const MailAddress(email: 'alice@example.test'),
+      date: date,
+      isSeen: true,
+      hasAttachments: false,
+    );
+    final DateTime now = DateTime.utc(2026, 9, 1);
+    final DateTime recent = DateTime.utc(2026, 8, 30);
+    final DateTime yearsAgo = DateTime.utc(2024, 1, 1);
+
+    Future<EncryptedMailCache> open(MailCachePolicy policy) async {
+      final EncryptedBox box = EncryptedBox(
+        boxName: MailCacheManager.secureBoxName,
+        keyStorageKey: MailCacheManager.keyStorageKey,
+        storage: _storage,
+        hive: Hive,
+        initializeHive: () async {},
+      );
+      expect((await box.openChecked()).isOpen, isTrue);
+      return EncryptedMailCache(box, policy: policy, now: () => now);
+    }
+
+    test('old headers inside the window survive, older ones age out', () async {
+      final EncryptedMailCache cache = await open(
+        const MailCachePolicy(windowHeaders: 2),
+      );
+
+      await cache.saveHeaders(<MailMessageHeader>[
+        header('4', recent),
+        header('3', yearsAgo),
+        header('2', yearsAgo),
+        header('1', yearsAgo),
+      ]);
+
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['4', '3'],
+      );
+    });
+
+    test('the header cap never evicts the window either', () async {
+      final EncryptedMailCache cache = await open(
+        const MailCachePolicy(maxHeaders: 2, windowHeaders: 2),
+      );
+
+      // UID 9 arrived last but carries an ancient Date header.
+      await cache.saveHeaders(<MailMessageHeader>[
+        header('5', recent),
+        header('4', recent),
+        header('9', yearsAgo),
+      ]);
+
+      expect(
+        (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+        <String>['5', '9'],
+      );
+    });
+  });
+
+  test('persists the INBOX UIDVALIDITY across restarts (C-10)', () async {
+    final MailCacheManager cache = manager();
+    await cache.initialize(accountExists: true);
+    expect(await cache.readUidValidity(), isNull);
+
+    await cache.saveUidValidity(1234);
+    await cache.saveMessage(detail());
+    await cache.clearCachedBodies();
+    await Hive.close();
+
+    Hive.init(directory.path);
+    final MailCacheManager restarted = manager();
+    await restarted.initialize(accountExists: true);
+    expect(
+      await restarted.readUidValidity(),
+      1234,
+      reason: 'clearing offline bodies keeps the header list and its UIDs',
+    );
+
+    await restarted.wipe();
+    expect(await restarted.readUidValidity(), isNull);
+  });
+
+  group('message removal keeps the derived indexes consistent (C-07)', () {
+    MailMessageDetail message(String id, String body) => MailMessageDetail(
+      id: id,
+      subject: 'Subject $id',
+      from: const MailAddress(email: 'alice@example.test'),
+      to: const <MailAddress>[MailAddress(email: 'student@example.test')],
+      date: DateTime.utc(2026, 8, 19),
+      body: body,
+    );
+
+    MailMessageHeader headerOf(MailMessageDetail m) => MailMessageHeader(
+      id: m.id,
+      subject: m.subject,
+      from: m.from,
+      date: m.date,
+      isSeen: false,
+      hasAttachments: false,
+    );
+
+    Future<EncryptedBox> openBox() async {
+      final EncryptedBox box = EncryptedBox(
+        boxName: MailCacheManager.secureBoxName,
+        keyStorageKey: MailCacheManager.keyStorageKey,
+        storage: _storage,
+        hive: Hive,
+        initializeHive: () async {},
+      );
+      expect((await box.openChecked()).isOpen, isTrue);
+      return box;
+    }
+
+    test(
+      'a removed message leaves neither search hits nor statistics',
+      () async {
+        final EncryptedBox box = await openBox();
+        final EncryptedMailCache cache = EncryptedMailCache(
+          box,
+          now: () => DateTime.utc(2026, 9, 1),
+        );
+        final MailMessageDetail removed = message('1', 'Geheimes Protokoll');
+        final MailMessageDetail kept = message('2', 'Offene Sprechstunde');
+        await cache.saveHeaders(<MailMessageHeader>[
+          headerOf(kept),
+          headerOf(removed),
+        ]);
+        await cache.saveMessages(<MailMessageDetail>[removed, kept]);
+        expect(await cache.searchHeaders('protokoll'), hasLength(1));
+
+        await cache.removeMessage('1');
+
+        expect(await cache.searchHeaders('protokoll'), isEmpty);
+        expect(await cache.searchHeaders('sprechstunde'), hasLength(1));
+        expect((await cache.stats()).bodyCount, 1);
+        final Map<String, dynamic> search =
+            jsonDecode((await box.read('search.v1'))!) as Map<String, dynamic>;
+        final Map<String, dynamic> metadata =
+            jsonDecode((await box.read('metadata.v1'))!)
+                as Map<String, dynamic>;
+        expect(search.keys, <String>['2']);
+        expect(metadata.keys, <String>['2']);
+      },
+    );
+
+    test('orphaned index entries without a body are discarded', () async {
+      final EncryptedBox box = await openBox();
+      final EncryptedMailCache cache = EncryptedMailCache(
+        box,
+        now: () => DateTime.utc(2026, 9, 1),
+      );
+      await cache.saveMessages(<MailMessageDetail>[
+        message('1', 'Geheimes Protokoll'),
+        message('2', 'Offene Sprechstunde'),
+      ]);
+      // An index written by an older build, whose body is already gone.
+      await box.delete('msg.1');
+
+      expect(await cache.searchHeaders('protokoll'), isEmpty);
+      expect((await cache.stats()).bodyCount, 1);
+      final Map<String, dynamic> search =
+          jsonDecode((await box.read('search.v1'))!) as Map<String, dynamic>;
+      expect(search.keys, <String>['2']);
+    });
   });
 }
 

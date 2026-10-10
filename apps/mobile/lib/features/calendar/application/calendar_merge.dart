@@ -139,8 +139,8 @@ List<CalendarEntry> exchangeEventsToCalendarEntries(
         id: 'exchange:${event.id}',
         source: CalendarSource.exchangeCalendar,
         title: event.subject.isEmpty ? untitledTitle : event.subject,
-        start: event.start,
-        end: event.end,
+        start: event.isAllDay ? _exchangeAllDayDate(event.start) : event.start,
+        end: event.isAllDay ? _exchangeAllDayDate(event.end) : event.end,
         allDay: event.isAllDay,
         location: event.location,
         isCancelled: event.isCancelled,
@@ -148,6 +148,24 @@ List<CalendarEntry> exchangeEventsToCalendarEntries(
       ),
     )
     .toList(growable: false);
+
+/// The UTC-midnight date marker (see [calendarDayOf]) for one bound of an
+/// all-day Exchange appointment.
+///
+/// Exchange stores an all-day appointment as the midnight that starts its
+/// date in the calendar's own zone, and the gateway pins the response zone to
+/// UTC — so a mailbox in Köthen answers with 22:00Z (summer) or 23:00Z
+/// (winter) the evening before. Read as a date marker that was a day early
+/// (F-06). The nearest UTC midnight is that zone's date for every zone from
+/// UTC−11 to UTC+12, whatever zone the device is in, and leaves a server that
+/// already sends 00:00Z unchanged.
+DateTime _exchangeAllDayDate(DateTime value) {
+  final DateTime utc = value.toUtc();
+  final DateTime midnight = DateTime.utc(utc.year, utc.month, utc.day);
+  return utc.difference(midnight) >= const Duration(hours: 12)
+      ? DateTime.utc(utc.year, utc.month, utc.day + 1)
+      : midnight;
+}
 
 /// Maps aggregated public-calendar events to calendar entries, resolving each
 /// event's colour and display name from the catalogue (by slug). The colour is
@@ -185,6 +203,11 @@ List<CalendarEntry> publicCalendarEventsToCalendarEntries(
 /// Maps a saved snapshot ("Meine gemerkten Events") to its calendar entry, so
 /// a bookmarked event shows up in the cross-source calendar with its own
 /// source and a bookmark to mark it apart from a live entry.
+///
+/// Location, description and the cancelled flag were copied into the
+/// snapshot precisely so it still says where and whether the event happens;
+/// they are carried over the same way the public-calendar mapper flattens
+/// them (F-04).
 CalendarEntry savedEventSnapshotToCalendarEntry(SavedEventSnapshot snapshot) =>
     CalendarEntry(
       id: 'savedEvent:${snapshot.eventRef}',
@@ -193,6 +216,9 @@ CalendarEntry savedEventSnapshotToCalendarEntry(SavedEventSnapshot snapshot) =>
       start: snapshot.start,
       end: snapshot.end,
       allDay: snapshot.allDay,
+      subtitle: snapshot.description,
+      location: snapshot.location,
+      isCancelled: snapshot.isCancelled,
       calendarSlug: snapshot.calendarSlug,
       colorArgb: snapshot.colorArgb,
       sourceLabel: snapshot.sourceLabel == null

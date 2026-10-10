@@ -66,6 +66,65 @@ void main() {
     test('returns null for a normal payload', () {
       expect(moodleExceptionOf(decode('{"userid":1}')), isNull);
     });
+
+    test('keeps an expired token classified as expired', () {
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"moodle_exception","errorcode":"expiredtoken","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.tokenExpired),
+      );
+    });
+
+    test('a rejected request parameter is not a rejected sign-in', () {
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"invalid_parameter_exception","errorcode":"invalidparameter","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.invalidResponse),
+      );
+    });
+
+    test('an unknown exception is unknown, not a rejected sign-in', () {
+      // For example a course that was deleted in the meantime.
+      expect(
+        moodleExceptionOf(
+          decode(
+            '{"exception":"dml_missing_record_exception","errorcode":"invalidrecord","message":"x"}',
+          ),
+        ),
+        const MoodleFailure(MoodleFailureKind.unknown),
+      );
+    });
+
+    test('an exception without an error code is unknown', () {
+      expect(
+        moodleExceptionOf(decode('{"exception":"moodle_exception"}')),
+        const MoodleFailure(MoodleFailureKind.unknown),
+      );
+    });
+
+    test('a suspended or deleted Moodle account rejects the sign-in', () {
+      for (final String code in <String>[
+        'wsaccessusersuspended',
+        'wsaccessuserdeleted',
+        'wsaccessusernologin',
+      ]) {
+        expect(
+          moodleExceptionOf(
+            decode(
+              '{"exception":"moodle_exception","errorcode":"$code","message":"x"}',
+            ),
+          ),
+          const MoodleFailure(MoodleFailureKind.tokenRejected),
+          reason: code,
+        );
+      }
+    });
   });
 
   group('parseSiteInfo', () {
@@ -188,6 +247,26 @@ void main() {
       expect(a.first.dueDate, isNotNull);
       expect(a.first.cutOffDate, isNull);
     });
+
+    // AGENTS §4: a structurally wrong answer must never read as "no
+    // assignments", or the next write replaces the cached list with nothing.
+    test('throws invalidResponse when the course list is missing', () {
+      expect(
+        () => parseAssignments(decode('{"warnings":[]}')),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('throws invalidResponse when the course list is not a list', () {
+      expect(
+        () => parseAssignments(decode('{"courses":{"id":101}}')),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('a valid empty course list is still an empty result', () {
+      expect(parseAssignments(decode('{"courses":[],"warnings":[]}')), isEmpty);
+    });
   });
 
   group('parseSubmissionStatus', () {
@@ -253,6 +332,37 @@ void main() {
       expect(a.first.authorName, 'Dozent Demo');
       expect(a.first.courseId, 101);
     });
+
+    test('a valid empty discussion list is still an empty result', () {
+      expect(
+        parseDiscussions(
+          decode('{"discussions":[],"warnings":[]}'),
+          courseId: 101,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('throws invalidResponse when the discussion list is missing', () {
+      expect(
+        () => parseDiscussions(decode('{"warnings":[]}'), courseId: 101),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('throws invalidResponse when the discussion list is not a list', () {
+      expect(
+        () => parseDiscussions(decode('{"discussions":"x"}'), courseId: 101),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('throws invalidResponse for an absent body', () {
+      expect(
+        () => parseDiscussions(null, courseId: 101),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
   });
 
   group('parseNewsForumIds', () {
@@ -263,6 +373,24 @@ void main() {
  {"id":3002,"course":101,"type":"general","name":"Allgemeines Forum"}]'''),
       );
       expect(ids, <int>[3001]);
+    });
+
+    test('a valid empty forum list is still an empty result', () {
+      expect(parseNewsForumIds(decode('[]')), isEmpty);
+    });
+
+    test('throws invalidResponse when the forum list is not a list', () {
+      expect(
+        () => parseNewsForumIds(decode('{"forums":[]}')),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('throws invalidResponse for an absent body', () {
+      expect(
+        () => parseNewsForumIds(null),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
     });
   });
 }

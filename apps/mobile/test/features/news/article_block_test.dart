@@ -562,7 +562,7 @@ void main() {
         tester,
         _article(
           content: const <ContentBlock>[
-            ImageBlock(url: 'https://cdn.example.org/plakat.png'),
+            ImageBlock(url: '/v1/media/uploads/plakat.png'),
           ],
         ),
       );

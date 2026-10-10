@@ -311,6 +311,14 @@ Die Schuljahre werden vorab über `/schoolyears` ermittelt; dadurch sind Gruppen
 des kommenden Semesters schon vor dem Wechsel des aktuellen Schuljahres verfügbar. Ein fehlerhafter
 Klassenabruf verwirft den gesamten Lauf, ohne vorhandene Daten zu löschen.
 
+Eine Klasse gilt nur dann als bestätigt, wenn ihre eigene Antwort ein leeres `errors[]` und mindestens
+ein Tagesobjekt für genau diese Klasse enthält. Nur bei bestätigten Klassen werden Zuordnungen
+entfernt, und zwar je Zuordnung: Verlässt eine Klasse eine Stunde, die für andere Klassen
+weiterläuft, verliert nur diese Klasse die Stunde. Meldet die Antwort einer Klasse Fehler oder
+fehlt ihr Tagesobjekt, bleibt ihr gespeicherter Plan unverändert, ohne dass der Lauf für die übrigen
+Klassen abbricht; die Anzahl solcher Klassen steht in der Sync-Historie. Eine einzelne nicht lesbare
+Stunde (kein Titel, unlesbare Zeit) behält ihre zuletzt gültige Version.
+
 ### 4.4 Personenbezogene Daten
 
 Die Quelle liefert **Lehrpersonennamen**. Diese werden gespeichert und angezeigt, weil sie
