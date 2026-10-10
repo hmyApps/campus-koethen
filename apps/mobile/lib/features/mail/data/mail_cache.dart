@@ -725,7 +725,9 @@ class MailCacheManager implements MailCacheStore {
     EncryptedBox? encryptedBox,
     HiveInterface? hive,
     Future<void> Function()? initializeHive,
+    DateTime Function()? now,
   }) : _hive = hive ?? Hive,
+       _now = now ?? DateTime.now,
        _initializeHive = initializeHive ?? (() => Hive.initFlutter()),
        _encryptedBox =
            encryptedBox ??
@@ -743,10 +745,13 @@ class MailCacheManager implements MailCacheStore {
   final HiveInterface _hive;
   final Future<void> Function() _initializeHive;
   final EncryptedBox _encryptedBox;
-  final MemoryMailCache _memory = MemoryMailCache();
+
+  /// The clock both delegates judge message age (retention) against.
+  final DateTime Function() _now;
+  late final MemoryMailCache _memory = MemoryMailCache(now: _now);
   final Set<Future<void>> _writes = <Future<void>>{};
 
-  MailCacheStore _delegate = MemoryMailCache();
+  late MailCacheStore _delegate = MemoryMailCache(now: _now);
   bool _locked = true;
 
   /// True when the encrypted store could not be opened and mail is only kept
@@ -790,7 +795,7 @@ class MailCacheManager implements MailCacheStore {
     }
     final EncryptedBoxOpenResult result = await _encryptedBox.openChecked();
     if (result.isOpen) {
-      _delegate = EncryptedMailCache(_encryptedBox);
+      _delegate = EncryptedMailCache(_encryptedBox, now: _now);
       _locked = false;
       return const MailCacheInitResult(MailCacheInitMode.encrypted);
     }

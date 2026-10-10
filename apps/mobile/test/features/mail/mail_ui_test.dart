@@ -48,7 +48,8 @@ List<Override> _mail(
   InMemoryMailCredentialStore store, {
   MailCacheStore? cache,
 }) {
-  final MailCacheStore resolvedCache = cache ?? MemoryMailCache();
+  final MailCacheStore resolvedCache =
+      cache ?? MemoryMailCache(now: _testClock);
   return <Override>[
     mailGatewayProvider.overrideWithValue(gateway),
     mailCredentialStoreProvider.overrideWithValue(store),
@@ -178,6 +179,10 @@ MailMessageHeader _header({String id = '1'}) => MailMessageHeader(
   hasAttachments: false,
 );
 
+/// Mail fixtures here are dated mid-2026. Retention judges message age against
+/// the clock, so the caches read a fixed clock near the fixtures.
+DateTime _testClock() => DateTime.utc(2026, 7, 26);
+
 void main() {
   group('MoreScreen', () {
     testWidgets('does not repeat mail, which is a default tab', (
@@ -267,7 +272,7 @@ void main() {
     ) async {
       final store = InMemoryMailCredentialStore()..write(_creds);
       // The INBOX is served from the offline cache — pre-populate it.
-      final MemoryMailCache cache = MemoryMailCache();
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_header()]);
       await pumpScreen(
         tester,
@@ -286,7 +291,7 @@ void main() {
     ) async {
       _tallSurface(tester);
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final MemoryMailCache cache = MemoryMailCache();
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(
         List<MailMessageHeader>.generate(
           50,
@@ -785,7 +790,7 @@ void main() {
       'downloads a missing attachment on demand, caches it and opens it',
       (WidgetTester tester) async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveMessage(
           const MailMessageDetail(
             id: '1',
@@ -1036,7 +1041,7 @@ void main() {
         );
 
     Future<MemoryMailCache> cachedInbox() async {
-      final MemoryMailCache cache = MemoryMailCache();
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[
         hdr('1', 'Rechnung 2026', name: 'Buchhaltung'),
       ]);
@@ -1073,7 +1078,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[
         for (int index = 0; index < 80; index++)
           hdr('$index', 'Rechnung $index'),
@@ -1234,7 +1239,7 @@ void main() {
             ),
           },
         );
-        final MemoryMailCache cache = MemoryMailCache();
+        final MemoryMailCache cache = MemoryMailCache(now: _testClock);
         await pumpScreen(
           tester,
           const MailMessageScreen(id: '9'),

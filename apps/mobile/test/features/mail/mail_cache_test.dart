@@ -18,6 +18,11 @@ import 'package:hive_ce/hive.dart';
 
 const FlutterSecureStorage _storage = FlutterSecureStorage();
 
+/// Retention judges message age against the clock. The fixtures are dated in
+/// August 2026, so the caches read a fixed clock near them instead of the real
+/// one, which would age them out of the retention window over time.
+DateTime _testClock() => DateTime.utc(2026, 8, 20);
+
 void main() {
   late Directory directory;
 
@@ -42,6 +47,7 @@ void main() {
     );
     return MailCacheManager(
       encryptedBox: box,
+      now: _testClock,
       hive: Hive,
       initializeHive: () async {},
     );
@@ -382,7 +388,7 @@ void main() {
     test('rewrites the address index once for the whole batch', () async {
       final _CountingBox box = openBox();
       expect((await box.openChecked()).isOpen, isTrue);
-      final EncryptedMailCache cache = EncryptedMailCache(box);
+      final EncryptedMailCache cache = EncryptedMailCache(box, now: _testClock);
 
       box.writtenKeys.clear();
       await cache.saveMessages(<MailMessageDetail>[
@@ -414,20 +420,26 @@ void main() {
       () async {
         final _CountingBox batched = openBox();
         expect((await batched.openChecked()).isOpen, isTrue);
-        await EncryptedMailCache(batched).saveMessages(<MailMessageDetail>[
-          message('1', 'a@example.test'),
-          message('2', 'b@example.test'),
-        ]);
+        await EncryptedMailCache(batched, now: _testClock).saveMessages(
+          <MailMessageDetail>[
+            message('1', 'a@example.test'),
+            message('2', 'b@example.test'),
+          ],
+        );
         final List<String> fromBatch =
             (await EncryptedMailCache(
                 batched,
+                now: _testClock,
               ).knownAddresses()).map((MailAddressEntry e) => e.email).toList()
               ..sort();
         await Hive.close();
 
         final _CountingBox oneByOne = openBox();
         expect((await oneByOne.openChecked()).isOpen, isTrue);
-        final EncryptedMailCache cache = EncryptedMailCache(oneByOne);
+        final EncryptedMailCache cache = EncryptedMailCache(
+          oneByOne,
+          now: _testClock,
+        );
         await cache.saveMessage(message('1', 'a@example.test'));
         await cache.saveMessage(message('2', 'b@example.test'));
         final List<String> fromSingles =
@@ -450,7 +462,10 @@ void main() {
       expect((await box.openChecked()).isOpen, isTrue);
       box.writtenKeys.clear();
 
-      await EncryptedMailCache(box).saveMessages(const <MailMessageDetail>[]);
+      await EncryptedMailCache(
+        box,
+        now: _testClock,
+      ).saveMessages(const <MailMessageDetail>[]);
 
       expect(box.writtenKeys, isEmpty);
     });
@@ -460,7 +475,10 @@ void main() {
       () async {
         final _CountingBox box = openBox();
         expect((await box.openChecked()).isOpen, isTrue);
-        final EncryptedMailCache cache = EncryptedMailCache(box);
+        final EncryptedMailCache cache = EncryptedMailCache(
+          box,
+          now: _testClock,
+        );
         await cache.saveMessage(message('1', 'a@example.test'));
         box.readKeys.clear();
 
@@ -480,6 +498,7 @@ void main() {
         expect((await box.openChecked()).isOpen, isTrue);
         final EncryptedMailCache cache = EncryptedMailCache(
           box,
+          now: _testClock,
           policy: const MailCachePolicy(
             maxBodies: 2,
             maxBodyBytes: 1024 * 1024,
@@ -528,7 +547,10 @@ void main() {
       () async {
         final _CountingBox box = openBox();
         expect((await box.openChecked()).isOpen, isTrue);
-        final EncryptedMailCache cache = EncryptedMailCache(box);
+        final EncryptedMailCache cache = EncryptedMailCache(
+          box,
+          now: _testClock,
+        );
         final MailMessageDetail cached = message('1', 'a@example.test');
         await cache.saveHeaders(<MailMessageHeader>[
           MailMessageHeader(

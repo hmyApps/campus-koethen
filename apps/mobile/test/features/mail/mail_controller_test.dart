@@ -73,6 +73,10 @@ MailMessageHeader _hdrAt(String id, DateTime date) => MailMessageHeader(
   hasAttachments: false,
 );
 
+/// The inbox fixtures are dated 20 July 2026. Retention judges message age
+/// against the clock, so the caches read a fixed clock near the fixtures.
+DateTime _testClock() => DateTime.utc(2026, 7, 26);
+
 void main() {
   group('account load', () {
     test('starts signed out when the store is empty', () async {
@@ -154,7 +158,7 @@ void main() {
       () async {
         final gateway = FakeMailGateway();
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
         final container = _container(
           gateway: gateway,
@@ -193,7 +197,7 @@ void main() {
         final container = _container(
           gateway: FakeMailGateway(),
           store: store,
-          cache: MemoryMailCache(),
+          cache: MemoryMailCache(now: _testClock),
         );
         final controller = container.read(
           mailAccountControllerProvider.notifier,
@@ -384,7 +388,7 @@ void main() {
       () async {
         final store = InMemoryMailCredentialStore(clearAvailable: false)
           ..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
         final container = _container(
           gateway: FakeMailGateway(),
@@ -429,7 +433,7 @@ void main() {
   group('inbox', () {
     test('serves the INBOX from the offline cache', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('7')]);
       final container = _container(
         gateway: FakeMailGateway(),
@@ -445,7 +449,7 @@ void main() {
 
     test('deletes on the server before removing the offline copy', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('7'), _hdr('8')]);
       await cache.saveMessages(<MailMessageDetail>[_dtl('7'), _dtl('8')]);
       final gateway = FakeMailGateway();
@@ -475,7 +479,7 @@ void main() {
 
     test('loads older inbox headers in stable 100-message pages', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('300'), _hdr('200')]);
       final Completer<void> olderGate = Completer<void>();
       final Completer<void> olderStarted = Completer<void>();
@@ -574,7 +578,7 @@ void main() {
       'destructive INBOX actions carry the cached UIDVALIDITY (C-10)',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveUidValidity(7);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('8'), _hdr('7')]);
         await cache.saveMessage(_dtl('8'));
@@ -612,7 +616,7 @@ void main() {
       'an older page from a renumbered INBOX is not merged (C-10)',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveUidValidity(1);
         await cache.saveHeaders(<MailMessageHeader>[
           for (int id = 300; id > 250; id--) _hdr('$id'),
@@ -661,7 +665,7 @@ void main() {
       final container = _container(
         gateway: gateway,
         store: store,
-        cache: MemoryMailCache(),
+        cache: MemoryMailCache(now: _testClock),
       );
       await container.read(mailAccountControllerProvider.future);
       final MailOlderInboxHeaders older = container.read(
@@ -691,7 +695,7 @@ void main() {
       'opening a cached message marks it seen locally and rebuilds the list',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('7')]);
         await cache.saveMessage(_dtl('7'));
         final gateway = FakeMailGateway();
@@ -723,7 +727,7 @@ void main() {
       'opening a message fetched from the network marks it seen locally',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('9')]);
         final gateway = FakeMailGateway(
           detailsById: <String, MailMessageDetail>{'9': _dtl('9')},
@@ -750,7 +754,7 @@ void main() {
       'a failed server \\Seen mark still leaves the message readable and seen locally',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         await cache.saveHeaders(<MailMessageHeader>[_hdr('3')]);
         await cache.saveMessage(_dtl('3'));
         final gateway = FakeMailGateway(
@@ -781,7 +785,7 @@ void main() {
 
     test('a non-INBOX message open never touches the INBOX cache', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
       final gateway = FakeMailGateway(
         detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
@@ -841,7 +845,7 @@ void main() {
   group('sync', () {
     test('an in-flight sync cannot repopulate cache after sign-out', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       final Completer<void> started = Completer<void>();
       final Completer<void> release = Completer<void>();
       final gateway = FakeMailGateway(
@@ -873,7 +877,7 @@ void main() {
       'caches headers and prefetches new bodies, accumulating over time',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         final gateway = FakeMailGateway(
           inbox: <MailMessageHeader>[_hdr('1')],
           detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
@@ -914,7 +918,7 @@ void main() {
     test('removes mails deleted elsewhere when the window is the whole mailbox '
         '(C-06)', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       final gateway = FakeMailGateway(
         inbox: <MailMessageHeader>[_hdr('3'), _hdr('2'), _hdr('1')],
         detailsById: <String, MailMessageDetail>{
@@ -988,7 +992,7 @@ void main() {
       'a changed UIDVALIDITY discards the cached inbox silently (C-10)',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         final gateway = FakeMailGateway(
           uidValidity: 1,
           messagesExists: 120,
@@ -1051,7 +1055,7 @@ void main() {
 
     test('an empty mailbox page never erases the cached inbox', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('2'), _hdr('1')]);
       final gateway = FakeMailGateway(messagesExists: 0);
       final container = _container(
@@ -1070,7 +1074,7 @@ void main() {
       'publishes only messages arriving after the initial baseline',
       () async {
         final store = InMemoryMailCredentialStore()..write(_creds);
-        final cache = MemoryMailCache();
+        final cache = MemoryMailCache(now: _testClock);
         final gateway = FakeMailGateway(
           inbox: <MailMessageHeader>[_hdr('1')],
           detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
@@ -1108,7 +1112,7 @@ void main() {
 
     test('a live IMAP change immediately triggers an inbox sync', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
       final gateway = FakeMailGateway(
         inbox: <MailMessageHeader>[_hdr('2'), _hdr('1')],
@@ -1144,7 +1148,7 @@ void main() {
 
     test('downloads attachment bytes only when the setting is on', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       final gateway = FakeMailGateway(
         inbox: <MailMessageHeader>[_hdr('1')],
         detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
@@ -1171,7 +1175,7 @@ void main() {
 
     test('prefetches only the newest bounded set of message bodies', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       final List<MailMessageHeader> headers = <MailMessageHeader>[
         for (int id = 30; id >= 1; id--) _hdr('$id'),
       ];
@@ -1284,7 +1288,7 @@ void main() {
     }
 
     test('finds a cached message without asking the server', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
       await cache.saveMessage(
         detail(id: '1', body: 'Anbei die Rechnung für das Semester.'),
@@ -1305,7 +1309,7 @@ void main() {
     });
 
     test('matches German case and surrounding whitespace robustly', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[
         header('1', subject: 'Prüfungsanmeldung'),
       ]);
@@ -1324,7 +1328,7 @@ void main() {
     });
 
     test('searches recipients and the body, not just the header', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1'), header('2')]);
       await cache.saveMessage(
         detail(
@@ -1360,7 +1364,7 @@ void main() {
     });
 
     test('a term nothing matches is an empty, non-error state', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
       await cache.saveMessage(detail(id: '1'));
       final gateway = FakeMailGateway();
@@ -1380,7 +1384,7 @@ void main() {
     });
 
     test('a blank query clears without hitting cache or server', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
       final gateway = FakeMailGateway();
       final container = await seeded(gateway, cache);
@@ -1400,7 +1404,7 @@ void main() {
     });
 
     test('does not pretend to search an uncached folder locally', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
       await cache.saveMessage(detail(id: '1'));
       final gateway = FakeMailGateway();
@@ -1426,7 +1430,7 @@ void main() {
     });
 
     test('removing the account leaves no results behind', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
       await cache.saveMessage(detail(id: '1'));
       final store = InMemoryMailCredentialStore()..write(_creds);
@@ -1478,7 +1482,7 @@ void main() {
     });
 
     test('shows the same hit from cache and IMAP only once', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
       await cache.saveMessage(_dtl('1'));
       final store = InMemoryMailCredentialStore()..write(_creds);
@@ -1510,7 +1514,7 @@ void main() {
     });
 
     test('a server failure keeps the local hits and can be retried', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
       await cache.saveMessage(_dtl('1'));
       final store = InMemoryMailCredentialStore()..write(_creds);
@@ -1558,7 +1562,7 @@ void main() {
     });
 
     test('a hung search stays pending and keeps the results visible', () async {
-      final cache = MemoryMailCache();
+      final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
       await cache.saveMessage(_dtl('1'));
       final store = InMemoryMailCredentialStore()..write(_creds);
