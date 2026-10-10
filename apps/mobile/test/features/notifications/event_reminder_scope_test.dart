@@ -15,6 +15,7 @@ import 'package:campus_koethen/features/events/application/saved_events_controll
 import 'package:campus_koethen/features/events/data/saved_events_store.dart';
 import 'package:campus_koethen/features/events/domain/saved_event_snapshot.dart';
 import 'package:campus_koethen/features/events/domain/unified_event.dart';
+import 'package:campus_koethen/features/notifications/application/daily_summary_providers.dart';
 import 'package:campus_koethen/features/notifications/application/event_reminder_candidates.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_request.dart';
@@ -103,6 +104,8 @@ Future<ProviderContainer> containerWith({
   List<SavedEventSnapshot> saved = const <SavedEventSnapshot>[],
   List<PublicCalendar> catalogue = const <PublicCalendar>[],
   List<Override> extra = const <Override>[],
+  Clock? clock,
+  List<CalendarEntry> Function(DateTime anchor)? liveFor,
 }) async {
   final MemorySavedEventsStore store = MemorySavedEventsStore();
   await store.writeAll(saved);
@@ -112,7 +115,7 @@ Future<ProviderContainer> containerWith({
       keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       savedEventsStoreProvider.overrideWithValue(store),
       savedEventsClockProvider.overrideWithValue(() => kNow),
-      notificationClockProvider.overrideWithValue(_FixedClock(kNow)),
+      notificationClockProvider.overrideWithValue(clock ?? _FixedClock(kNow)),
       timeZoneResolverProvider.overrideWithValue(
         FixedTimeZoneResolver('Europe/Berlin'),
       ),
@@ -124,7 +127,8 @@ Future<ProviderContainer> containerWith({
       // the horizon is empty, exactly as an unfetched month would be.
       publicCalendarMonthEntriesProvider.overrideWith(
         (Ref ref, DateTime anchor) async =>
-            anchor.month == 7 ? live : const <CalendarEntry>[],
+            liveFor?.call(anchor) ??
+            (anchor.month == 7 ? live : const <CalendarEntry>[]),
       ),
       ...extra,
     ],
@@ -382,4 +386,42 @@ void main() {
       }
     });
   });
+
+  test('the month horizon moves on with the planning day (VF-N03)', () async {
+    // Open on 31 July: the horizon is July and August. A September event is
+    // out of reach until the day rolls over into August.
+    final _MutableClock clock = _MutableClock(DateTime(2026, 7, 31, 23, 50));
+    final CalendarEntry september = liveEvent(
+      eventId: '9001',
+      start: DateTime(2026, 9, 1, 16),
+    );
+    final ProviderContainer container = await containerWith(
+      clock: clock,
+      liveFor: (DateTime anchor) =>
+          anchor.month == 9 ? <CalendarEntry>[september] : <CalendarEntry>[],
+    );
+    container.listen(notificationEventEntriesProvider, (_, _) {});
+    // Let every month of the first horizon settle, so nothing but the day
+    // change itself is left to trigger a rebuild.
+    await container.read(
+      publicCalendarMonthEntriesProvider(DateTime(2026, 8)).future,
+    );
+    expect(entryIds(container), isEmpty);
+
+    // Midnight, as `NotificationHost` handles it: the planning day moves on.
+    clock.value = DateTime(2026, 8, 1, 0, 0, 1);
+    container.read(notificationPlanningDayProvider.notifier).refresh();
+    await container.read(
+      publicCalendarMonthEntriesProvider(DateTime(2026, 9)).future,
+    );
+
+    expect(entryIds(container), <String>[september.id]);
+  });
+}
+
+class _MutableClock implements Clock {
+  _MutableClock(this.value);
+  DateTime value;
+  @override
+  DateTime now() => value;
 }

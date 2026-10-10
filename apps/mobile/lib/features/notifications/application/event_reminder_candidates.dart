@@ -18,6 +18,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../domain/delivery_window.dart';
 import '../domain/notification_category.dart';
 import '../domain/notification_request.dart';
+import 'daily_summary_providers.dart' show notificationPlanningDayProvider;
 import 'notification_providers.dart';
 import 'notification_settings_controller.dart';
 
@@ -217,11 +218,15 @@ List<NotificationRequest> eventReminderRequests({
 /// reminder (ADR-0001 § 7.3, "genau eine").
 final Provider<List<CalendarEntry>> notificationEventEntriesProvider =
     Provider<List<CalendarEntry>>((Ref ref) {
-      final DateTime now = ref.watch(notificationClockProvider).now();
+      // The planning day, not a clock read: the clock is no app state and
+      // would never rebuild this provider, so an app left open across the end
+      // of a month would keep the old two-month horizon (VF-N03).
+      // `NotificationHost` moves the planning day on at midnight and on resume.
+      final DateTime today = ref.watch(notificationPlanningDayProvider);
 
       final List<CalendarEntry> live = <CalendarEntry>[];
       for (int i = 0; i < kEventReminderHorizonMonths; i++) {
-        final DateTime month = DateTime(now.year, now.month + i);
+        final DateTime month = DateTime(today.year, today.month + i);
         live.addAll(
           ref.watch(publicCalendarMonthEntriesProvider(month)).value ??
               const <CalendarEntry>[],
