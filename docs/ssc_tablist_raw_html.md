@@ -5,6 +5,7 @@
 **Die Tab-Buttons sind `<button type="submit">` Elemente mit `onclick` Handler**, nicht Links!
 
 ### Tab-Button-IDs gefunden:
+
 ```
 1. "Meine Studiengänge"       → ID: studyserviceForm:stgStudent_TabBtn
 2. "Kontaktdaten" [AKTIV]     → ID: studyserviceForm:newContactData_TabBtn
@@ -44,6 +45,7 @@ Entgegen der Annahme "fehlendes `_TabBtn`-Element" funktioniert das System so:
 ## 🛠️ So aktivierst du einen Tab programmatisch
 
 ### Mit Selenium (Python):
+
 ```python
 from selenium.webdriver.common.by import By
 
@@ -66,6 +68,7 @@ for tab_id in tab_ids:
 ```
 
 ### Mit Browser-Konsole (JavaScript):
+
 ```javascript
 // Kontaktdaten Tab aktivieren
 const kontaktdatenBtn = document.getElementById('studyserviceForm:newContactData_TabBtn');
@@ -78,6 +81,7 @@ if (kontaktdatenBtn.onclick) {
 ```
 
 ### Mit Curl/Browser-Form-Submit:
+
 ```
 Die Tabs funktionieren nur via Browser-JavaScript.
 Mit curl/scraping nicht möglich, da `onclick` Handler erforderlich.
@@ -86,17 +90,18 @@ Nutze stattdessen Selenium oder Playwright.
 
 ## 📊 Vollständige Tab-Liste aus der Seite
 
-| Index | Label | Button ID |
-|-------|-------|-----------|
-| 0 | Meine Studiengänge | `studyserviceForm:stgStudent_TabBtn` |
-| 1 | **Kontaktdaten** (aktiv) | `studyserviceForm:newContactData_TabBtn` |
-| 2 | Zahlungen | `studyserviceForm:billsAndPayment_TabBtn` |
-| 3 | Bescheide / Bescheinigungen | (ID folgt) |
-| 4 | Persönliche Einwilligungen | (ID folgt) |
+| Index | Label                       | Button ID                                 |
+| ----- | --------------------------- | ----------------------------------------- |
+| 0     | Meine Studiengänge          | `studyserviceForm:stgStudent_TabBtn`      |
+| 1     | **Kontaktdaten** (aktiv)    | `studyserviceForm:newContactData_TabBtn`  |
+| 2     | Zahlungen                   | `studyserviceForm:billsAndPayment_TabBtn` |
+| 3     | Bescheide / Bescheinigungen | (ID folgt)                                |
+| 4     | Persönliche Einwilligungen  | (ID folgt)                                |
 
 ## 🔄 JSF Form-Values beim Tab-Wechsel
 
 Wenn du einen Tab klickst, wird folgendes übertragen:
+
 ```
 POST /qisserver/pages/cm/stu/studyService/start.xhtml?_flowId=studyservice-flow
 
@@ -110,9 +115,10 @@ Das `content.5` ist die interne JSF-Value des Buttons (nicht 100% eindeutig, abe
 
 ## ⚠️ Warum das Parser-Projekt davon nicht betroffen ist
 
-Der SSC-Parser (`ssc_parser.js`, `ssc_parser.py`) parst die **bereits geladene HTML-Seite** im Browser oder aus einer lokalen HTML-Datei. 
+Der SSC-Parser (`ssc_parser.js`, `ssc_parser.py`) parst die **bereits geladene HTML-Seite** im Browser oder aus einer lokalen HTML-Datei.
 
 Die Tab-Struktur ist **irrelevant** für den Parser, weil:
+
 - ✅ Der Parser nutzt den **Inhalt des aktiven Tabs** (das `[role="tabpanel"]`)
 - ✅ Er braucht nicht zu wissen, wie man zwischen Tabs wechselt
 - ✅ Du klickst manuell auf "Kontaktdaten" oder navigierst direkt zur URL
@@ -122,12 +128,14 @@ Der Parser funktioniert mit jedem Tab-System (klassisch JSF, PrimeFaces, React, 
 ## 🎓 Fazit
 
 **Das ist ein **typisches PrimeFaces `p:tabView`-Pattern** mit Submit-Buttons statt Links:**
+
 - Jeder Tab-Click löst Form-Submit aus
 - Server entscheidet, welcher Tab oben ist
 - JavaScript-Handler im `onclick` koordiniert
 - Gut für server-seitige Validierung & State-Management
 
 **Für zukünftige Parser-Projekte:**
+
 - Nicht auf Tab-Navigation verlassen (zu portalspezifisch)
 - Direkt auf die URLs linken oder JavaScript/Selenium für automatisierte Navigatin nutzen
 - Die Daten im tabpanel sind standardisiert genug zum Parsen

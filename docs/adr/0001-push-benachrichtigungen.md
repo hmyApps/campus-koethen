@@ -543,7 +543,7 @@ Eintrag. Beides ist rein additiv und berührt keinen bestehenden Vertrag.
 | Bibliothek                 | `flutter_local_notifications`, plus `timezone` für zonenrichtige Zeitpunkte und ein kleines Paket zur Ermittlung der Gerätezeitzone (exakte Auswahl gegen die eingesetzte Plugin-Version prüfen)                                                                                                                                                 |
 | Terminierung               | `zonedSchedule` **inexakt** (`inexactAllowWhileIdle`) — damit braucht Android 12+ **kein** `SCHEDULE_EXACT_ALARM`                                                                                                                                                                                                                                |
 | Genauigkeit am Fensterrand | Inexakte Terminierung kann einige Minuten später zustellen. Ein auf 19:5x geplanter Hinweis kann daher nach 20:00 Uhr erscheinen. Das Fenster aus P7 ist eine **Planungsregel**; eine Zustellung auf die Minute wäre nur mit `SCHEDULE_EXACT_ALARM` zusagbar, und dieser Preis steht in keinem Verhältnis. Die Abweichung ist zu messen (§ 13.2) |
-| Android-Kanäle             | **vier** Kanäle, je einer für N1, N2, N3 und das später ergänzte N4, vor der ersten Planung/Anzeige angelegt. Kanäle sind kein Gruppenschlüssel und berühren P8 nicht                                                                                                                                                                             |
+| Android-Kanäle             | **vier** Kanäle, je einer für N1, N2, N3 und das später ergänzte N4, vor der ersten Planung/Anzeige angelegt. Kanäle sind kein Gruppenschlüssel und berühren P8 nicht                                                                                                                                                                            |
 | Android-Berechtigung       | `POST_NOTIFICATIONS` ab Android 13; darunter gilt sie als erteilt — beides muss die UI korrekt darstellen                                                                                                                                                                                                                                        |
 | Kleines Symbol (Android)   | monochrom, sonst zeigt Android ein graues Quadrat                                                                                                                                                                                                                                                                                                |
 | iOS-Berechtigung           | erst nach erklärtem Nutzen anfragen: im letzten Onboarding-Schritt beim bewussten Abschluss mit aktiviertem Schalter oder später über einen kontextuellen Einstiegspunkt (LEVIORA-158/167)                                                                                                                                                       |
@@ -556,21 +556,21 @@ Die dreizehn Kandidaten der ersten Fassung sind durch LEVIORA-159 entschieden. D
 erhalten, damit nachvollziehbar ist, was bewusst nicht gebaut wird — sie ist **keine** offene Liste
 mehr.
 
-| #   | Kandidat                         | Entscheidung nach LEVIORA-159                                                  |
-| --- | -------------------------------- | ------------------------------------------------------------------------------ |
-| K1  | Gemerktes Event                  | **In N1 aufgegangen** — Erinnerung exakt 24 h vorher                           |
-| K2  | Termin aus öffentlichem Kalender | **In N1 aufgegangen** — nur aus aktivierten Kalendern                          |
-| K3  | Vor einer Lehrveranstaltung      | **Kein Einzelhinweis** (P5). Erscheint in N2, sobald WebUntis freigegeben ist  |
-| K4  | Stundenplanausfall               | **Kein Einzelhinweis** (P5). Ein lokal bekannter Ausfall erscheint in N2       |
-| K5  | Lieblingsgericht                 | **N3**, fest um 11:00 Uhr                                                      |
-| K6  | Moodle-Abgabefrist               | **Kein Einzelhinweis** (P5). Erscheint aggregiert in N2                        |
-| K7  | Tagesübersicht                   | **N2**, fest um 08:00 Uhr                                                      |
-| K8  | Aufgabe fällig                   | Nicht Bestandteil der Freigabe. `Todo` hat weiterhin kein Fälligkeitsdatum     |
-| K9  | Neuer Beitrag / neues Event      | **Bewusster Verzicht** (LEVIORA-159). Strukturell nur mit S2, dann best effort |
+| #   | Kandidat                         | Entscheidung nach LEVIORA-159                                                                           |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| K1  | Gemerktes Event                  | **In N1 aufgegangen** — Erinnerung exakt 24 h vorher                                                    |
+| K2  | Termin aus öffentlichem Kalender | **In N1 aufgegangen** — nur aus aktivierten Kalendern                                                   |
+| K3  | Vor einer Lehrveranstaltung      | **Kein Einzelhinweis** (P5). Erscheint in N2, sobald WebUntis freigegeben ist                           |
+| K4  | Stundenplanausfall               | **Kein Einzelhinweis** (P5). Ein lokal bekannter Ausfall erscheint in N2                                |
+| K5  | Lieblingsgericht                 | **N3**, fest um 11:00 Uhr                                                                               |
+| K6  | Moodle-Abgabefrist               | **Kein Einzelhinweis** (P5). Erscheint aggregiert in N2                                                 |
+| K7  | Tagesübersicht                   | **N2**, fest um 08:00 Uhr                                                                               |
+| K8  | Aufgabe fällig                   | Nicht Bestandteil der Freigabe. `Todo` hat weiterhin kein Fälligkeitsdatum                              |
+| K9  | Neuer Beitrag / neues Event      | **Bewusster Verzicht** (LEVIORA-159). Strukturell nur mit S2, dann best effort                          |
 | K10 | Neue E-Mail                      | **Später als N4 ergänzt:** sofort lokal nach bestätigtem Vordergrund-IDLE-Sync; keine Hintergrundzusage |
-| K11 | Neue Note                        | **Nein** — persönliche Daten, falsche Voreinstellung auf dem Sperrbildschirm   |
-| K12 | Moodle-Ankündigung               | Nicht Bestandteil der Freigabe. Wie K10                                        |
-| K13 | Notfallmeldung                   | **Nein** — keine autoritative Quelle, die App ist unabhängig und inoffiziell   |
+| K11 | Neue Note                        | **Nein** — persönliche Daten, falsche Voreinstellung auf dem Sperrbildschirm                            |
+| K12 | Moodle-Ankündigung               | Nicht Bestandteil der Freigabe. Wie K10                                                                 |
+| K13 | Notfallmeldung                   | **Nein** — keine autoritative Quelle, die App ist unabhängig und inoffiziell                            |
 
 **Aus dreizehn Kandidaten sind drei Kategorien geworden — ohne Server, ohne Anbieter, ohne einen
 einzigen gespeicherten Datensatz außerhalb des Geräts.**
@@ -696,14 +696,14 @@ funktionieren ohne sie unverändert.
 
 **Risiken mit Frühindikator**
 
-| Risiko                                                  | Frühindikator                                 | Gegenmaßnahme                                                           |
-| ------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
+| Risiko                                                  | Frühindikator                                 | Gegenmaßnahme                                                                     |
+| ------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | Zu viele Erinnerungen, Nutzer schalten alles ab         | Rückmeldungen; hohe Zahl geplanter Einträge   | Drei geplante Kategorien plus neutraler N4-Live-Hinweis; jede einzeln abschaltbar |
-| Vorrat läuft leer bei seltener Nutzung                  | in der Gerätematrix reproduzierbar            | Budget ausschöpfen, in der UX ehrlich erklären                          |
-| Veraltete Erinnerung nach einer Absage                  | Testfall in der Gerätematrix                  | Neuplanung nach jedem Abruf; vorsichtige Textwahl                       |
-| iOS-Grenze überschritten, Einträge fallen weg           | Zähler „Budget ausgeschöpft“                  | Budget 60 statt 64, Priorisierung nach Zeitpunkt                        |
-| Abbruch zwischen `cancelAll()` und erneuter Planung     | leerer Planungsstand nach erzwungenem Beenden | Serialisierte Neuplanung; jeder App-Start plant neu; Fall in der Matrix |
-| Planer liest versehentlich die Kalender-Anzeigeschalter | gemerkte Events erzeugen keine Hinweise       | Unit-Test auf den Geltungsbereich aus § 7.2                             |
+| Vorrat läuft leer bei seltener Nutzung                  | in der Gerätematrix reproduzierbar            | Budget ausschöpfen, in der UX ehrlich erklären                                    |
+| Veraltete Erinnerung nach einer Absage                  | Testfall in der Gerätematrix                  | Neuplanung nach jedem Abruf; vorsichtige Textwahl                                 |
+| iOS-Grenze überschritten, Einträge fallen weg           | Zähler „Budget ausgeschöpft“                  | Budget 60 statt 64, Priorisierung nach Zeitpunkt                                  |
+| Abbruch zwischen `cancelAll()` und erneuter Planung     | leerer Planungsstand nach erzwungenem Beenden | Serialisierte Neuplanung; jeder App-Start plant neu; Fall in der Matrix           |
+| Planer liest versehentlich die Kalender-Anzeigeschalter | gemerkte Events erzeugen keine Hinweise       | Unit-Test auf den Geltungsbereich aus § 7.2                                       |
 
 **Umkehrbarkeit.** Sehr hoch. Rückbau heißt: `cancelAll()`, zwei bis drei Pakete entfernen, die
 optionalen Zielparameter zurücknehmen. Es entsteht keine Migration, weil keine Daten das Gerät

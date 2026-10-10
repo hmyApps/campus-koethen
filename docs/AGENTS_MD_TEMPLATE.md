@@ -20,6 +20,7 @@ Dieses Template kann in dein Projektverzeichnis kopiert und angepasst werden.
 **Portal**: HISinOne SSC Hochschule Anhalt (https://sscportal.ssc.hs-anhalt.de)
 
 **Besonderheiten**:
+
 - JSF-basiert mit PrimeFaces-ähnlichen Komponenten
 - Tab-Navigation via Submit-Buttons (nicht Links)
 - Alle Tabs haben eindeutige Button-IDs (`*_TabBtn`)
@@ -27,11 +28,13 @@ Dieses Template kann in dein Projektverzeichnis kopiert und angepasst werden.
 
 ### Tab-Button IDs
 ```
-- Meine Studiengänge:       studyserviceForm:stgStudent_TabBtn
-- Kontaktdaten:             studyserviceForm:newContactData_TabBtn
-- Zahlungen:                studyserviceForm:billsAndPayment_TabBtn
+
+- Meine Studiengänge: studyserviceForm:stgStudent_TabBtn
+- Kontaktdaten: studyserviceForm:newContactData_TabBtn
+- Zahlungen: studyserviceForm:billsAndPayment_TabBtn
 - Bescheide/Bescheinigungen: studyserviceForm:billsAndPayment_TabBtn
 - Persönliche Einwilligungen: ...weitere
+
 ```
 
 ## 🤖 Agent-Workflows
@@ -39,7 +42,7 @@ Dieses Template kann in dein Projektverzeichnis kopiert und angepasst werden.
 ### 1. Data Extraction Agent
 **Purpose**: Extrahiert Kontaktdaten von der Studienservice-Seite
 
-**Input**: 
+**Input**:
 - Portal-URL (nach Login)
 - Gewünschte Adresstypen (oder alle)
 
@@ -55,13 +58,15 @@ Dieses Template kann in dein Projektverzeichnis kopiert und angepasst werden.
 
 **Prozess**:
 ```
+
 1. Login (Credentials aus Umgebung)
 2. Navigate zu Studienservice (POST mit Tab-Button-ID)
 3. Click "Kontaktdaten" Button (ID: studyserviceForm:newContactData_TabBtn)
 4. Wait für [role="tabpanel"] zu laden
 5. Parse mit SSCPortalParser
 6. Return JSON
-```
+
+````
 
 ### 2. Comparison Agent
 **Purpose**: Vergleicht aktuelle mit gespeicherten Kontaktdaten
@@ -99,59 +104,60 @@ class SSCPortalAgent:
     def __init__(self):
         self.driver = webdriver.Chrome()
         self.wait = WebDriverWait(self.driver, 10)
-        
+
     def login(self, username: str, password: str):
         """Login ins Portal"""
         self.driver.get("https://sscportal.ssc.hs-anhalt.de/qisserver")
-        
+
         # Finde Login-Felder
         user_input = self.wait.until(
             EC.presence_of_element_located((By.ID, "username"))
         )
         pass_input = self.driver.find_element(By.ID, "password")
-        
+
         user_input.send_keys(username)
         pass_input.send_keys(password)
-        
+
         # Submit
         login_btn = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Anmelden')]")
         login_btn.click()
-        
+
         # Warte auf Seite zu laden
         self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[role='main']")))
-        
+
     def goto_studienservice(self):
         """Navigate zu Studienservice"""
         url = "https://sscportal.ssc.hs-anhalt.de/qisserver/pages/cm/stu/studyService/start.xhtml?_flowId=studyservice-flow"
         self.driver.get(url)
-        
+
         self.wait.until(
             EC.presence_of_element_located((By.ID, "studyserviceForm:newContactData_TabBtn"))
         )
-        
+
     def click_kontaktdaten_tab(self):
         """Klicke Kontaktdaten Tab"""
         btn = self.driver.find_element(By.ID, "studyserviceForm:newContactData_TabBtn")
         btn.click()
-        
+
         # Warte auf Tab-Inhalt
         self.wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "[role='tabpanel']"))
         )
-        
+
     def extract_kontaktdaten(self):
         """Extrahiere Kontaktdaten"""
         from ssc_parser import SSCPortalParser
-        
+
         html = self.driver.page_source
         parser = SSCPortalParser(html)
         return parser.parse()
-        
+
     def close(self):
         self.driver.quit()
-```
+````
 
 **Beispiel-Nutzung**:
+
 ```python
 agent = SSCPortalAgent()
 agent.login(
@@ -170,7 +176,7 @@ print(data)
 
 Wenn du nur die Daten **von einer offenen Seite** extrahieren möchtest:
 
-```javascript
+```text
 // In Browser-Konsole auf der Kontaktdaten-Seite:
 <script src="ssc_parser.js"></script>
 
@@ -182,6 +188,7 @@ SSCParser.downloadJSON()      // Datei
 ## 📅 Geplante Automatisierungen
 
 ### 1. Tägliches Backup
+
 ```yaml
 Frequenz: Täglich 23:59 Uhr
 Agent: Backup Agent
@@ -190,6 +197,7 @@ Benachrichtigung: Email bei Änderungen
 ```
 
 ### 2. Wöchentlicher Vergleich
+
 ```yaml
 Frequenz: Montag 08:00 Uhr
 Agent: Comparison Agent
@@ -198,6 +206,7 @@ Report: Markdown file `weekly_changes.md`
 ```
 
 ### 3. Monatlicher Export
+
 ```yaml
 Frequenz: 1. des Monats
 Agent: Export Agent
@@ -220,7 +229,7 @@ try:
 except TimeoutException:
     print("Login fehlgeschlagen oder Portal nicht erreichbar")
     # Benachrichtige Admin
-    
+
 try:
     agent.click_kontaktdaten_tab()
 except ElementNotFound:
@@ -243,6 +252,7 @@ except ElementNotFound:
 ## 📞 Debugging
 
 ### Seite lädt nicht
+
 ```python
 # Screenshot machen
 self.driver.save_screenshot("debug.png")
@@ -253,6 +263,7 @@ with open("debug.html", "w") as f:
 ```
 
 ### Tab funktioniert nicht
+
 ```python
 # Prüfe ob Button sichtbar
 btn = self.driver.find_element(By.ID, "studyserviceForm:newContactData_TabBtn")
@@ -263,6 +274,7 @@ self.driver.execute_script("arguments[0].click();", btn)
 ```
 
 ### Parser funktioniert nicht
+
 ```python
 # Prüfe ob tabpanel vorhanden
 tabpanel = self.driver.find_element(By.CSS_SELECTOR, "[role='tabpanel']")
@@ -279,7 +291,9 @@ parser._extract_contact_blocks()  # Debugging
 **Version**: 1.0  
 **Letzte Aktualisierung**: 2026-10-03
 **Getestet**: Hochschule Anhalt HISinOne
+
 ```
+
 ```
 
 ---
@@ -289,6 +303,7 @@ parser._extract_contact_blocks()  # Debugging
 Kopiere den Content oben in dein Projekt als `.github/AGENTS.md` oder `docs/AGENTS.md`.
 
 Passe dann an:
+
 - Deine spezifischen Credentials-Anforderungen
 - Deine Scheduling-Anforderungen
 - Deine Output-Formate

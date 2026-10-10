@@ -296,12 +296,12 @@ Die Benachrichtigungseinstellungen liegen unter _Mehr → Einstellungen → Bena
 
 Ein Tap auf eine Benachrichtigung führt direkt zum betroffenen Inhalt:
 
-| Benachrichtigungs-Typ | Lokaler Typ-Identifier | Ziel-Route in `AppRoutes`                   | Konkretes Verhalten beim Öffnen                         |
-| :-------------------- | :--------------------- | :------------------------------------------ | :------------------------------------------------------ |
-| `daily_summary`       | `daily.summary`        | `AppRoutes.calendar` (`/calendar`)          | **Öffnet direkt die Tagesansicht** des aktuellen Tages. |
-| `events_reminder`     | `event.reminder`       | `AppRoutes.newsEventsName` (`/news/events`) | **Öffnet direkt das Event** und fokussiert Details.     |
-| `canteen_favourites`  | `canteen.favourite`    | `AppRoutes.canteen` (`/canteen`)            | **Öffnet direkt das Mensagericht** im Speiseplan.       |
-| `new_mail`            | `mail.new`             | `AppRoutes.mail` (`/more/mail`)              | **Öffnet den Posteingang**; Payload enthält nur die UID.|
+| Benachrichtigungs-Typ | Lokaler Typ-Identifier | Ziel-Route in `AppRoutes`                   | Konkretes Verhalten beim Öffnen                          |
+| :-------------------- | :--------------------- | :------------------------------------------ | :------------------------------------------------------- |
+| `daily_summary`       | `daily.summary`        | `AppRoutes.calendar` (`/calendar`)          | **Öffnet direkt die Tagesansicht** des aktuellen Tages.  |
+| `events_reminder`     | `event.reminder`       | `AppRoutes.newsEventsName` (`/news/events`) | **Öffnet direkt das Event** und fokussiert Details.      |
+| `canteen_favourites`  | `canteen.favourite`    | `AppRoutes.canteen` (`/canteen`)            | **Öffnet direkt das Mensagericht** im Speiseplan.        |
+| `new_mail`            | `mail.new`             | `AppRoutes.mail` (`/more/mail`)             | **Öffnet den Posteingang**; Payload enthält nur die UID. |
 
 ### 6.2 Fehler- und Fallback-Verhalten
 
