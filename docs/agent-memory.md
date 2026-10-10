@@ -17,6 +17,7 @@ ausschließlich in `AGENTS.md`; diese Datei ergänzt sie nur um Fortschritt und 
 | ---------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | 2026-10-07 | Rekursiver Mehragenten-Bughunt (4 Runden, 19 Agenten, nur Analyse) | `docs/bughunt-audit-2026-10-07.md`: 94 validierte Bugs (9 hoch, 40 mittel, 45 niedrig)         |
 | 2026-10-10 | Mehragenten-Bugfix-Lauf (12 Arbeitspakete, je ein Worktree, TDD)   | Branch `fix/bughunt-2026-10-07`: 85 von 94 Funden behoben, 9 offen als Maintainer-Entscheidung |
+| 2026-10-11 | Doku-Drift aufgelöst, Folgefixes und Maintainer-Entscheidungen     | Alle 94 Funde erledigt; Sicherheits-Patches, Folgefixes und G-08 umgesetzt (siehe unten)       |
 
 ## Stand nach dem Bugfix-Lauf (2026-10-10)
 
@@ -39,33 +40,49 @@ Flutter 3.44.7, Wegwerf-Container `postgres:16-alpine` mit `campus_app_test_<run
   Abhängigkeit geändert): `proxy-addr` 2.0.7 → ≥2.0.8 und `compression` 1.8.1 → ≥1.8.2 (Backend-Laufzeit),
   `handlebars` 4.7.9 → ≥4.7.10, `sharp` 0.35.4 → ≥0.35.5 (CMS).
 
+## Stand 2026-10-11
+
+Umgesetzt (jeweils TDD, vorher real roter Test):
+
+- Sicherheits-Patches: `proxy-addr` 2.0.8, `compression` 1.8.2, `handlebars` 4.7.10, `sharp` 0.35.5 —
+  `pnpm audit --audit-level high` grün (nur die dokumentierte `brace-expansion`-Ausnahme).
+- Mail: periodischer Sync und Live-Verbindung teilen die Sperre nach abgelehntem Passwort (Rest von C-01).
+- Hochschulzugang: Ein Kontowechsel verbindet nur den prüfenden Dienst; alle anderen (HSA-GPT über seinen
+  Zustimmungsbildschirm) erst nach `+`. Reine Passwortänderung erhält die Verknüpfungen.
+- Noten: HISinOne ist Standard; Konten ohne Portalwahl wechseln einmalig (Cache wird dabei verworfen).
+- About: Quellcode-Links auf Originalprojekt und Fork (G-08, Release-Gate geschlossen).
+- Backend: Aufbewahrung vergangener Termine öffentlicher Kalender ein Jahr; „heute“ nach Berliner Tag
+  auch in Posts, Kalendern und Mensa-Sync; `timetable_sync_runs.groupsUnconfirmed` (Migration
+  `20261011120000_…`).
+- Events: vor VF-N01 gemerkte Ganztags-Posts werden beim Lesen auf ihren Tag korrigiert.
+- Tests: Mail-Tests mit fester Uhr (verifiziert mit Standarduhr 2030).
+
+Gates (sauberer Worktree, Node 24.21.0, Wegwerf-`postgres:16-alpine`): Migrationen 14/14, Backend inkl.
+Integration 59/59 Suites, 820/820; Lint, Typecheck, Build, OpenAPI ohne Drift; CMS und Karte grün;
+`format:check` und `pnpm audit` grün; Flutter `dart format .`, `analyze`, `test` 3099/3099, Release-API,
+Hardcoded-Text-Grep, Dart-Audit grün; Gitleaks (200 Commits) ohne Fund.
+
 Windows-Hinweis: Flutter-Gates scheitern in sehr langen Pfaden an MAX_PATH (`ios/Flutter/ephemeral`);
 lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat teils CRLF
 (`core.autocrlf=true`), Index ist LF — `format:check` im Arbeitsverzeichnis kann deshalb fälschlich rot sein.
 
 ## Offene To-dos (Priorität absteigend)
 
-- [ ] Sicherheits-Patches für `pnpm audit` (siehe oben) über Overrides in `pnpm-workspace.yaml` bzw. den
-      exakten `compression`-Pin im Backend; danach alle Gates erneut.
-- [ ] Release-Gate G-08: Quellcode-Link im About (AGPL) fehlt; braucht die festgelegte öffentliche Repo-URL
-      (`docs/product/mvp.md` §6, Gate 3).
 - [x] 2026-10-11 Doku-Drift aufgelöst, Doku/AGENTS folgen dem Code: A-07 (Mensa-IDs als dokumentierte Ausnahme),
       A-08 (lokaler `STRAPI_BASE_URL`-Default), VA-N02 (`to` = from+14), B-11 (manueller `images.yml`-Start im
       README beschrieben), D-10 (`POST /api/ai-req`), D-11 (E2EE-Modul nicht angebunden), E-13 (Moodle stündlich
       im Vordergrund), G-07 (Store-Kennungen). PROD-Domains in AGENTS §10 und `mvp.md` als geklärt eingetragen.
-- [ ] Bewusste Abweichungen bestätigen: B-10 `.invalid`-Kalender im Perf-Seed bleiben aktiv; D-06 fehlende Portalwahl
-      fällt weiter auf HIS-QIS zurück (1.x-Migration); HSA-GPT wird bei Kontowechsel ohne erneute Zustimmung neu
-      verbunden; jedes HSA-GPT-Neuverbinden rotiert das Token.
-- [ ] Folgefixes: regulärer 10-min-Mail-Sync loggt nach abgelehntem Passwort weiter ein (Rest von C-01);
-      „heute“ per UTC noch in `posts.controller.ts`, `public-calendar.controller.ts`, `canteen-sync.service.ts`
-      (Helper `common/time/campus-date.ts` nutzen); Aufbewahrungsfrist für `public_calendar_events` festlegen (B-02);
-      vor dem Update gemerkte Ganztags-Event-Posts migrieren (VF-N01); Mail-Tests mit echter Uhr laufen ab ~01/2027 ab;
-      Stundenplan-Lauf bleibt `success`, wenn einzelne Klassen unbestätigt sind (nur `errorMessage`).
+- [x] 2026-10-11 Sicherheits-Patches, Folgefixes, G-08 und Maintainer-Entscheidungen umgesetzt (siehe „Stand
+      2026-10-11“). Bestätigt: B-10 `.invalid`-Kalender bleiben aktiv; D-06 jetzt mit HISinOne als Standard.
+- [ ] Optional: HIS-QIS ganz entfernen, falls HISinOne alle Konten abdeckt (heute nur noch über „Prüfungsportal
+      wechseln“ erreichbar).
 - [ ] Live/real zu verifizieren: F-06 (EWS-Ganztag), C-02 (Teilabruf ohne Anhänge, echtes Postfach), D-08 (Overlay-IDs
       HISinOne), E-12 (Moodle-`wsaccessuser*`-Codes), F-08 (Gerätematrix #20), B-05/B-08 (Strapi `channels.isActive`,
       `documentId` in Relationen), B-06 (nginx-Laufzeitverhalten auf dem VPS; Syntax geprüft), B-02/VB-N02
       (Google-ETag-Verhalten).
 - [ ] Deployment (manuell, kein Auto-Deploy): Standard-Update laut `infrastructure/vps/README.md`
-      (`--profile migrate run --rm migrate` vor `up -d api worker`) deckt die neue, rein additive Migration
-      `20261009120000_…` ab; geänderte Edge-Confs (`proxy_ignore_headers`) separat auf dem VPS einspielen,
-      `nginx -t`, reload.
+      (`--profile migrate run --rm migrate` vor `up -d api worker`) deckt die rein additiven Migrationen
+      `20261009120000_…` und `20261011120000_…` ab; geänderte Edge-Confs (`proxy_ignore_headers`) separat auf dem
+      VPS einspielen, `nginx -t`, reload.
+- [ ] Release: signierte Android-Version braucht den Release-Keystore (`CAMPUS_ANDROID_KEYSTORE_*`); iOS nur
+      unter macOS. HSA-GPT bleibt deaktiviert, bis HSA HAWKI aktualisiert.
