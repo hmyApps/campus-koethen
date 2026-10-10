@@ -28,14 +28,15 @@ String icsFromCalendarEntries(
     _writeContentLine(buffer, 'UID:${_escape(entry.id)}@campus-koethen.app');
     _writeContentLine(buffer, 'DTSTAMP:$stamp');
     if (entry.allDay) {
-      // DTEND for an all-day event is the exclusive day-after, the same
-      // convention `CalendarEntry.lastDay`'s own doc comment already
-      // documents this app's all-day entries as using.
-      final DateTime end = entry.end ?? _nextCalendarDay(entry.start);
-      _writeContentLine(
-        buffer,
-        'DTSTART;VALUE=DATE:${_dateStamp(entry.start)}',
-      );
+      // DTEND for an all-day event is the exclusive day after its last day.
+      // Derived from `CalendarEntry.lastDay` rather than copied from `end`: a
+      // source end on the start day (23:59, or equal to the start) would give
+      // DTEND <= DTSTART, which RFC 5545 forbids, and a multi-day end at 23:59
+      // would drop the last day (VF-N02). Rebuilt from the date parts, so a
+      // daylight saving change cannot land it on the same day again.
+      final DateTime last = entry.lastDay;
+      final DateTime end = DateTime(last.year, last.month, last.day + 1);
+      _writeContentLine(buffer, 'DTSTART;VALUE=DATE:${_dateStamp(entry.day)}');
       _writeContentLine(buffer, 'DTEND;VALUE=DATE:${_dateStamp(end)}');
     } else {
       _writeContentLine(buffer, 'DTSTART:${_utcStamp(entry.start.toUtc())}');
@@ -100,10 +101,6 @@ String _escape(String value) => value
     .replaceAll('\r\n', '\\n')
     .replaceAll('\r', '\\n')
     .replaceAll('\n', '\\n');
-
-DateTime _nextCalendarDay(DateTime date) => date.isUtc
-    ? DateTime.utc(date.year, date.month, date.day + 1)
-    : DateTime(date.year, date.month, date.day + 1);
 
 String _pad(int value, int width) => value.toString().padLeft(width, '0');
 
