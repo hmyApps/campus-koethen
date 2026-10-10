@@ -1419,6 +1419,8 @@
       "service": {"type": "String"}
     }
   },
+  "universityAccountConnectAfterAccountChange": "Was linked to the previous account. Links to the new account only after you agree using the plus button.",
+  "@universityAccountConnectAfterAccountChange": {},
   "universityAccountDeleteSubtitle": "Disconnects every service and deletes the central access last",
   "universityAccountDeleteConfirmNoServices": "The username/email address and password are deleted from this device's secure keystore. App settings, channel subscriptions, canteen favourites and tasks are kept.",
   "universityAccountDeleteConfirmAction": "Delete completely",

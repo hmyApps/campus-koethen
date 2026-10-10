@@ -279,9 +279,70 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('account update reports a failed reconnect on its service row', (
-    WidgetTester tester,
-  ) async {
+  Future<void> submitUpdate(
+    WidgetTester tester, {
+    required String identifier,
+    required String password,
+  }) async {
+    await tester.ensureVisible(find.text('Zugangsdaten aktualisieren'));
+    await tester.tap(find.text('Zugangsdaten aktualisieren'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(
+        TextFormField,
+        'Hochschul-Benutzername oder -Mailadresse',
+      ),
+      identifier,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Hochschul-Passwort'),
+      password,
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.ensureVisible(find.text('Prüfen und sicher hinterlegen'));
+    await tester.tap(find.text('Prüfen und sicher hinterlegen'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('an account change links no other service and asks for consent '
+      'on each previously linked one', (WidgetTester tester) async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
+      for (final DirectService service in DirectService.values)
+        service: _Adapter(),
+    };
+    await _pump(
+      tester,
+      store: store,
+      adapters: adapters,
+      connected: const <DirectService>[
+        DirectService.mail,
+        DirectService.moodle,
+      ],
+    );
+    await tester.pump();
+
+    await submitUpdate(
+      tester,
+      identifier: 'replacement@hs-anhalt.de',
+      password: 'new-secret',
+    );
+
+    expect(store.value?.identifier, 'replacement@hs-anhalt.de');
+    // Mail validated the new account; Moodle waits for an explicit plus.
+    expect(
+      find.textContaining('Mit dem neuen Konto erst nach deiner Zustimmung'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('konnte mit den neuen Zugangsdaten'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a password-only change reports a failed reconnect on its '
+      'service row', (WidgetTester tester) async {
     final _MemoryIdentityStore store = _MemoryIdentityStore()
       ..value = _identity;
     final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
@@ -300,26 +361,13 @@ void main() {
     );
     await tester.pump();
 
-    await tester.ensureVisible(find.text('Zugangsdaten aktualisieren'));
-    await tester.tap(find.text('Zugangsdaten aktualisieren'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(
-        TextFormField,
-        'Hochschul-Benutzername oder -Mailadresse',
-      ),
-      'replacement@hs-anhalt.de',
+    await submitUpdate(
+      tester,
+      identifier: _identity.identifier,
+      password: 'changed-secret',
     );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Hochschul-Passwort'),
-      'new-secret',
-    );
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.ensureVisible(find.text('Prüfen und sicher hinterlegen'));
-    await tester.tap(find.text('Prüfen und sicher hinterlegen'));
-    await tester.pumpAndSettle();
 
-    expect(store.value?.identifier, 'replacement@hs-anhalt.de');
+    expect(store.value?.password, 'changed-secret');
     expect(
       find.textContaining('Moodle konnte mit den neuen Zugangsdaten'),
       findsOneWidget,

@@ -2288,6 +2288,8 @@
       "service": {"type": "String"}
     }
   },
+  "universityAccountConnectAfterAccountChange": "War mit dem vorherigen Konto verbunden. Mit dem neuen Konto erst nach deiner Zustimmung über Plus.",
+  "@universityAccountConnectAfterAccountChange": {},
   "universityAccountDeleteSubtitle": "Trennt alle Dienste und löscht den zentralen Zugang zuletzt",
   "universityAccountDeleteConfirmNoServices": "Benutzername/Mailadresse und Passwort werden aus dem sicheren Schlüsselspeicher dieses Geräts gelöscht. App-Einstellungen, Kanal-Abos, Mensafavoriten und Aufgaben bleiben erhalten.",
   "universityAccountDeleteConfirmAction": "Vollständig löschen",

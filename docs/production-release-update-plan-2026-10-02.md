@@ -14,6 +14,10 @@ bleiben bis nach diesem Production-Cut zurückgestellt.
   Hochschulzugangsdaten automatisch neu verbunden werden. Der Wechsel muss
   dennoch fail-closed, cache-isoliert und mit einem ehrlichen Teilergebnis
   umgesetzt werden, da externe Dienste nicht gemeinsam transaktional sind.
+  **Geändert am 2026-10-11:** Gilt nur noch für eine reine Passwortänderung
+  derselben Kennung. Bei einem echten Kontowechsel wird nur der prüfende Dienst
+  verbunden; jeder weitere Dienst erst nach Zustimmung über `+`, HSA-GPT über
+  seinen eigenen Zustimmungsbildschirm (siehe `AGENTS.md` §2).
 - Die organisatorischen und rechtlichen Freigaben für WebUntis und die
   öffentlichen Google-Kalender liegen laut Projektverantwortlichem vor. Die
   Release-Dokumentation und versionierten Deploymentvorlagen müssen deshalb

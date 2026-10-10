@@ -31,6 +31,10 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
   final Set<DirectService> _busy = <DirectService>{};
   final Map<DirectService, String> _errors = <DirectService, String>{};
 
+  /// Services that were linked to the previous account and wait for the
+  /// user's explicit `+` after an account change.
+  final Set<DirectService> _awaitingConsent = <DirectService>{};
+
   Future<void> _showSetup({
     DirectService initialService = DirectService.mail,
   }) async {
@@ -43,6 +47,9 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     final AppLocalizations l10n = context.l10n;
     setState(() {
       _errors.clear();
+      _awaitingConsent
+        ..clear()
+        ..addAll(result.awaitingConsent);
       for (final DirectService service in result.failedReconnections) {
         _errors[service] = l10n.universityAccountReconnectFailed(
           universityServiceLabel(l10n, service),
@@ -73,6 +80,7 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     setState(() {
       _busy.add(service);
       _errors.remove(service);
+      _awaitingConsent.remove(service);
     });
     try {
       final UniversityServiceConnector connector = ref.read(
@@ -104,6 +112,7 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     setState(() {
       _busy.add(service);
       _errors.remove(service);
+      _awaitingConsent.remove(service);
     });
     try {
       await connectHsaKiWithOnboarding(context, ref);
@@ -126,6 +135,7 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     setState(() {
       _busy.add(service);
       _errors.remove(service);
+      _awaitingConsent.remove(service);
     });
     try {
       final NextcloudAccountController controller = ref.read(
@@ -255,6 +265,9 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
                     _busy.contains(service) ||
                     (service == DirectService.nextcloud &&
                         nextcloudAccount.isLoading),
+                notice: _awaitingConsent.contains(service)
+                    ? l10n.universityAccountConnectAfterAccountChange
+                    : null,
                 error:
                     _errors[service] ??
                     (service == DirectService.nextcloud &&
@@ -313,6 +326,7 @@ class _UniversityServiceRow extends StatelessWidget {
     required this.connected,
     required this.busy,
     required this.error,
+    required this.notice,
     required this.onPressed,
   });
 
@@ -320,6 +334,9 @@ class _UniversityServiceRow extends StatelessWidget {
   final bool connected;
   final bool busy;
   final String? error;
+
+  /// A neutral hint shown instead of the connection state, never as an error.
+  final String? notice;
   final VoidCallback? onPressed;
 
   @override
@@ -342,9 +359,10 @@ class _UniversityServiceRow extends StatelessWidget {
       leading: Icon(serviceIcon),
       title: Text(label),
       subtitle: Semantics(
-        liveRegion: error != null,
+        liveRegion: error != null || notice != null,
         child: Text(
           error ??
+              notice ??
               (connected
                   ? l10n.universityAccountConnected
                   : l10n.universityAccountDisconnected),

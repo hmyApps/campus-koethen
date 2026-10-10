@@ -163,7 +163,11 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    beim Erkennen vollständig verworfen, nie still migriert. `+` erzeugt nach bewusster Nutzeraktion
    ausschließlich die dienstbezogene Session beziehungsweise Credential-Kopie; `−` wischt nur
    diesen Dienst und seinen
-   Cache, nicht die zentrale Identität. „Hochschulzugang vollständig löschen“ trennt alle Dienste
+   Cache, nicht die zentrale Identität. Ein Kontowechsel (andere Kennung) verbindet ausschließlich
+   den Dienst, mit dem das neue Konto geprüft wurde; jeder zuvor verknüpfte Dienst wird getrennt
+   und erst nach erneutem `+` des Nutzers mit dem neuen Konto verbunden, HSA-GPT nur über seinen
+   Zustimmungsbildschirm. Eine reine Passwortänderung derselben Kennung erhält die bestehenden
+   Verknüpfungen und verbindet sie mit dem neuen Passwort neu. „Hochschulzugang vollständig löschen“ trennt alle Dienste
    über deren kanonische Wipes und löscht die zentrale Identität **zuletzt**; bei einem Teilfehler
    bleibt sie für den sichtbaren, wiederholbaren Retry erhalten. Kein Wert daraus darf in
    `SharedPreferences`, Hive, öffentlichen Riverpod-State, Campus API, Logs oder Telemetrie gelangen.

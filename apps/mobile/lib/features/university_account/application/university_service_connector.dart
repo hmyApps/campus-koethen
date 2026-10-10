@@ -244,11 +244,16 @@ class UniversityServiceConnectionResult {
     required this.identityChanged,
     this.reconnectedServices = const <DirectService>{},
     this.failedReconnections = const <DirectService>{},
+    this.awaitingConsent = const <DirectService>{},
   });
 
   final bool identityChanged;
   final Set<DirectService> reconnectedServices;
   final Set<DirectService> failedReconnections;
+
+  /// Services that were linked to the previous account. After an account
+  /// change they stay disconnected until the user connects each one again.
+  final Set<DirectService> awaitingConsent;
 }
 
 /// Connects one service at a time. A shared identity never becomes a shared
@@ -324,9 +329,10 @@ class UniversityServiceConnector {
   /// new secret is retained and every linked service is reconnected in place.
   /// Only a real account change (any other identifier, including a username
   /// instead of the mail address) wipes every other protocol boundary before
-  /// the new identity becomes visible. Previously linked services are
-  /// reconnected independently and failures are returned to the UI per
-  /// service.
+  /// the new identity becomes visible. After an account change only the
+  /// validating service is linked; previously linked services are returned as
+  /// [UniversityServiceConnectionResult.awaitingConsent] and connect again
+  /// only through the user's explicit `+`.
   Future<UniversityServiceConnectionResult> replaceIdentityAndReconnect(
     DirectService validationService,
     UniversityIdentity identity, {
@@ -425,27 +431,17 @@ class UniversityServiceConnector {
           Error.throwWithStackTrace(error, stackTrace);
         }
 
-        final Set<DirectService> reconnected = <DirectService>{};
-        final Set<DirectService> failed = <DirectService>{};
-        for (final DirectService service in snapshot.connected) {
-          if (service == validationService) continue;
-          try {
-            await _reconnectLinked(
-              service,
-              replacement,
-              displayName: snapshot.displayNameFor(service),
-            );
-            reconnected.add(service);
-          } catch (_) {
-            // Its canonical wipe already completed. A failed reconnect stays
-            // disconnected and can safely be retried with the explicit `+`.
-            failed.add(service);
-          }
-        }
+        // The user consented to each previous link for the previous account.
+        // None of them is carried over: every service other than the one the
+        // new account was just validated with waits for its own explicit `+`
+        // (HSA-GPT through its consent screen). Their canonical wipes above
+        // already completed.
         return UniversityServiceConnectionResult(
           identityChanged: true,
-          reconnectedServices: reconnected,
-          failedReconnections: failed,
+          awaitingConsent: <DirectService>{
+            for (final DirectService service in snapshot.connected)
+              if (service != validationService) service,
+          },
         );
       });
 
@@ -547,9 +543,11 @@ class UniversityServiceConnector {
   static bool _isSameAccount(UniversityIdentity a, UniversityIdentity b) =>
       a.identifier.trim().toLowerCase() == b.identifier.trim().toLowerCase();
 
-  /// Re-establishes a link that existed before this account update. For
-  /// HSA-GPT that link already rests on the user's explicit consent, so the
-  /// consent scope is reopened only for exactly this reconnect.
+  /// Re-establishes a link of the *same* account (a password-only change or a
+  /// rollback to the previous account). For HSA-GPT that link already rests on
+  /// the user's explicit consent for this account, so the consent scope is
+  /// reopened only for exactly this reconnect. An account change never calls
+  /// this for the new account.
   Future<void> _reconnectLinked(
     DirectService service,
     UniversityIdentity identity, {

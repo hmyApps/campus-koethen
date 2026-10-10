@@ -10,7 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// flow that showed that screen ([runWithConsent]) and the HSA-GPT adapter of
 /// the university connector refuses to mint a token outside such a scope.
 /// The connector itself opens a scope only to re-establish a link the user
-/// had already consented to (an account update reconnecting HSA-GPT).
+/// had already consented to for the same account (a password-only change or
+/// a rollback to the previous account), never to link a new account.
 ///
 /// Deliberately in memory only: nothing here outlives the running flow.
 class HsaKiConsentGate {

@@ -287,7 +287,8 @@ void main() {
   });
 
   test(
-    'changing the retained identity wipes every service and reconnects the previously linked ones',
+    'changing to another account wipes every other service and connects none '
+    'of them to the new account without the user',
     () async {
       final _MemoryIdentityStore store = _MemoryIdentityStore()
         ..value = _identity;
@@ -316,63 +317,20 @@ void main() {
       expect(store.value, _replacementIdentity);
       expect(result.identityChanged, isTrue);
       expect(result.failedReconnections, isEmpty);
-      expect(result.reconnectedServices, <DirectService>{
+      expect(result.reconnectedServices, isEmpty);
+      expect(result.awaitingConsent, <DirectService>{
         DirectService.mail,
         DirectService.moodle,
       });
       expect(adapters[DirectService.mail]!.disconnects, 1);
       expect(adapters[DirectService.moodle]!.disconnects, 1);
       expect(adapters[DirectService.grades]!.disconnects, 0);
+      // Only the service the user validated the new account with is linked.
       expect(adapters[DirectService.grades]!.connections, <UniversityIdentity>[
         _replacementIdentity,
       ]);
-      expect(
-        adapters[DirectService.mail]!.connectedWithDisplayName,
-        'Max Mustermensch',
-      );
-      expect(adapters[DirectService.mail]!.connectedWith, _replacementIdentity);
-      expect(
-        adapters[DirectService.moodle]!.connectedWith,
-        _replacementIdentity,
-      );
-    },
-  );
-
-  test(
-    'a failed reconnect is returned per service and never revives its old connection',
-    () async {
-      final _MemoryIdentityStore store = _MemoryIdentityStore()
-        ..value = _identity;
-      final Map<DirectService, _RecordingAdapter> adapters =
-          <DirectService, _RecordingAdapter>{
-            for (final DirectService service in DirectService.values)
-              service: _RecordingAdapter(),
-          };
-      adapters[DirectService.moodle]!.rejectedIdentifiers.add(
-        _replacementIdentity.identifier,
-      );
-      final ProviderContainer container = _container(
-        store,
-        adapters,
-        snapshot: const UniversityServiceConnectionSnapshot(
-          connected: <DirectService>{DirectService.mail, DirectService.moodle},
-        ),
-      );
-      addTearDown(container.dispose);
-
-      final UniversityServiceConnectionResult result = await container
-          .read(universityServiceConnectorProvider)
-          .replaceIdentityAndReconnect(
-            DirectService.grades,
-            _replacementIdentity,
-          );
-
-      expect(store.value, _replacementIdentity);
-      expect(result.reconnectedServices, <DirectService>{DirectService.mail});
-      expect(result.failedReconnections, <DirectService>{DirectService.moodle});
+      expect(adapters[DirectService.mail]!.connections, isEmpty);
       expect(adapters[DirectService.moodle]!.connections, isEmpty);
-      expect(adapters[DirectService.moodle]!.connectedWith, isNull);
-      expect(adapters[DirectService.moodle]!.disconnects, 1);
     },
   );
 
@@ -924,8 +882,8 @@ void main() {
     },
   );
 
-  test('an account update re-establishes an already consented HSA-GPT link '
-      'without a new consent prompt', () async {
+  test('an account change never links HSA-GPT to the new account without its '
+      'consent screen', () async {
     final _MemoryIdentityStore store = _MemoryIdentityStore()
       ..value = _identity;
     final Map<DirectService, _RecordingAdapter> adapters =
@@ -959,8 +917,54 @@ void main() {
         );
 
     expect(result.failedReconnections, isEmpty);
+    expect(result.reconnectedServices, isEmpty);
+    expect(result.awaitingConsent, <DirectService>{DirectService.hsaKi});
+    // The consented link belonged to the previous account: it is revoked and
+    // no token is minted for the new one.
+    expect(gateway.connectCalls, 0);
+    expect(hsaKiStore.value, isNull);
+    expect(container.read(hsaKiConsentGateProvider).isGranted, isFalse);
+  });
+
+  test('a password-only change keeps the consented HSA-GPT link of the same '
+      'account', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _RecordingAdapter> adapters =
+        <DirectService, _RecordingAdapter>{
+          DirectService.mail: _RecordingAdapter(),
+          DirectService.moodle: _RecordingAdapter(),
+          DirectService.grades: _RecordingAdapter(),
+          DirectService.nextcloud: _RecordingAdapter(),
+        };
+    final _HsaKiGateway gateway = _HsaKiGateway();
+    final _MemoryHsaKiCredentialStore hsaKiStore = _MemoryHsaKiCredentialStore()
+      ..value = _hsaKiCredential;
+    final ProviderContainer container = _container(
+      store,
+      adapters,
+      snapshot: const UniversityServiceConnectionSnapshot(
+        connected: <DirectService>{DirectService.hsaKi},
+      ),
+      extraOverrides: <Override>[
+        hsaKiGatewayProvider.overrideWithValue(gateway),
+        hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final UniversityServiceConnectionResult result = await container
+        .read(universityServiceConnectorProvider)
+        .replaceIdentityAndReconnect(
+          DirectService.grades,
+          const UniversityIdentity(
+            identifier: 'student@hs-anhalt.de',
+            password: 'changed-secret',
+          ),
+        );
+
+    expect(result.awaitingConsent, isEmpty);
     expect(result.reconnectedServices, <DirectService>{DirectService.hsaKi});
-    expect(gateway.connectCalls, 1);
     expect(hsaKiStore.value, isNotNull);
     expect(container.read(hsaKiConsentGateProvider).isGranted, isFalse);
   });
