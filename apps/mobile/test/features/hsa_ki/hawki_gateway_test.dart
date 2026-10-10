@@ -343,6 +343,39 @@ void main() {
     );
 
     test(
+      'waits far longer for the generated answer than for ordinary calls',
+      () async {
+        // dio's receiveTimeout bounds the wait for the response headers, and
+        // HAWKI only answers this non-streaming request once generation is
+        // complete.
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+          if (o.uri.path == '/api/ai-req') {
+            return _json(<String, dynamic>{'success': true, 'content': 'ok'});
+          }
+          return _json(<String, dynamic>{'data': <dynamic>[]});
+        });
+        final HawkiGateway gateway = HawkiGateway(adapter);
+
+        await gateway.listModels(credential);
+        await gateway.sendMessage(
+          credential,
+          modelId: 'gpt-4',
+          messages: const <HsaKiMessage>[
+            HsaKiMessage(role: HsaKiMessageRole.user, text: 'Hallo'),
+          ],
+        );
+
+        final RequestOptions models = adapter.requests.first;
+        final RequestOptions chat = adapter.requests.last;
+        expect(models.receiveTimeout, const Duration(seconds: 15));
+        expect(
+          chat.receiveTimeout,
+          greaterThanOrEqualTo(const Duration(minutes: 2)),
+        );
+      },
+    );
+
+    test(
       'posts the stateless payload shape and returns the reply text',
       () async {
         final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {

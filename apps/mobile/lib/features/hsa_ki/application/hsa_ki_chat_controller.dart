@@ -92,9 +92,14 @@ class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
     );
   }
 
-  Future<void> send(String text) async {
+  /// Sends [text] with the visible history and resolves to whether HAWKI
+  /// answered. On `false` the text is not part of the history (the caller may
+  /// offer it again); nothing undelivered is ever re-sent implicitly.
+  Future<bool> send(String text) async {
     final HsaKiChatState? current = state.value;
-    if (current == null || current.isSending || text.trim().isEmpty) return;
+    if (current == null || current.isSending || text.trim().isEmpty) {
+      return false;
+    }
 
     final int generation = ref.read(hsaKiSessionGenerationProvider);
     final HsaKiMessage userMessage = HsaKiMessage(
@@ -113,7 +118,6 @@ class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
       ),
     );
 
-    var reachedHawki = false;
     try {
       final HsaKiCredential? credential = await ref
           .read(hsaKiCredentialStoreProvider)
@@ -128,24 +132,23 @@ class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
         final List<HsaKiModel> models = await ref
             .read(hsaKiGatewayProvider)
             .listModels(credential);
-        if (!_isCurrent(generation)) return;
+        if (!_isCurrent(generation)) return false;
         modelId = _defaultModelId(models);
         if (modelId == null) {
           throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
         }
         final HsaKiChatState? latest = state.value;
-        if (latest == null) return;
+        if (latest == null) return false;
         state = AsyncData<HsaKiChatState>(
           latest.copyWith(models: models, selectedModelId: modelId),
         );
       }
-      reachedHawki = true;
       final String reply = await ref
           .read(hsaKiGatewayProvider)
           .sendMessage(credential, modelId: modelId, messages: withUserTurn);
-      if (!_isCurrent(generation)) return;
+      if (!_isCurrent(generation)) return false;
       final HsaKiChatState? latest = state.value;
-      if (latest == null) return;
+      if (latest == null) return false;
       state = AsyncData<HsaKiChatState>(
         latest.copyWith(
           messages: <HsaKiMessage>[
@@ -155,25 +158,26 @@ class HsaKiChatController extends AsyncNotifier<HsaKiChatState> {
           isSending: false,
         ),
       );
+      return true;
     } catch (error) {
-      if (!_isCurrent(generation)) return;
+      if (!_isCurrent(generation)) return false;
       final HsaKiChatState? latest = state.value;
-      if (latest == null) return;
+      if (latest == null) return false;
       state = AsyncData<HsaKiChatState>(
         latest.copyWith(
-          // A turn that never reached HAWKI was not sent; keep it out of the
-          // history the next request carries.
-          messages: reachedHawki
-              ? null
-              : latest.messages
-                    .where((HsaKiMessage m) => !identical(m, userMessage))
-                    .toList(growable: false),
+          // An unanswered turn leaves the history: otherwise the next
+          // request would carry it again (VD-N02). The caller gets `false`
+          // and can offer the text again.
+          messages: latest.messages
+              .where((HsaKiMessage m) => !identical(m, userMessage))
+              .toList(growable: false),
           isSending: false,
           lastError: error is HsaKiFailure
               ? error.kind
               : HsaKiFailureKind.unknown,
         ),
       );
+      return false;
     }
   }
 }

@@ -141,6 +141,34 @@ void main() {
     expect(state.messages.single.role, HsaKiMessageRole.user);
   });
 
+  test('a failed request drops its unanswered turn, reports it undelivered and '
+      'never sends it again', () async {
+    final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!')
+      ..failingSends = 1;
+    final ProviderContainer container = _container(
+      store: _MemoryCredentialStore()..value = _credential,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiChatControllerProvider.future);
+    final HsaKiChatController chat = container.read(
+      hsaKiChatControllerProvider.notifier,
+    );
+
+    expect(await chat.send('Lange Frage'), isFalse);
+    final HsaKiChatState failed = container
+        .read(hsaKiChatControllerProvider)
+        .value!;
+    expect(failed.messages, isEmpty);
+    expect(failed.lastError, HsaKiFailureKind.timeout);
+    expect(failed.isSending, isFalse);
+
+    expect(await chat.send('Neue Frage'), isTrue);
+    expect(gateway.sentHistories.last.map((HsaKiMessage m) => m.text), <String>[
+      'Neue Frage',
+    ]);
+  });
+
   group('chat lifecycle (D-03)', () {
     test('a new HSA-GPT session starts with an empty chat and never sends the '
         'previous history', () async {
@@ -338,6 +366,9 @@ class _Gateway implements HsaKiGateway {
 
   /// Only the first n model lists fail.
   int failingModelLists;
+
+  /// Only the first n chat requests fail (e.g. a timeout).
+  int failingSends = 0;
   final List<List<HsaKiMessage>> sentHistories = <List<HsaKiMessage>>[];
   final String reply;
   final bool blockSend;
@@ -379,6 +410,10 @@ class _Gateway implements HsaKiGateway {
     sentHistories.add(List<HsaKiMessage>.of(messages));
     if (!sendEntered.isCompleted) sendEntered.complete();
     if (blockSend) await releaseSend.future;
+    if (failingSends > 0) {
+      failingSends--;
+      throw const HsaKiFailure(HsaKiFailureKind.timeout);
+    }
     return reply;
   }
 }

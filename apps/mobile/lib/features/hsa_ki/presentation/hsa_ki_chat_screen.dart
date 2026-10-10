@@ -141,7 +141,13 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
     final String text = _composer.text;
     if (text.trim().isEmpty) return;
     _composer.clear();
-    await ref.read(hsaKiChatControllerProvider.notifier).send(text);
+    final bool delivered = await ref
+        .read(hsaKiChatControllerProvider.notifier)
+        .send(text);
+    if (!mounted) return;
+    // An undelivered message is not kept in the history (it would otherwise
+    // be re-sent with the next one); hand it back for an explicit retry.
+    if (!delivered && _composer.text.isEmpty) _composer.text = text;
     _scrollToEnd();
   }
 

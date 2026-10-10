@@ -140,6 +140,7 @@ class HawkiGateway implements HsaKiGateway {
       final Map<String, dynamic> body = await session.postBearerJson(
         _profile.aiRequestUri,
         token: credential.token,
+        receiveTimeout: HawkiSession.chatReceiveTimeout,
         body: <String, dynamic>{
           'payload': <String, dynamic>{
             'model': modelId,
