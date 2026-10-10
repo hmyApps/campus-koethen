@@ -218,6 +218,27 @@ void main() {
       return (container, store, gateway);
     }
 
+    test('a 2xx without a usable link freezes instead of failing', () async {
+      // E-02: the case very likely exists. A "failed" answer invited a fresh
+      // submission; frozen, only the identical replay can follow.
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(
+          const SubmissionOutcomeUnknown.acceptedWithoutUsableLink(
+            'accepted-without-usable-status-url',
+          ),
+        ),
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+
+      await container.read(requestsProvider.notifier).submit(draft, now: _now);
+
+      expect(store.drafts.single.isFrozen, isTrue);
+      expect(store.cases, isEmpty, reason: 'never stored without its link');
+    });
+
     test('freezes the draft so its payload cannot drift', () async {
       final (container, store, _) = await setUpFrozen();
 

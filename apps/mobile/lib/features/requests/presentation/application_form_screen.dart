@@ -480,7 +480,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       case PickTooLarge():
         _showMessage(l10n.requestsSlotTooLarge);
       case PickFailed():
-        // Not `requestsSubmitFailed`: nothing was submitted, and saying so
+        // Not a submission message: nothing was submitted, and saying so
         // sends the reader looking for a case that does not exist.
         _showMessage(l10n.requestsPickFailed);
     }

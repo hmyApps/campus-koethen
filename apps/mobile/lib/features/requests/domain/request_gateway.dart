@@ -103,18 +103,23 @@ class SubmissionRateLimited extends SubmissionResult {
 /// [PendingSubmission] and a retry sends the identical payload under the same
 /// key.
 class SubmissionOutcomeUnknown extends SubmissionResult {
-  const SubmissionOutcomeUnknown(this.reason);
+  const SubmissionOutcomeUnknown(this.reason)
+    : acceptedWithoutUsableLink = false;
+
+  /// The endpoint answered 200/201, but its status or receipt link was
+  /// missing, not HTTPS or not on the configured origin.
+  ///
+  /// Not a failure: the case very likely exists. It cannot be stored without
+  /// a usable link (and a foreign link must never receive the token), so the
+  /// draft freezes and only an identical replay may follow — which returns
+  /// the same case again if the endpoint is fixed.
+  const SubmissionOutcomeUnknown.acceptedWithoutUsableLink(this.reason)
+    : acceptedWithoutUsableLink = true;
 
   /// A short technical reason. Never carries the payload, a link or a name.
   final String reason;
-}
 
-/// The endpoint answered, but with something unusable — a success without a
-/// status link, or a body that is not what the contract describes.
-class SubmissionFailed extends SubmissionResult {
-  const SubmissionFailed(this.reason);
-
-  final String reason;
+  final bool acceptedWithoutUsableLink;
 }
 
 /// Port: whatever accepts submissions.

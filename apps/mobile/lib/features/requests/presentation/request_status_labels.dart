@@ -53,8 +53,9 @@ abstract final class RequestLabels {
     SubmissionTooLarge() => l10n.requestsSubmitTooLarge,
     SubmissionUnsupportedMedia() => l10n.requestsSubmitUnsupportedMedia,
     SubmissionRateLimited() => l10n.requestsSubmitRateLimited,
+    SubmissionOutcomeUnknown(acceptedWithoutUsableLink: true) =>
+      l10n.requestsSubmitAcceptedUnusable,
     SubmissionOutcomeUnknown() => l10n.requestsSubmitOutcomeUnknown,
-    SubmissionFailed() => l10n.requestsSubmitFailed,
   };
 
   /// What a failed status read means for the reader.

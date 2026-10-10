@@ -70,6 +70,13 @@ FeedbackDraft _feedback({String submitterName = ''}) => FeedbackDraft(
   feedback: '  Die Öffnungszeiten sollten verlängert werden.  ',
 );
 
+/// A 2xx without a usable link: unknown and frozen, never "failed".
+final Matcher _acceptedWithoutLink = isA<SubmissionOutcomeUnknown>().having(
+  (SubmissionOutcomeUnknown result) => result.acceptedWithoutUsableLink,
+  'acceptedWithoutUsableLink',
+  isTrue,
+);
+
 const FakeGremioResponse _created = FakeGremioResponse(<String, dynamic>{
   'statusUrl': kFakeStatusUrl,
   'receiptPdfUrl': kFakeReceiptUrl,
@@ -391,6 +398,9 @@ void main() {
       );
     });
 
+    // E-02: the endpoint answered 2xx, so the case may well exist. Calling
+    // that "failed" invited a second submission with the student ID; it is
+    // an unknown outcome that freezes the draft for an identical replay.
     test('a success without a usable status link is not a success', () async {
       expect(
         await answer(
@@ -399,7 +409,7 @@ void main() {
             'number': 'F_1',
           }, statusCode: 201),
         ),
-        isA<SubmissionFailed>(),
+        _acceptedWithoutLink,
       );
     });
 
@@ -414,7 +424,22 @@ void main() {
             'number': null,
           }, statusCode: 201),
         ),
-        isA<SubmissionFailed>(),
+        _acceptedWithoutLink,
+      );
+    });
+
+    test('a foreign receipt link is refused the same way', () async {
+      // No case is ever stored with an empty or foreign receipt link
+      // (docs/requests.md §5) — the draft freezes instead.
+      expect(
+        await answer(
+          const FakeGremioResponse(<String, dynamic>{
+            'statusUrl': kFakeStatusUrl,
+            'receiptPdfUrl': 'https://requests.example.invalid/receipt',
+            'number': null,
+          }, statusCode: 200),
+        ),
+        _acceptedWithoutLink,
       );
     });
 
@@ -427,7 +452,7 @@ void main() {
             'number': null,
           }, statusCode: 201),
         ),
-        isA<SubmissionFailed>(),
+        _acceptedWithoutLink,
       );
     });
   });
@@ -482,7 +507,6 @@ void main() {
         );
         final String reason = switch (result) {
           SubmissionOutcomeUnknown(:final String reason) => reason,
-          SubmissionFailed(:final String reason) => reason,
           _ => '',
         };
         expect(reason, isNot(contains('testtoken')));
