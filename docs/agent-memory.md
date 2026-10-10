@@ -7,7 +7,7 @@ ausschließlich in `AGENTS.md`; diese Datei ergänzt sie nur um Fortschritt und 
 ## Projekt-Eckdaten
 
 - Monorepo: `apps/backend` (NestJS, Prisma, Node 24), `apps/cms` (Strapi 5), `apps/mobile` (Flutter, Riverpod, go_router, dio, hive_ce), `packages/campus-map`, `packages/openapi`.
-- Aktuelle App-Version: `2.0.0+10` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
+- Aktuelle App-Version: `2.0.1+11` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
 - Smoke-Check je Änderung: Release-Build (Flutter) bzw. die Gates aus `README.md`.
 - In Cloud-Sessions ist Flutter/Dart nicht installiert; Backend-Gates laufen nach `pnpm install --frozen-lockfile`.
 
