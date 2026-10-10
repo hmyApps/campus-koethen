@@ -141,8 +141,10 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
   @override
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  ) async {
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  }) async {
+    bool cancelled() => isCancelled?.call() ?? false;
     final HisInOneSession session = _openSession();
     try {
       await _login(session, credentials);
@@ -214,16 +216,26 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       // Only that overlay's own "PDF erstellen" button — a plain
       // `type="submit"` with no AJAX at all — actually starts the job, via a
       // full page POST/redirect/GET exactly like the grades feature's print
-      // buttons. `buildJobConfigurationSubmitRequest` returns `null` when no
+      // buttons. `readJobConfiguration` reports `NoJobConfiguration` when no
       // such overlay is present, which is the normal case for a job that
-      // starts right away (e.g. "Gebührenbescheinigung").
+      // starts right away (e.g. "Gebührenbescheinigung"); an overlay that is
+      // there but not completely readable fails closed — polling a job that
+      // was never started would only time out after a minute.
       if (downloadUrl == null) {
-        final TabSwitchRequest? configSubmit =
-            HisInOneStudentServiceParser.buildJobConfigurationSubmitRequest(
+        final JobConfiguration configuration =
+            HisInOneStudentServiceParser.readJobConfiguration(
               started.raw,
               ajaxForm,
             );
-        if (configSubmit != null) {
+        if (configuration is UnrecognisedJobConfiguration) {
+          throw const StudentServiceFailure(
+            StudentServiceFailureKind.portalStructureChanged,
+            stage: 'jobConfiguration',
+          );
+        }
+        if (configuration case JobConfigurationSubmit(
+          request: final TabSwitchRequest configSubmit,
+        )) {
           final HisInOnePage submitted = await session.postForm(
             configSubmit.action,
             configSubmit.formData,
@@ -254,7 +266,9 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         // button's own id, which would ask the server to needlessly
         // process/validate it as an input component on every tick.
         for (int attempt = 0; attempt < _maxPollAttempts; attempt++) {
+          if (cancelled()) return const CertificateUnavailable('cancelled');
           await Future<void>.delayed(_pollInterval);
+          if (cancelled()) return const CertificateUnavailable('cancelled');
           started = await _ajaxRequest(
             session,
             ajaxForm,
@@ -272,6 +286,7 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       if (downloadUrl == null) {
         return const CertificateUnavailable('job-not-finished');
       }
+      if (cancelled()) return const CertificateUnavailable('cancelled');
 
       // The real link is site-relative; resolve it against the portal
       // origin before validating/fetching (an already-absolute fallback
@@ -416,13 +431,13 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
     } on FormatException {
       return const CertificateUnavailable('invalid-url');
     }
-    if (!StudentServiceProfile.allowsDocumentDownload(uri)) {
+    if (!StudentServiceProfile.allowsDocumentDownloadEntry(uri)) {
       return const CertificateUnavailable('host-rejected');
     }
     try {
       final Response<ResponseBody> response = await session.fetchStream(
         uri.toString(),
-        allowsTarget: StudentServiceProfile.allowsDocumentDownload,
+        allowsTarget: StudentServiceProfile.documentDownloadRoute(),
       );
       if ((response.statusCode ?? 0) != 200) {
         return CertificateUnavailable('http-${response.statusCode}');

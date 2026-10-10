@@ -185,10 +185,15 @@ before a request reaches Node:
 | Health probes, whole API  | 50 requests/s, burst 200                                     |
 | General connections       | 3,000 per NAT and 4,000 globally                             |
 | Media connections         | 500 per NAT and 750 globally                                 |
-| Public media cache        | 5 GiB maximum, 7 days inactive, upstream cache headers apply |
+| Public media cache        | 5 GiB maximum, 7 d inactive; only 200 (24 h) and 404 (1 min) |
 | Request body              | maximum 1 KiB; the public API is read-only                   |
 | Allowed methods           | `GET`, `HEAD`, `OPTIONS`                                     |
 | Upstream                  | keepalive pool to `127.0.0.1:3021`                           |
+
+The media cache ignores the upstream `Cache-Control` and `Expires` headers
+(`proxy_ignore_headers`): nginx would otherwise prefer them over
+`proxy_cache_valid`, and a single error answer carrying a long `max-age` was
+kept for a day. The API marks every error answer `no-store` as well.
 
 `/docs` and `/docs-json` are intentionally public because the API is a public
 read-only contract. `DOCS_ENABLED=true` in the deployment environment must

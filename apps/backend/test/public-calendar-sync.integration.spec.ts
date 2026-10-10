@@ -249,6 +249,74 @@ describe('PublicCalendarSyncService (integration)', () => {
       expect(listed.data).toHaveLength(0);
     });
 
+    it('a feed that comes back unchanged after a 404 is restored, not "ready" and empty', async () => {
+      const body = icsWith([{ uid: 'a', dayOffset: 2, summary: 'Beispielsitzung' }]);
+      await seedReadyCalendar(body);
+      ics.next = new IcsClientError('feedNotFound', 'The calendar feed does not exist.', 404);
+      await sync.syncCalendarEvents('beispielkalender-a');
+      const gone = await prisma.publicCalendar.findUnique({
+        where: { slug: 'beispielkalender-a' },
+      });
+      expect(gone).toMatchObject({ operationalStatus: 'unavailable', lastContentHash: null });
+
+      ics.next = okBody(body);
+      const outcome = await sync.syncCalendarEvents('beispielkalender-a');
+      expect(outcome.status).toBe('success');
+      expect(await prisma.publicCalendarEvent.count()).toBe(1);
+    });
+
+    it('switching a text flag forces a re-parse of an unchanged feed', async () => {
+      const body =
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:mit-text\r\n' +
+        'DTSTAMP:20260101T000000Z\r\n' +
+        `DTSTART:${new Date(Date.now() + 2 * 86_400_000)
+          .toISOString()
+          .replace(/[-:]/g, '')
+          .replace(/\.\d{3}Z$/, 'Z')}\r\n` +
+        'DURATION:PT1H\r\nSUMMARY:Sitzung\r\nDESCRIPTION:Beschreibung\r\n' +
+        'LOCATION:Beispielraum\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n';
+      await seedReadyCalendar(body);
+      expect((await prisma.publicCalendarEvent.findFirst())?.description).toBe('Beschreibung');
+
+      strapi.de = [strapiEntry({ includeEventDescription: false })];
+      await sync.syncCatalog();
+      ics.next = okBody(body);
+      const outcome = await sync.syncCalendarEvents('beispielkalender-a');
+
+      expect(outcome.status).toBe('success');
+      const stored = await prisma.publicCalendarEvent.findFirst();
+      expect(stored).toMatchObject({ description: null, location: 'Beispielraum' });
+    });
+
+    it('never retires or downloads a seeded user-test calendar', async () => {
+      await prisma.publicCalendar.create({
+        data: {
+          slug: 'user-test-stura',
+          googleCalendarId: 'user-test-stura@user-test.invalid',
+          nameDe: 'Testkalender',
+          colorHex: '#5B3FD0',
+          source: 'user-test',
+          operationalStatus: 'ready',
+          lastSuccessfulSyncAt: new Date(),
+        },
+      });
+      await prisma.publicCalendar.create({
+        data: {
+          slug: 'perf-kalender',
+          googleCalendarId: 'perf-kalender@perf.invalid',
+          nameDe: 'Lastkalender',
+          colorHex: '#5B3FD0',
+        },
+      });
+      await seedReadyCalendar();
+
+      const outcomes = await sync.syncEvents();
+
+      expect(outcomes.map((outcome) => outcome.slug)).toEqual(['beispielkalender-a']);
+      const seeded = await prisma.publicCalendar.findUnique({ where: { slug: 'user-test-stura' } });
+      expect(seeded).toMatchObject({ isActive: true, operationalStatus: 'ready' });
+    });
+
     it('an unchanged content hash skips re-processing but stays ready', async () => {
       const body = icsWith([{ uid: 'a', dayOffset: 2, summary: 'Beispielsitzung' }]);
       await seedReadyCalendar(body);

@@ -3,9 +3,15 @@
  * reads (Strapi collections). Single-instance only — no distributed
  * invalidation, which is fine given the process topology here.
  *
- * A failed `factory()` call is never cached: on error the entry is left
- * untouched (stale-but-valid data keeps serving) and the error propagates to
- * the caller exactly as an uncached call would.
+ * A failed `factory()` call is never cached: the error propagates to the
+ * caller exactly as an uncached call would, and the next call tries again.
+ *
+ * There is deliberately NO stale-on-error. A refresh only happens once an
+ * entry has expired, and an expired entry is gone before the refresh starts,
+ * so a failing upstream is answered with its error, not with old data. Serving
+ * stale data here would carry no staleness marker to the client, and the post
+ * lists cached through this class are filtered by a validity window evaluated
+ * at request time — an outage would keep a withdrawn post visible.
  *
  * "Small" is enforced, not assumed. A cache key is often derived from request
  * input, and an unbounded map would let whoever sends those requests decide how

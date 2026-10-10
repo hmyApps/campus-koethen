@@ -38,10 +38,19 @@ InMemoryKeyValueStore storeWithGroup() =>
 /// on every load to show availability and to resolve the selected group,
 /// even for tests only interested in the week's content. Each test still
 /// supplies its own week/groups-list/error behaviour as [fallback].
+///
+/// The room catalogue an entry card resolves its rooms against is answered
+/// here too, as the JSON array the contract promises ([rooms], empty by
+/// default): a catch-all week object in its place is a structurally broken
+/// list response, which is an error rather than "no rooms" (G-03).
 FakeHttpResponse Function(RequestOptions) _withTimetableScaffolding(
-  FakeHttpResponse Function(RequestOptions) fallback,
-) {
+  FakeHttpResponse Function(RequestOptions) fallback, {
+  List<Map<String, dynamic>> rooms = const <Map<String, dynamic>>[],
+}) {
   return (RequestOptions options) {
+    if (options.path.endsWith('/rooms')) {
+      return FakeHttpResponse(envelope(rooms));
+    }
     if (options.path.endsWith('/timetable/status')) {
       return FakeHttpResponse(
         envelope(<String, dynamic>{
@@ -197,39 +206,38 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeHttpAdapter adapter = FakeHttpAdapter(
-        _withTimetableScaffolding((RequestOptions options) {
-          if (options.path.endsWith('/timetable/groups')) {
-            return FakeHttpResponse(envelope(timetableGroupsFixture));
-          }
-          if (options.path.endsWith('/rooms')) {
-            return FakeHttpResponse(
-              envelope(<Map<String, dynamic>>[
-                <String, dynamic>{
-                  'roomKey': 'ratke-gebaeude-first-floor-216',
-                  'roomNumber': '216',
-                  'buildingKey': 'ratke-gebaeude',
-                  'buildingNumber': '23',
-                  'buildingName': 'Ratke-Gebäude',
-                  'floorKey': 'ratke-gebaeude-first-floor',
-                  'floorName': '1. Obergeschoss',
-                  'roomType': 'lecture',
-                  'mapVersion': testCatalog.mapVersion,
-                  'sortOrder': 0,
-                },
-              ]),
-            );
-          }
-          final Map<String, dynamic> week = timetableWeekFixture(monday);
-          final List<dynamic> days = week['days'] as List<dynamic>;
-          final List<dynamic> entries =
-              (days.first as Map<String, dynamic>)['entries'] as List<dynamic>;
-          (entries.first
-              as Map<String, dynamic>)['rooms'] = <Map<String, dynamic>>[
-            <String, dynamic>{'shortName': 'K023-216'},
-            <String, dynamic>{'shortName': 'D-04/201'},
-          ];
-          return FakeHttpResponse(envelope(week, meta: timetableMeta()));
-        }),
+        _withTimetableScaffolding(
+          rooms: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'roomKey': 'ratke-gebaeude-first-floor-216',
+              'roomNumber': '216',
+              'buildingKey': 'ratke-gebaeude',
+              'buildingNumber': '23',
+              'buildingName': 'Ratke-Gebäude',
+              'floorKey': 'ratke-gebaeude-first-floor',
+              'floorName': '1. Obergeschoss',
+              'roomType': 'lecture',
+              'mapVersion': testCatalog.mapVersion,
+              'sortOrder': 0,
+            },
+          ],
+          (RequestOptions options) {
+            if (options.path.endsWith('/timetable/groups')) {
+              return FakeHttpResponse(envelope(timetableGroupsFixture));
+            }
+            final Map<String, dynamic> week = timetableWeekFixture(monday);
+            final List<dynamic> days = week['days'] as List<dynamic>;
+            final List<dynamic> entries =
+                (days.first as Map<String, dynamic>)['entries']
+                    as List<dynamic>;
+            (entries.first
+                as Map<String, dynamic>)['rooms'] = <Map<String, dynamic>>[
+              <String, dynamic>{'shortName': 'K023-216'},
+              <String, dynamic>{'shortName': 'D-04/201'},
+            ];
+            return FakeHttpResponse(envelope(week, meta: timetableMeta()));
+          },
+        ),
       );
 
       await pumpTimetable(

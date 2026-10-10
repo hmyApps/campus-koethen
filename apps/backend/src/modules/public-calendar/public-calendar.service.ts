@@ -137,6 +137,16 @@ export class PublicCalendarService implements OnModuleInit {
     lastSuccessfulSyncAt: true,
   } as const;
 
+  /**
+   * The editor's publication flags. Stored rows only lose a description or
+   * location on the next FULL sync, which can be far off while the feed does
+   * not change, so every event response applies the flags itself.
+   */
+  private static readonly TEXT_FLAGS = {
+    includeEventDescription: true,
+    includeEventLocation: true,
+  } as const;
+
   private servableWhere() {
     return {
       isActive: true,
@@ -232,6 +242,7 @@ export class PublicCalendarService implements OnModuleInit {
       status: string;
     },
     slug: string,
+    flags: { includeEventDescription: boolean; includeEventLocation: boolean },
     // Resolved once per response by the caller: every row of a single-calendar
     // page shares it, and an aggregated page has one per selected calendar.
     perCalendar: Map<string, string> = eventKeysFor(slug),
@@ -242,8 +253,8 @@ export class PublicCalendarService implements OnModuleInit {
       calendarId: row.calendarId,
       calendarSlug: slug,
       title: row.title,
-      description: row.description,
-      location: row.location,
+      description: flags.includeEventDescription ? row.description : null,
+      location: flags.includeEventLocation ? row.location : null,
       start: row.startsAt.toISOString(),
       end: row.endsAt.toISOString(),
       allDay: row.allDay,
@@ -262,7 +273,7 @@ export class PublicCalendarService implements OnModuleInit {
   } | null> {
     const row = await this.prisma.publicCalendar.findFirst({
       where: { slug, ...this.servableWhere() },
-      select: PublicCalendarService.CALENDAR_FIELDS,
+      select: { ...PublicCalendarService.CALENDAR_FIELDS, ...PublicCalendarService.TEXT_FLAGS },
     });
     if (!row) return null;
     const limit = this.env.PUBLIC_CALENDAR_API_MAX_EVENTS;
@@ -296,7 +307,7 @@ export class PublicCalendarService implements OnModuleInit {
         dataStale: stale,
         googleOpenUrl: buildSingleOpenUrl(row.googleCalendarId),
       },
-      events: events.map((e) => this.toEventDto(e, slug, perCalendar)),
+      events: events.map((e) => this.toEventDto(e, slug, row, perCalendar)),
       truncated,
     };
   }
@@ -310,10 +321,10 @@ export class PublicCalendarService implements OnModuleInit {
     if (slugs.length === 0) return { events: [], truncated: false };
     const rows = await this.prisma.publicCalendar.findMany({
       where: { slug: { in: slugs }, ...this.servableWhere() },
-      select: { id: true, slug: true },
+      select: { id: true, slug: true, ...PublicCalendarService.TEXT_FLAGS },
     });
     if (rows.length === 0) return { events: [], truncated: false };
-    const slugById = new Map(rows.map((r) => [r.id, r.slug]));
+    const calendarById = new Map(rows.map((r) => [r.id, r]));
     const limit = this.env.PUBLIC_CALENDAR_API_MAX_EVENTS;
     // The calendar count and the date range are bounded, the row count they
     // span is not. Deterministic ordering plus a ceiling makes the cut
@@ -333,14 +344,19 @@ export class PublicCalendarService implements OnModuleInit {
     // One index per selected calendar, resolved once rather than per event.
     const keysByCalendarId = new Map(rows.map((r) => [r.id, eventKeysFor(r.slug)] as const));
     const unknownCalendarKeys = eventKeysFor('');
+    // A row whose calendar is not in the list cannot happen (the event query
+    // filters on these ids); should it ever, it publishes no optional text.
+    const withheld = { includeEventDescription: false, includeEventLocation: false };
     return {
-      events: kept.map((e) =>
-        this.toEventDto(
+      events: kept.map((e) => {
+        const calendar = calendarById.get(e.calendarId);
+        return this.toEventDto(
           e,
-          slugById.get(e.calendarId) ?? '',
+          calendar?.slug ?? '',
+          calendar ?? withheld,
           keysByCalendarId.get(e.calendarId) ?? unknownCalendarKeys,
-        ),
-      ),
+        );
+      }),
       truncated,
     };
   }

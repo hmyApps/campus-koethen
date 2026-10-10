@@ -10,10 +10,16 @@
 /// silently dropping those paths.
 library;
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:campus_koethen/core/content/content_block.dart';
 import 'package:campus_koethen/core/network/api_config.dart';
+import 'package:campus_koethen/core/widgets/content_blocks_view.dart';
 import 'package:campus_koethen/features/contacts/data/contact_models.dart';
 import 'package:campus_koethen/features/news/data/news_models.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/pump_app.dart';
 
 void main() {
   group('resolving a media reference', () {
@@ -100,6 +106,72 @@ void main() {
 
       // The preview remains square even when the CMS reports no dimensions.
       expect(parsed.heroImage!.aspectRatio, isNull);
+    });
+  });
+
+  group('an image block inside rich text', () {
+    // The API rewrites every inline image onto its own media route, exactly
+    // like a banner (G-01). A check written for outbound links demanded an
+    // `https` scheme and silently dropped every one of them.
+    Map<String, dynamic> imageBlock(String url) => <String, dynamic>{
+      'type': 'image',
+      'url': url,
+      'alternativeText': 'Plakat zum Sommerfest',
+      'width': 1200,
+      'height': 800,
+    };
+
+    test('keeps the API-relative media path the API published', () {
+      final List<ContentBlock> blocks = ContentBlock.parse(<Object>[
+        imageBlock('/v1/media/uploads/plakat_abc.png'),
+      ]);
+
+      expect(blocks, hasLength(1));
+      final ImageBlock image = blocks.single as ImageBlock;
+      expect(image.url, '/v1/media/uploads/plakat_abc.png');
+      expect(image.alternativeText, 'Plakat zum Sommerfest');
+      expect(image.width, 1200);
+      expect(image.height, 800);
+    });
+
+    test('still refuses anything that is not the API media route', () {
+      // No loosening for foreign hosts or plaintext: the parser accepts
+      // exactly what the renderer can resolve against the Campus API.
+      expect(
+        ContentBlock.parse(<Object>[
+          imageBlock('https://cdn.example/plakat.png'),
+          imageBlock('http://cdn.example/plakat.png'),
+          imageBlock('/v1/media/other/plakat.png'),
+          imageBlock('/v1/media/uploads/../secret.png'),
+          imageBlock('javascript:alert(1)'),
+          imageBlock(''),
+        ]),
+        isEmpty,
+      );
+    });
+
+    testWidgets('is rendered from the Campus API media route', (
+      WidgetTester tester,
+    ) async {
+      final List<ContentBlock> blocks = ContentBlock.parse(<Object>[
+        imageBlock('/v1/media/uploads/plakat_abc.png'),
+      ]);
+
+      await pumpScreen(
+        tester,
+        Scaffold(
+          body: SingleChildScrollView(child: ContentBlocksView(blocks: blocks)),
+        ),
+      );
+
+      final CachedNetworkImage image = tester.widget<CachedNetworkImage>(
+        find.byType(CachedNetworkImage),
+      );
+      expect(
+        image.imageUrl,
+        ApiConfig.resolveMediaUrl('/v1/media/uploads/plakat_abc.png'),
+      );
+      expect(find.bySemanticsLabel('Plakat zum Sommerfest'), findsOneWidget);
     });
   });
 

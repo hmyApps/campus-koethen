@@ -127,7 +127,18 @@ class GradesController extends AsyncNotifier<GradesViewState> {
     SessionLease<({String username, GradePortal portal})> lease,
   ) async {
     if (!_sessions.isCurrent(lease)) return;
-    final GradesViewState current = state.value ?? const GradesViewState();
+    // Settle build() first. A sync triggered from the screen's first frame can
+    // start while build() is still reading the cache, and after a portal
+    // switch the state still carries the PREVIOUS portal's report as a
+    // "previous value" until the rebuild has run. Publishing before build()
+    // settles would also let its late result overwrite this sync's state.
+    GradesViewState current;
+    try {
+      current = await future;
+    } catch (_) {
+      current = const GradesViewState();
+    }
+    if (!_sessions.isCurrent(lease)) return;
     state = AsyncData(current.copyWith(isSyncing: true, clearError: true));
 
     try {
@@ -146,15 +157,21 @@ class GradesController extends AsyncNotifier<GradesViewState> {
           .read(gradesGatewayProvider)
           .fetchGrades(credentials);
       if (!_sessions.isCurrent(lease)) return;
+      // The baseline is the PERSISTED last successful report (docs/grades.md),
+      // read now — not whatever was in memory when this sync started. The
+      // settled screen state is only a fallback for a cache read that came
+      // back empty; it was itself loaded from that same cache by build().
+      final GradeReport? cached = await _cache.readReport() ?? current.report;
+      if (!_sessions.isCurrent(lease)) return;
       // An empty answer NEVER replaces grades we already have. The portal
       // returning nothing where it returned 75 entries yesterday means the
       // account moved, the session was silently dropped or the page changed —
       // never that the results are gone. Keep the cache and surface it.
-      final GradeReport? cached = current.report;
       if (report.isEmpty && cached != null && !cached.isEmpty) {
         if (!_sessions.isCurrent(lease)) return;
         state = AsyncData(
           current.copyWith(
+            report: cached,
             isSyncing: false,
             error: const GradeFailure(GradeFailureKind.portalStructureChanged),
           ),

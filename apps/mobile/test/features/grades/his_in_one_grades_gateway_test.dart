@@ -373,6 +373,44 @@ void main() {
       );
     });
 
+    // D-09: AGENTS.md §2 pins the order — portal-host docdownload first, the
+    // untrust- host only as its redirect.
+    test(
+      'a POST that redirects straight to the untrust- host is rejected',
+      () async {
+        const String untrust =
+            'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload&docId=abc';
+        final adapter = FakeHtmlAdapter((RequestOptions o) {
+          final String url = o.uri.toString();
+          if (url == untrust) {
+            return const FakeHtmlResponse(
+              '%PDF-1.7\nfixture',
+              contentType: 'application/pdf',
+            );
+          }
+          if (url.contains('personExamsReadonly.xhtml') && o.method == 'POST') {
+            return const FakeHtmlResponse.redirect(untrust);
+          }
+          return scriptWithReports(o);
+        });
+
+        await expectLater(
+          HisInOneGradesGateway(
+            const HisInOneProfile(),
+            adapter,
+          ).downloadExamReport(_creds, offer),
+          throwsA(const GradeFailure(GradeFailureKind.tlsOrHostRejected)),
+        );
+        expect(
+          adapter.requests.any(
+            (RequestOptions r) => r.uri.toString() == untrust,
+          ),
+          isFalse,
+        );
+      },
+    );
+
     test('an offer no longer listed on a fresh read is rejected before any '
         'POST', () async {
       final adapter = FakeHtmlAdapter(scriptWithReports);

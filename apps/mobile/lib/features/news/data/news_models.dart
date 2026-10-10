@@ -266,6 +266,8 @@ class NewsArticle {
       return null;
     }
     final String? sourceUrl = asString(map['sourceUrl']);
+    final bool eventAllDay = asBool(map['eventAllDay']) ?? false;
+    final DateTime? eventStart = asDateTime(map['eventStart']);
     return NewsArticle(
       slug: slug,
       title: title,
@@ -280,10 +282,29 @@ class NewsArticle {
       sourceName: asString(map['sourceName']),
       sourceUrl: SafeLinkLauncher.isAllowed(sourceUrl) ? sourceUrl : null,
       content: ContentBlock.parse(map['content']),
-      eventStart: asDateTime(map['eventStart']),
+      eventStart: eventAllDay && eventStart != null
+          ? _allDayDate(eventStart)
+          : eventStart,
       eventEnd: asDateTime(map['eventEnd']),
-      eventAllDay: asBool(map['eventAllDay']) ?? false,
+      eventAllDay: eventAllDay,
     );
+  }
+
+  /// `eventStart` is a Strapi `datetime`: an all-day event entered as 00:00
+  /// Berlin time arrives as 22:00Z/23:00Z the evening before. Every reader
+  /// takes an all-day start as a UTC-midnight date marker (`calendarDayOf`),
+  /// so the post showed a day early and never matched its public-calendar
+  /// twin (VF-N01). The start is therefore re-read as the local date it was
+  /// entered for. A value that already is UTC midnight is kept, so a server
+  /// sending date markers is never shifted.
+  ///
+  /// `eventEnd` is deliberately left alone: its UTC date already is the last
+  /// day for both an end at 23:59 and one at the following midnight.
+  static DateTime _allDayDate(DateTime start) {
+    final DateTime utc = start.toUtc();
+    if (utc == DateTime.utc(utc.year, utc.month, utc.day)) return utc;
+    final DateTime local = start.toLocal();
+    return DateTime.utc(local.year, local.month, local.day);
   }
 
   static List<NewsArticle> listFromJson(Object? json) => asList(

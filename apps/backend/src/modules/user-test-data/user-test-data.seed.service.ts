@@ -219,9 +219,12 @@ export class UserTestDataSeedService {
         // here they are written directly so the calendar screens have something
         // to show without any network access. `operationalStatus` and the sync
         // timestamp are set to what a successful run would leave behind —
-        // otherwise the API would serve them as permanently stale.
+        // otherwise the API would serve them as permanently stale. `source`
+        // keeps the worker's catalogue and event jobs away from them: Strapi
+        // does not publish these slugs, and their ids name no real feed.
         for (const calendar of dataset.calendars) {
           const calendarData = {
+            source: USER_TEST_SOURCE,
             googleCalendarId: `${calendar.slug}@user-test.invalid`,
             nameDe: calendar.nameDe,
             nameEn: calendar.nameEn,

@@ -58,7 +58,7 @@ class CachedEndpoint {
         locale: locale,
       );
       final Loaded<T> loaded = Loaded<T>(
-        value: parse(response.data),
+        value: _parseChecked(parse, response.data),
         meta: response.meta,
       );
       // Storing is best effort and happens *after* the value was parsed, so a
@@ -71,6 +71,23 @@ class CachedEndpoint {
       if (cached != null) return cached;
       rethrow;
     }
+  }
+
+  /// Parses [data] and refuses a list that did not come from a JSON array.
+  ///
+  /// Every list endpoint of the contract delivers `data` as an array — an
+  /// empty one when there is nothing to show. The tolerant per-field readers
+  /// turn anything else (`null`, an object, a missing key) into an empty list
+  /// as well, and that "list" used to be cached over the last good canteen
+  /// list, feed, contact list or room catalogue (G-03). Throwing here — before
+  /// anything is written — sends a live response down the cache fallback and
+  /// keeps a broken cached envelope from being served as "nothing there".
+  static T _parseChecked<T>(T Function(Object? data) parse, Object? data) {
+    final T value = parse(data);
+    if (value is List && data is! List) {
+      throw const FormatException('List payload is not a JSON array');
+    }
+    return value;
   }
 
   Future<void> _writeCache(
@@ -97,7 +114,7 @@ class CachedEndpoint {
       final CacheEntry? entry = await cache.read(cacheKey);
       if (entry == null) return null;
       return Loaded<T>(
-        value: parse(entry.payload['data']),
+        value: _parseChecked(parse, entry.payload['data']),
         meta: ApiMeta.fromJson(asJsonMap(entry.payload['meta'])),
         // A document inside an explicit freshness window is the current value
         // according to that endpoint's refresh policy, not an offline

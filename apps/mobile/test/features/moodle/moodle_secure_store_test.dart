@@ -3,11 +3,15 @@
 
 import 'package:campus_koethen/core/cache/encrypted_box.dart';
 import 'package:campus_koethen/features/moodle/data/encrypted_moodle_cache.dart';
+import 'package:campus_koethen/features/moodle/data/moodle_repository_impl.dart';
 import 'package:campus_koethen/features/moodle/data/secure_moodle_token_store.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_failure.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/fake_moodle.dart';
 
 const MoodleToken _token = MoodleToken(
   value: 'new-token',
@@ -63,6 +67,71 @@ void main() {
     );
   });
 
+  test(
+    'token read reports an unreadable keychain instead of "absent"',
+    () async {
+      final _ControlledStorage storage = _ControlledStorage(
+        values: <String, String>{
+          'moodle.token': 'stored-token',
+          'moodle.userid': '7',
+        },
+      )..readError = StateError('keystore locked');
+
+      await expectLater(
+        SecureMoodleTokenStore(storage).read(),
+        throwsA(
+          const MoodleFailure(MoodleFailureKind.secureStorageUnavailable),
+        ),
+      );
+    },
+  );
+
+  test('token read still reports a genuinely absent token as null', () async {
+    expect(await SecureMoodleTokenStore(_ControlledStorage()).read(), isNull);
+  });
+
+  test(
+    'reconnecting while the keychain is unreadable keeps the encrypted cache',
+    () async {
+      final _ControlledStorage storage = _ControlledStorage(
+        values: <String, String>{
+          'moodle.token': 'stored-token',
+          'moodle.userid': '7',
+        },
+      )..readError = StateError('keystore locked');
+      final InMemoryMoodleCacheStore cache = InMemoryMoodleCacheStore()
+        ..courses = <MoodleCourse>[
+          const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+        ];
+      final MoodleRepositoryImpl repo = MoodleRepositoryImpl(
+        apiClient: FakeMoodleApiClient()
+          ..siteInfo = const MoodleSiteInfo(userId: 7, username: 'demo'),
+        tokenStore: SecureMoodleTokenStore(storage),
+        cacheStore: cache,
+      );
+
+      // Not "disconnected": an unreadable token is an error, never a null
+      // account the setup screen would then invite the user to replace.
+      await expectLater(
+        repo.currentAccount(),
+        throwsA(
+          const MoodleFailure(MoodleFailureKind.secureStorageUnavailable),
+        ),
+      );
+      // And a reconnect must not treat the unreadable stored account as a
+      // different identity whose cache has to go.
+      await expectLater(
+        repo.connect(username: 'demo', password: 'pw'),
+        throwsA(
+          const MoodleFailure(MoodleFailureKind.secureStorageUnavailable),
+        ),
+      );
+      expect(cache.clears, 0);
+      expect(cache.courses, hasLength(1));
+      expect(storage.values['moodle.token'], 'stored-token');
+    },
+  );
+
   test('Moodle cache clear rejects an incomplete encrypted wipe', () async {
     final EncryptedMoodleCache cache = EncryptedMoodleCache(
       _WipeBox(const EncryptedBoxWipeResult(keyAbsent: true, boxAbsent: false)),
@@ -97,6 +166,9 @@ class _ControlledStorage extends FlutterSecureStorage {
   final Set<String> droppedWrites;
   final Set<String> droppedDeletes;
 
+  /// When set, every read throws it — a locked or broken keystore.
+  Object? readError;
+
   @override
   Future<String?> read({
     required String key,
@@ -106,7 +178,11 @@ class _ControlledStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async => values[key];
+  }) async {
+    final Object? error = readError;
+    if (error != null) throw error;
+    return values[key];
+  }
 
   @override
   Future<void> write({

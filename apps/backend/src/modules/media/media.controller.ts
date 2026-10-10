@@ -5,6 +5,16 @@ import { ApiError } from '../../common/errors/api-error';
 import { MediaError, MediaService } from './media.service';
 
 /**
+ * Freshness of a delivered image.
+ *
+ * Set by the handler on a 200 or 304 only — deliberately NOT through
+ * `@Header()`, which Nest applies before the handler runs, so a 404 or a 503
+ * left with it too and the edge cache kept the failure for a day. Error
+ * answers are marked `no-store` by the global exception filter.
+ */
+const IMAGE_CACHE_CONTROL = 'public, max-age=86400';
+
+/**
  * Serves editorial images.
  *
  * The one endpoint of this API that answers with bytes rather than JSON, and
@@ -36,7 +46,6 @@ export class MediaController {
   })
   @ApiResponse({ status: 200, description: 'The image bytes.' })
   @ApiResponse({ status: 304, description: 'The client copy is still current. No body.' })
-  @Header('Cache-Control', 'public, max-age=86400')
   // Belt and braces for a byte-serving endpoint: nothing here should ever be
   // interpreted as a document by a client that guesses at content types.
   @Header('X-Content-Type-Options', 'nosniff')
@@ -48,6 +57,7 @@ export class MediaController {
   ): Promise<void> {
     try {
       const result = await this.media.fetch(`/uploads/${filename}`, { ifNoneMatch });
+      response.setHeader('Cache-Control', IMAGE_CACHE_CONTROL);
       if (result.etag) {
         response.setHeader('ETag', result.etag);
       }

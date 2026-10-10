@@ -341,6 +341,87 @@ describe('PublicCalendarService', () => {
     });
   });
 
+  describe('description and location flags', () => {
+    // The stored rows only lose a description/location on the next FULL sync,
+    // and that may be a long way off when the feed itself does not change. The
+    // editor's flag is what decides publication, so the read path enforces it
+    // on its own.
+    const storedWithText = {
+      id: 'db-uuid-1',
+      calendarId: 'calendar-id',
+      occurrenceKey: 'occ-key-1',
+      title: 'Sitzung',
+      description: 'Interne Beschreibung',
+      location: 'Raum 1',
+      startsAt: new Date('2026-09-01T10:00:00.000Z'),
+      endsAt: new Date('2026-09-01T12:00:00.000Z'),
+      allDay: false,
+      status: 'confirmed',
+    };
+    const from = new Date('2026-09-01T00:00:00.000Z');
+    const to = new Date('2026-09-01T23:59:59.999Z');
+
+    it('withholds stored text a single calendar no longer publishes', async () => {
+      const { service, calendarFindFirst } = serviceWith(
+        { ...row, includeEventDescription: false, includeEventLocation: false },
+        [storedWithText],
+      );
+
+      const result = await service.getCalendarEvents('events', from, to);
+
+      expect(result?.events[0]).toMatchObject({ description: null, location: null });
+      expect(calendarFindFirst.mock.calls[0]![0].select).toMatchObject({
+        includeEventDescription: true,
+        includeEventLocation: true,
+      });
+    });
+
+    it('withholds each field on its own flag', async () => {
+      const { service } = serviceWith(
+        { ...row, includeEventDescription: true, includeEventLocation: false },
+        [storedWithText],
+      );
+
+      const result = await service.getCalendarEvents('events', from, to);
+
+      expect(result?.events[0]).toMatchObject({
+        description: 'Interne Beschreibung',
+        location: null,
+      });
+    });
+
+    it('withholds stored text per calendar on an aggregated page', async () => {
+      const calendars = [
+        {
+          id: 'calendar-a',
+          slug: 'cal-a',
+          includeEventDescription: true,
+          includeEventLocation: true,
+        },
+        {
+          id: 'calendar-b',
+          slug: 'cal-b',
+          includeEventDescription: false,
+          includeEventLocation: false,
+        },
+      ];
+      const { service, calendarFindMany } = serviceWith(row, [
+        { ...storedWithText, id: 'db-uuid-a', calendarId: 'calendar-a' },
+        { ...storedWithText, id: 'db-uuid-b', calendarId: 'calendar-b' },
+      ]);
+      calendarFindMany.mockResolvedValue(calendars);
+
+      const { events } = await service.getAggregatedEvents(['cal-a', 'cal-b'], from, to);
+
+      expect(
+        events.map((event) => [event.calendarSlug, event.description, event.location]),
+      ).toEqual([
+        ['cal-a', 'Interne Beschreibung', 'Raum 1'],
+        ['cal-b', null, null],
+      ]);
+    });
+  });
+
   describe('startup configuration warning', () => {
     it('warns when PUBLIC_CALENDAR_LOOKAHEAD_DAYS < PUBLIC_CALENDAR_API_MAX_RANGE_DAYS', () => {
       const { service } = serviceWith(row, [], {

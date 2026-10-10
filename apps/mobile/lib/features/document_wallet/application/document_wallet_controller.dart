@@ -42,6 +42,13 @@ class DocumentWalletController extends AsyncNotifier<List<WalletDocument>> {
     required WalletDocumentKind kind,
     required AppDocument document,
   }) async {
+    // The session is (re-)activated only in build(). Saving straight from a
+    // document viewer — the wallet never opened in this session, or opened
+    // before a portal/account switch invalidated the guard — otherwise found
+    // an inactive guard and failed. `future` flushes a pending rebuild and
+    // waits for it; `initializeIfNeeded` would not revive an invalidated
+    // guard by design.
+    await future;
     final String? username = ref
         .read(gradeAccountControllerProvider)
         .value
