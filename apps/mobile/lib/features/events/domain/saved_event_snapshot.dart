@@ -4,6 +4,7 @@
 import 'package:meta/meta.dart';
 
 import '../../../core/network/json.dart';
+import '../../../core/time/all_day_post_start.dart';
 import 'unified_event.dart';
 
 /// One entry of the offline saved-events list ("Meine gemerkten Events").
@@ -131,13 +132,18 @@ class SavedEventSnapshot {
         kind == null) {
       return null;
     }
+    final bool allDay = asBool(map['allDay']) ?? false;
     return SavedEventSnapshot(
       eventRef: eventRef,
       kind: kind,
       title: title,
-      start: start,
+      // Bookmarks written before VF-N01 hold an all-day post start as the
+      // instant of local midnight; read them like a fresh API answer.
+      start: allDay && kind == UnifiedEventKind.postEvent
+          ? allDayPostStart(start)
+          : start,
       end: asDateTime(map['end']),
-      allDay: asBool(map['allDay']) ?? false,
+      allDay: allDay,
       channelSlug: asString(map['channelSlug']),
       calendarSlug: asString(map['calendarSlug']),
       sourceLabel: asString(map['sourceLabel']),
