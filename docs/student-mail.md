@@ -20,6 +20,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Die kombinierte IMAP-/SMTP-Prüfung endet spätestens an ihrer Gesamtgrenze mit einem typisierten
   Timeout; der Setup-Screen bleibt dadurch nie unbegrenzt im Ladezustand und gibt das Formular
   für einen erneuten Versuch wieder frei.
+- Übertragungen mit Nachrichteninhalt sind größenabhängig begrenzt: Befehlstimeout plus die Zeit,
+  die die Datenmenge bei mindestens 64 KiB/s braucht. Bestätigt der SMTP-Server die übergebene
+  Nachricht nicht rechtzeitig, meldet die App „Ausgang unklar“ mit dem Hinweis, vor einem erneuten
+  Senden den Ordner „Gesendet“ zu prüfen, schließt die Verbindung ohne weiteres Protokollkommando
+  und sendet **nicht** automatisch erneut; der Entwurf bleibt erhalten.
 - Die Campus-Köthen-API, Strapi und der Worker sind **nie** an Mail beteiligt. Sie
   erhalten **weder Zugangsdaten noch E-Mails**.
 - Genau **zwei** Eingaben: E-Mail-Adresse + Passwort. Die Adresse ist zugleich
@@ -46,6 +51,10 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Adresse und Passwort bleiben getrennte Secure-Storage-Daten und liegen **nie** im Cache.
   Der Cache ist auf 500 Header, 200 vollständige Nachrichten und 100 MiB Nachrichtendaten begrenzt;
   Header älter als 365 Tage und Bodies älter als 180 Tage werden bei der Bereinigung entfernt.
+  Ausgenommen davon sind die Header des aktuellen Serverfensters (die 50 höchsten IMAP-UIDs):
+  Sie werden unabhängig von Alter und Header-Obergrenze behalten, damit die neuesten Mails
+  sichtbar bleiben und beim nächsten Sync nicht erneut als neu gelten. Bodies, die die
+  Altersgrenze sofort wieder entfernen würde, werden nicht vorgeladen.
   Einstellungen → Studentische E-Mail zeigt Belegung und Anzahl und kann die vollständigen
   Offline-Inhalte samt abgeleiteten Indizes löschen, ohne den Account oder die Headerliste zu
   entfernen.
@@ -76,28 +85,53 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   (`kMailSyncInterval`, geplant im App-Shell) und **manuell** (Sync-Button /
   Pull-to-Refresh).
 - Der Sync holt die **50 neuesten** INBOX-Header und führt sie mit dem lokalen Bestand zusammen.
-  Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Pro Lauf werden höchstens die
+  Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Umfasst das Fenster laut
+  IMAP-`EXISTS` das ganze Postfach, entfernt der Sync jede gecachte Nachricht, die dort fehlt
+  (etwa im Webmail gelöscht); eine leere Serverantwort löscht nie. Der Cache merkt sich die
+  `UIDVALIDITY` der INBOX: Meldet der Server einen anderen Wert, verwirft der Sync Header, Inhalte
+  und Indizes und baut eine neue Basis auf, ohne die Mails als neu zu melden. Löschen und
+  „gelesen“ laufen für die INBOX nur, wenn der Server noch dieselbe `UIDVALIDITY` meldet; sonst
+  bricht die Aktion mit einem Hinweis zum Aktualisieren ab. Pro Lauf werden höchstens die
   **20 neuesten** noch fehlenden Inhalte vorgeladen; ältere Inhalte lädt das Öffnen der Nachricht
   bei Bedarf direkt vom IMAP-Server.
 - Am Ende der Nachrichtenliste lädt „100 ältere E-Mails laden“ die jeweils nächsten
   bis zu 100 Header vor der ältesten bereits sichtbaren IMAP-UID. Weitere Seiten werden
   mit demselben Button geladen. Die UID dient als stabiler Cursor; neue oder gelöschte
   Nachrichten verschieben die Seite daher nicht. INBOX-Header werden verschlüsselt lokal
-  ergänzt, der vollständige Inhalt einer älteren Nachricht erst beim Öffnen geladen.
+  ergänzt, der vollständige Inhalt einer älteren Nachricht erst beim Öffnen geladen. Header, die
+  die Cache-Grenzen (365 Tage, 500 Header) nicht aufnehmen, bleiben für die laufende Sitzung nur
+  im Arbeitsspeicher sichtbar; der Cursor setzt unter ihnen fort, statt dieselbe Seite erneut zu
+  laden.
 - **Anhänge herunterladen** ist optional und wird sowohl bei der Mail-Einrichtung als auch unter
   Einstellungen → Studentische E-Mail angeboten. Nur bei aktivierter Einstellung werden
   Nicht-Bild-Anhänge automatisch für die Offline-Nutzung geladen. Ist sie aus, lädt ein bewusster
   Tipp den fehlenden Anhang live vom Mailserver, legt ihn für die INBOX im verschlüsselten Cache
   ab und öffnet ihn anschließend. Bilder werden ohnehin inline aus dem Speicher angezeigt.
+  Ist die Einstellung aus, lädt die App von einer mehrteiligen Mail nur die Textteile und Bilder
+  (vorab per `BODYSTRUCTURE` ermittelt); Dateianhänge bleiben bis zum Tipp auf dem Server.
+- **Große Mails:** Inhalte werden mit größenabhängigem Zeitlimit geladen (siehe oben). Ein
+  Vorladelauf beginnt mit den kleinsten Nachrichten; eine vom Server verweigerte oder nicht
+  lesbare Nachricht wird übersprungen und erst beim Öffnen geladen. Bricht die Verbindung bei
+  einer großen Nachricht ab, bleiben die bereits geladenen Inhalte erhalten.
 - **Empfängervorschläge:** Beim Verfassen durchsucht das An-/Cc-Feld nach 250 ms Debounce direkt
   das authentifizierte Exchange-Adressbuch per EWS `ResolveNames` und mischt die Treffer mit
   Adressen aus der verschlüsselt gecachten Mailhistorie (From/To/Cc). Schlägt EWS fehl oder ist
-  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar.
+  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar. Lehnt Exchange
+  die Zugangsdaten ab (HTTP 401/403), stellt die App in dieser Mailsitzung keine weiteren
+  EWS-Anfragen für Vorschläge mehr — jede wäre ein weiterer Fehl-Login am zentralen
+  Hochschulkonto; erst eine erneute Anmeldung hebt die Sperre auf.
 - **Neue-Mail-Hinweis:** Ein IDLE-Signal allein genügt nicht. Erst wenn der anschließende
   INBOX-Abgleich eine bisher unbekannte UID bestätigt, entsteht bei aktivem globalem Opt-in und
   aktiver Kategorie eine lokale Benachrichtigung. Titel und Text nennen weder Absender noch
   Betreff; der Payload enthält nur die IMAP-UID. Der erste Sync setzt ausschließlich die Basis und
   meldet vorhandene Nachrichten nicht nachträglich.
+- **Live-Verbindung (IMAP IDLE):** Bricht sie ab, verbindet die App mit exponentiellem Backoff
+  neu (15 s, 30 s, 1 min … höchstens 30 min); erst eine Verbindung, die mindestens zwei Minuten
+  stabil war, setzt den Backoff zurück. Lehnt der Server das Passwort ab oder scheitert die
+  gesicherte Verbindung, verbindet die App **nicht** automatisch neu — jeder weitere Versuch wäre
+  ein Fehl-Login am zentralen Hochschulkonto. Der Posteingang zeigt dann „Live-Synchronisierung
+  angehalten“ mit dem Grund. Nach einem abgelehnten Passwort bleibt die Live-Verbindung bis zur
+  erneuten Anmeldung aus, auch über Pause/Resume hinweg.
 
 > Anmerkung: Es gibt **kein** Sync, während die App vollständig geschlossen ist — dafür
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP
@@ -346,7 +380,8 @@ Verfassen / Senden
 Antworten
 
 - [ ] „Antworten” öffnet den Verfassen-Screen mit dem Absender als Empfänger,
-      „Re: …”-Betreff und zitiertem Originaltext.
+      „Re: …”-Betreff und zitiertem Originaltext. Trägt die Mail einen `Reply-To`-Header
+      (z. B. Verteiler, Sekretariate), ist stattdessen diese Adresse der Empfänger.
 - [ ] „Allen antworten” adressiert zusätzlich alle ursprünglichen Empfänger (Cc),
       **ohne** die eigene Adresse.
 

@@ -60,35 +60,48 @@ class HisInOneProfile implements GradePortalProfile {
   static const String documentDownloadHost =
       'untrust-sscportal.ssc.hs-anhalt.de';
 
-  /// A second, narrower allowlist for exactly one purpose: every redirect
-  /// hop a print button's POST can lead through, down to the one-time
-  /// document itself — kept as its own check (never folded into [allows]
-  /// by reference) so a future real difference would not require
+  /// A second, narrower, ORDERED allowlist for exactly one purpose: every
+  /// redirect hop a print button's POST can lead through, down to the
+  /// one-time document itself — kept as its own check (never folded into
+  /// [allows] by reference) so a future real difference would not require
   /// re-threading every session call site (AGENTS.md §2: "kein gemeinsamer
   /// Pool"). Deliberately NOT shared with
-  /// `StudentServiceProfile.allowsDocumentDownload`, even though both
+  /// `StudentServiceProfile.documentDownloadRoute`, even though both
   /// currently pin the same two hosts — separate features, separate checks.
   ///
   /// The real chain, confirmed 2026-10-04 from the device: the POST's own
   /// redirect bounces back through the exam-overview page itself on [host]
   /// (a standard POST/redirect/GET) — THAT page's own response is what then
-  /// redirects to `/qisserver/rds?state=docdownload`, which in turn
-  /// redirects to [documentDownloadHost]. So exactly two shapes are
-  /// allowed: the exam-overview page's own path on [host] (the bounce,
-  /// nothing more — not an arbitrary other page), and the
-  /// `state=docdownload` path on either host.
-  bool allowsDocumentDownload(Uri uri) {
-    if (_isDocDownloadRequest(uri)) return true;
-    return gradePortalAllows(uri, scheme: scheme, host: host) &&
-        uri.path == _examOverviewPath;
+  /// redirects to `/qisserver/rds?state=docdownload` on [host], which in
+  /// turn redirects to [documentDownloadHost]. Returns a fresh check for ONE
+  /// download, called once per redirect hop in order:
+  ///
+  ///  1. until the docdownload entry: the exam-overview page's own path on
+  ///     [host] (the bounce, nothing more — not an arbitrary other page) or
+  ///     the `state=docdownload` entry on [host];
+  ///  2. after that entry: only `state=docdownload` on
+  ///     [documentDownloadHost] — never back to [host], never the bounce.
+  ///
+  /// AGENTS.md §2 pins exactly this order; a flat "either host at any hop"
+  /// set accepted a POST redirecting straight to the untrust- host.
+  bool Function(Uri uri) examReportDownloadRoute() {
+    bool entered = false;
+    return (Uri uri) {
+      if (!entered) {
+        if (_isDocDownloadRequest(uri, host)) {
+          entered = true;
+          return true;
+        }
+        return gradePortalAllows(uri, scheme: scheme, host: host) &&
+            uri.path == _examOverviewPath;
+      }
+      return _isDocDownloadRequest(uri, documentDownloadHost);
+    };
   }
 
-  bool _isDocDownloadRequest(Uri uri) {
-    final bool hostAllowed =
-        gradePortalAllows(uri, scheme: scheme, host: host) ||
-        gradePortalAllows(uri, scheme: scheme, host: documentDownloadHost);
+  bool _isDocDownloadRequest(Uri uri, String expectedHost) {
     final List<String>? states = uri.queryParametersAll['state'];
-    return hostAllowed &&
+    return gradePortalAllows(uri, scheme: scheme, host: expectedHost) &&
         uri.path == '/qisserver/rds' &&
         !uri.hasFragment &&
         states != null &&

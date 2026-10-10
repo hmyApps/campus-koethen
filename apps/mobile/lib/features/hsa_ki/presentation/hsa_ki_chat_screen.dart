@@ -10,6 +10,8 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/presentation/university_account_setup_sheet.dart';
 import '../application/hsa_ki_account_controller.dart';
 import '../application/hsa_ki_chat_controller.dart';
 import '../domain/hsa_ki_account.dart';
@@ -74,7 +76,13 @@ class _HsaKiConnectPromptState extends ConsumerState<_HsaKiConnectPrompt> {
       await connectHsaKiWithOnboarding(context, ref);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = hsaKiFailureMessage(context.l10n, error));
+      setState(
+        () => _error = universityAccountErrorMessage(
+          context.l10n,
+          DirectService.hsaKi,
+          error,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -133,7 +141,13 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
     final String text = _composer.text;
     if (text.trim().isEmpty) return;
     _composer.clear();
-    await ref.read(hsaKiChatControllerProvider.notifier).send(text);
+    final bool delivered = await ref
+        .read(hsaKiChatControllerProvider.notifier)
+        .send(text);
+    if (!mounted) return;
+    // An undelivered message is not kept in the history (it would otherwise
+    // be re-sent with the next one); hand it back for an explicit retry.
+    if (!delivered && _composer.text.isEmpty) _composer.text = text;
     _scrollToEnd();
   }
 
@@ -192,7 +206,10 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
           ),
         Expanded(
           child: state == null || state.messages.isEmpty
-              ? EmptyView(icon: AppIcons.message_2, message: l10n.hsaKiEmptyState)
+              ? EmptyView(
+                  icon: AppIcons.message_2,
+                  message: l10n.hsaKiEmptyState,
+                )
               : ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -263,9 +280,9 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
           ),
           child: Text(
             l10n.hsaKiDisclaimerFooter,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
         ),
       ],
@@ -296,7 +313,9 @@ class _MessageBubble extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isUser ? colors.primaryContainer : colors.surfaceContainerHighest,
+          color: isUser
+              ? colors.primaryContainer
+              : colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(AppSpacing.md),
         ),
         child: Text(

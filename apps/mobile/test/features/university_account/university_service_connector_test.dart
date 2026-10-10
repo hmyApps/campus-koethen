@@ -7,6 +7,12 @@ import 'package:campus_koethen/features/settings/application/sign_out_everywhere
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
+import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_consent.dart';
+import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_providers.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_account.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_chat.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_failure.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_gateway.dart';
 import 'package:campus_koethen/features/mail/application/mail_providers.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/university_account/application/university_account_controller.dart';
@@ -94,12 +100,71 @@ class _RecordingAdapter implements UniversityServiceAdapter {
   }
 }
 
+const HsaKiCredential _hsaKiCredential = HsaKiCredential(
+  token: 'tok-1',
+  tokenId: '7',
+  username: 'student@hs-anhalt.de',
+);
+
+class _MemoryHsaKiCredentialStore implements HsaKiCredentialStore {
+  HsaKiCredential? value;
+
+  @override
+  Future<HsaKiCredential?> read() async => value;
+
+  @override
+  Future<void> write(HsaKiCredential credential) async => value = credential;
+
+  @override
+  Future<void> clear() async => value = null;
+}
+
+/// HAWKI as seen by the real HSA-GPT controller: it either rejects every
+/// login or mints [_hsaKiCredential].
+class _HsaKiGateway implements HsaKiGateway {
+  _HsaKiGateway({this.rejectLogin = false});
+
+  final bool rejectLogin;
+  int connectCalls = 0;
+
+  @override
+  Future<HsaKiCredential> connect({
+    required String username,
+    required String password,
+  }) async {
+    connectCalls++;
+    if (rejectLogin) {
+      throw const HsaKiFailure(HsaKiFailureKind.invalidCredentials);
+    }
+    return _hsaKiCredential;
+  }
+
+  @override
+  Future<void> revoke(
+    HsaKiCredential credential, {
+    required String password,
+  }) async {}
+
+  @override
+  Future<List<HsaKiModel>> listModels(HsaKiCredential credential) async =>
+      const <HsaKiModel>[];
+
+  @override
+  Future<String> sendMessage(
+    HsaKiCredential credential, {
+    required String modelId,
+    required List<HsaKiMessage> messages,
+  }) async => '';
+}
+
 ProviderContainer _container(
   _MemoryIdentityStore store,
   Map<DirectService, _RecordingAdapter> adapters, {
   UniversityServiceConnectionSnapshot? snapshot,
+  List<Override> extraOverrides = const <Override>[],
 }) => ProviderContainer(
   overrides: <Override>[
+    ...extraOverrides,
     universityIdentityStoreProvider.overrideWithValue(store),
     if (snapshot != null)
       universityServiceConnectionSnapshotProvider.overrideWithValue(snapshot),
@@ -343,6 +408,179 @@ void main() {
     },
   );
 
+  group('password-only change (C-09)', () {
+    const UniversityIdentity newPassword = UniversityIdentity(
+      identifier: 'student@hs-anhalt.de',
+      password: 'changed-secret',
+    );
+
+    Map<DirectService, _RecordingAdapter> allAdapters() =>
+        <DirectService, _RecordingAdapter>{
+          for (final DirectService service in DirectService.values)
+            service: _RecordingAdapter(),
+        };
+
+    test(
+      'keeps every linked service and reconnects it without a wipe',
+      () async {
+        final _MemoryIdentityStore store = _MemoryIdentityStore()
+          ..value = _identity;
+        final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+        final ProviderContainer container = _container(
+          store,
+          adapters,
+          snapshot: const UniversityServiceConnectionSnapshot(
+            connected: <DirectService>{
+              DirectService.mail,
+              DirectService.moodle,
+            },
+            mailDisplayName: 'Max Mustermensch',
+          ),
+        );
+        addTearDown(container.dispose);
+
+        final UniversityServiceConnectionResult result = await container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword);
+
+        for (final _RecordingAdapter adapter in adapters.values) {
+          expect(adapter.disconnects, 0);
+        }
+        expect(store.value, newPassword);
+        expect(result.failedReconnections, isEmpty);
+        expect(result.reconnectedServices, <DirectService>{
+          DirectService.mail,
+          DirectService.moodle,
+        });
+        expect(adapters[DirectService.grades]!.connectedWith, newPassword);
+        expect(adapters[DirectService.mail]!.connectedWith, newPassword);
+        expect(
+          adapters[DirectService.mail]!.connectedWithDisplayName,
+          'Max Mustermensch',
+        );
+        expect(adapters[DirectService.moodle]!.connectedWith, newPassword);
+      },
+    );
+
+    test('compares the identifier case-insensitively', () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            const UniversityIdentity(
+              identifier: ' Student@HS-Anhalt.de ',
+              password: 'changed-secret',
+            ),
+          );
+
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    });
+
+    test('a username instead of the mail address still counts as an account '
+        'change', () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            const UniversityIdentity(
+              identifier: 'student',
+              password: 'changed-secret',
+            ),
+          );
+
+      expect(adapters[DirectService.mail]!.disconnects, 1);
+      expect(adapters[DirectService.moodle]!.disconnects, 1);
+    });
+
+    test(
+      'a failed reconnect is reported per service and never wipes it',
+      () async {
+        final _MemoryIdentityStore store = _MemoryIdentityStore()
+          ..value = _identity;
+        final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+        adapters[DirectService.moodle]!.connectError = StateError('offline');
+        final ProviderContainer container = _container(
+          store,
+          adapters,
+          snapshot: const UniversityServiceConnectionSnapshot(
+            connected: <DirectService>{
+              DirectService.mail,
+              DirectService.moodle,
+            },
+          ),
+        );
+        addTearDown(container.dispose);
+
+        final UniversityServiceConnectionResult result = await container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword);
+
+        expect(store.value, newPassword);
+        expect(result.reconnectedServices, <DirectService>{DirectService.mail});
+        expect(result.failedReconnections, <DirectService>{
+          DirectService.moodle,
+        });
+        expect(adapters[DirectService.moodle]!.disconnects, 0);
+      },
+    );
+
+    test('a failed central write restores the previous identity without '
+        'touching any service', () async {
+      final StateError retentionError = StateError('transient');
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity
+        ..nextWriteError = retentionError;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword),
+        throwsA(same(retentionError)),
+      );
+
+      expect(store.value, _identity);
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+      expect(adapters[DirectService.mail]!.connections, isEmpty);
+    });
+  });
+
   test(
     'rejected replacement credentials leave the old identity and services untouched',
     () async {
@@ -554,6 +792,178 @@ void main() {
       },
     );
   }
+
+  test('a password HAWKI rejects is never retained through the real HSA-GPT '
+      'controller', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore();
+    final _HsaKiGateway gateway = _HsaKiGateway(rejectLogin: true);
+    final _MemoryHsaKiCredentialStore hsaKiStore =
+        _MemoryHsaKiCredentialStore();
+    final ProviderContainer container = _container(
+      store,
+      const <DirectService, _RecordingAdapter>{},
+      extraOverrides: <Override>[
+        hsaKiGatewayProvider.overrideWithValue(gateway),
+        hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container
+          .read(hsaKiConsentGateProvider)
+          .runWithConsent(
+            () => container
+                .read(universityServiceConnectorProvider)
+                .connectAndRetain(DirectService.hsaKi, _identity),
+          ),
+      throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+    );
+
+    expect(gateway.connectCalls, 1);
+    expect(store.value, isNull);
+    expect(store.writes, 0);
+    expect(hsaKiStore.value, isNull);
+  });
+
+  test(
+    'an already connected HSA-GPT never vouches for an unchecked replacement '
+    'identity',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters =
+          <DirectService, _RecordingAdapter>{
+            DirectService.mail: _RecordingAdapter(),
+            DirectService.moodle: _RecordingAdapter(),
+            DirectService.grades: _RecordingAdapter(),
+            DirectService.nextcloud: _RecordingAdapter(),
+          };
+      final _HsaKiGateway gateway = _HsaKiGateway(rejectLogin: true);
+      final _MemoryHsaKiCredentialStore hsaKiStore =
+          _MemoryHsaKiCredentialStore()..value = _hsaKiCredential;
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{
+            DirectService.mail,
+            DirectService.grades,
+            DirectService.hsaKi,
+          },
+        ),
+        extraOverrides: <Override>[
+          hsaKiGatewayProvider.overrideWithValue(gateway),
+          hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(hsaKiConsentGateProvider)
+            .runWithConsent(
+              () => container
+                  .read(universityServiceConnectorProvider)
+                  .replaceIdentityAndReconnect(
+                    DirectService.hsaKi,
+                    _replacementIdentity,
+                  ),
+            ),
+        throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+      );
+
+      expect(gateway.connectCalls, 1);
+      expect(store.value, _identity);
+      expect(store.writes, 0);
+      expect(hsaKiStore.value, same(_hsaKiCredential));
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    },
+  );
+
+  test(
+    'HSA-GPT never mints a token without its dedicated consent, even through '
+    'the generic connector',
+    () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore();
+      final _HsaKiGateway gateway = _HsaKiGateway();
+      final _MemoryHsaKiCredentialStore hsaKiStore =
+          _MemoryHsaKiCredentialStore();
+      final ProviderContainer container = _container(
+        store,
+        const <DirectService, _RecordingAdapter>{},
+        extraOverrides: <Override>[
+          hsaKiGatewayProvider.overrideWithValue(gateway),
+          hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+        ],
+      );
+      addTearDown(container.dispose);
+      final UniversityServiceConnector connector = container.read(
+        universityServiceConnectorProvider,
+      );
+
+      await expectLater(
+        connector.connectAndRetain(DirectService.hsaKi, _identity),
+        throwsA(const HsaKiFailure(HsaKiFailureKind.consentRequired)),
+      );
+      expect(gateway.connectCalls, 0);
+      expect(store.writes, 0);
+      expect(hsaKiStore.value, isNull);
+
+      await container
+          .read(hsaKiConsentGateProvider)
+          .runWithConsent(
+            () => connector.connectAndRetain(DirectService.hsaKi, _identity),
+          );
+      expect(gateway.connectCalls, 1);
+      expect(store.value, _identity);
+      expect(hsaKiStore.value, same(_hsaKiCredential));
+      expect(container.read(hsaKiConsentGateProvider).isGranted, isFalse);
+    },
+  );
+
+  test('an account update re-establishes an already consented HSA-GPT link '
+      'without a new consent prompt', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _RecordingAdapter> adapters =
+        <DirectService, _RecordingAdapter>{
+          DirectService.mail: _RecordingAdapter(),
+          DirectService.moodle: _RecordingAdapter(),
+          DirectService.grades: _RecordingAdapter(),
+          DirectService.nextcloud: _RecordingAdapter(),
+        };
+    final _HsaKiGateway gateway = _HsaKiGateway();
+    final _MemoryHsaKiCredentialStore hsaKiStore = _MemoryHsaKiCredentialStore()
+      ..value = _hsaKiCredential;
+    final ProviderContainer container = _container(
+      store,
+      adapters,
+      snapshot: const UniversityServiceConnectionSnapshot(
+        connected: <DirectService>{DirectService.hsaKi},
+      ),
+      extraOverrides: <Override>[
+        hsaKiGatewayProvider.overrideWithValue(gateway),
+        hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final UniversityServiceConnectionResult result = await container
+        .read(universityServiceConnectorProvider)
+        .replaceIdentityAndReconnect(
+          DirectService.grades,
+          _replacementIdentity,
+        );
+
+    expect(result.failedReconnections, isEmpty);
+    expect(result.reconnectedServices, <DirectService>{DirectService.hsaKi});
+    expect(gateway.connectCalls, 1);
+    expect(hsaKiStore.value, isNotNull);
+    expect(container.read(hsaKiConsentGateProvider).isGranted, isFalse);
+  });
 
   test('failed validation never stores the central password', () async {
     final _MemoryIdentityStore store = _MemoryIdentityStore();

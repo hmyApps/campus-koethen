@@ -236,6 +236,7 @@ class MailInboxScreen extends ConsumerWidget {
                     liveConnection: folder.isInbox
                         ? live.connection
                         : MailLiveConnection.stopped,
+                    liveError: live.error,
                     onRetry: () => ref
                         .read(mailInboxControllerProvider.notifier)
                         .refresh(),
@@ -335,6 +336,7 @@ class _InboxStatusHeader extends StatelessWidget {
     required this.lastSyncedAt,
     required this.liveConnection,
     required this.onRetry,
+    this.liveError,
   });
 
   final bool showError;
@@ -342,6 +344,7 @@ class _InboxStatusHeader extends StatelessWidget {
   final bool cacheDegraded;
   final DateTime? lastSyncedAt;
   final MailLiveConnection liveConnection;
+  final Object? liveError;
   final VoidCallback onRetry;
 
   @override
@@ -402,6 +405,9 @@ class _InboxStatusHeader extends StatelessWidget {
                 MailLiveConnection.idle => l10n.mailLiveConnected,
                 MailLiveConnection.polling => l10n.mailLivePolling,
                 MailLiveConnection.retrying => l10n.mailLiveRetrying,
+                MailLiveConnection.authRequired => l10n.mailLiveAuthRequired(
+                  mailFailureMessage(l10n, liveError),
+                ),
               }, style: context.type.dataSmall),
             ),
         ],

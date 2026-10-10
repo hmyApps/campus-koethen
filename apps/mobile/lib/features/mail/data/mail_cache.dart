@@ -54,10 +54,19 @@ class MemoryMailCache implements MailCacheStore {
       <String, MailMessageDetail>{};
   final Map<String, MailAddressEntry> _addresses = <String, MailAddressEntry>{};
   final Map<String, DateTime> _storedAt = <String, DateTime>{};
+  int? _uidValidity;
 
   @override
   Future<List<MailMessageHeader>> readHeaders() async =>
       List<MailMessageHeader>.of(_headers);
+
+  @override
+  Future<int?> readUidValidity() async => _uidValidity;
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) async {
+    _uidValidity = uidValidity;
+  }
 
   @override
   Future<void> saveHeaders(List<MailMessageHeader> headers) async {
@@ -73,6 +82,9 @@ class MemoryMailCache implements MailCacheStore {
     if (message != null) _messages[id] = message;
     return message;
   }
+
+  @override
+  bool retainsBody(DateTime? date) => policy.retainsBodyDated(date, _now());
 
   @override
   Future<void> saveMessage(MailMessageDetail message) async {
@@ -102,6 +114,7 @@ class MemoryMailCache implements MailCacheStore {
         .where((MailMessageHeader header) => header.id != id)
         .toList(growable: false);
     _messages.remove(id);
+    _storedAt.remove(id);
     _addresses.clear();
     for (final MailMessageDetail message in _messages.values) {
       for (final MailAddress address in addressesOf(message)) {
@@ -168,14 +181,14 @@ class MemoryMailCache implements MailCacheStore {
   @override
   Future<void> prune() async {
     if (_messages.isEmpty) return;
-    final DateTime cutoff = _now().toUtc().subtract(policy.bodyRetention);
+    final DateTime now = _now();
     final List<String> ids = _messages.keys.toList(growable: true);
     final String newestId = ids.last;
     for (final String id in ids.toList()) {
       final MailMessageDetail? message = _messages[id];
       final DateTime effective =
-          message?.date?.toUtc() ?? _storedAt[id] ?? _now().toUtc();
-      if (id != newestId && effective.isBefore(cutoff)) {
+          message?.date?.toUtc() ?? _storedAt[id] ?? now.toUtc();
+      if (id != newestId && !policy.retainsBodyDated(effective, now)) {
         _messages.remove(id);
         _storedAt.remove(id);
         ids.remove(id);
@@ -199,6 +212,7 @@ class MemoryMailCache implements MailCacheStore {
     _messages.clear();
     _addresses.clear();
     _storedAt.clear();
+    _uidValidity = null;
   }
 }
 
@@ -209,16 +223,35 @@ List<MailMessageHeader> _retainedHeaders(
 ) {
   if (headers.isEmpty) return <MailMessageHeader>[];
   final DateTime cutoff = now.toUtc().subtract(policy.headerRetention);
-  final List<MailMessageHeader> retained = <MailMessageHeader>[
-    headers.first,
-    ...headers
-        .skip(1)
-        .where(
-          (MailMessageHeader header) =>
-              header.date == null || !header.date!.toUtc().isBefore(cutoff),
-        ),
-  ];
-  return retained.take(policy.maxHeaders).toList(growable: false);
+  // IMAP UIDs ascend with arrival, so the highest ones are the server window
+  // the last sync fetched — whatever their Date header says.
+  final List<(int, String)> byUid = <(int, String)>[
+    for (final MailMessageHeader header in headers)
+      if (int.tryParse(header.id) case final int uid) (uid, header.id),
+  ]..sort(((int, String) a, (int, String) b) => b.$1.compareTo(a.$1));
+  final int windowSize = policy.windowHeaders.clamp(0, policy.maxHeaders);
+  final Set<String> window = <String>{
+    for (final (int, String) entry in byUid.take(windowSize)) entry.$2,
+  };
+  final int otherBudget = policy.maxHeaders - window.length;
+  int others = 0;
+  final List<MailMessageHeader> retained = <MailMessageHeader>[];
+  for (int index = 0; index < headers.length; index++) {
+    final MailMessageHeader header = headers[index];
+    if (window.contains(header.id)) {
+      retained.add(header);
+      continue;
+    }
+    final bool fresh =
+        index == 0 ||
+        header.date == null ||
+        !header.date!.toUtc().isBefore(cutoff);
+    if (fresh && others < otherBudget) {
+      retained.add(header);
+      others++;
+    }
+  }
+  return List<MailMessageHeader>.of(retained, growable: false);
 }
 
 /// Mail cache serialization on top of the app's only at-rest crypto primitive.
@@ -233,6 +266,7 @@ class EncryptedMailCache implements MailCacheStore {
   static const String _addressesKey = 'addresses';
   static const String _metadataKey = 'metadata.v1';
   static const String _searchKey = 'search.v1';
+  static const String _uidValidityKey = 'uidvalidity.v1';
   static const String _messagePrefix = 'msg.';
 
   final EncryptedBox _box;
@@ -269,6 +303,16 @@ class EncryptedMailCache implements MailCacheStore {
   );
 
   @override
+  Future<int?> readUidValidity() async {
+    final Object? decoded = _decode(await _box.read(_uidValidityKey));
+    return decoded is int && decoded > 0 ? decoded : null;
+  }
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) =>
+      _box.write(_uidValidityKey, jsonEncode(uidValidity));
+
+  @override
   Future<Set<String>> cachedMessageIds() async => (await _box.keys())
       .where((String key) => key.startsWith(_messagePrefix))
       .map((String key) => key.substring(_messagePrefix.length))
@@ -296,6 +340,9 @@ class EncryptedMailCache implements MailCacheStore {
 
   Future<Object?> _decodedMessage(String id) async =>
       _decode(await _box.read('$_messagePrefix$id'));
+
+  @override
+  bool retainsBody(DateTime? date) => policy.retainsBodyDated(date, _now());
 
   @override
   Future<void> saveMessage(MailMessageDetail message) =>
@@ -363,6 +410,13 @@ class EncryptedMailCache implements MailCacheStore {
           .toList(growable: false),
     );
     await _box.delete('$_messagePrefix$id');
+
+    // The compact search document holds the message's normalised text; it has
+    // to go with the body, or a deleted mail stays findable (and counted).
+    final _MailCacheIndexes indexes = await _loadIndexes();
+    final bool hadMetadata = indexes.metadata.remove(id) != null;
+    final bool hadSearchDocument = indexes.search.remove(id) != null;
+    if (hadMetadata || hadSearchDocument) await _writeIndexes(indexes);
 
     final Map<String, MailAddressEntry> index = <String, MailAddressEntry>{};
     for (final String remainingId in await cachedMessageIds()) {
@@ -486,7 +540,6 @@ class EncryptedMailCache implements MailCacheStore {
   Future<void> prune() async {
     final _MailCacheIndexes indexes = await _loadIndexes();
     final DateTime now = _now().toUtc();
-    final DateTime cutoff = now.subtract(policy.bodyRetention);
     final List<_MailBodyRecord> records = <_MailBodyRecord>[];
     for (final MapEntry<String, Map<String, dynamic>> entry
         in indexes.metadata.entries) {
@@ -514,7 +567,9 @@ class EncryptedMailCache implements MailCacheStore {
     );
     final Set<String> remove = <String>{
       for (final _MailBodyRecord record in records)
-        if (record.id != newest.id && record.date.isBefore(cutoff)) record.id,
+        if (record.id != newest.id &&
+            !policy.retainsBodyDated(record.date, now))
+          record.id,
     };
     final List<_MailBodyRecord> live = records
         .where((_MailBodyRecord record) => !remove.contains(record.id))
@@ -552,7 +607,16 @@ class EncryptedMailCache implements MailCacheStore {
     );
     bool changed = false;
     final DateTime now = _now().toUtc();
-    for (final String id in await cachedMessageIds()) {
+    final Set<String> bodyIds = await cachedMessageIds();
+    // An index entry without its body (an interrupted removal, or one written
+    // by an older build) would keep a deleted mail searchable and counted.
+    for (final Map<String, Map<String, dynamic>> index
+        in <Map<String, Map<String, dynamic>>>[metadata, search]) {
+      final int before = index.length;
+      index.removeWhere((String id, _) => !bodyIds.contains(id));
+      if (index.length != before) changed = true;
+    }
+    for (final String id in bodyIds) {
       if (metadata.containsKey(id) && search.containsKey(id)) continue;
       final String? raw = await _box.read('$_messagePrefix$id');
       final Object? decoded = _decode(raw);
@@ -778,6 +842,14 @@ class MailCacheManager implements MailCacheStore {
       : _failSoft(() => _delegate.readHeaders(), <MailMessageHeader>[]);
 
   @override
+  Future<int?> readUidValidity() async =>
+      _locked ? null : _failSoft<int?>(() => _delegate.readUidValidity(), null);
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) =>
+      _write(() => _delegate.saveUidValidity(uidValidity));
+
+  @override
   Future<Set<String>> cachedMessageIds() async => _locked
       ? <String>{}
       : _failSoft(() => _delegate.cachedMessageIds(), <String>{});
@@ -804,6 +876,9 @@ class MailCacheManager implements MailCacheStore {
           () => _delegate.stats(),
           const MailCacheStats(headerCount: 0, bodyCount: 0, byteCount: 0),
         );
+
+  @override
+  bool retainsBody(DateTime? date) => _delegate.retainsBody(date);
 
   @override
   Future<void> saveHeaders(List<MailMessageHeader> headers) =>

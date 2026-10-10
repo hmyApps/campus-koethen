@@ -2,10 +2,12 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:enough_mail/enough_mail.dart';
+import 'package:meta/meta.dart';
 
 import '../domain/hsa_mail_profile.dart';
 import '../domain/mail_credentials.dart' as domain;
@@ -29,6 +31,13 @@ import 'mail_mime_builder.dart';
 ///    exception is the explicitly cancellable foreground [watchInbox] stream.
 ///  - Raw exceptions are converted to a [MailFailure] classification; server
 ///    responses and credentials never escape this class.
+/// The slowest throughput a transfer is given time for: 64 KiB/s (about
+/// 0.5 Mbit/s, a weak mobile link). Transfers that carry a message body —
+/// fetching it, submitting it, storing the Sent copy — get the normal command
+/// timeout plus the time this rate needs for their size, instead of one fixed
+/// limit that a large attachment can never meet.
+const int kMailMinTransferBytesPerSecond = 64 * 1024;
+
 class EnoughMailGateway implements MailGateway {
   factory EnoughMailGateway(
     HsaMailProfile profile, {
@@ -36,12 +45,16 @@ class EnoughMailGateway implements MailGateway {
     Duration commandTimeout = const Duration(seconds: 20),
     Duration cleanupTimeout = const Duration(seconds: 2),
     Duration verificationTimeout = const Duration(seconds: 25),
+    int minTransferBytesPerSecond = kMailMinTransferBytesPerSecond,
+    @visibleForTesting SmtpClient Function()? smtpClientFactory,
   }) => EnoughMailGateway._(
     profile,
     connectionTimeout,
     commandTimeout,
     cleanupTimeout,
     verificationTimeout,
+    minTransferBytesPerSecond,
+    smtpClientFactory,
   );
 
   EnoughMailGateway._(
@@ -50,6 +63,8 @@ class EnoughMailGateway implements MailGateway {
     this._commandTimeout,
     this._cleanupTimeout,
     this._verificationTimeout,
+    this._minTransferBytesPerSecond,
+    this._smtpClientFactory,
   );
 
   final HsaMailProfile _profile;
@@ -57,6 +72,8 @@ class EnoughMailGateway implements MailGateway {
   final Duration _commandTimeout;
   final Duration _cleanupTimeout;
   final Duration _verificationTimeout;
+  final int _minTransferBytesPerSecond;
+  final SmtpClient Function()? _smtpClientFactory;
 
   // --- IMAP -----------------------------------------------------------------
 
@@ -99,7 +116,7 @@ class EnoughMailGateway implements MailGateway {
       // A timed-out command must not be followed by another protocol command:
       // close the socket directly so the abandoned Future cannot keep the
       // login alive in the background. Normal logout stays best effort only.
-      if (!timedOut) {
+      if (!timedOut && _abandoned[client] != true) {
         try {
           await client.logout().timeout(_cleanupTimeout);
         } catch (_) {}
@@ -110,6 +127,11 @@ class EnoughMailGateway implements MailGateway {
     }
   }
 
+  /// IMAP connections a request gave up on after a timed-out command while
+  /// still returning a partial result: they are closed without LOGOUT, like a
+  /// timed-out request.
+  final Expando<bool> _abandoned = Expando<bool>('abandoned IMAP connection');
+
   // --- SMTP -----------------------------------------------------------------
 
   Future<T> _withSmtp<T>(
@@ -117,7 +139,9 @@ class EnoughMailGateway implements MailGateway {
     Future<T> Function(SmtpClient client) body, {
     Duration? operationTimeout,
   }) async {
-    final SmtpClient client = SmtpClient(_hostnameForEhlo, isLogEnabled: false);
+    final SmtpClient client =
+        _smtpClientFactory?.call() ??
+        SmtpClient(_hostnameForEhlo, isLogEnabled: false);
     bool timedOut = false;
     try {
       final Future<T> operation = () async {
@@ -167,11 +191,21 @@ class EnoughMailGateway implements MailGateway {
   static const String _hostnameForEhlo = 'campus-koethen.localhost';
 
   /// Selects [mailboxPath], taking the cheap INBOX shortcut when possible.
-  Future<void> _select(ImapClient client, String mailboxPath) async {
-    if (mailboxPath == kInboxPath) {
-      await client.selectInbox();
-    } else {
-      await client.selectMailboxByPath(mailboxPath);
+  ///
+  /// With [expectedUidValidity], fails closed when the mailbox reports another
+  /// UIDVALIDITY: the caller's UID may then name a different message, so no
+  /// command addressing it may follow.
+  Future<void> _select(
+    ImapClient client,
+    String mailboxPath, {
+    int? expectedUidValidity,
+  }) async {
+    final Mailbox selected = mailboxPath == kInboxPath
+        ? await client.selectInbox()
+        : await client.selectMailboxByPath(mailboxPath);
+    if (expectedUidValidity != null &&
+        selected.uidValidity != expectedUidValidity) {
+      throw const MailFailure(MailFailureKind.mailboxChanged);
     }
   }
 
@@ -244,34 +278,43 @@ class EnoughMailGateway implements MailGateway {
   }
 
   @override
-  Future<List<model.MailMessageHeader>> fetchHeaders(
+  Future<MailHeaderPage> fetchHeaders(
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     int limit = 50,
     String? beforeId,
   }) async {
     return _guard(() async {
-      return _withImap<List<model.MailMessageHeader>>(credentials, (
-        ImapClient client,
-      ) async {
+      return _withImap<MailHeaderPage>(credentials, (ImapClient client) async {
         final Mailbox inbox = mailboxPath == kInboxPath
             ? await client.selectInbox()
             : await client.selectMailboxByPath(mailboxPath);
-        if (inbox.messagesExists == 0) return <model.MailMessageHeader>[];
+        // EXISTS and UIDVALIDITY come from this very SELECT, so the caller can
+        // tell a complete mailbox from a window and a reused UID from the
+        // message it cached under that UID.
+        MailHeaderPage pageOf(List<model.MailMessageHeader> headers) =>
+            MailHeaderPage(
+              headers: headers,
+              messagesExists: inbox.messagesExists,
+              uidValidity: inbox.uidValidity,
+            );
+        if (inbox.messagesExists == 0) {
+          return pageOf(<model.MailMessageHeader>[]);
+        }
 
         if (beforeId != null) {
           final int? beforeUid = int.tryParse(beforeId);
           if (beforeUid == null) {
             throw const MailFailure(MailFailureKind.protocol);
           }
-          if (beforeUid <= 1) return <model.MailMessageHeader>[];
+          if (beforeUid <= 1) return pageOf(<model.MailMessageHeader>[]);
           final SearchImapResult search = await client.uidSearchMessages(
             searchCriteria: 'UID 1:${beforeUid - 1}',
             responseTimeout: _commandTimeout,
           );
           final MessageSequence? matches = search.matchingSequence;
           if (matches == null || matches.isEmpty) {
-            return <model.MailMessageHeader>[];
+            return pageOf(<model.MailMessageHeader>[]);
           }
           final List<int> uids = matches.toList()..sort();
           final List<int> page = uids.reversed.take(limit).toList();
@@ -280,7 +323,9 @@ class EnoughMailGateway implements MailGateway {
             '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
             responseTimeout: _commandTimeout,
           );
-          return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+          return pageOf(
+            result.messages.map(_toHeader).toList()..sort(_newestFirst),
+          );
         }
 
         final int upper = inbox.messagesExists;
@@ -292,7 +337,9 @@ class EnoughMailGateway implements MailGateway {
           '(UID FLAGS ENVELOPE BODYSTRUCTURE)',
           responseTimeout: _commandTimeout,
         );
-        return result.messages.map(_toHeader).toList()..sort(_newestFirst);
+        return pageOf(
+          result.messages.map(_toHeader).toList()..sort(_newestFirst),
+        );
       });
     });
   }
@@ -347,15 +394,21 @@ class EnoughMailGateway implements MailGateway {
       ) async {
         await _select(client, mailboxPath);
         final int uid = int.parse(id);
-        final FetchImapResult result = await client.uidFetchMessages(
-          MessageSequence.fromRange(uid, uid, isUidSequence: true),
-          '(UID FLAGS ENVELOPE BODY.PEEK[])',
-          responseTimeout: _commandTimeout,
-        );
-        if (result.messages.isEmpty) {
+        final MimeMessage? structure = (await _fetchStructures(client, <int>[
+          uid,
+        ]))[uid];
+        if (structure == null) {
           throw const MailFailure(MailFailureKind.protocol);
         }
-        return _toDetail(result.messages.first, includeAttachmentBytes);
+        final MimeMessage? message = await _fetchContent(
+          client,
+          structure,
+          includeAttachmentBytes: includeAttachmentBytes,
+        );
+        if (message == null) {
+          throw const MailFailure(MailFailureKind.protocol);
+        }
+        return _toDetail(message, includeAttachmentBytes);
       });
     });
   }
@@ -376,26 +429,170 @@ class EnoughMailGateway implements MailGateway {
         final List<int> uids = ids
             .map(int.tryParse)
             .whereType<int>()
+            .where((int uid) => uid > 0)
             .toList(growable: false);
-        final List<model.MailMessageDetail> details =
-            <model.MailMessageDetail>[];
-        // One session, one fetch per id: enough_mail returns whole messages per
-        // UID; a tighter batch API is not worth the risk of partial parsing.
-        for (final int uid in uids) {
-          final FetchImapResult result = await client.uidFetchMessages(
-            MessageSequence.fromRange(uid, uid, isUidSequence: true),
-            '(UID FLAGS ENVELOPE BODY.PEEK[])',
-            responseTimeout: _commandTimeout,
+        if (uids.isEmpty) return const <model.MailMessageDetail>[];
+        final Map<int, MimeMessage> structures = await _fetchStructures(
+          client,
+          uids,
+        );
+        // Smallest first: one huge message can no longer keep every other
+        // message of the batch from being prefetched.
+        final List<int> bySize = uids.where(structures.containsKey).toList()
+          ..sort(
+            (int a, int b) =>
+                (structures[a]!.size ?? 0).compareTo(structures[b]!.size ?? 0),
           );
-          if (result.messages.isNotEmpty) {
-            details.add(
-              _toDetail(result.messages.first, includeAttachmentBytes),
+        final Map<int, model.MailMessageDetail> details =
+            <int, model.MailMessageDetail>{};
+        for (final int uid in bySize) {
+          try {
+            final MimeMessage? message = await _fetchContent(
+              client,
+              structures[uid]!,
+              includeAttachmentBytes: includeAttachmentBytes,
             );
+            if (message != null) {
+              details[uid] = _toDetail(message, includeAttachmentBytes);
+            }
+          } catch (error) {
+            // A refused or unparseable message only costs itself: it is
+            // skipped and loads on demand when opened.
+            if (!_isConnectionFailure(error)) continue;
+            // The connection is unusable now. Without any result this is the
+            // batch's failure; otherwise keep what arrived and close the socket
+            // without another protocol command.
+            if (details.isEmpty) rethrow;
+            _abandoned[client] = true;
+            break;
           }
         }
-        return details;
+        return <model.MailMessageDetail>[
+          for (final int uid in uids)
+            if (details[uid] != null) details[uid]!,
+        ];
       });
     });
+  }
+
+  /// Size (`RFC822.SIZE`) and MIME structure of [uids] in one cheap round
+  /// trip, keyed by UID. Nothing of the content is downloaded.
+  Future<Map<int, MimeMessage>> _fetchStructures(
+    ImapClient client,
+    List<int> uids,
+  ) async {
+    final FetchImapResult result = await client.uidFetchMessages(
+      MessageSequence.fromIds(uids, isUid: true),
+      '(UID RFC822.SIZE BODYSTRUCTURE)',
+      responseTimeout: _commandTimeout,
+    );
+    return <int, MimeMessage>{
+      for (final MimeMessage message in result.messages)
+        if (message.uid != null) message.uid!: message,
+    };
+  }
+
+  /// Downloads the content of one message described by [structure].
+  ///
+  /// Without [includeAttachmentBytes] only the text parts and the images (for
+  /// the inline preview) of a multipart message are fetched — attachment files
+  /// stay on the server until a tap asks for them. The time limit follows the
+  /// size of what is actually transferred.
+  Future<MimeMessage?> _fetchContent(
+    ImapClient client,
+    MimeMessage structure, {
+    required bool includeAttachmentBytes,
+  }) async {
+    final int uid = structure.uid!;
+    final MessageSequence sequence = MessageSequence.fromRange(
+      uid,
+      uid,
+      isUidSequence: true,
+    );
+    final BodyPart? body = structure.body;
+    final List<BodyPart>? parts = (includeAttachmentBytes || body == null)
+        ? null
+        : _partsWithoutFiles(body);
+    if (parts == null) {
+      final FetchImapResult result = await client
+          .uidFetchMessages(sequence, '(UID FLAGS ENVELOPE BODY.PEEK[])')
+          .timeout(_transferTimeout(structure.size ?? 0));
+      return result.messages.firstOrNull;
+    }
+
+    final int bytes = parts.fold<int>(
+      _headerAllowanceBytes,
+      (int total, BodyPart part) => total + (part.size ?? 0),
+    );
+    final String criteria =
+        '(UID FLAGS BODY.PEEK[HEADER] '
+        '${parts.map((BodyPart part) => 'BODY.PEEK[${part.fetchId}]').join(' ')})';
+    final FetchImapResult result = await client
+        .uidFetchMessages(sequence, criteria)
+        .timeout(_transferTimeout(bytes));
+    final MimeMessage? fetched = result.messages.firstOrNull;
+    if (fetched == null) return null;
+    // The structure goes in first: copying the parts afterwards gives each one
+    // its MIME type and transfer encoding from it.
+    return MimeMessage()
+      ..uid = uid
+      ..flags = fetched.flags
+      ..body = body
+      ..headers = fetched.headers
+      ..copyIndividualParts(fetched);
+  }
+
+  /// Room for the message header on top of the fetched part sizes.
+  static const int _headerAllowanceBytes = 64 * 1024;
+
+  /// The parts to download while attachment files stay on the server: every
+  /// text part that is not an attachment (the body and its alternatives) and
+  /// every image. Null when nothing would be left out, or for structures the
+  /// partial path leaves alone (a single part, an embedded message) — those
+  /// are fetched whole, as before.
+  static List<BodyPart>? _partsWithoutFiles(BodyPart body) {
+    if (!(body.contentType?.mediaType.isMultipart ?? false)) return null;
+    final List<BodyPart> leaves = <BodyPart>[];
+    if (!_collectLeafParts(body, leaves)) return null;
+    final List<BodyPart> wanted = leaves.where((BodyPart part) {
+      final MediaType? media = part.contentType?.mediaType;
+      if (media == null || media.isImage) return true;
+      return media.isText &&
+          part.contentDisposition?.disposition != ContentDisposition.attachment;
+    }).toList();
+    if (wanted.length == leaves.length ||
+        wanted.any((BodyPart part) => part.fetchId == null)) {
+      return null;
+    }
+    return wanted;
+  }
+
+  /// Collects the leaves below multipart containers. False when the tree
+  /// holds an embedded message, whose part numbering the partial path does
+  /// not handle.
+  static bool _collectLeafParts(BodyPart part, List<BodyPart> leaves) {
+    final MediaType? media = part.contentType?.mediaType;
+    if (media?.isMessage ?? false) return false;
+    if (media?.isMultipart ?? false) {
+      for (final BodyPart child in part.parts ?? const <BodyPart>[]) {
+        if (!_collectLeafParts(child, leaves)) return false;
+      }
+      return true;
+    }
+    leaves.add(part);
+    return true;
+  }
+
+  /// Whether [error] leaves the IMAP connection unusable for further
+  /// commands (as opposed to one message being refused or unparseable).
+  static bool _isConnectionFailure(Object error) {
+    if (error is TimeoutException ||
+        error is SocketException ||
+        error is TlsException) {
+      return true;
+    }
+    return error is ImapException &&
+        (error.message ?? '').toLowerCase().contains('timeout');
   }
 
   @override
@@ -403,10 +600,15 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final int uid = int.parse(id);
         await client.uidMarkSeen(
           MessageSequence.fromRange(uid, uid, isUidSequence: true),
@@ -420,6 +622,7 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
@@ -438,7 +641,11 @@ class EnoughMailGateway implements MailGateway {
                   box.name == 'Papierkorb',
             )
             .firstOrNull;
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final MessageSequence sequence = MessageSequence.fromRange(
           uid,
           uid,
@@ -446,8 +653,12 @@ class EnoughMailGateway implements MailGateway {
         );
 
         if (trash != null && trash.encodedPath != mailboxPath) {
+          // enough_mail sets no response timeout for MOVE/COPY. On timeout
+          // [_withImap] closes the socket instead of sending LOGOUT.
           if (client.serverInfo.supportsMove) {
-            await client.uidMove(sequence, targetMailbox: trash);
+            await client
+                .uidMove(sequence, targetMailbox: trash)
+                .timeout(_commandTimeout);
             return;
           }
           if (!client.serverInfo.supportsUidPlus) {
@@ -456,7 +667,9 @@ class EnoughMailGateway implements MailGateway {
             // unavailable.
             throw const MailFailure(MailFailureKind.protocol);
           }
-          await client.uidCopy(sequence, targetMailbox: trash);
+          await client
+              .uidCopy(sequence, targetMailbox: trash)
+              .timeout(_commandTimeout);
           await client.uidMarkDeleted(sequence, silent: true);
           await client.uidExpunge(sequence);
           return;
@@ -636,13 +849,47 @@ class EnoughMailGateway implements MailGateway {
     model.OutgoingMessage message,
   ) async {
     final MimeMessage mime = buildOutgoingMime(credentials, message);
-    // SMTP send only. If this throws, nothing was sent. Storing a Sent copy is
-    // a separate call so the UI is not blocked on a second IMAP round trip.
-    await _guard(() async {
-      await _withSmtp(credentials, (SmtpClient client) async {
-        await client.sendMessage(mime);
+    // SMTP send only. Storing a Sent copy is a separate call so the UI is not
+    // blocked on a second IMAP round trip.
+    bool submitting = false;
+    try {
+      await _guard(() async {
+        await _withSmtp(credentials, (SmtpClient client) async {
+          submitting = true;
+          // Bounded by size: a stalled submission must not hold the compose
+          // screen forever. On timeout [_withSmtp] closes the socket without
+          // another protocol command.
+          await client
+              .sendMessage(mime)
+              .timeout(_transferTimeout(_estimatedWireBytes(message)));
+        });
       });
-    });
+    } on MailFailure catch (failure) {
+      if (submitting && failure.kind == MailFailureKind.timeout) {
+        // The message data may already be with the server. Never report this
+        // as "not sent", which invites a duplicate, and never retry here.
+        throw const MailFailure(MailFailureKind.sendOutcomeUnknown);
+      }
+      rethrow;
+    }
+  }
+
+  /// The command timeout plus the time [bytes] need at the minimum assumed
+  /// throughput ([kMailMinTransferBytesPerSecond] by default).
+  Duration _transferTimeout(int bytes) =>
+      _commandTimeout +
+      Duration(
+        milliseconds: (bytes * 1000 / _minTransferBytesPerSecond).ceil(),
+      );
+
+  /// An upper estimate of the message on the wire: base64 grows attachments by
+  /// a third, plus room for headers and MIME boundaries.
+  static int _estimatedWireBytes(model.OutgoingMessage message) {
+    int bytes = 64 * 1024 + utf8.encode(message.text).length;
+    for (final model.OutgoingAttachment attachment in message.attachments) {
+      bytes += (attachment.bytes.length * 4 / 3).ceil();
+    }
+    return bytes;
   }
 
   @override
@@ -684,11 +931,16 @@ class EnoughMailGateway implements MailGateway {
         // Never create a folder unprompted.
         return SentCopyResult.noSentFolder;
       }
-      await client.appendMessage(
-        mime,
-        targetMailbox: sent,
-        flags: <String>[MessageFlags.seen],
-      );
+      // Rendered once here (appendMessage would render it again) so the
+      // upload can be bounded by its size; enough_mail sets no limit itself.
+      final String text = mime.renderMessage();
+      await client
+          .appendMessageText(
+            text,
+            targetMailbox: sent,
+            flags: <String>[MessageFlags.seen],
+          )
+          .timeout(_transferTimeout(utf8.encode(text).length));
       return SentCopyResult.appended;
     });
   }
@@ -719,7 +971,7 @@ class EnoughMailGateway implements MailGateway {
       ),
       date: m.decodeDate(),
       isSeen: m.isSeen,
-      hasAttachments: m.hasAttachments(),
+      hasAttachments: _attachmentParts(m).isNotEmpty,
     );
   }
 
@@ -741,6 +993,12 @@ class EnoughMailGateway implements MailGateway {
         email: from?.email ?? '',
         name: from?.personalName,
       ),
+      replyTo: (m.replyTo ?? const <MailAddress>[])
+          .map(
+            (MailAddress a) =>
+                model.MailAddress(email: a.email, name: a.personalName),
+          )
+          .toList(),
       to: (m.to ?? const <MailAddress>[])
           .map(
             (MailAddress a) =>
@@ -764,11 +1022,11 @@ class EnoughMailGateway implements MailGateway {
   /// the inline preview) and — when [includeFiles] — other types too, so a
   /// downloaded attachment is available offline.
   List<model.MailAttachment> _attachmentsOf(MimeMessage m, bool includeFiles) {
-    final List<ContentInfo> infos = m.findContentInfo();
-    return infos.map((ContentInfo info) {
+    return _attachmentParts(m).map((_MimeLeaf leaf) {
+      final ContentInfo info = leaf.info;
       final String type = info.mediaType?.text ?? 'application/octet-stream';
       final Uint8List? bytes = (info.isImage || includeFiles)
-          ? m.getPart(info.fetchId)?.decodeContentBinary()
+          ? (leaf.isRoot ? m : m.getPart(info.fetchId))?.decodeContentBinary()
           : null;
       return model.MailAttachment(
         filename: info.fileName ?? info.fetchId,
@@ -777,6 +1035,114 @@ class EnoughMailGateway implements MailGateway {
         bytes: bytes,
       );
     }).toList();
+  }
+
+  /// Every part of [m] the app offers as an attachment, in message order.
+  ///
+  /// Not only `Content-Disposition: attachment`: mailers such as Apple Mail
+  /// send files `inline`, others omit the disposition altogether. Any such
+  /// non-text part counts, as does a text part with its own file name — except
+  /// the text the reader already shows as the message body. Works on a
+  /// downloaded message (`BODY[]`) and on a bare `BODYSTRUCTURE` alike.
+  List<_MimeLeaf> _attachmentParts(MimeMessage m) {
+    final BodyPart? structure = m.body;
+    final List<_MimeLeaf> leaves = <_MimeLeaf>[];
+    if (structure != null) {
+      _collectStructureLeaves(structure, leaves, isRoot: true);
+    } else {
+      _collectMimeLeaves(m, null, leaves);
+    }
+    final Set<String> bodyIds = <String>{};
+    for (final MediaSubtype subtype in <MediaSubtype>[
+      MediaSubtype.textPlain,
+      MediaSubtype.textHtml,
+    ]) {
+      final _MimeLeaf? first = leaves
+          .where(
+            (_MimeLeaf leaf) =>
+                !leaf.isExplicitAttachment &&
+                leaf.info.mediaType?.sub == subtype,
+          )
+          .firstOrNull;
+      if (first != null) bodyIds.add(first.info.fetchId);
+    }
+
+    final List<_MimeLeaf> result = <_MimeLeaf>[
+      for (final _MimeLeaf leaf in leaves)
+        if (leaf.isExplicitAttachment ||
+            (!leaf.isEmbeddedMessage &&
+                !bodyIds.contains(leaf.info.fetchId) &&
+                (!(leaf.info.mediaType?.isText ?? true) ||
+                    leaf.info.fileName != null)))
+          leaf,
+    ];
+    // Explicit attachments nested inside forwarded messages are found by the
+    // library's own walk, as before.
+    final Set<String> listed = result
+        .map((_MimeLeaf leaf) => leaf.info.fetchId)
+        .toSet();
+    for (final ContentInfo info in m.findContentInfo()) {
+      if (info.fetchId.isNotEmpty && listed.add(info.fetchId)) {
+        result.add(_MimeLeaf(info, isRoot: false));
+      }
+    }
+    return result;
+  }
+
+  static void _collectStructureLeaves(
+    BodyPart part,
+    List<_MimeLeaf> leaves, {
+    required bool isRoot,
+  }) {
+    final MediaType? media = part.contentType?.mediaType;
+    final List<BodyPart>? children = part.parts;
+    if ((media?.isMultipart ?? false) ||
+        (children != null &&
+            children.isNotEmpty &&
+            !(media?.isMessage ?? false))) {
+      for (final BodyPart child in children ?? const <BodyPart>[]) {
+        _collectStructureLeaves(child, leaves, isRoot: false);
+      }
+      return;
+    }
+    leaves.add(
+      _MimeLeaf(
+        ContentInfo(part.fetchId ?? '1')
+          ..contentType = part.contentType
+          ..contentDisposition = part.contentDisposition
+          ..cid = part.cid,
+        isRoot: isRoot,
+      ),
+    );
+  }
+
+  static void _collectMimeLeaves(
+    MimePart part,
+    String? fetchId,
+    List<_MimeLeaf> leaves,
+  ) {
+    final MediaType media = part.mediaType;
+    final List<MimePart>? children = part.parts;
+    if (media.isMultipart ||
+        (children != null && children.isNotEmpty && !media.isMessage)) {
+      final List<MimePart> parts = children ?? const <MimePart>[];
+      for (int i = 0; i < parts.length; i++) {
+        _collectMimeLeaves(
+          parts[i],
+          fetchId == null ? '${i + 1}' : '$fetchId.${i + 1}',
+          leaves,
+        );
+      }
+      return;
+    }
+    leaves.add(
+      _MimeLeaf(
+        ContentInfo(fetchId ?? '1')
+          ..contentType = part.getHeaderContentType()
+          ..contentDisposition = part.getHeaderContentDisposition(),
+        isRoot: fetchId == null,
+      ),
+    );
   }
 
   MailFolder _toFolder(Mailbox box) => MailFolder(
@@ -866,4 +1232,20 @@ class EnoughMailGateway implements MailGateway {
     }
     return MailFailureKind.protocol;
   }
+}
+
+/// One leaf of a message's MIME tree, described by its [ContentInfo].
+class _MimeLeaf {
+  _MimeLeaf(this.info, {required this.isRoot});
+
+  final ContentInfo info;
+
+  /// The whole message is this single part (no multipart container), so its
+  /// content is the message's own body rather than a numbered sub-part.
+  final bool isRoot;
+
+  bool get isExplicitAttachment =>
+      info.contentDisposition?.disposition == ContentDisposition.attachment;
+
+  bool get isEmbeddedMessage => info.mediaType?.isMessage ?? false;
 }

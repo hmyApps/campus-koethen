@@ -253,6 +253,26 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
 
   void _handlePayload(String? payload) {
     if (payload == null) return;
+    unawaited(_routePayload(payload));
+  }
+
+  Future<void> _routePayload(String payload) async {
+    // An event reminder names a `CalendarEntry.id`, and resolving it needs
+    // the saved events and public calendars. On a cold start from the
+    // notification none of them has loaded yet, and a synchronous lookup
+    // would call a live event "no longer available" (F-08). So the lookup
+    // waits for its sources first — bounded, see
+    // `kNotificationTapSourceTimeout`.
+    final NotificationPayload? parsed = NotificationPayload.tryParse(payload);
+    CalendarEntry? eventEntry;
+    if (parsed != null &&
+        parsed.category == NotificationCategory.eventReminder) {
+      eventEntry = await loadCalendarEntryForNotification(
+        ProviderScope.containerOf(context, listen: false),
+        parsed.target,
+      );
+      if (!mounted) return;
+    }
     // Deferred to the next frame: a cold start resolves the launch payload
     // before the router has built its first route, and pushing into a
     // navigator that does not exist yet is how a notification tap turns into
@@ -262,7 +282,7 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
       final NotificationTapTarget? target = NotificationTapRouter(
         preferredCanteenSlug: ref.read(settingsProvider).preferredCanteenSlug,
         findCalendarEntry: (String id) =>
-            ref.read(calendarEntryForNotificationProvider(id)),
+            eventEntry ?? ref.read(calendarEntryForNotificationProvider(id)),
       ).resolve(payload);
       if (target == null) return;
 
@@ -321,6 +341,9 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         unawaited(showCalendarEntrySheet(context, entry));
       });
     });
+    // After the wait above the app may be idle with no frame pending; make
+    // sure the post-frame callback actually gets one.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override

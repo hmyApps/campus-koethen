@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ApiError } from '../errors/api-error';
 import { Locale } from '../locale/locale';
+import { addCalendarDays, campusToday } from '../time/campus-date';
 import { asString } from '../util/coerce';
 
 /**
@@ -183,12 +184,9 @@ export function refineDateRange<T extends { from: string; to: string }>(
 
 export const dateRangeSchema = refineDateRange(
   z.object({ from: isoDate.optional(), to: isoDate.optional() }).transform((input) => {
-    const from = input.from ?? new Date().toISOString().slice(0, 10);
-    const to =
-      input.to ??
-      new Date(parseIsoDayUtc(from) + DEFAULT_MENU_RANGE_DAYS * 86_400_000)
-        .toISOString()
-        .slice(0, 10);
+    // The campus day, not the UTC day: see `campusToday`.
+    const from = input.from ?? campusToday();
+    const to = input.to ?? addCalendarDays(from, DEFAULT_MENU_RANGE_DAYS);
     return { from, to };
   }),
   MAX_MENU_RANGE_DAYS,

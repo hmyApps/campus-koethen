@@ -371,6 +371,11 @@ model PublicCalendar {
   includeEventDescription Boolean @default(false)
   includeEventLocation    Boolean @default(false)
 
+  /// Who owns this row: `strapi` (mirrored by the catalogue sync) or
+  /// `user-test` (written by the synthetic user-test seed). Only `strapi` rows
+  /// are retired by the catalogue sync or downloaded from Google.
+  source String @default("strapi")
+
   /// pending | ready | stale | revoked | unavailable | invalid
   operationalStatus String @default("pending")
 
@@ -379,6 +384,10 @@ model PublicCalendar {
   lastModified    String?
   /// SHA-256 of the last successfully processed feed body — never the body.
   lastContentHash String?
+  /// End of the window the stored occurrences were last expanded for. A
+  /// 304/unchanged feed may only skip the parse while this keeps up with the
+  /// moving window; otherwise recurrences at its far edge would never appear.
+  lastExpandedTo  DateTime?
 
   lastCatalogSyncAt    DateTime?
   lastSuccessfulSyncAt DateTime?

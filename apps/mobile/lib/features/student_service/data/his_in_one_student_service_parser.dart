@@ -327,36 +327,44 @@ abstract final class HisInOneStudentServiceParser {
   /// caller already built for the job button's own AJAX click (same action,
   /// same hidden fields, ViewState already rotated to this response).
   ///
-  /// Returns `null` when [partialResponseXml] does not contain this overlay
-  /// at all, which is the caller's cue that the job already started directly
-  /// and it should go straight to polling instead of guessing a submission
-  /// that cannot possibly exist.
+  /// Three outcomes, never two:
+  ///
+  ///  - [NoJobConfiguration] — neither the overlay's start button nor its
+  ///    configuration settings appear at all: the job started directly and
+  ///    the caller goes straight to polling.
+  ///  - [JobConfigurationSubmit] — the overlay was read completely.
+  ///  - [UnrecognisedJobConfiguration] — the overlay is recognisably there
+  ///    but not readable completely (no start button value, no `<select>`,
+  ///    no pre-selected option). Folding that into "absent" sent the caller
+  ///    polling for a minute against a job that was never started; the
+  ///    caller must fail closed instead of guessing (AGENTS.md §2).
   ///
   /// Only one configuration field is handled — the semester `<select>` — the
   /// only one any real job has offered so far; its CURRENTLY selected option
   /// (confirmed real behaviour: the portal pre-selects the current semester)
   /// is submitted unchanged rather than inventing a choice.
-  static TabSwitchRequest? buildJobConfigurationSubmitRequest(
+  static JobConfiguration readJobConfiguration(
     String partialResponseXml,
     TabSwitchRequest base,
   ) {
+    if (!_configurationOverlayMarkers.any(partialResponseXml.contains)) {
+      return const NoJobConfiguration();
+    }
     final RegExpMatch? startJob = _startJobButtonPattern.firstMatch(
       partialResponseXml,
     );
-    if (startJob == null) return null;
-    final String startJobId = startJob.group(1)!;
-    final String startJobValue = startJob.group(2)!;
-
     final RegExpMatch? select = _configurationSelectPattern.firstMatch(
       partialResponseXml,
     );
-    if (select == null) return null;
-    final String selectName = select.group(1)!;
-
     final RegExpMatch? selected = _selectedOptionPattern.firstMatch(
       partialResponseXml,
     );
-    if (selected == null) return null;
+    if (startJob == null || select == null || selected == null) {
+      return const UnrecognisedJobConfiguration();
+    }
+    final String startJobId = startJob.group(1)!;
+    final String startJobValue = startJob.group(2)!;
+    final String selectName = select.group(1)!;
     final String selectValue = selected.group(1)!;
 
     final Map<String, String> formData = Map<String, String>.of(base.formData)
@@ -365,8 +373,20 @@ abstract final class HisInOneStudentServiceParser {
         selectName: selectValue,
         startJobId: startJobValue,
       });
-    return TabSwitchRequest(action: base.action, formData: formData);
+    return JobConfigurationSubmit(
+      TabSwitchRequest(action: base.action, formData: formData),
+    );
   }
+
+  /// Id fragments that exist only inside an opened configuration overlay —
+  /// its "PDF erstellen" button and its settings container (confirmed
+  /// 2026-10-04). Plain substring checks on purpose: if attribute order or
+  /// quoting changes, the overlay must still be RECOGNISED as present, so an
+  /// unreadable one fails closed rather than passing as absent.
+  static const List<String> _configurationOverlayMarkers = <String>[
+    ':navigationBottom:startJob',
+    ':jobConfiguration:settingsContainer',
+  ];
 
   static final RegExp _startJobButtonPattern = RegExp(
     r'''<button id="([^"]*:navigationBottom:startJob)"[^>]*value="([^"]*)"''',
@@ -384,6 +404,29 @@ abstract final class HisInOneStudentServiceParser {
       value.replaceAll(_whitespacePattern, ' ').trim();
 
   static final RegExp _whitespacePattern = RegExp(r'\s+');
+}
+
+/// What a job-start response says about a configuration overlay — see
+/// [HisInOneStudentServiceParser.readJobConfiguration].
+sealed class JobConfiguration {
+  const JobConfiguration();
+}
+
+/// No overlay at all: the job started directly.
+final class NoJobConfiguration extends JobConfiguration {
+  const NoJobConfiguration();
+}
+
+/// The overlay was read completely; [request] starts the job.
+final class JobConfigurationSubmit extends JobConfiguration {
+  const JobConfigurationSubmit(this.request);
+
+  final TabSwitchRequest request;
+}
+
+/// The overlay is present but could not be read completely.
+final class UnrecognisedJobConfiguration extends JobConfiguration {
+  const UnrecognisedJobConfiguration();
 }
 
 /// A tab switch, ready to POST: every hidden field of the currently loaded

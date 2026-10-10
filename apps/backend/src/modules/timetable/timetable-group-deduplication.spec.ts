@@ -6,7 +6,8 @@ const group = (
   longName: string,
   department: string | null,
   entryIds: string[],
-) => ({ id, shortName, longName, department, entryIds });
+  contextIds: string[] = ['semester-1'],
+) => ({ id, shortName, longName, department, entryIds, contextIds });
 
 describe('resolveTimetableGroupVisibility', () => {
   it('keeps the populated representative of an exact public duplicate', () => {
@@ -50,6 +51,39 @@ describe('resolveTimetableGroupVisibility', () => {
       new Map([
         ['b', false],
         ['a', true],
+      ]),
+    );
+  });
+
+  it('never merges same-named groups of different semester catalogues', () => {
+    // Right after a semester change the window spans both catalogues. The
+    // next semester's group has no lessons yet; it is still its own group.
+    const visibility = resolveTimetableGroupVisibility([
+      group('summer', 'MER2', '2.Sem.Ernährungstherapie Master', 'FB1', ['lesson-1'], ['ss']),
+      group('winter', 'MER2', '2.Sem.Ernährungstherapie Master', 'FB1', [], ['ws']),
+    ]);
+
+    expect(visibility).toEqual(
+      new Map([
+        ['summer', true],
+        ['winter', true],
+      ]),
+    );
+  });
+
+  it('keeps a group visible while it represents at least one of its semesters', () => {
+    const visibility = resolveTimetableGroupVisibility([
+      group('a-summer-only', 'SAME', 'Same public label', 'FB1', [], ['ss']),
+      group('b-both', 'SAME', 'Same public label', 'FB1', [], ['ss', 'ws']),
+      group('c-winter-only', 'SAME', 'Same public label', 'FB1', [], ['ws']),
+    ]);
+
+    // Summer: a represents, b is its alias. Winter: b represents, c is its alias.
+    expect(visibility).toEqual(
+      new Map([
+        ['a-summer-only', true],
+        ['b-both', true],
+        ['c-winter-only', false],
       ]),
     );
   });

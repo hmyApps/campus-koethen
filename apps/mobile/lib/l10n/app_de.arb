@@ -1052,6 +1052,15 @@
   "@mailLiveConnecting": {},
   "mailLiveRetrying": "Live-Verbindung wird wiederhergestellt …",
   "@mailLiveRetrying": {},
+  "mailLiveAuthRequired": "Live-Synchronisierung angehalten: {reason}",
+  "@mailLiveAuthRequired": {
+    "description": "Shown when the live mail connection was stopped and is not retried automatically; reason is the localized mail error.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "mailSearchTooltip": "Mails durchsuchen",
   "@mailSearchTooltip": {},
   "mailSearchHint": "Nach Absender oder Inhalt suchen",
@@ -1229,6 +1238,10 @@
   "@mailErrorProtocol": {},
   "mailErrorSessionClosed": "Das Postfach wurde in der Zwischenzeit getrennt.",
   "@mailErrorSessionClosed": {},
+  "mailErrorMailboxChanged": "Der Posteingang wurde auf dem Mailserver neu aufgebaut. Bitte aktualisiere ihn und versuche es erneut.",
+  "@mailErrorMailboxChanged": {},
+  "mailErrorSendOutcomeUnknown": "Ausgang unklar: Der Mailserver hat den Versand nicht rechtzeitig bestätigt. Die Nachricht wurde möglicherweise trotzdem gesendet – prüfe den Ordner „Gesendet“, bevor du sie erneut sendest.",
+  "@mailErrorSendOutcomeUnknown": {},
   "mailErrorSecureStorage": "Die sichere Ablage auf diesem Gerät ist nicht verfügbar. Die Zugangsdaten können nicht gespeichert werden.",
   "@mailErrorSecureStorage": {},
   "mailErrorGeneric": "Es ist ein Fehler aufgetreten. Bitte versuche es später erneut.",
@@ -2325,6 +2338,7 @@
   "onboardingUniversityConnecting": "Ausgewählte Dienste werden verbunden",
   "@onboardingUniversityConnecting": {},
   "onboardingUniversitySeparateSessions": "Mail, Moodle und Noten verwenden dieselbe Kennung, werden aber separat verbunden. Nextcloud meldet sich unabhängig im Systembrowser an. Es entsteht keine gemeinsame SSO-Sitzung.",
+  "onboardingHsaKiSeparateConsent": "HSA-GPT hat einen eigenen Zustimmungsbildschirm und wird deshalb nicht über diese Auswahl verbunden.",
   "onboardingNotificationsTitle": "Benachrichtigungen",
   "onboardingNotificationsBody": "Lass dich passend zu deinem Campus-Alltag erinnern.",
   "onboardingNotificationsDailySummary": "Tagesübersicht zur gewählten Uhrzeit mit Vorlesungen, Terminen, Fristen und Mensa",
@@ -2910,6 +2924,14 @@
   "@notificationEventReminderTitleToday": {
     "placeholders": { "title": { "type": "String" } }
   },
+  "notificationEventReminderTitleOnDate": "{date}: {title}",
+  "@notificationEventReminderTitleOnDate": {
+    "description": "Title of an event reminder delivered two or more days ahead; date is weekday plus day and month, e.g. 'Mittwoch, 22. Juli'.",
+    "placeholders": {
+      "date": { "type": "String" },
+      "title": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrow": "Morgen um {time} Uhr",
   "@notificationEventReminderWhenTomorrow": {
     "placeholders": { "time": { "type": "String" } }
@@ -2918,10 +2940,21 @@
   "@notificationEventReminderWhenToday": {
     "placeholders": { "time": { "type": "String" } }
   },
+  "notificationEventReminderWhenOnDate": "{date} um {time} Uhr",
+  "@notificationEventReminderWhenOnDate": {
+    "placeholders": {
+      "date": { "type": "String" },
+      "time": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrowAllDay": "Morgen, ganztägig",
   "@notificationEventReminderWhenTomorrowAllDay": {},
   "notificationEventReminderWhenTodayAllDay": "Heute, ganztägig",
   "@notificationEventReminderWhenTodayAllDay": {},
+  "notificationEventReminderWhenOnDateAllDay": "{date}, ganztägig",
+  "@notificationEventReminderWhenOnDateAllDay": {
+    "placeholders": { "date": { "type": "String" } }
+  },
   "notificationEventReminderBody": "{when}.",
   "@notificationEventReminderBody": {
     "placeholders": { "when": { "type": "String" } }
@@ -3267,6 +3300,8 @@
   "@hsaKiErrorSecureStorage": {},
   "hsaKiErrorNotConnected": "Verbinde zuerst HSA-GPT.",
   "@hsaKiErrorNotConnected": {},
+  "hsaKiErrorConsentRequired": "HSA-GPT wird nur über den eigenen HSA-GPT-Zustimmungsbildschirm verbunden.",
+  "@hsaKiErrorConsentRequired": {},
   "hsaKiErrorUnknown": "HSA-GPT konnte nicht erreicht werden. Versuche es erneut.",
   "@hsaKiErrorUnknown": {},
   "calendarHomeWidgetTitle": "Kalender-Widget",

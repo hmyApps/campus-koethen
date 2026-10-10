@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApiResponse, buildMeta } from '../../common/dto/meta.dto';
 import { LocaleResolution } from '../../common/locale/locale';
 import { RequestLocale } from '../../common/locale/locale.decorator';
+import { addCalendarDays, campusToday } from '../../common/time/campus-date';
 import {
   isoDate,
   paginationSchema,
@@ -55,6 +56,15 @@ export class TimetableController {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
+  /**
+   * The timetable horizon advertised with the catalogue: from the campus day
+   * (Europe/Berlin, not UTC) to the end of the configured look-ahead.
+   */
+  private horizon(): { from: string; to: string } {
+    const from = campusToday();
+    return { from, to: addCalendarDays(from, this.env.WEBUNTIS_LOOKAHEAD_DAYS) };
+  }
+
   @Get('groups')
   @ApiOperation({
     summary: 'List selectable class groups.',
@@ -77,7 +87,6 @@ export class TimetableController {
   ): Promise<ApiResponse<TimetableGroupDto[]>> {
     const filter = parseWith(groupsQuerySchema, query, locale.resolvedLocale);
     const result = await this.timetable.listGroups(locale, filter);
-    const now = Date.now();
 
     return {
       data: result.data,
@@ -89,10 +98,7 @@ export class TimetableController {
         featureEnabled: this.timetable.featureEnabled,
         lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,
         dataStale: result.stale,
-        from: new Date(now).toISOString().slice(0, 10),
-        to: new Date(now + this.env.WEBUNTIS_LOOKAHEAD_DAYS * 86_400_000)
-          .toISOString()
-          .slice(0, 10),
+        ...this.horizon(),
       }),
     };
   }
@@ -111,7 +117,6 @@ export class TimetableController {
   ): Promise<ApiResponse<TimetableGroupDto>> {
     const { groupId } = parseWith(groupParamSchema, params, locale.resolvedLocale);
     const result = await this.timetable.getGroup(locale, groupId);
-    const now = Date.now();
 
     return {
       data: result.data,
@@ -121,10 +126,7 @@ export class TimetableController {
         featureEnabled: this.timetable.featureEnabled,
         lastSuccessfulSyncAt: result.lastSyncAt?.toISOString() ?? null,
         dataStale: result.stale,
-        from: new Date(now).toISOString().slice(0, 10),
-        to: new Date(now + this.env.WEBUNTIS_LOOKAHEAD_DAYS * 86_400_000)
-          .toISOString()
-          .slice(0, 10),
+        ...this.horizon(),
       }),
     };
   }

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../domain/mail_folder.dart';
 import '../domain/mail_cache_store.dart';
+import '../domain/mail_failure.dart';
 import '../domain/mail_gateway.dart';
 import '../domain/mail_message.dart';
 import 'mail_account_controller.dart';
@@ -23,25 +24,37 @@ const int kMailBodyPrefetchLimit = MailCachePolicy.defaultPrefetchBodies;
 /// Accumulates on purpose: a message that has scrolled out of the fetched
 /// server window stays cached. When [fetchedLimit] proves a non-empty response
 /// authoritative for a UID range, messages deleted or moved elsewhere are
-/// removed inside that range. An empty response is always non-destructive.
-/// Newest first; [latest] wins on conflicts (updated \Seen flag etc.).
+/// removed inside that range. When [mailboxSize] (the server's EXISTS count)
+/// shows that the window covered the whole mailbox, every cached message
+/// missing from it is gone and removed. An empty response is always
+/// non-destructive. Newest first; [latest] wins on conflicts (updated \Seen
+/// flag etc.).
 List<MailMessageHeader> mergeInboxHeaders(
   List<MailMessageHeader> cached,
   List<MailMessageHeader> latest, {
   int? fetchedLimit,
+  int? mailboxSize,
 }) {
   Set<String>? retainedCachedIds;
+  final bool coversMailbox =
+      fetchedLimit != null &&
+      mailboxSize != null &&
+      mailboxSize > 0 &&
+      mailboxSize <= fetchedLimit;
   if (latest.isNotEmpty &&
       fetchedLimit != null &&
       fetchedLimit > 0 &&
-      latest.length >= fetchedLimit) {
+      (coversMailbox || latest.length >= fetchedLimit)) {
     final Set<String> latestIds = latest
         .map((MailMessageHeader header) => header.id)
         .toSet();
     final List<int?> parsed = latest
         .map((MailMessageHeader header) => int.tryParse(header.id))
         .toList(growable: false);
-    if (parsed.every((int? uid) => uid != null && uid > 0)) {
+    if (coversMailbox) {
+      // Nothing older exists on the server, so nothing older may stay.
+      retainedCachedIds = latestIds;
+    } else if (parsed.every((int? uid) => uid != null && uid > 0)) {
       final int oldestFetchedUid = parsed.cast<int>().reduce(
         (int a, int b) => a < b ? a : b,
       );
@@ -211,15 +224,30 @@ class MailSyncController extends Notifier<MailSyncStatus> {
           .mailDownloadAttachments;
 
       // 1) Newest 50 headers → merge into the accumulated cache.
-      final List<MailMessageHeader> cachedBefore = await cache.readHeaders();
-      final bool hadBaseline =
-          cachedBefore.isNotEmpty || state.lastSyncedAt != null;
-      final List<MailMessageHeader> latest = await gateway.fetchHeaders(
+      List<MailMessageHeader> cachedBefore = await cache.readHeaders();
+      final int? knownUidValidity = await cache.readUidValidity();
+      bool hadBaseline = cachedBefore.isNotEmpty || state.lastSyncedAt != null;
+      final MailHeaderPage page = await gateway.fetchHeaders(
         credentials,
         mailboxPath: kInboxPath,
         limit: kInboxLimit,
       );
+      final List<MailMessageHeader> latest = page.headers;
       if (!accountController.isSessionCurrent(generation)) return;
+      final int? uidValidity = page.uidValidity;
+      if (uidValidity != null &&
+          knownUidValidity != null &&
+          uidValidity != knownUidValidity) {
+        // The server renumbered the INBOX: every cached UID may now name a
+        // different message. Drop the whole cached INBOX and start a fresh
+        // baseline — renumbered mail is not new mail.
+        await cache.clearCachedBodies();
+        await cache.saveHeaders(const <MailMessageHeader>[]);
+        if (!accountController.isSessionCurrent(generation)) return;
+        ref.read(mailOlderInboxHeadersProvider.notifier).clear();
+        cachedBefore = const <MailMessageHeader>[];
+        hadBaseline = false;
+      }
       final Set<String> knownIds = cachedBefore
           .map((MailMessageHeader header) => header.id)
           .toSet();
@@ -230,6 +258,7 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         cachedBefore,
         latest,
         fetchedLimit: kInboxLimit,
+        mailboxSize: page.messagesExists,
       );
       final Set<String> retainedIds = merged
           .map((MailMessageHeader header) => header.id)
@@ -245,16 +274,30 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         await cache.removeMessage(removedId);
       }
       if (!accountController.isSessionCurrent(generation)) return;
+      if (uidValidity != null && uidValidity != knownUidValidity) {
+        await cache.saveUidValidity(uidValidity);
+        if (!accountController.isSessionCurrent(generation)) return;
+      }
+      ref
+          .read(mailOlderInboxHeadersProvider.notifier)
+          .reconcile(
+            latest,
+            fetchedLimit: kInboxLimit,
+            mailboxSize: page.messagesExists,
+          );
       ref.read(mailCacheRevisionProvider.notifier).bump();
       if (hadBaseline && newMessages.isNotEmpty) {
         ref.read(mailNewMessageEventProvider.notifier).publish(newMessages);
       }
 
-      // 2) Prefetch full bodies for messages not yet cached.
+      // 2) Prefetch full bodies for messages not yet cached. Bodies the age
+      //    retention would prune straight away are skipped: downloading them
+      //    would only repeat on every sync. Opening one still loads it.
       final Set<String> cachedIds = await cache.cachedMessageIds();
       final List<String> missing = latest
+          .where((MailMessageHeader h) => !cachedIds.contains(h.id))
+          .where((MailMessageHeader h) => cache.retainsBody(h.date))
           .map((MailMessageHeader h) => h.id)
-          .where((String id) => !cachedIds.contains(id))
           .take(kMailBodyPrefetchLimit)
           .toList();
       if (missing.isNotEmpty) {
@@ -290,7 +333,40 @@ mailSyncControllerProvider =
       MailSyncController.new,
     );
 
-enum MailLiveConnection { stopped, connecting, idle, polling, retrying }
+enum MailLiveConnection {
+  stopped,
+  connecting,
+  idle,
+  polling,
+  retrying,
+
+  /// The server rejected the stored password, or the secure connection could
+  /// not be established. The live connection is NOT retried automatically:
+  /// every reconnect is a fresh login against the central university account,
+  /// and repeated failed logins can lock it. [MailLiveSyncStatus.error] carries
+  /// the typed reason.
+  authRequired,
+}
+
+/// First automatic reconnect delay after the live connection dropped.
+const Duration kMailLiveRetryInitialDelay = Duration(seconds: 15);
+
+/// Upper bound of the exponential reconnect backoff.
+const Duration kMailLiveRetryMaxDelay = Duration(minutes: 30);
+
+/// A live connection that stayed up this long counts as healthy again: the
+/// next drop starts the backoff over at [kMailLiveRetryInitialDelay]. A
+/// connection that drops right after its login keeps escalating instead, so a
+/// server that accepts and immediately closes cannot cause a login loop.
+const Duration kMailLiveStableAfter = Duration(minutes: 2);
+
+/// The delay before the next automatic reconnect after [failedAttempts]
+/// consecutive failures: 15 s, 30 s, 1 min, … capped at 30 min.
+Duration mailLiveRetryDelay(int failedAttempts) {
+  final int doublings = failedAttempts.clamp(0, 16);
+  final Duration delay = kMailLiveRetryInitialDelay * (1 << doublings);
+  return delay > kMailLiveRetryMaxDelay ? kMailLiveRetryMaxDelay : delay;
+}
 
 class MailLiveSyncStatus {
   const MailLiveSyncStatus({
@@ -305,26 +381,73 @@ class MailLiveSyncStatus {
 /// Owns the foreground-only IMAP IDLE connection. Mobile operating systems do
 /// not guarantee sockets while the process is suspended; the normal resume
 /// sync remains the correctness fallback.
+///
+/// Reconnects back off exponentially ([mailLiveRetryDelay]). A rejected
+/// password stops the live connection for the rest of the mail session — a
+/// later [start] (for example on resume) does not try it again; only a new
+/// sign-in, which advances the session generation, does.
 class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   StreamSubscription<MailLiveSignal>? _subscription;
   Timer? _retry;
+  Timer? _stable;
   int _generation = 0;
+  int _failedAttempts = 0;
+
+  /// The foreground owner asked for a live connection and has not stopped it.
+  bool _wanted = false;
+
+  /// The server rejected this session's password.
+  MailFailure? _credentialsRejected;
+
+  /// The session was replaced while a live connection was wanted. The new
+  /// account is published only after its credentials are stored, so the
+  /// reconnect waits for that instead of racing the replacement.
+  bool _reconnectForNewSession = false;
 
   @override
   MailLiveSyncStatus build() {
     ref.listen<int>(mailSessionGenerationProvider, (_, _) {
-      unawaited(stop());
+      // A new session brings new credentials: forget the rejection and the
+      // backoff of the replaced one.
+      _credentialsRejected = null;
+      _failedAttempts = 0;
+      _reconnectForNewSession = _wanted;
+      unawaited(_disconnect());
+      state = const MailLiveSyncStatus();
+    });
+    ref.listen<AsyncValue<MailAccountState>>(mailAccountControllerProvider, (
+      _,
+      AsyncValue<MailAccountState> next,
+    ) {
+      if (!_reconnectForNewSession || next is! AsyncData<MailAccountState>) {
+        return;
+      }
+      // Re-signing in while already signed in never flips the account from
+      // signed out to signed in, so the app shell's start trigger stays
+      // silent; reconnect here instead of waiting for the next resume.
+      _reconnectForNewSession = false;
+      if (_wanted && next.value.isSignedIn) unawaited(start());
     });
     ref.onDispose(() {
       _generation++;
       _retry?.cancel();
+      _stable?.cancel();
       unawaited(_subscription?.cancel());
     });
     return const MailLiveSyncStatus();
   }
 
   Future<void> start() async {
+    _wanted = true;
     if (_subscription != null) return;
+    final MailFailure? rejected = _credentialsRejected;
+    if (rejected != null) {
+      state = MailLiveSyncStatus(
+        connection: MailLiveConnection.authRequired,
+        error: rejected,
+      );
+      return;
+    }
     final MailAccountState? account = ref
         .read(mailAccountControllerProvider)
         .value;
@@ -345,11 +468,13 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
               if (generation != _generation) return;
               switch (signal) {
                 case MailLiveSignal.connected:
+                  _markConnected();
                   state = const MailLiveSyncStatus(
                     connection: MailLiveConnection.idle,
                   );
                   return;
                 case MailLiveSignal.pollingFallback:
+                  _markConnected();
                   state = const MailLiveSyncStatus(
                     connection: MailLiveConnection.polling,
                   );
@@ -362,41 +487,78 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
               }
             },
             onError: (Object error, StackTrace _) {
-              if (generation == _generation) _scheduleRetry(error);
+              if (generation == _generation) _connectionLost(error);
             },
             onDone: () {
-              if (generation == _generation) _scheduleRetry(null);
+              if (generation == _generation) _connectionLost(null);
             },
           );
     } catch (error) {
-      if (generation == _generation) _scheduleRetry(error);
+      if (generation == _generation) _connectionLost(error);
     }
   }
 
-  void _scheduleRetry(Object? error) {
-    if (state.connection == MailLiveConnection.retrying &&
-        (_retry?.isActive ?? false)) {
-      return;
-    }
-    final StreamSubscription<MailLiveSignal>? active = _subscription;
-    _subscription = null;
-    unawaited(active?.cancel());
-    state = MailLiveSyncStatus(
-      connection: MailLiveConnection.retrying,
-      error: error,
-    );
-    _retry?.cancel();
-    _retry = Timer(const Duration(seconds: 15), () => unawaited(start()));
+  void _markConnected() {
+    _stable?.cancel();
+    _stable = Timer(kMailLiveStableAfter, () => _failedAttempts = 0);
   }
 
-  Future<void> stop() async {
+  void _connectionLost(Object? error) {
+    // Invalidate every further callback of the lost connection (a failing
+    // watcher reports an error AND closes its stream).
     _generation++;
+    _stable?.cancel();
+    _stable = null;
     _retry?.cancel();
     _retry = null;
     final StreamSubscription<MailLiveSignal>? active = _subscription;
     _subscription = null;
-    await active?.cancel();
+    unawaited(active?.cancel());
+
+    if (error is MailFailure &&
+        (error.kind == MailFailureKind.invalidCredentials ||
+            error.kind == MailFailureKind.tls)) {
+      // No automatic retry. A rejected password stays rejected for this
+      // session; a TLS failure sent no credentials, so an explicit later
+      // start (resume) may try again — but never on a timer.
+      if (error.kind == MailFailureKind.invalidCredentials) {
+        _credentialsRejected = error;
+      }
+      state = MailLiveSyncStatus(
+        connection: MailLiveConnection.authRequired,
+        error: error,
+      );
+      return;
+    }
+
+    final Duration delay = mailLiveRetryDelay(_failedAttempts);
+    _failedAttempts++;
+    state = MailLiveSyncStatus(
+      connection: MailLiveConnection.retrying,
+      error: error,
+    );
+    _retry = Timer(delay, () {
+      if (_wanted) unawaited(start());
+    });
+  }
+
+  Future<void> _disconnect() {
+    _generation++;
+    _retry?.cancel();
+    _retry = null;
+    _stable?.cancel();
+    _stable = null;
+    final StreamSubscription<MailLiveSignal>? active = _subscription;
+    _subscription = null;
+    return active?.cancel() ?? Future<void>.value();
+  }
+
+  Future<void> stop() async {
+    _wanted = false;
+    _reconnectForNewSession = false;
+    final Future<void> closed = _disconnect();
     state = const MailLiveSyncStatus();
+    await closed;
   }
 }
 

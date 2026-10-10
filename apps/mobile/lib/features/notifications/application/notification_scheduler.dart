@@ -65,12 +65,13 @@ class NotificationSyncResult {
 ///
 /// Two properties carry the whole design:
 ///
-/// **Full replacement, never a delta.** Every run cancels everything and
-/// re-registers the plan. That is what makes "updated", "replaced" and
-/// "cancelled" need no code of their own (ADR-0001 § 7.1): a cancelled event
-/// simply is not in the next plan.
+/// **Full replacement, never a delta.** Every run cancels everything still
+/// pending and re-registers the plan. That is what makes "updated",
+/// "replaced" and "cancelled" need no code of their own (ADR-0001 § 7.1): a
+/// cancelled event simply is not in the next plan. Notifications already
+/// delivered are not part of that state and are never touched (F-01).
 ///
-/// **Strictly serialised.** `cancelAll()` and the re-scheduling that follows
+/// **Strictly serialised.** `cancelAllPending()` and the re-scheduling that follows
 /// it are not atomic, so two runs overlapping would interleave a cancel into
 /// another run's scheduling and leave an arbitrary subset behind. Runs are
 /// therefore chained; a second one waits.
@@ -96,7 +97,7 @@ class NotificationScheduler {
   /// queue is empty, so a caller can await its own work.
   Future<NotificationSyncResult> apply(NotificationPlan plan) {
     return _enqueue(() async {
-      final bool cancelled = await _gateway.cancelAll();
+      final bool cancelled = await _gateway.cancelAllPending();
       if (!cancelled) {
         final NotificationSyncResult result =
             NotificationSyncResult.cancellationFailure(
@@ -138,8 +139,9 @@ class NotificationScheduler {
 
   /// Clears every pending entry — switching notifications off, or a withdrawn
   /// permission. Goes through the same queue, so it can never race a run that
-  /// is still scheduling.
-  Future<bool> cancelAll() => _enqueue(() => _gateway.cancelAll());
+  /// is still scheduling. Delivered notifications stay.
+  Future<bool> cancelAllPending() =>
+      _enqueue(() => _gateway.cancelAllPending());
 
   Future<T> _enqueue<T>(Future<T> Function() run) {
     _pending++;

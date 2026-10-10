@@ -64,7 +64,8 @@ export type IcsFetchResult =
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export class GooglePublicIcsClient {
-  private lastRequestAt = 0;
+  /** Earliest instant (epoch ms) the next request may be sent. */
+  private nextRequestAt = 0;
 
   constructor(
     private readonly config: IcsClientConfig,
@@ -101,12 +102,22 @@ export class GooglePublicIcsClient {
     throw lastError;
   }
 
+  /**
+   * Reserves this request's send slot BEFORE waiting for it.
+   *
+   * The event job drives several feeds through one client at once. Stamping
+   * the slot only after the sleep let every concurrent caller compute its wait
+   * from the same previous request and wake up together, which defeats the
+   * spacing exactly when it matters.
+   */
   private async throttle(): Promise<void> {
     const spacing = this.config.requestSpacingMs;
     if (spacing <= 0) return;
-    const wait = this.lastRequestAt + spacing - Date.now();
+    const now = Date.now();
+    const slot = Math.max(now, this.nextRequestAt);
+    this.nextRequestAt = slot + spacing;
+    const wait = slot - now;
     if (wait > 0) await this.sleep(wait);
-    this.lastRequestAt = Date.now();
   }
 
   private sleep(ms: number): Promise<void> {

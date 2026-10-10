@@ -13,11 +13,18 @@ import 'package:campus_koethen/features/student_service/domain/student_service_c
 import 'package:campus_koethen/features/student_service/domain/student_service_failure.dart';
 import 'package:campus_koethen/features/student_service/domain/student_service_gateway.dart';
 import 'package:campus_koethen/features/student_service/domain/student_service_overview.dart';
+import 'package:campus_koethen/features/student_service/data/his_in_one_student_service_gateway.dart';
+import 'package:campus_koethen/features/student_service/data/his_in_one_student_service_parser.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_grades.dart';
+import '../../support/fake_html_adapter.dart';
+import '../grades/his_in_one_fixtures.dart'
+    show hisInOneAuthenticatedLandingHtml;
+import 'student_service_fixtures.dart';
 
 const GradeCredentials _creds = GradeCredentials(
   username: 'testuser',
@@ -57,11 +64,55 @@ class FakeStudentServiceGateway implements StudentServiceGateway {
     return overview ?? _overview();
   }
 
+  /// When set, certificate downloads run through this (real) gateway.
+  StudentServiceGateway? downloads;
+
   @override
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  ) async => const CertificateUnavailable('not-scripted');
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  }) async =>
+      downloads?.downloadCertificate(
+        credentials,
+        offer,
+        isCancelled: isCancelled,
+      ) ??
+      const CertificateUnavailable('not-scripted');
+}
+
+const String _landingUrl =
+    'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=user&category=menu.browse';
+
+/// A portal whose certificate job is started but never finishes — every
+/// poll tick answers "still running". Counts the AJAX round trips.
+class _NeverFinishingJob {
+  int ajaxCalls = 0;
+
+  late final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+    final String url = o.uri.toString();
+    if (url.contains('auth.login')) {
+      return const FakeHtmlResponse.redirect(_landingUrl);
+    }
+    if (url == _landingUrl) {
+      return const FakeHtmlResponse(hisInOneAuthenticatedLandingHtml);
+    }
+    if (url.contains('auth.logout')) return const FakeHtmlResponse('bye');
+    if (url.contains('studyService/start.xhtml') && o.method == 'GET') {
+      return FakeHtmlResponse(studyServiceStgStudentHtml());
+    }
+    if (url.contains('studyService/start.xhtml') && o.method == 'POST') {
+      final Map<String, String> body = Map<String, String>.from(o.data as Map);
+      if (body.containsKey('studyserviceForm:content.10')) {
+        return FakeHtmlResponse(studyServiceReportHtml());
+      }
+      if (body['javax.faces.partial.ajax'] == 'true') {
+        ajaxCalls++;
+        return FakeHtmlResponse(partialResponseStarted());
+      }
+    }
+    return const FakeHtmlResponse('not found', statusCode: 404);
+  });
 }
 
 /// In-memory cache. Records writes so the race test can assert a late
@@ -346,6 +397,54 @@ void main() {
 
         expect(gateway.fetchCalls, 2);
         expect(cache.clears, greaterThanOrEqualTo(1));
+      },
+    );
+  });
+
+  // VD-N03: a running certificate job used to poll for its full ~60 s even
+  // after the grades connection was deleted, because the wipe waits for
+  // every tracked operation and the poll loop never looked at the session.
+  group('certificate download', () {
+    test(
+      'deleting the grades connection stops a running job within a poll tick',
+      () async {
+        final _NeverFinishingJob portal = _NeverFinishingJob();
+        final FakeStudentServiceGateway gateway = FakeStudentServiceGateway()
+          ..downloads = HisInOneStudentServiceGateway(
+            portal.adapter,
+            const Duration(milliseconds: 5),
+          );
+        final ProviderContainer c = await connectedOnHisInOne(
+          gateway: gateway,
+          cache: InMemoryStudentServiceCacheStore(),
+        );
+        final CertificateOffer offer =
+            HisInOneStudentServiceParser.readCertificateOffers(
+              studyServiceReportHtml(),
+            ).first;
+
+        final Future<CertificateDownloadResult> download = c
+            .read(studentServiceControllerProvider.notifier)
+            .downloadCertificate(offer);
+        // Wait until the job is started and polling.
+        while (portal.ajaxCalls < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+
+        final Future<void> abandoned = expectLater(
+          download,
+          throwsA(
+            const StudentServiceFailure(StudentServiceFailureKind.notConnected),
+          ),
+        );
+        await c
+            .read(gradeAccountControllerProvider.notifier)
+            .deleteEverything();
+        final int ajaxCallsAtWipe = portal.ajaxCalls;
+        await abandoned;
+        // One job click plus at most a couple of poll ticks — not the 30
+        // ticks of the full polling budget.
+        expect(ajaxCallsAtWipe, lessThanOrEqualTo(4));
       },
     );
   });

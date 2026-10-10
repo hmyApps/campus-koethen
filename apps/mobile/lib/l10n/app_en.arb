@@ -645,6 +645,7 @@
   "mailLivePolling": "Automatic sync active",
   "mailLiveConnecting": "Connecting live sync …",
   "mailLiveRetrying": "Restoring live connection …",
+  "mailLiveAuthRequired": "Live sync paused: {reason}",
   "mailSearchTooltip": "Search mail",
   "mailSearchHint": "Search sender or content",
   "mailSearchPrompt": "Searches the mail stored on this device right away — offline too. You can then search the server as well.",
@@ -710,6 +711,8 @@
   "mailErrorServerUnreachable": "The mail server is currently unavailable.",
   "mailErrorProtocol": "Unexpected response from the mail server.",
   "mailErrorSessionClosed": "The mailbox was disconnected in the meantime.",
+  "mailErrorMailboxChanged": "The inbox was rebuilt on the mail server. Please refresh it and try again.",
+  "mailErrorSendOutcomeUnknown": "Outcome unclear: the mail server did not confirm the submission in time. The message may have been sent anyway – check your Sent folder before sending it again.",
   "mailErrorSecureStorage": "Secure storage is not available on this device. Your credentials cannot be saved.",
   "mailErrorGeneric": "Something went wrong. Please try again later.",
   "gradesTitle": "Grades",
@@ -1465,6 +1468,7 @@
   "onboardingUniversityConnectSelected": "Connect selected services",
   "onboardingUniversityConnecting": "Connecting selected services",
   "onboardingUniversitySeparateSessions": "Mail, Moodle and grades reuse the same identifier but connect separately. Nextcloud signs in independently in the system browser. This does not create a shared SSO session.",
+  "onboardingHsaKiSeparateConsent": "HSA-GPT has its own consent screen and is therefore not connected through this selection.",
   "onboardingNotificationsTitle": "Notifications",
   "onboardingNotificationsBody": "Get timely reminders for your daily campus life.",
   "onboardingNotificationsDailySummary": "Daily overview at your chosen time with lectures, events, deadlines and canteen menus",
@@ -1893,6 +1897,14 @@
   "@notificationEventReminderTitleToday": {
     "placeholders": { "title": { "type": "String" } }
   },
+  "notificationEventReminderTitleOnDate": "{date}: {title}",
+  "@notificationEventReminderTitleOnDate": {
+    "description": "Title of an event reminder delivered two or more days ahead; date is weekday plus day and month, e.g. 'Wednesday, July 22'.",
+    "placeholders": {
+      "date": { "type": "String" },
+      "title": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrow": "Tomorrow at {time}",
   "@notificationEventReminderWhenTomorrow": {
     "placeholders": { "time": { "type": "String" } }
@@ -1901,10 +1913,21 @@
   "@notificationEventReminderWhenToday": {
     "placeholders": { "time": { "type": "String" } }
   },
+  "notificationEventReminderWhenOnDate": "{date} at {time}",
+  "@notificationEventReminderWhenOnDate": {
+    "placeholders": {
+      "date": { "type": "String" },
+      "time": { "type": "String" }
+    }
+  },
   "notificationEventReminderWhenTomorrowAllDay": "Tomorrow, all day",
   "@notificationEventReminderWhenTomorrowAllDay": {},
   "notificationEventReminderWhenTodayAllDay": "Today, all day",
   "@notificationEventReminderWhenTodayAllDay": {},
+  "notificationEventReminderWhenOnDateAllDay": "{date}, all day",
+  "@notificationEventReminderWhenOnDateAllDay": {
+    "placeholders": { "date": { "type": "String" } }
+  },
   "notificationEventReminderBody": "{when}.",
   "@notificationEventReminderBody": {
     "placeholders": { "when": { "type": "String" } }
@@ -2172,6 +2195,7 @@
   "hsaKiErrorExternalAccessDisabled": "External access to HSA-GPT is currently disabled.",
   "hsaKiErrorSecureStorage": "Secure storage is unavailable.",
   "hsaKiErrorNotConnected": "Connect HSA-GPT first.",
+  "hsaKiErrorConsentRequired": "HSA-GPT is only connected through its own HSA-GPT consent screen.",
   "hsaKiErrorUnknown": "HSA-GPT could not be reached. Try again.",
   "calendarHomeWidgetTitle": "Calendar widget",
   "calendarHomeWidgetSubtitle": "Upcoming events on the device home screen",

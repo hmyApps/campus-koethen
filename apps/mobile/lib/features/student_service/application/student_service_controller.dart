@@ -215,9 +215,17 @@ class StudentServiceController extends AsyncNotifier<StudentServiceViewState> {
           StudentServiceFailureKind.notConnected,
         );
       }
+      // The wipe that deletes the grades connection invalidates this guard
+      // and then waits for every tracked operation. Handing the lease check
+      // to the gateway lets its poll loop stop at the next tick instead of
+      // holding that wipe for the job's full polling budget.
       final CertificateDownloadResult result = await ref
           .read(studentServiceGatewayProvider)
-          .downloadCertificate(credentials, offer);
+          .downloadCertificate(
+            credentials,
+            offer,
+            isCancelled: () => !_isCurrent(lease),
+          );
       if (!_isCurrent(lease)) {
         throw const StudentServiceFailure(
           StudentServiceFailureKind.notConnected,

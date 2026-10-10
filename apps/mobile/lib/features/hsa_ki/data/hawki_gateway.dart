@@ -34,12 +34,11 @@ class HawkiGateway implements HsaKiGateway {
     final HawkiSession session = HawkiSession(adapter: _adapter);
     try {
       await session.login(username: username, password: password);
-      final Map<String, dynamic> created = await session
-          .postJsonWithFreshCsrf(
-            _profile.createTokenUri,
-            csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
-            body: <String, dynamic>{'name': _tokenName},
-          );
+      final Map<String, dynamic> created = await session.postJsonWithFreshCsrf(
+        _profile.createTokenUri,
+        csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
+        body: <String, dynamic>{'name': _tokenName},
+      );
       final Object? token = created['token'];
       final Object? id = created['id'];
       if (token is! String || token.isEmpty || id == null) {
@@ -141,6 +140,7 @@ class HawkiGateway implements HsaKiGateway {
       final Map<String, dynamic> body = await session.postBearerJson(
         _profile.aiRequestUri,
         token: credential.token,
+        receiveTimeout: HawkiSession.chatReceiveTimeout,
         body: <String, dynamic>{
           'payload': <String, dynamic>{
             'model': modelId,

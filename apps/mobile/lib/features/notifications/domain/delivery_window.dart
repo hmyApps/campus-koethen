@@ -35,10 +35,12 @@ abstract final class DeliveryWindow {
   /// after 20:00              → 07:00 of the next day
   /// ```
   ///
-  /// The rule is total and single-valued: every input has exactly one result,
-  /// and a shifted reminder is never pushed past the event it is about — the
-  /// largest shift arises just before midnight and is a little over seven
-  /// hours, which still leaves more than sixteen hours of lead time.
+  /// The rule is total and single-valued: every input has exactly one result.
+  /// It only ever moves a moment **forward** and knows nothing about what the
+  /// reminder is about, so on its own it can push a short lead past its
+  /// target: a deadline at 23:59 with a one-hour lead wants 22:59, and the
+  /// next 07:00 is after the deadline. A reminder with a target therefore
+  /// uses [shiftIntoWindowBefore].
   ///
   /// The result is rebuilt through the [tz.TZDateTime] constructor rather than
   /// by adding a `Duration`, so a shift across a daylight-saving change lands
@@ -61,6 +63,47 @@ abstract final class DeliveryWindow {
       desired.month,
       desired.day + 1,
       startHour,
+    );
+  }
+
+  /// [shiftIntoWindow], but never onto or past [target] — the event start or
+  /// the deadline the reminder is about.
+  ///
+  /// ```text
+  /// shifted moment before target → the shifted moment
+  /// otherwise                    → the latest 20:00 strictly before target
+  /// ```
+  ///
+  /// For a target after 20:00 the fallback is 20:00 the same evening; for a
+  /// target at or before 20:00 it is 20:00 the evening before. It only ever
+  /// moves a reminder **earlier** than the reader asked for, never later, and
+  /// it is always inside the window. It may lie in the past; dropping it then
+  /// is the caller's job, exactly as for every other moment.
+  ///
+  /// Like [shiftIntoWindow], the result is built from the date parts, so the
+  /// fallback is 20:00 on the dial on a daylight-saving day too.
+  static tz.TZDateTime shiftIntoWindowBefore(
+    tz.TZDateTime desired,
+    DateTime target,
+  ) {
+    final tz.TZDateTime shifted = shiftIntoWindow(desired);
+    final tz.Location location = desired.location;
+    final tz.TZDateTime bound = tz.TZDateTime.from(target, location);
+    if (shifted.isBefore(bound)) return shifted;
+    final tz.TZDateTime sameEvening = tz.TZDateTime(
+      location,
+      bound.year,
+      bound.month,
+      bound.day,
+      endHour,
+    );
+    if (sameEvening.isBefore(bound)) return sameEvening;
+    return tz.TZDateTime(
+      location,
+      bound.year,
+      bound.month,
+      bound.day - 1,
+      endHour,
     );
   }
 }

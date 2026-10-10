@@ -174,7 +174,13 @@ export class TimetableService {
     };
   }
 
-  /** Resolve one stored Campus UUID without downloading the catalogue. */
+  /**
+   * Resolve one stored Campus UUID without downloading the catalogue.
+   *
+   * A hidden alias answers with its visible representative — but only from the
+   * same semester catalogue(s), exactly the scope in which the alias was
+   * decided. A same-named group of another semester is a different cohort.
+   */
   async getGroup(
     locale: LocaleResolution,
     groupId: string,
@@ -189,13 +195,14 @@ export class TimetableService {
     const [group, lastSyncAt] = await Promise.all([
       this.prisma.timetableGroup.findFirst({
         where: { id: groupId },
-        select,
+        select: { ...select, contexts: { select: { contextId: true } } },
       }),
       this.lastSuccessful('groups'),
     ]);
     if (!group) {
       throw new ApiError('TIMETABLE_GROUP_NOT_FOUND', locale.resolvedLocale);
     }
+    const contextIds = group.contexts.map((context) => context.contextId);
     const publicGroup = group.catalogVisible
       ? group
       : ((await this.prisma.timetableGroup.findFirst({
@@ -205,6 +212,8 @@ export class TimetableService {
             shortName: group.shortName,
             longName: group.longName,
             department: group.department,
+            contexts:
+              contextIds.length > 0 ? { some: { contextId: { in: contextIds } } } : { none: {} },
           },
           orderBy: { id: 'asc' },
           select,

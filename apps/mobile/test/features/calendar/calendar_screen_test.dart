@@ -573,9 +573,7 @@ void main() {
       await openSources(tester);
 
       await tester.tap(
-        find.byKey(
-          const ValueKey<String>('calendar-source-public-calendar'),
-        ),
+        find.byKey(const ValueKey<String>('calendar-source-public-calendar')),
       );
       await tester.pumpAndSettle();
 

@@ -16,6 +16,14 @@ import '../domain/moodle_failure.dart';
 import '../domain/moodle_profile.dart';
 import 'moodle_parsers.dart';
 
+/// Transport limits shared by every request to Moodle, file downloads included.
+const Duration kMoodleConnectTimeout = Duration(seconds: 20);
+const Duration kMoodleSendTimeout = Duration(seconds: 20);
+
+/// The longest silence tolerated while waiting for a response — or, for a
+/// streamed download, for its next chunk. Dio treats it as an idle timeout.
+const Duration kMoodleReceiveTimeout = Duration(seconds: 30);
+
 /// The one component that talks to Moodle over the network.
 ///
 /// The security policy here is central and non-bypassable:
@@ -42,9 +50,9 @@ class MoodleHttpClient implements MoodleApiClient {
         // a redirect target and non-2xx never throws before we classify it.
         followRedirects: false,
         validateStatus: (_) => true,
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(seconds: 20),
+        connectTimeout: kMoodleConnectTimeout,
+        receiveTimeout: kMoodleReceiveTimeout,
+        sendTimeout: kMoodleSendTimeout,
         responseType: ResponseType.plain,
       ),
     );
@@ -234,9 +242,16 @@ class MoodleHttpClient implements MoodleApiClient {
   }
 
   Object? _decode(Object? data) {
-    if (data == null) return null;
+    // Every whitelisted function answers with a JSON structure. A missing or
+    // blank 200 body is therefore a broken answer, never an empty result —
+    // reading it as one let it replace good cached data (AGENTS §4).
+    if (data == null) {
+      throw const MoodleFailure(MoodleFailureKind.invalidResponse);
+    }
     if (data is String) {
-      if (data.trim().isEmpty) return null;
+      if (data.trim().isEmpty) {
+        throw const MoodleFailure(MoodleFailureKind.invalidResponse);
+      }
       try {
         return jsonDecode(data);
       } on FormatException {

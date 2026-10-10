@@ -24,6 +24,12 @@ class SecureMoodleTokenStore implements MoodleTokenStore {
   static const String _usernameKey = 'moodle.username';
   static const String _siteNameKey = 'moodle.sitename';
 
+  /// Returns null only when no complete token is stored.
+  ///
+  /// A keychain that cannot be read is a different state and throws
+  /// [MoodleFailureKind.secureStorageUnavailable]. Reporting it as "absent"
+  /// made a stored connection look gone, and reconnecting then treated the
+  /// unreadable account as a different identity and wiped the encrypted cache.
   @override
   Future<MoodleToken?> read() async {
     try {
@@ -38,7 +44,7 @@ class SecureMoodleTokenStore implements MoodleTokenStore {
         siteName: await _storage.read(key: _siteNameKey),
       );
     } catch (_) {
-      return null;
+      throw const MoodleFailure(MoodleFailureKind.secureStorageUnavailable);
     }
   }
 
