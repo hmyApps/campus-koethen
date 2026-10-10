@@ -49,6 +49,10 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
   List<String> _generalIssues = <String>[];
   String? _banner;
 
+  /// Set when the last attempt was refused because the idempotency key is
+  /// older than 30 days; the banner then offers a deliberate new case (E-05).
+  bool _keyExpired = false;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +95,22 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
   /// The store is the truth; the local copy only exists so the text fields
   /// have something stable to bind to. `submit()` can freeze the stored draft
   /// under us.
+  /// Abandons the old idempotency key and lets this feedback be sent as a new
+  /// case — after asking, never on its own. See the application form.
+  Future<void> _resubmitAsNew() async {
+    final FeedbackDraft? draft = _draft;
+    if (draft == null) return;
+    if (!await confirmResubmitAsNew(context) || !mounted) return;
+
+    await ref.read(requestsProvider.notifier).unfreeze(draft.id);
+    if (!mounted) return;
+    setState(() {
+      _banner = null;
+      _keyExpired = false;
+    });
+    _adoptStoredDraft();
+  }
+
   void _adoptStoredDraft() {
     final FeedbackDraft? current = _draft;
     if (current == null) return;
@@ -238,6 +258,12 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
             icon: AppIcons.error_outline,
             title: _banner ?? l10n.requestsIssuesTitle,
             message: _generalIssues.join('\n'),
+            action: _keyExpired
+                ? TextButton(
+                    onPressed: _resubmitAsNew,
+                    child: Text(l10n.requestsKeyExpiredSendAnyway),
+                  )
+                : null,
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
@@ -332,6 +358,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
       _serverErrors = <RequestField, String>{};
       _generalIssues = <String>[];
       _banner = null;
+      _keyExpired = false;
     });
 
     if (!RequestValidation.validate(draft).isValid) return;
@@ -367,7 +394,10 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
       case SubmitDraftStoreFailed():
         setState(() => _banner = l10n.requestsSubmitDraftStoreFailed);
       case SubmitKeyExpired():
-        setState(() => _banner = l10n.requestsKeyExpiredBody);
+        setState(() {
+          _banner = l10n.requestsKeyExpiredBody;
+          _keyExpired = true;
+        });
       case SubmitPayloadChanged():
         setState(() => _banner = l10n.requestsPayloadChanged);
       case SubmitGatewaySaid(:final SubmissionResult result):

@@ -397,6 +397,68 @@ void main() {
       },
     );
 
+    testWidgets('an expired key offers a deliberate way on (E-05)', (
+      WidgetTester tester,
+    ) async {
+      // A frozen feedback whose idempotency key outlived the server's 30 days
+      // used to be a dead end: every field locked, no way to send it.
+      final FeedbackDraft base = FeedbackDraft(
+        id: 'draft-old',
+        createdAt: _now,
+        updatedAt: _now,
+        idempotencyKey: '550e8400-e29b-41d4-a716-446655440000',
+        areaId: 1,
+        feedback: 'Mein Hinweis',
+      );
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..drafts = <RequestDraft>[
+          base.copyWith(
+            pending: PendingSubmission(
+              firstAttemptAt: DateTime.now().subtract(const Duration(days: 40)),
+              fingerprint: base.payloadFingerprint,
+            ),
+          ),
+        ];
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(
+        const SubmissionRateLimited(),
+      );
+      await pumpScreen(
+        tester,
+        const FeedbackFormScreen(draftId: 'draft-old'),
+        overrides: _overrides(store: store, gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder send = find.text('Feedback absenden');
+      await tester.ensureVisible(send);
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(gateway.keysUsed, isEmpty, reason: 'nothing goes out on its own');
+
+      final Finder sendAnyway = find.widgetWithText(
+        TextButton,
+        'Trotzdem als neuen Vorgang senden',
+      );
+      expect(sendAnyway, findsOneWidget);
+      await tester.ensureVisible(sendAnyway);
+      await tester.tap(sendAnyway);
+      await tester.pumpAndSettle();
+      // A decision, not a side effect: it asks first.
+      expect(find.text('Als neuen Vorgang senden?'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Trotzdem als neuen Vorgang senden'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(store.drafts.single.isFrozen, isFalse);
+      expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .every((TextField field) => field.enabled != false),
+        isTrue,
+      );
+    });
+
     testWidgets('a rejected submission keeps the text', (
       WidgetTester tester,
     ) async {

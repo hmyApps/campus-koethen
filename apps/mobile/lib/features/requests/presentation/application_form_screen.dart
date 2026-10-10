@@ -134,25 +134,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   Future<void> _resubmitAsNew() async {
     final FinanceApplicationDraft? draft = _draft;
     if (draft == null) return;
-    final AppLocalizations l10n = context.l10n;
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text(l10n.requestsResubmitAsNewTitle),
-        content: Text(l10n.requestsResubmitAsNewBody),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.requestsCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.requestsKeyExpiredSendAnyway),
-          ),
-        ],
-      ),
-    );
-    if (!(confirmed ?? false) || !mounted) return;
+    if (!await confirmResubmitAsNew(context) || !mounted) return;
 
     await ref.read(requestsProvider.notifier).unfreeze(draft.id);
     if (!mounted) return;
