@@ -5,6 +5,7 @@ import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_account_contro
 import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_providers.dart';
 import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_account.dart';
 import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_chat.dart';
+import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_failure.dart';
 import 'package:campus_koethen/features/hsa_ki/domain/hsa_ki_gateway.dart';
 import 'package:campus_koethen/features/university_account/application/university_account_controller.dart';
 import 'package:campus_koethen/features/university_account/domain/university_identity.dart';
@@ -18,6 +19,12 @@ const HsaKiCredential _credential = HsaKiCredential(
   username: 'mmustermann',
 );
 
+const HsaKiCredential _rotatedCredential = HsaKiCredential(
+  token: 'tok-2',
+  tokenId: '8',
+  username: 'mmustermann',
+);
+
 const UniversityIdentity _identity = UniversityIdentity(
   identifier: 'mmustermann',
   password: 'secret',
@@ -27,7 +34,10 @@ void main() {
   test('connect mints a token and stores only the credential', () async {
     final _MemoryCredentialStore store = _MemoryCredentialStore();
     final _Gateway gateway = _Gateway();
-    final ProviderContainer container = _container(store: store, gateway: gateway);
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+    );
     addTearDown(container.dispose);
     await container.read(hsaKiAccountControllerProvider.future);
     final int generationBefore = container.read(hsaKiSessionGenerationProvider);
@@ -48,31 +58,115 @@ void main() {
     );
   });
 
+  test('a failed secure-storage write revokes the just-minted token and leaves '
+      'no local credential behind', () async {
+    final _MemoryCredentialStore store = _MemoryCredentialStore(
+      writeFails: true,
+    );
+    final _Gateway gateway = _Gateway();
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiAccountControllerProvider.future);
+
+    await expectLater(
+      container
+          .read(hsaKiAccountControllerProvider.notifier)
+          .connect(username: 'mmustermann', password: 'secret'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(store.value, isNull);
+    expect(gateway.revokeCalls, 1);
+    expect(container.read(hsaKiAccountControllerProvider).value, isNull);
+  });
+
+  test('a rejected login is rethrown to the caller and never reported as a '
+      'connection', () async {
+    final _MemoryCredentialStore store = _MemoryCredentialStore();
+    final _Gateway gateway = _Gateway(
+      connectError: const HsaKiFailure(HsaKiFailureKind.invalidCredentials),
+    );
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiAccountControllerProvider.future);
+
+    await expectLater(
+      container
+          .read(hsaKiAccountControllerProvider.notifier)
+          .connect(username: 'mmustermann', password: 'wrong'),
+      throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+    );
+
+    expect(store.value, isNull);
+    expect(container.read(hsaKiAccountControllerProvider).value, isNull);
+  });
+
+  test('connecting while already connected still verifies the password and '
+      'rotates the token instead of returning unchecked', () async {
+    final _MemoryCredentialStore store = _MemoryCredentialStore()
+      ..value = _credential;
+    final _Gateway gateway = _Gateway(minted: _rotatedCredential);
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiAccountControllerProvider.future);
+    final int generationBefore = container.read(hsaKiSessionGenerationProvider);
+
+    await container
+        .read(hsaKiAccountControllerProvider.notifier)
+        .connect(username: 'mmustermann', password: 'new-secret');
+
+    expect(gateway.connectCalls, 1);
+    expect(store.value, same(_rotatedCredential));
+    expect(gateway.revoked, <HsaKiCredential>[_credential]);
+    expect(gateway.revokePasswords, <String>['new-secret']);
+    expect(
+      container.read(hsaKiSessionGenerationProvider),
+      greaterThan(generationBefore),
+    );
+  });
+
   test(
-    'a failed secure-storage write revokes the just-minted token and leaves '
-    'no local credential behind',
+    'a rejected re-verification keeps the existing connection untouched',
     () async {
-      final _MemoryCredentialStore store = _MemoryCredentialStore(
-        writeFails: true,
+      final _MemoryCredentialStore store = _MemoryCredentialStore()
+        ..value = _credential;
+      final _Gateway gateway = _Gateway(
+        connectError: const HsaKiFailure(HsaKiFailureKind.invalidCredentials),
       );
-      final _Gateway gateway = _Gateway();
       final ProviderContainer container = _container(
         store: store,
         gateway: gateway,
       );
       addTearDown(container.dispose);
       await container.read(hsaKiAccountControllerProvider.future);
-
-      await container
-          .read(hsaKiAccountControllerProvider.notifier)
-          .connect(username: 'mmustermann', password: 'secret');
-
-      expect(store.value, isNull);
-      expect(gateway.revokeCalls, 1);
-      expect(
-        container.read(hsaKiAccountControllerProvider).hasError,
-        isTrue,
+      final int generationBefore = container.read(
+        hsaKiSessionGenerationProvider,
       );
+
+      await expectLater(
+        container
+            .read(hsaKiAccountControllerProvider.notifier)
+            .connect(username: 'mmustermann', password: 'wrong'),
+        throwsA(const HsaKiFailure(HsaKiFailureKind.invalidCredentials)),
+      );
+
+      expect(gateway.connectCalls, 1);
+      expect(store.value, same(_credential));
+      expect(gateway.revokeCalls, 0);
+      expect(
+        container.read(hsaKiAccountControllerProvider).value,
+        const HsaKiAccount(username: 'mmustermann'),
+      );
+      expect(container.read(hsaKiSessionGenerationProvider), generationBefore);
     },
   );
 
@@ -102,28 +196,23 @@ void main() {
     },
   );
 
-  test(
-    'disconnect with no central identity stored skips the remote revoke but '
-    'still wipes the local token',
-    () async {
-      final _MemoryCredentialStore store = _MemoryCredentialStore()
-        ..value = _credential;
-      final _Gateway gateway = _Gateway();
-      final ProviderContainer container = _container(
-        store: store,
-        gateway: gateway,
-      );
-      addTearDown(container.dispose);
-      await container.read(hsaKiAccountControllerProvider.future);
+  test('disconnect with no central identity stored skips the remote revoke but '
+      'still wipes the local token', () async {
+    final _MemoryCredentialStore store = _MemoryCredentialStore()
+      ..value = _credential;
+    final _Gateway gateway = _Gateway();
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiAccountControllerProvider.future);
 
-      await container
-          .read(hsaKiAccountControllerProvider.notifier)
-          .disconnect();
+    await container.read(hsaKiAccountControllerProvider.notifier).disconnect();
 
-      expect(gateway.revokeCalls, 0);
-      expect(store.value, isNull);
-    },
-  );
+    expect(gateway.revokeCalls, 0);
+    expect(store.value, isNull);
+  });
 }
 
 ProviderContainer _container({
@@ -173,11 +262,19 @@ class _MemoryIdentityStore implements UniversityIdentityStore {
 }
 
 class _Gateway implements HsaKiGateway {
-  _Gateway({this.revokeFails = false});
+  _Gateway({
+    this.revokeFails = false,
+    this.connectError,
+    this.minted = _credential,
+  });
 
   final bool revokeFails;
+  final Object? connectError;
+  final HsaKiCredential minted;
   var connectCalls = 0;
   var revokeCalls = 0;
+  final List<HsaKiCredential> revoked = <HsaKiCredential>[];
+  final List<String> revokePasswords = <String>[];
 
   @override
   Future<HsaKiCredential> connect({
@@ -185,12 +282,18 @@ class _Gateway implements HsaKiGateway {
     required String password,
   }) async {
     connectCalls++;
-    return _credential;
+    if (connectError != null) throw connectError!;
+    return minted;
   }
 
   @override
-  Future<void> revoke(HsaKiCredential credential, {required String password}) async {
+  Future<void> revoke(
+    HsaKiCredential credential, {
+    required String password,
+  }) async {
     revokeCalls++;
+    revoked.add(credential);
+    revokePasswords.add(password);
     if (revokeFails) throw StateError('remote unavailable');
   }
 

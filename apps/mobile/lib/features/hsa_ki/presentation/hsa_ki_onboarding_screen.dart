@@ -7,14 +7,12 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 
-/// Dedicated consent screen for connecting HSA-GPT outside the first-run
-/// wizard — e.g. from the university-account card's `+` button, reached via
-/// [connectHsaKiWithOnboarding]. The first-run wizard itself
-/// (`OnboardingUniversityServicesStep`) shows a condensed inline version of
-/// this same explanation next to its own checkbox instead of pushing this
-/// screen, but the content — what HSA-GPT is, that the device talks straight
-/// to `ki.hs-anhalt.de`, that only a revocable token is kept — is the same
-/// either way.
+/// Dedicated consent screen for connecting HSA-GPT (`AGENTS.md` §2), reached
+/// only via [connectHsaKiWithOnboarding] — from the chat screen, the
+/// university-account card's `+` and the first-run wizard alike. It explains
+/// what HSA-GPT is, that the device talks straight to `ki.hs-anhalt.de` and
+/// that only a revocable token is kept. Only a positive answer opens the
+/// consent scope a token mint requires.
 class HsaKiOnboardingScreen extends StatelessWidget {
   const HsaKiOnboardingScreen({super.key});
 
@@ -55,7 +53,10 @@ class HsaKiOnboardingScreen extends StatelessWidget {
                         color: colors.primary,
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Text(l10n.hsaKiOnboardingTitle, style: text.headlineMedium),
+                      Text(
+                        l10n.hsaKiOnboardingTitle,
+                        style: text.headlineMedium,
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       Text(l10n.hsaKiOnboardingIntro, style: text.bodyMedium),
                       const SizedBox(height: AppSpacing.lg),
@@ -94,7 +95,10 @@ class HsaKiOnboardingScreen extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Icon(AppIcons.warning_amber_outlined, color: colors.error),
+                          Icon(
+                            AppIcons.warning_amber_outlined,
+                            color: colors.error,
+                          ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(

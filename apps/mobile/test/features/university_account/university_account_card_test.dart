@@ -326,6 +326,34 @@ void main() {
     );
   });
 
+  testWidgets(
+    'the generic account sheet never offers HSA-GPT as validating service',
+    (WidgetTester tester) async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
+        for (final DirectService service in DirectService.values)
+          service: _Adapter(),
+      };
+      await _pump(tester, store: store, adapters: adapters);
+      await tester.pump();
+
+      await tester.ensureVisible(find.text('Zugangsdaten aktualisieren'));
+      await tester.tap(find.text('Zugangsdaten aktualisieren'));
+      await tester.pumpAndSettle();
+
+      final DropdownButton<DirectService> dropdown = tester
+          .widget<DropdownButton<DirectService>>(
+            find.byType(DropdownButton<DirectService>),
+          );
+      final List<DirectService?> offered = dropdown.items!
+          .map((DropdownMenuItem<DirectService> item) => item.value)
+          .toList();
+      expect(offered, isNot(contains(DirectService.hsaKi)));
+      expect(offered, contains(DirectService.mail));
+    },
+  );
+
   testWidgets('does not overflow at 320 dp and 200 percent text', (
     WidgetTester tester,
   ) async {

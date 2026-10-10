@@ -22,10 +22,7 @@ abstract interface class HsaKiGateway {
   /// stored by this feature itself. A caller with no password available
   /// (central identity already gone) must skip this and wipe the local
   /// credential on its own — never block a disconnect on it.
-  Future<void> revoke(
-    HsaKiCredential credential, {
-    required String password,
-  });
+  Future<void> revoke(HsaKiCredential credential, {required String password});
 
   Future<List<HsaKiModel>> listModels(HsaKiCredential credential);
 

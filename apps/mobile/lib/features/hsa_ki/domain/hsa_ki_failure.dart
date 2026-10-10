@@ -26,6 +26,9 @@ enum HsaKiFailureKind {
   externalAccessDisabled,
   secureStorageUnavailable,
   notConnected,
+
+  /// A token mint was requested outside the dedicated HSA-GPT consent flow.
+  consentRequired,
   unknown,
 }
 

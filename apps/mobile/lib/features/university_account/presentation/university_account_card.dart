@@ -11,7 +11,6 @@ import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../settings/presentation/sign_out_everywhere_tile.dart';
 import '../../hsa_ki/presentation/hsa_ki_connect_flow.dart';
-import '../../hsa_ki/presentation/hsa_ki_messages.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
 import '../../nextcloud/domain/nextcloud_account.dart';
 import '../application/university_account_controller.dart';
@@ -97,10 +96,9 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
   }
 
   /// HSA-GPT's `+` on this card always opens its own dedicated consent screen
-  /// first — see `AGENTS.md` §2. The first-run onboarding wizard shows the
-  /// same consent inline instead (`OnboardingUniversityServicesStep`), since
-  /// it already has its own explicit per-step confirmation. Disconnecting
-  /// needs no special case and falls through to the generic path above.
+  /// first — see `AGENTS.md` §2. The first-run wizard uses the same flow
+  /// (`OnboardingUniversityServicesStep`). Disconnecting needs no special
+  /// case and falls through to the generic path above.
   Future<void> _connectHsaKi() async {
     const DirectService service = DirectService.hsaKi;
     setState(() {
@@ -112,7 +110,11 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errors[service] = hsaKiFailureMessage(context.l10n, error);
+        _errors[service] = universityAccountErrorMessage(
+          context.l10n,
+          service,
+          error,
+        );
       });
     } finally {
       if (mounted) setState(() => _busy.remove(service));

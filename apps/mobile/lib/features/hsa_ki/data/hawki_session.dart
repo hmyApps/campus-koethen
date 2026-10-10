@@ -62,6 +62,11 @@ class HawkiSession {
   );
 
   static const Duration _timeout = Duration(seconds: 15);
+
+  /// `ai-req` is not streamed: HAWKI sends the response headers only once
+  /// the whole answer is generated, and dio's `receiveTimeout` bounds exactly
+  /// that wait. Ordinary calls keep the short [_timeout].
+  static const Duration chatReceiveTimeout = Duration(minutes: 3);
   static const int _maxRedirects = 10;
   static const HsaKiProfile _profile = HsaKiProfile();
 
@@ -188,11 +193,13 @@ class HawkiSession {
     Uri target, {
     required String token,
     required Map<String, dynamic> body,
+    Duration? receiveTimeout,
   }) async {
     final Response<dynamic> response = await _dio.postUri<dynamic>(
       _validated(target),
       data: body,
       options: Options(
+        receiveTimeout: receiveTimeout,
         headers: <String, String>{
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',

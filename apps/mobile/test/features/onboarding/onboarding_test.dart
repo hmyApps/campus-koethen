@@ -15,6 +15,7 @@ import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
 import 'package:campus_koethen/features/campusmap/application/campus_map_providers.dart';
 import 'package:campus_koethen/features/campusmap/domain/map_catalog.dart';
+import 'package:campus_koethen/features/hsa_ki/presentation/hsa_ki_onboarding_screen.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/application/notification_settings_controller.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
@@ -455,6 +456,72 @@ void main() {
       );
       expect(mail.connectedWith, expected);
       expect(grades.connectedWith, expected);
+      expect(identityStore.value, expected);
+    },
+  );
+
+  testWidgets(
+    'HSA-GPT is no checkbox in the wizard but goes through its own consent '
+    'screen before the draft is used',
+    (WidgetTester tester) async {
+      final _MemoryIdentityStore identityStore = _MemoryIdentityStore();
+      final _RecordingServiceAdapter hsaKi = _RecordingServiceAdapter();
+      await pumpApp(
+        tester,
+        identityStore: identityStore,
+        serviceAdapters: <DirectService, UniversityServiceAdapter>{
+          DirectService.hsaKi: hsaKi,
+        },
+      );
+
+      for (int i = 0; i < 5; i++) {
+        await tester.tap(find.text('Weiter'));
+        await tester.pumpAndSettle();
+      }
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('onboarding-university-identifier')),
+        'student42',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('onboarding-university-password')),
+        'secret-password',
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+      expect(find.text('Dienste verknüpfen'), findsOneWidget);
+
+      expect(find.widgetWithText(CheckboxListTile, 'HSA-GPT'), findsNothing);
+      final Finder connectHsaKi = find.widgetWithText(
+        OutlinedButton,
+        'HSA-GPT verbinden',
+      );
+      expect(connectHsaKi, findsOneWidget);
+
+      await tester.ensureVisible(connectHsaKi);
+      await tester.tap(connectHsaKi);
+      await tester.pumpAndSettle();
+      expect(find.byType(HsaKiOnboardingScreen), findsOneWidget);
+      expect(hsaKi.connectedWith, isNull, reason: 'no consent yet');
+
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HsaKiOnboardingScreen), findsNothing);
+      expect(hsaKi.connectedWith, isNull);
+      expect(identityStore.value, isNull);
+
+      await tester.ensureVisible(connectHsaKi);
+      await tester.tap(connectHsaKi);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verstanden, verbinden'));
+      await tester.pumpAndSettle();
+
+      const UniversityIdentity expected = UniversityIdentity(
+        identifier: 'student42',
+        password: 'secret-password',
+      );
+      expect(hsaKi.connectedWith, expected);
       expect(identityStore.value, expected);
     },
   );

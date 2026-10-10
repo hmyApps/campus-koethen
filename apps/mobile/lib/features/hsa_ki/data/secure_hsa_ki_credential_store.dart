@@ -17,11 +17,7 @@ class SecureHsaKiCredentialStore implements HsaKiCredentialStore {
   static const String tokenIdKey = 'hsaKi.tokenId';
   static const String usernameKey = 'hsaKi.username';
 
-  static const List<String> _keys = <String>[
-    tokenKey,
-    tokenIdKey,
-    usernameKey,
-  ];
+  static const List<String> _keys = <String>[tokenKey, tokenIdKey, usernameKey];
 
   @override
   Future<HsaKiCredential?> read() async {

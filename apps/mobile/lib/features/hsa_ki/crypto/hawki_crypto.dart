@@ -66,9 +66,9 @@ abstract final class HawkiCrypto {
             saltBytes,
           );
 
-    final PBKDF2KeyDerivator derivator =
-        PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
-          ..init(Pbkdf2Parameters(combinedSalt, _pbkdf2Iterations, 32));
+    final PBKDF2KeyDerivator derivator = PBKDF2KeyDerivator(
+      HMac(SHA256Digest(), 64),
+    )..init(Pbkdf2Parameters(combinedSalt, _pbkdf2Iterations, 32));
     return derivator.process(Uint8List.fromList(utf8.encode(passphrase)));
   }
 
@@ -109,12 +109,7 @@ abstract final class HawkiCrypto {
     final GCMBlockCipher cipher = GCMBlockCipher(AESEngine())
       ..init(
         false,
-        AEADParameters(
-          KeyParameter(key),
-          _macSizeBits,
-          value.iv,
-          Uint8List(0),
-        ),
+        AEADParameters(KeyParameter(key), _macSizeBits, value.iv, Uint8List(0)),
       );
     try {
       return cipher.process(combined);
