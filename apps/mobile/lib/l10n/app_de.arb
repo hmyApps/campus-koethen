@@ -1052,6 +1052,15 @@
   "@mailLiveConnecting": {},
   "mailLiveRetrying": "Live-Verbindung wird wiederhergestellt …",
   "@mailLiveRetrying": {},
+  "mailLiveAuthRequired": "Live-Synchronisierung angehalten: {reason}",
+  "@mailLiveAuthRequired": {
+    "description": "Shown when the live mail connection was stopped and is not retried automatically; reason is the localized mail error.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "mailSearchTooltip": "Mails durchsuchen",
   "@mailSearchTooltip": {},
   "mailSearchHint": "Nach Absender oder Inhalt suchen",
@@ -1231,6 +1240,8 @@
   "@mailErrorSessionClosed": {},
   "mailErrorMailboxChanged": "Der Posteingang wurde auf dem Mailserver neu aufgebaut. Bitte aktualisiere ihn und versuche es erneut.",
   "@mailErrorMailboxChanged": {},
+  "mailErrorSendOutcomeUnknown": "Ausgang unklar: Der Mailserver hat den Versand nicht rechtzeitig bestätigt. Die Nachricht wurde möglicherweise trotzdem gesendet – prüfe den Ordner „Gesendet“, bevor du sie erneut sendest.",
+  "@mailErrorSendOutcomeUnknown": {},
   "mailErrorSecureStorage": "Die sichere Ablage auf diesem Gerät ist nicht verfügbar. Die Zugangsdaten können nicht gespeichert werden.",
   "@mailErrorSecureStorage": {},
   "mailErrorGeneric": "Es ist ein Fehler aufgetreten. Bitte versuche es später erneut.",

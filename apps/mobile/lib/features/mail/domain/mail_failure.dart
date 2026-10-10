@@ -29,6 +29,12 @@ enum MailFailureKind {
   /// Destructive actions refuse to run; a refresh rebuilds the list.
   mailboxChanged,
 
+  /// The SMTP submission stalled after the message data had been handed to
+  /// the server. The server may or may not have accepted it, so the message
+  /// must not be re-sent automatically; the user should check the Sent
+  /// folder first.
+  sendOutcomeUnknown,
+
   /// A file picked for an outgoing message could not be read at send time
   /// (e.g. it was deleted, moved, or revoked access in between). Never
   /// carries the path or the raw I/O error.

@@ -46,6 +46,9 @@ class _RecipientAutocompleteFieldState
     extends ConsumerState<RecipientAutocompleteField> {
   FocusNode? _ownedFocusNode;
 
+  /// Identifies the newest keystroke; older debounced lookups are dropped.
+  int _queryTicket = 0;
+
   FocusNode get _focusNode =>
       widget.focusNode ?? (_ownedFocusNode ??= FocusNode());
 
@@ -75,6 +78,24 @@ class _RecipientAutocompleteFieldState
     );
   }
 
+  /// Reads the auto-dispose suggestions provider while holding a listener.
+  ///
+  /// A bare `ref.read(...future)` releases the provider immediately; Riverpod
+  /// then disposes it at the end of the event loop, which cancels the lookup
+  /// before it can answer.
+  Future<List<MailAddressEntry>> _suggestionsFor(String query) async {
+    final ProviderSubscription<Future<List<MailAddressEntry>>> subscription =
+        ref.listenManual(
+          mailRecipientSuggestionsProvider(query).future,
+          (_, _) {},
+        );
+    try {
+      return await subscription.read();
+    } finally {
+      subscription.close();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Trigger loading of the address index.
@@ -86,8 +107,16 @@ class _RecipientAutocompleteFieldState
       displayStringForOption: (MailAddressEntry e) => e.email,
       optionsBuilder: (TextEditingValue value) async {
         final String query = _currentToken(value.text);
+        final int ticket = ++_queryTicket;
         if (query.length < 2) return const <MailAddressEntry>[];
-        return ref.read(mailRecipientSuggestionsProvider(query).future);
+        // Debounce here, not in the provider: only the last token typed
+        // reaches the address book, and RawAutocomplete drops the results of
+        // superseded calls anyway.
+        await Future<void>.delayed(kRecipientSuggestionDebounce);
+        if (!mounted || ticket != _queryTicket) {
+          return const <MailAddressEntry>[];
+        }
+        return _suggestionsFor(query);
       },
       onSelected: (MailAddressEntry option) =>
           _replaceCurrentToken(option.email),

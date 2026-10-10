@@ -64,6 +64,7 @@ abstract final class MailCacheCodec {
     'id': d.id,
     'subject': d.subject,
     'from': address(d.from),
+    if (d.replyTo.isNotEmpty) 'replyTo': d.replyTo.map(address).toList(),
     'to': d.to.map(address).toList(),
     'cc': d.cc.map(address).toList(),
     'date': d.date?.toUtc().toIso8601String(),
@@ -76,6 +77,9 @@ abstract final class MailCacheCodec {
         id: (json['id'] as String?) ?? '',
         subject: (json['subject'] as String?) ?? '',
         from: addressFrom(_map(json['from'])),
+        // Absent in entries cached before Reply-To was kept: replies then go
+        // to From, exactly as before.
+        replyTo: _list(json['replyTo']).map(addressFrom).toList(),
         to: _list(json['to']).map(addressFrom).toList(),
         cc: _list(json['cc']).map(addressFrom).toList(),
         date: _date(json['date']),

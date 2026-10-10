@@ -110,12 +110,17 @@ class MailMessageDetail {
     required this.date,
     required this.body,
     this.cc = const <MailAddress>[],
+    this.replyTo = const <MailAddress>[],
     this.attachments = const <MailAttachment>[],
   });
 
   final String id;
   final String subject;
   final MailAddress from;
+
+  /// The `Reply-To` addresses, if the sender asked for replies to go
+  /// somewhere other than [from]. Empty when the header is absent.
+  final List<MailAddress> replyTo;
   final List<MailAddress> to;
 
   /// Carbon-copy recipients. Needed so "reply all" can address everyone.

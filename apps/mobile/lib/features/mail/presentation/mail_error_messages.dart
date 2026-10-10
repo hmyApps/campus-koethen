@@ -24,6 +24,7 @@ String mailFailureMessage(AppLocalizations l10n, Object? error) {
         l10n.mailAccountRemoveIncomplete,
       MailFailureKind.sessionClosed => l10n.mailErrorSessionClosed,
       MailFailureKind.mailboxChanged => l10n.mailErrorMailboxChanged,
+      MailFailureKind.sendOutcomeUnknown => l10n.mailErrorSendOutcomeUnknown,
       MailFailureKind.attachmentUnreadable =>
         l10n.mailComposeAttachmentUnreadable,
       MailFailureKind.attachmentLimitExceeded =>

@@ -20,6 +20,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Die kombinierte IMAP-/SMTP-Prüfung endet spätestens an ihrer Gesamtgrenze mit einem typisierten
   Timeout; der Setup-Screen bleibt dadurch nie unbegrenzt im Ladezustand und gibt das Formular
   für einen erneuten Versuch wieder frei.
+- Übertragungen mit Nachrichteninhalt sind größenabhängig begrenzt: Befehlstimeout plus die Zeit,
+  die die Datenmenge bei mindestens 64 KiB/s braucht. Bestätigt der SMTP-Server die übergebene
+  Nachricht nicht rechtzeitig, meldet die App „Ausgang unklar“ mit dem Hinweis, vor einem erneuten
+  Senden den Ordner „Gesendet“ zu prüfen, schließt die Verbindung ohne weiteres Protokollkommando
+  und sendet **nicht** automatisch erneut; der Entwurf bleibt erhalten.
 - Die Campus-Köthen-API, Strapi und der Worker sind **nie** an Mail beteiligt. Sie
   erhalten **weder Zugangsdaten noch E-Mails**.
 - Genau **zwei** Eingaben: E-Mail-Adresse + Passwort. Die Adresse ist zugleich
@@ -102,15 +107,31 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Nicht-Bild-Anhänge automatisch für die Offline-Nutzung geladen. Ist sie aus, lädt ein bewusster
   Tipp den fehlenden Anhang live vom Mailserver, legt ihn für die INBOX im verschlüsselten Cache
   ab und öffnet ihn anschließend. Bilder werden ohnehin inline aus dem Speicher angezeigt.
+  Ist die Einstellung aus, lädt die App von einer mehrteiligen Mail nur die Textteile und Bilder
+  (vorab per `BODYSTRUCTURE` ermittelt); Dateianhänge bleiben bis zum Tipp auf dem Server.
+- **Große Mails:** Inhalte werden mit größenabhängigem Zeitlimit geladen (siehe oben). Ein
+  Vorladelauf beginnt mit den kleinsten Nachrichten; eine vom Server verweigerte oder nicht
+  lesbare Nachricht wird übersprungen und erst beim Öffnen geladen. Bricht die Verbindung bei
+  einer großen Nachricht ab, bleiben die bereits geladenen Inhalte erhalten.
 - **Empfängervorschläge:** Beim Verfassen durchsucht das An-/Cc-Feld nach 250 ms Debounce direkt
   das authentifizierte Exchange-Adressbuch per EWS `ResolveNames` und mischt die Treffer mit
   Adressen aus der verschlüsselt gecachten Mailhistorie (From/To/Cc). Schlägt EWS fehl oder ist
-  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar.
+  das Gerät offline, bleiben lokale Vorschläge und direkte Adresseingabe nutzbar. Lehnt Exchange
+  die Zugangsdaten ab (HTTP 401/403), stellt die App in dieser Mailsitzung keine weiteren
+  EWS-Anfragen für Vorschläge mehr — jede wäre ein weiterer Fehl-Login am zentralen
+  Hochschulkonto; erst eine erneute Anmeldung hebt die Sperre auf.
 - **Neue-Mail-Hinweis:** Ein IDLE-Signal allein genügt nicht. Erst wenn der anschließende
   INBOX-Abgleich eine bisher unbekannte UID bestätigt, entsteht bei aktivem globalem Opt-in und
   aktiver Kategorie eine lokale Benachrichtigung. Titel und Text nennen weder Absender noch
   Betreff; der Payload enthält nur die IMAP-UID. Der erste Sync setzt ausschließlich die Basis und
   meldet vorhandene Nachrichten nicht nachträglich.
+- **Live-Verbindung (IMAP IDLE):** Bricht sie ab, verbindet die App mit exponentiellem Backoff
+  neu (15 s, 30 s, 1 min … höchstens 30 min); erst eine Verbindung, die mindestens zwei Minuten
+  stabil war, setzt den Backoff zurück. Lehnt der Server das Passwort ab oder scheitert die
+  gesicherte Verbindung, verbindet die App **nicht** automatisch neu — jeder weitere Versuch wäre
+  ein Fehl-Login am zentralen Hochschulkonto. Der Posteingang zeigt dann „Live-Synchronisierung
+  angehalten“ mit dem Grund. Nach einem abgelehnten Passwort bleibt die Live-Verbindung bis zur
+  erneuten Anmeldung aus, auch über Pause/Resume hinweg.
 
 > Anmerkung: Es gibt **kein** Sync, während die App vollständig geschlossen ist — dafür
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP
@@ -359,7 +380,8 @@ Verfassen / Senden
 Antworten
 
 - [ ] „Antworten” öffnet den Verfassen-Screen mit dem Absender als Empfänger,
-      „Re: …”-Betreff und zitiertem Originaltext.
+      „Re: …”-Betreff und zitiertem Originaltext. Trägt die Mail einen `Reply-To`-Header
+      (z. B. Verteiler, Sekretariate), ist stattdessen diese Adresse der Empfänger.
 - [ ] „Allen antworten” adressiert zusätzlich alle ursprünglichen Empfänger (Cc),
       **ohne** die eigene Adresse.
 

@@ -22,33 +22,42 @@ class ComposeDraft {
   final String subject;
   final String body;
 
-  /// A reply to [message]: the sole recipient is the original sender.
+  /// A reply to [message]: the original sender — or, when the message names
+  /// one, its `Reply-To` address.
   factory ComposeDraft.reply(
     MailMessageDetail message, {
     required String attribution,
   }) {
     return ComposeDraft(
-      to: _clean(<String>[message.from.email]),
+      to: _replyTargets(message),
       subject: replySubject(message.subject),
       body: quotedBody(message.body, attribution),
     );
   }
 
-  /// A reply to everyone: the original sender in To, and every other original
-  /// recipient (To + Cc) in Cc, minus your own address and the sender.
+  /// A reply to everyone: the reply target (sender or `Reply-To`) in To, and
+  /// every other original recipient (To + Cc) in Cc, minus your own address
+  /// and the reply target.
   factory ComposeDraft.replyAll(
     MailMessageDetail message, {
     required String selfEmail,
     required String attribution,
   }) {
-    final String sender = message.from.email;
-    final List<String> others = <String>[
-      for (final MailAddress a in message.to) a.email,
-      for (final MailAddress a in message.cc) a.email,
-    ].where((String e) => !_same(e, selfEmail) && !_same(e, sender)).toList();
+    final List<String> targets = _replyTargets(message);
+    final List<String> others =
+        <String>[
+              for (final MailAddress a in message.to) a.email,
+              for (final MailAddress a in message.cc) a.email,
+            ]
+            .where(
+              (String e) =>
+                  !_same(e, selfEmail) &&
+                  !targets.any((String target) => _same(e, target)),
+            )
+            .toList();
 
     return ComposeDraft(
-      to: _clean(<String>[sender]),
+      to: targets,
       cc: _dedupe(_clean(others)),
       subject: replySubject(message.subject),
       body: quotedBody(message.body, attribution),
@@ -57,6 +66,15 @@ class ComposeDraft {
 
   bool get isEmpty =>
       to.isEmpty && cc.isEmpty && subject.isEmpty && body.isEmpty;
+
+  /// `Reply-To` wins over `From` (RFC 5322 §3.6.2): mailing lists, offices
+  /// and no-reply senders use it to route answers.
+  static List<String> _replyTargets(MailMessageDetail message) {
+    final List<String> replyTo = _dedupe(
+      _clean(message.replyTo.map((MailAddress a) => a.email)),
+    );
+    return replyTo.isNotEmpty ? replyTo : _clean(<String>[message.from.email]);
+  }
 
   static List<String> _clean(Iterable<String> addresses) => addresses
       .map((String e) => e.trim())
