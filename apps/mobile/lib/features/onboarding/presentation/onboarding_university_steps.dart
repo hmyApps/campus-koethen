@@ -10,6 +10,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/panel.dart';
 import '../../../l10n/l10n.dart';
+import '../../hsa_ki/presentation/hsa_ki_connect_flow.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
@@ -174,6 +175,10 @@ class _OnboardingUniversityAccessStepState
 
 /// Lets the reader deliberately choose which protocol-specific services are
 /// connected with the one local credential draft.
+///
+/// HSA-GPT is deliberately not one of the checkboxes: `AGENTS.md` §2 requires
+/// its own explicit consent screen instead of a checkbox in this wizard, so it
+/// gets a separate action that runs [connectHsaKiWithOnboarding].
 class OnboardingUniversityServicesStep extends ConsumerStatefulWidget {
   const OnboardingUniversityServicesStep({
     required this.identity,
@@ -203,6 +208,42 @@ class _OnboardingUniversityServicesStepState
   void dispose() {
     _mailDisplayName.dispose();
     super.dispose();
+  }
+
+  static final List<DirectService> _checkboxServices = DirectService.values
+      .where((DirectService service) => service != DirectService.hsaKi)
+      .toList(growable: false);
+
+  Future<void> _connectHsaKi() async {
+    if (_busy) return;
+    const DirectService service = DirectService.hsaKi;
+    setState(() {
+      _busy = true;
+      _activeService = service;
+      _generalError = null;
+      _errors.remove(service);
+    });
+    widget.onBusyChanged(true);
+    try {
+      await connectHsaKiWithOnboarding(context, ref, draft: widget.identity);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errors[service] = universityAccountErrorMessage(
+          context.l10n,
+          service,
+          error,
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _activeService = null;
+        });
+        widget.onBusyChanged(false);
+      }
+    }
   }
 
   Future<void> _connectSelected() async {
@@ -235,7 +276,7 @@ class _OnboardingUniversityServicesStepState
       universityServiceConnectorProvider,
     );
     try {
-      for (final DirectService service in DirectService.values) {
+      for (final DirectService service in _checkboxServices) {
         if (!_selected.contains(service) || _connectedHere.contains(service)) {
           continue;
         }
@@ -311,7 +352,7 @@ class _OnboardingUniversityServicesStepState
       children: <Widget>[
         if (!canUseIdentity)
           Panel(child: Text(l10n.onboardingUniversityMissingDraft)),
-        for (final DirectService service in DirectService.values) ...<Widget>[
+        for (final DirectService service in _checkboxServices) ...<Widget>[
           CheckboxListTile(
             value:
                 alreadyConnected.contains(service) ||
@@ -372,22 +413,6 @@ class _OnboardingUniversityServicesStepState
                 ),
               ),
             ),
-          if (service == DirectService.hsaKi &&
-              _selected.contains(DirectService.hsaKi) &&
-              !alreadyConnected.contains(DirectService.hsaKi))
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.xl,
-                right: AppSpacing.md,
-                bottom: AppSpacing.sm,
-              ),
-              child: Text(
-                l10n.hsaKiOnboardingIntro,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: context.colors.textSecondary,
-                ),
-              ),
-            ),
         ],
         if (_generalError != null)
           Padding(
@@ -432,7 +457,12 @@ class _OnboardingUniversityServicesStepState
             label: Text(l10n.nextcloudCancelLogin),
           ),
         ],
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
+        _HsaKiConsentEntry(
+          connected: alreadyConnected.contains(DirectService.hsaKi),
+          error: _errors[DirectService.hsaKi],
+          onConnect: _busy || !canUseIdentity ? null : _connectHsaKi,
+        ),
         Text(
           l10n.onboardingUniversitySeparateSessions,
           style: Theme.of(
@@ -450,4 +480,61 @@ class _OnboardingUniversityServicesStepState
     DirectService.nextcloud => AppIcons.cloud_outlined,
     DirectService.hsaKi => AppIcons.message_2,
   };
+}
+
+/// HSA-GPT's place in the wizard: a pointer to its own consent screen, never a
+/// checkbox (`AGENTS.md` §2).
+class _HsaKiConsentEntry extends StatelessWidget {
+  const _HsaKiConsentEntry({
+    required this.connected,
+    required this.error,
+    required this.onConnect,
+  });
+
+  final bool connected;
+  final String? error;
+  final VoidCallback? onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    final String label = universityServiceLabel(l10n, DirectService.hsaKi);
+    final String? failure = error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ListTile(
+            leading: const Icon(AppIcons.message_2),
+            title: Text(label),
+            subtitle: failure != null
+                ? Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      failure,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  )
+                : Text(
+                    connected
+                        ? l10n.universityAccountConnected
+                        : l10n.onboardingHsaKiSeparateConsent,
+                  ),
+          ),
+          if (!connected)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: OutlinedButton.icon(
+                onPressed: onConnect,
+                icon: const Icon(AppIcons.add_circle_outline),
+                label: Text(l10n.universityAccountConnectService(label)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

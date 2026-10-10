@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../grades/application/grade_account_controller.dart';
 import '../../hsa_ki/application/hsa_ki_account_controller.dart';
+import '../../hsa_ki/application/hsa_ki_consent.dart';
 import '../../hsa_ki/domain/hsa_ki_account.dart';
+import '../../hsa_ki/domain/hsa_ki_failure.dart';
 import '../../mail/application/mail_account_controller.dart';
 import '../../moodle/application/moodle_account_controller.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
@@ -137,15 +139,25 @@ class _GradesUniversityServiceAdapter implements UniversityServiceAdapter {
       _ref.read(gradeAccountControllerProvider.notifier).deleteEverything();
 }
 
+/// The central consent gate (`AGENTS.md` §2): whichever generic path reaches
+/// this adapter — setup sheet, onboarding, `+` — no HAWKI token is minted
+/// unless the dedicated HSA-GPT consent screen opened a consent scope.
 class _HsaKiUniversityServiceAdapter implements UniversityServiceAdapter {
   const _HsaKiUniversityServiceAdapter(this._ref);
   final Ref _ref;
 
   @override
-  Future<void> connect(UniversityIdentity identity, {String? displayName}) =>
-      _ref
-          .read(hsaKiAccountControllerProvider.notifier)
-          .connect(username: identity.identifier, password: identity.password);
+  Future<void> connect(
+    UniversityIdentity identity, {
+    String? displayName,
+  }) async {
+    if (!_ref.read(hsaKiConsentGateProvider).isGranted) {
+      throw const HsaKiFailure(HsaKiFailureKind.consentRequired);
+    }
+    await _ref
+        .read(hsaKiAccountControllerProvider.notifier)
+        .connect(username: identity.identifier, password: identity.password);
+  }
 
   @override
   Future<void> disconnect() =>
@@ -209,7 +221,9 @@ universityServiceConnectionSnapshotProvider =
       final GradeAccountState? grades = ref
           .watch(gradeAccountControllerProvider)
           .value;
-      final HsaKiAccount? hsaKi = ref.watch(hsaKiAccountControllerProvider).value;
+      final HsaKiAccount? hsaKi = ref
+          .watch(hsaKiAccountControllerProvider)
+          .value;
       return UniversityServiceConnectionSnapshot(
         connected: <DirectService>{
           if (mail?.isSignedIn ?? false) DirectService.mail,
@@ -403,12 +417,11 @@ class UniversityServiceConnector {
         for (final DirectService service in snapshot.connected) {
           if (service == validationService) continue;
           try {
-            await _ref
-                .read(universityServiceAdapterProvider(service))
-                .connect(
-                  replacement,
-                  displayName: snapshot.displayNameFor(service),
-                );
+            await _reconnectLinked(
+              service,
+              replacement,
+              displayName: snapshot.displayNameFor(service),
+            );
             reconnected.add(service);
           } catch (_) {
             // Its canonical wipe already completed. A failed reconnect stays
@@ -453,14 +466,34 @@ class UniversityServiceConnector {
     }
     for (final DirectService service in snapshot.connected) {
       try {
-        await _ref
-            .read(universityServiceAdapterProvider(service))
-            .connect(previous, displayName: snapshot.displayNameFor(service));
+        await _reconnectLinked(
+          service,
+          previous,
+          displayName: snapshot.displayNameFor(service),
+        );
       } catch (_) {
         restored = false;
       }
     }
     return restored;
+  }
+
+  /// Re-establishes a link that existed before this account update. For
+  /// HSA-GPT that link already rests on the user's explicit consent, so the
+  /// consent scope is reopened only for exactly this reconnect.
+  Future<void> _reconnectLinked(
+    DirectService service,
+    UniversityIdentity identity, {
+    String? displayName,
+  }) {
+    final UniversityServiceAdapter adapter = _ref.read(
+      universityServiceAdapterProvider(service),
+    );
+    Future<void> reconnect() =>
+        adapter.connect(identity, displayName: displayName);
+    return service == DirectService.hsaKi
+        ? _ref.read(hsaKiConsentGateProvider).runWithConsent<void>(reconnect)
+        : reconnect();
   }
 
   /// Explicit `+`: reads the secret only for this call and creates only this

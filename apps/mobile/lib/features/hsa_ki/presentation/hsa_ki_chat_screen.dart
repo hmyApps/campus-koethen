@@ -10,6 +10,8 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
+import '../../settings/domain/direct_service.dart';
+import '../../university_account/presentation/university_account_setup_sheet.dart';
 import '../application/hsa_ki_account_controller.dart';
 import '../application/hsa_ki_chat_controller.dart';
 import '../domain/hsa_ki_account.dart';
@@ -74,7 +76,13 @@ class _HsaKiConnectPromptState extends ConsumerState<_HsaKiConnectPrompt> {
       await connectHsaKiWithOnboarding(context, ref);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = hsaKiFailureMessage(context.l10n, error));
+      setState(
+        () => _error = universityAccountErrorMessage(
+          context.l10n,
+          DirectService.hsaKi,
+          error,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

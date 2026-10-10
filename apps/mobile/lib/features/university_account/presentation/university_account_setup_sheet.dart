@@ -10,6 +10,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../l10n/l10n.dart';
 import '../../grades/domain/grade_failure.dart';
 import '../../grades/presentation/grade_messages.dart';
+import '../../hsa_ki/application/hsa_ki_consent.dart';
 import '../../hsa_ki/domain/hsa_ki_failure.dart';
 import '../../hsa_ki/presentation/hsa_ki_messages.dart';
 import '../../mail/domain/mail_failure.dart';
@@ -91,6 +92,7 @@ class _UniversityAccountSetupSheetState
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _identifier = TextEditingController();
   final TextEditingController _password = TextEditingController();
+  late final List<DirectService> _validationServices;
   late DirectService _service;
   bool _consent = false;
   bool _showConsentError = false;
@@ -101,7 +103,20 @@ class _UniversityAccountSetupSheetState
   @override
   void initState() {
     super.initState();
-    _service = widget.initialService;
+    // HSA-GPT has its own consent screen (`AGENTS.md` §2). It is offered
+    // here only while that screen's consent scope is open, i.e. when this
+    // sheet was opened by the HSA-GPT connect flow — never as an ordinary
+    // option of the generic setup or the account update.
+    final bool hsaKiConsented = ref.read(hsaKiConsentGateProvider).isGranted;
+    _validationServices = DirectService.universityIdentityServices
+        .where(
+          (DirectService service) =>
+              service != DirectService.hsaKi || hsaKiConsented,
+        )
+        .toList(growable: false);
+    _service = _validationServices.contains(widget.initialService)
+        ? widget.initialService
+        : _validationServices.first;
     final UniversityAccountState? current = ref
         .read(universityAccountControllerProvider)
         .value;
@@ -201,7 +216,7 @@ class _UniversityAccountSetupSheetState
                       labelText: l10n.universityAccountValidationService,
                       prefixIcon: const Icon(AppIcons.shield_outlined),
                     ),
-                    items: DirectService.universityIdentityServices
+                    items: _validationServices
                         .map(
                           (DirectService service) =>
                               DropdownMenuItem<DirectService>(
