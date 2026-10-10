@@ -25,18 +25,28 @@ Zusätzlich behoben, nicht im Audit: `ical.js` verknüpfte Overrides UID-übergr
 `occurrenceKey`, Feed-Sync-Abbruch); `meta.truncated` im Kalender-Abgleich gemerkter Events;
 48-dp-Ziel des Sterns in `meal_card.dart`; Race beim parallelen Schreiben von Antragsvorgängen.
 
-Gates auf dem Endstand (lokal, Windows, Flutter 3.44.7, Node 24.11.0):
+Gates auf dem Endstand, CI-Jobs lokal nachgebildet (sauberer Worktree, gepinntes Node 24.21.0,
+Flutter 3.44.7, Wegwerf-Container `postgres:16-alpine` mit `campus_app_test_<run-id>`):
 
-- Mobile: `gen-l10n`, `analyze --fatal-infos --fatal-warnings`, `dart format --set-exit-if-changed`
-  grün; `flutter test` 3087/3087.
-- Backend: `typecheck`, `lint` grün; Unit-Tests (`src/`) 44/44 Suites, 639/639.
-- **Nicht ausgeführt:** alle DB-Integration-Specs (kein PostgreSQL/Docker), inkl. der neuen Fälle
-  aus WP1/WP2, und die Migration `20261009120000_add_public_calendar_source_and_expansion`.
+- Backend: `prisma migrate deploy` (13 Migrationen, Schema aktuell), Unit- **und** Integrationstests
+  58/58 Suites, 811/811; `lint`, `typecheck`, `build`, OpenAPI ohne Drift.
+- CMS: `typecheck`, `test`, `build`, Slug-Schema-Prüfung grün. Karte: `test`, `validate`, `check` grün.
+- Mobile: `gen-l10n`, `validate_release_api`, `dart format .`, `analyze --fatal-infos --fatal-warnings`,
+  `flutter test` (TZ=Europe/Berlin) 3087/3087, Hardcoded-Text-Grep, Dart-Dependency-Audit grün.
+- Repo: `pnpm format:check` grün (7 Docs, die schon auf `main` rot waren, formatiert), Gitleaks 8.30.1
+  über die gesamte Historie ohne Fund, `image_url`-Guard grün, nginx `-t` für beide API-Edge-Confs ok.
+- **Rot, aber nicht durch diesen Branch:** `pnpm audit --audit-level high` (identisch auf `main`, keine
+  Abhängigkeit geändert): `proxy-addr` 2.0.7 → ≥2.0.8 und `compression` 1.8.1 → ≥1.8.2 (Backend-Laufzeit),
+  `handlebars` 4.7.9 → ≥4.7.10, `sharp` 0.35.4 → ≥0.35.5 (CMS).
+
+Windows-Hinweis: Flutter-Gates scheitern in sehr langen Pfaden an MAX_PATH (`ios/Flutter/ephemeral`);
+lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat teils CRLF
+(`core.autocrlf=true`), Index ist LF — `format:check` im Arbeitsverzeichnis kann deshalb fälschlich rot sein.
 
 ## Offene To-dos (Priorität absteigend)
 
-- [ ] DB-Integration-Specs und neue Migration gegen eine isolierte temporäre PostgreSQL ausführen
-      (AGENTS §8); Gates mit der gepinnten Node-Version 24.21.0 wiederholen (lokal 24.11.0, Root-`preinstall` scheitert).
+- [ ] Sicherheits-Patches für `pnpm audit` (siehe oben) über Overrides in `pnpm-workspace.yaml` bzw. den
+      exakten `compression`-Pin im Backend; danach alle Gates erneut.
 - [ ] Maintainer-Entscheidungen: A-07 (Mensa-IDs im DTO), A-08 (`STRAPI_BASE_URL`-Default), VA-N02 (Speiseplan
       `to` = from+14 vs. Doku +13), B-11 (`workflow_dispatch` in `images.yml`), D-10 (`/api/ai-req` vs. AGENTS),
       D-11 (ungenutztes HAWKI-E2EE-Modul), E-13 (Moodle-Auto-Sync stündlich vs. Doku 24 h), G-07 (App-IDs),
@@ -51,4 +61,9 @@ Gates auf dem Endstand (lokal, Windows, Flutter 3.44.7, Node 24.11.0):
       Stundenplan-Lauf bleibt `success`, wenn einzelne Klassen unbestätigt sind (nur `errorMessage`).
 - [ ] Live/real zu verifizieren: F-06 (EWS-Ganztag), C-02 (Teilabruf ohne Anhänge, echtes Postfach), D-08 (Overlay-IDs
       HISinOne), E-12 (Moodle-`wsaccessuser*`-Codes), F-08 (Gerätematrix #20), B-05/B-08 (Strapi `channels.isActive`,
-      `documentId` in Relationen), B-06 (nginx `proxy_ignore_headers`), B-02/VB-N02 (Google-ETag-Verhalten).
+      `documentId` in Relationen), B-06 (nginx-Laufzeitverhalten auf dem VPS; Syntax geprüft), B-02/VB-N02
+      (Google-ETag-Verhalten).
+- [ ] Deployment (manuell, kein Auto-Deploy): Standard-Update laut `infrastructure/vps/README.md`
+      (`--profile migrate run --rm migrate` vor `up -d api worker`) deckt die neue, rein additive Migration
+      `20261009120000_…` ab; geänderte Edge-Confs (`proxy_ignore_headers`) separat auf dem VPS einspielen,
+      `nginx -t`, reload.
