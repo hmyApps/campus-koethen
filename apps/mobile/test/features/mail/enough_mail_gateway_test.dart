@@ -190,6 +190,70 @@ void main() {
       );
     });
 
+    test(
+      'refuses to delete or mark seen once UIDVALIDITY changed (C-10)',
+      () async {
+        server = await FakeImapServer.start(
+          (String tag, String command) {
+            if (command.startsWith('LOGIN ')) {
+              return <String>['$tag OK LOGIN completed'];
+            }
+            if (command.startsWith('LIST')) {
+              return <String>[
+                '* LIST (\\HasNoChildren) "/" "INBOX"',
+                '* LIST (\\HasNoChildren \\Trash) "/" "Deleted Items"',
+                '$tag OK LIST completed',
+              ];
+            }
+            if (command.startsWith('SELECT')) {
+              return <String>[
+                '* 1 EXISTS',
+                '* OK [UIDVALIDITY 1] UIDs valid',
+                '* FLAGS (\\Deleted \\Seen)',
+                '$tag OK [READ-WRITE] SELECT completed',
+              ];
+            }
+            if (command.startsWith('LOGOUT')) {
+              return <String>['* BYE logging out', '$tag OK LOGOUT completed'];
+            }
+            return <String>['$tag OK done'];
+          },
+          greeting:
+              '* OK [CAPABILITY IMAP4rev1 UIDPLUS MOVE SPECIAL-USE] ready',
+        );
+        final EnoughMailGateway gateway = EnoughMailGateway(
+          _LoopbackMailProfile(server.port),
+        );
+        final Matcher mailboxChanged = throwsA(
+          isA<MailFailure>().having(
+            (MailFailure failure) => failure.kind,
+            'kind',
+            MailFailureKind.mailboxChanged,
+          ),
+        );
+
+        await expectLater(
+          gateway.deleteMessage(_credentials, id: '7', expectedUidValidity: 2),
+          mailboxChanged,
+        );
+        await expectLater(
+          gateway.markSeen(_credentials, id: '7', expectedUidValidity: 2),
+          mailboxChanged,
+        );
+
+        expect(server.receivedCommands, isNot(contains(contains('UID MOVE'))));
+        expect(server.receivedCommands, isNot(contains(contains('UID STORE'))));
+
+        // A matching UIDVALIDITY lets the very same request through.
+        await gateway.deleteMessage(
+          _credentials,
+          id: '7',
+          expectedUidValidity: 1,
+        );
+        expect(server.receivedCommands, contains(contains('UID MOVE 7')));
+      },
+    );
+
     test('enters IMAP IDLE when the server advertises it', () async {
       String? idleTag;
       server = await FakeImapServer.start((String tag, String command) {

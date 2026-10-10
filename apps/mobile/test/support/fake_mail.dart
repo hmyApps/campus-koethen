@@ -164,6 +164,9 @@ class FakeMailGateway implements MailGateway {
   /// UIDVALIDITY reported with every header page (null: not reported).
   int? uidValidity;
 
+  /// The UIDVALIDITY guard passed with the last markSeen/deleteMessage.
+  int? lastExpectedUidValidity;
+
   @override
   Future<MailHeaderPage> fetchHeaders(
     MailCredentials credentials, {
@@ -244,7 +247,9 @@ class FakeMailGateway implements MailGateway {
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
+    lastExpectedUidValidity = expectedUidValidity;
     if (markSeenError != null) throw markSeenError!;
     markedSeen.add(id);
   }
@@ -254,7 +259,9 @@ class FakeMailGateway implements MailGateway {
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
+    lastExpectedUidValidity = expectedUidValidity;
     deletedMessages.add((mailboxPath: mailboxPath, id: id));
   }
 

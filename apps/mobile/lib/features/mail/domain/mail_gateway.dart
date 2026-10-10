@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'mail_credentials.dart';
+import 'mail_failure.dart';
 import 'mail_folder.dart';
 import 'mail_message.dart';
 
@@ -103,19 +104,29 @@ abstract interface class MailGateway {
   });
 
   /// Marks a message as \Seen. Best effort — failure is non-fatal to the caller.
+  ///
+  /// With [expectedUidValidity], nothing is changed unless the selected
+  /// mailbox still reports that UIDVALIDITY; otherwise this throws
+  /// [MailFailureKind.mailboxChanged].
   Future<void> markSeen(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   });
 
   /// Moves one message to the server's Trash folder. When the message already
   /// lives in Trash it is permanently removed. Implementations must address it
   /// by IMAP UID, never by the unstable sequence number.
+  ///
+  /// With [expectedUidValidity], nothing is changed unless the selected
+  /// mailbox still reports that UIDVALIDITY; otherwise this throws
+  /// [MailFailureKind.mailboxChanged].
   Future<void> deleteMessage(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   });
 
   /// Watches INBOX changes using IMAP IDLE, with a bounded NOOP polling

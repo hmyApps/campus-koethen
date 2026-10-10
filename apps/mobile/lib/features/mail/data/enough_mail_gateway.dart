@@ -167,11 +167,21 @@ class EnoughMailGateway implements MailGateway {
   static const String _hostnameForEhlo = 'campus-koethen.localhost';
 
   /// Selects [mailboxPath], taking the cheap INBOX shortcut when possible.
-  Future<void> _select(ImapClient client, String mailboxPath) async {
-    if (mailboxPath == kInboxPath) {
-      await client.selectInbox();
-    } else {
-      await client.selectMailboxByPath(mailboxPath);
+  ///
+  /// With [expectedUidValidity], fails closed when the mailbox reports another
+  /// UIDVALIDITY: the caller's UID may then name a different message, so no
+  /// command addressing it may follow.
+  Future<void> _select(
+    ImapClient client,
+    String mailboxPath, {
+    int? expectedUidValidity,
+  }) async {
+    final Mailbox selected = mailboxPath == kInboxPath
+        ? await client.selectInbox()
+        : await client.selectMailboxByPath(mailboxPath);
+    if (expectedUidValidity != null &&
+        selected.uidValidity != expectedUidValidity) {
+      throw const MailFailure(MailFailureKind.mailboxChanged);
     }
   }
 
@@ -416,10 +426,15 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final int uid = int.parse(id);
         await client.uidMarkSeen(
           MessageSequence.fromRange(uid, uid, isUidSequence: true),
@@ -433,6 +448,7 @@ class EnoughMailGateway implements MailGateway {
     domain.MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
@@ -451,7 +467,11 @@ class EnoughMailGateway implements MailGateway {
                   box.name == 'Papierkorb',
             )
             .firstOrNull;
-        await _select(client, mailboxPath);
+        await _select(
+          client,
+          mailboxPath,
+          expectedUidValidity: expectedUidValidity,
+        );
         final MessageSequence sequence = MessageSequence.fromRange(
           uid,
           uid,

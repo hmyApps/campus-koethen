@@ -255,6 +255,15 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
 
       if (folder.isInbox) {
         final cache = ref.read(mailCacheStoreProvider);
+        final int? knownUidValidity = await cache.readUidValidity();
+        if (page.uidValidity != null &&
+            knownUidValidity != null &&
+            page.uidValidity != knownUidValidity) {
+          // Renumbered INBOX: these UIDs do not continue the cached ones.
+          // The sync discards the stale cache; the page is not merged.
+          unawaited(ref.read(mailSyncControllerProvider.notifier).syncNow());
+          throw const MailFailure(MailFailureKind.mailboxChanged);
+        }
         final List<MailMessageHeader> merged = mergeInboxHeaders(
           await cache.readHeaders(),
           older,
@@ -332,6 +341,7 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
           credentials,
           mailboxPath: message.mailboxPath,
           id: message.id,
+          expectedUidValidity: await _cachedUidValidity(ref, message),
         );
     if (!accountController.isSessionCurrent(generation)) {
       throw const MailFailure(MailFailureKind.sessionClosed);
@@ -452,6 +462,15 @@ Future<void> _markSeen(Ref ref, MailMessageRef message) async {
           credentials,
           mailboxPath: message.mailboxPath,
           id: message.id,
+          expectedUidValidity: await _cachedUidValidity(ref, message),
         );
   } catch (_) {}
 }
+
+/// The UIDVALIDITY an INBOX id was cached under, so a destructive server
+/// action can refuse to run once the mailbox has been renumbered. Other
+/// folders are read live, so their ids are never stale and need no guard.
+Future<int?> _cachedUidValidity(Ref ref, MailMessageRef message) async =>
+    message.mailboxPath == kInboxPath
+    ? ref.read(mailCacheStoreProvider).readUidValidity()
+    : null;

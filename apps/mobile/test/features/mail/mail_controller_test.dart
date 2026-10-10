@@ -570,6 +570,91 @@ void main() {
       expect(container.read(mailPaginationProvider).hasMore, isFalse);
     });
 
+    test(
+      'destructive INBOX actions carry the cached UIDVALIDITY (C-10)',
+      () async {
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        final cache = MemoryMailCache();
+        await cache.saveUidValidity(7);
+        await cache.saveHeaders(<MailMessageHeader>[_hdr('8'), _hdr('7')]);
+        await cache.saveMessage(_dtl('8'));
+        final gateway = FakeMailGateway(
+          detailsById: <String, MailMessageDetail>{'1': _dtl('1')},
+        );
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        await container.read(mailAccountControllerProvider.future);
+        final MailInboxController inbox = container.read(
+          mailInboxControllerProvider.notifier,
+        );
+
+        await inbox.deleteMessage((mailboxPath: kInboxPath, id: '7'));
+        expect(gateway.lastExpectedUidValidity, 7);
+
+        gateway.lastExpectedUidValidity = null;
+        await container.read(
+          mailMessageProvider((mailboxPath: kInboxPath, id: '8')).future,
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(gateway.markedSeen, <String>['8']);
+        expect(gateway.lastExpectedUidValidity, 7);
+
+        // Other folders are not cached, so their ids are never stale.
+        await inbox.deleteMessage((mailboxPath: 'Archiv', id: '1'));
+        expect(gateway.lastExpectedUidValidity, isNull);
+      },
+    );
+
+    test(
+      'an older page from a renumbered INBOX is not merged (C-10)',
+      () async {
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        final cache = MemoryMailCache();
+        await cache.saveUidValidity(1);
+        await cache.saveHeaders(<MailMessageHeader>[
+          for (int id = 300; id > 250; id--) _hdr('$id'),
+        ]);
+        final gateway = FakeMailGateway(
+          uidValidity: 2,
+          messagesExists: 300,
+          olderInbox: <MailMessageHeader>[
+            for (int id = 250; id > 150; id--) _hdr('$id'),
+          ],
+        );
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        await container.read(mailAccountControllerProvider.future);
+        await container.read(mailInboxControllerProvider.future);
+
+        await container.read(mailInboxControllerProvider.notifier).loadOlder();
+
+        expect(
+          container.read(mailPaginationProvider).error,
+          isA<MailFailure>().having(
+            (MailFailure f) => f.kind,
+            'kind',
+            MailFailureKind.mailboxChanged,
+          ),
+        );
+        expect(container.read(mailOlderInboxHeadersProvider), isEmpty);
+        expect(
+          (await cache.readHeaders()).any(
+            (MailMessageHeader h) => h.id == '250',
+          ),
+          isFalse,
+        );
+        // The rejected page asks the sync to rebuild the renumbered INBOX.
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+        expect(await cache.readUidValidity(), 2);
+      },
+    );
+
     test('in-memory older pages follow deletions and seen flags', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
       final gateway = FakeMailGateway();

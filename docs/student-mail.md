@@ -82,7 +82,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
 - Der Sync holt die **50 neuesten** INBOX-Header und führt sie mit dem lokalen Bestand zusammen.
   Alters-, Anzahl- und Bytebudgets begrenzen diesen Bestand. Umfasst das Fenster laut
   IMAP-`EXISTS` das ganze Postfach, entfernt der Sync jede gecachte Nachricht, die dort fehlt
-  (etwa im Webmail gelöscht); eine leere Serverantwort löscht nie. Pro Lauf werden höchstens die
+  (etwa im Webmail gelöscht); eine leere Serverantwort löscht nie. Der Cache merkt sich die
+  `UIDVALIDITY` der INBOX: Meldet der Server einen anderen Wert, verwirft der Sync Header, Inhalte
+  und Indizes und baut eine neue Basis auf, ohne die Mails als neu zu melden. Löschen und
+  „gelesen“ laufen für die INBOX nur, wenn der Server noch dieselbe `UIDVALIDITY` meldet; sonst
+  bricht die Aktion mit einem Hinweis zum Aktualisieren ab. Pro Lauf werden höchstens die
   **20 neuesten** noch fehlenden Inhalte vorgeladen; ältere Inhalte lädt das Öffnen der Nachricht
   bei Bedarf direkt vom IMAP-Server.
 - Am Ende der Nachrichtenliste lädt „100 ältere E-Mails laden“ die jeweils nächsten
