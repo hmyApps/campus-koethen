@@ -21,6 +21,7 @@ import '../domain/notification_request.dart';
 import 'daily_summary_providers.dart' show notificationPlanningDayProvider;
 import 'notification_providers.dart';
 import 'notification_settings_controller.dart';
+import 'saved_event_scope.dart';
 
 /// N1 · `event.reminder` — at most one locally configured reminder per event
 /// (ADR-0001 amendment of 2026-10-07).
@@ -233,11 +234,10 @@ final Provider<List<CalendarEntry>> notificationEventEntriesProvider =
         );
       }
 
-      final List<SavedEventSnapshot> saved =
-          (ref.watch(savedEventsControllerProvider).value ??
-                  const <SavedEventSnapshot>[])
-              .where((SavedEventSnapshot s) => !s.isOrphaned && !s.isCancelled)
-              .toList(growable: false);
+      final List<SavedEventSnapshot> saved = notifiableSavedEvents(
+        ref.watch(savedEventsControllerProvider).value ??
+            const <SavedEventSnapshot>[],
+      );
 
       final List<PublicCalendar> catalog =
           ref.watch(publicCalendarsCatalogProvider).value?.value ??

@@ -30,6 +30,7 @@ import 'daily_summary.dart';
 import 'daily_summary_content.dart';
 import 'notification_providers.dart';
 import 'notification_settings_controller.dart';
+import 'saved_event_scope.dart';
 
 /// The local calendar day every planning contributor treats as "today".
 ///
@@ -204,9 +205,12 @@ Iterable<CalendarEntry> _eventEntries(
     );
   }
 
-  final List<SavedEventSnapshot> saved =
-      ref.watch(savedEventsControllerProvider).value ??
-      const <SavedEventSnapshot>[];
+  // The same bookmarks N1 may remind about: never an orphaned or cancelled
+  // one, which would otherwise fill a day with something that is gone (F-04).
+  final List<SavedEventSnapshot> saved = notifiableSavedEvents(
+    ref.watch(savedEventsControllerProvider).value ??
+        const <SavedEventSnapshot>[],
+  );
   if (saved.isEmpty) return live;
 
   final List<PublicCalendar> catalog =

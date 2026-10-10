@@ -126,6 +126,8 @@ Regeln, die dabei gelten:
   Moodle-Frist und kein Mensa-Speiseplan. Ein vorhandener Speiseplan ist nach P4 ein eigener Anteil
   der Tagesübersicht und begründet deshalb auch ohne weitere Quelle eine Meldung.
 - **Eine abgesagte Lehrveranstaltung zählt nicht** und füllt keinen Tag.
+- **Verwaiste und abgesagte gemerkte Events zählen ebenfalls nicht** — dieselbe Regel wie in N1
+  (`notifiableSavedEvents`), geprüft am Merkeintrag selbst.
 - **Moodle bleibt aggregiert.** Der Tagesbefund hat kein Feld für einen Kurs- oder Aufgabentitel,
   der Text kann also keinen nennen. Ein Tag mit einer Frist wird zusätzlich als `neutral`
   markiert.
