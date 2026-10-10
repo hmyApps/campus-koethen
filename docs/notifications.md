@@ -207,7 +207,11 @@ dieselbe `DeliveryWindow`, können also nicht auseinanderlaufen.
 **Tap.** Der Payload trägt die `CalendarEntry.id` und sonst nichts. `NotificationTapRouter` löst
 sie über den zusammengeführten Bestand auf, fokussiert den Tag **des Eintrags** (nicht einen Tag
 aus dem Payload, den es dort nicht gibt) und öffnet `showCalendarEntrySheet`. Löst sie nicht auf,
-bleibt es bei `/calendar` plus dezentem Hinweis.
+bleibt es bei `/calendar` plus dezentem Hinweis. Vor dem Auflösen wartet der Tap
+(`loadCalendarEntryForNotification`) auf gemerkte Events, Kalenderkatalog und die Monate des
+Horizonts, höchstens `kNotificationTapSourceTimeout` (5 s) lang: Bei einem Kaltstart aus der
+Benachrichtigung ist sonst noch nichts geladen, und ein bestehendes Event würde als „nicht mehr
+verfügbar" gemeldet (Gerätematrix #20).
 
 **Eine bewusste Abweichung von § 7.2, aktenkundig:** Der Bestand beobachtet
 `publicCalendarMonthEntriesProvider` für den laufenden und den folgenden Monat. Gewartet wird nie —

@@ -272,6 +272,47 @@ final calendarEntryForNotificationProvider =
       return null;
     });
 
+/// How long a tapped `event.reminder` waits for its sources before it
+/// resolves against whatever has loaded by then.
+const Duration kNotificationTapSourceTimeout = Duration(seconds: 5);
+
+/// [calendarEntryForNotificationProvider], but only once the sources it
+/// resolves against have loaded — the tap side of N1 (F-08).
+///
+/// The synchronous lookup reads every source as `.value`, which is right for
+/// planning and wrong for a tap on a **cold start**: the app was opened by the
+/// notification, nothing has loaded yet, and a live event would be reported
+/// as "no longer available". So the tap waits for the saved events, the
+/// calendar catalogue and the public-calendar months of the horizon, each
+/// failure swallowed (a failed source is simply an absent one) and the whole
+/// wait bounded by [timeout]. Then it asks the ordinary lookup.
+///
+/// Takes the container rather than a `Ref`: it is called from a tap handler
+/// above the widget tree, and it must not create a provider of its own that
+/// could be disposed while it waits.
+Future<CalendarEntry?> loadCalendarEntryForNotification(
+  ProviderContainer container,
+  String id, {
+  Duration timeout = kNotificationTapSourceTimeout,
+}) async {
+  final DateTime today = container.read(notificationPlanningDayProvider);
+  Future<void> settled(Future<Object?> source) =>
+      source.then<void>((_) {}, onError: (Object _) {});
+  await Future.wait<void>(<Future<void>>[
+    settled(container.read(savedEventsControllerProvider.future)),
+    settled(container.read(publicCalendarsCatalogProvider.future)),
+    for (int i = 0; i < kEventReminderHorizonMonths; i++)
+      settled(
+        container.read(
+          publicCalendarMonthEntriesProvider(
+            DateTime(today.year, today.month + i),
+          ).future,
+        ),
+      ),
+  ]).timeout(timeout, onTimeout: () => const <void>[]);
+  return container.read(calendarEntryForNotificationProvider(id));
+}
+
 /// N1's contribution to the plan.
 final Provider<List<NotificationRequest>> eventReminderCandidatesProvider =
     Provider<List<NotificationRequest>>((Ref ref) {

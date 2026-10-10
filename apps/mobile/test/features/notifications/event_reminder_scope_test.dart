@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/network/api_meta.dart';
@@ -106,6 +108,8 @@ Future<ProviderContainer> containerWith({
   List<Override> extra = const <Override>[],
   Clock? clock,
   List<CalendarEntry> Function(DateTime anchor)? liveFor,
+  Future<List<CalendarEntry>> Function(DateTime anchor)? loadMonth,
+  bool settle = true,
 }) async {
   final MemorySavedEventsStore store = MemorySavedEventsStore();
   await store.writeAll(saved);
@@ -126,14 +130,19 @@ Future<ProviderContainer> containerWith({
       // Only the month the fixtures live in answers with anything; the rest of
       // the horizon is empty, exactly as an unfetched month would be.
       publicCalendarMonthEntriesProvider.overrideWith(
-        (Ref ref, DateTime anchor) async =>
-            liveFor?.call(anchor) ??
-            (anchor.month == 7 ? live : const <CalendarEntry>[]),
+        (Ref ref, DateTime anchor) =>
+            loadMonth?.call(anchor) ??
+            Future<List<CalendarEntry>>.value(
+              liveFor?.call(anchor) ??
+                  (anchor.month == 7 ? live : const <CalendarEntry>[]),
+            ),
       ),
       ...extra,
     ],
   );
   addTearDown(container.dispose);
+  // A cold start: nothing has loaded yet when the first question is asked.
+  if (!settle) return container;
 
   // The two async sources have to have settled before the synchronous
   // candidate provider is asked, or it would legitimately answer "nothing
@@ -416,6 +425,84 @@ void main() {
     );
 
     expect(entryIds(container), <String>[september.id]);
+  });
+
+  group('a tap on a cold start (F-08)', () {
+    test('the synchronous lookup knows nothing yet, the tap lookup waits for '
+        'the sources and finds the entry', () async {
+      final ProviderContainer container = await containerWith(
+        live: <CalendarEntry>[liveEvent()],
+        saved: <SavedEventSnapshot>[
+          savedSnapshot(
+            eventRef: 'post:vortrag',
+            kind: UnifiedEventKind.postEvent,
+            title: 'Gemerkter Vortrag',
+            start: DateTime(2026, 7, 23, 18),
+            calendarSlug: null,
+          ),
+        ],
+        settle: false,
+      );
+      final String liveId = liveEvent().id;
+      const String savedId = 'savedEvent:post:vortrag';
+
+      // What the tap handler used to do: read synchronously before anything
+      // has loaded — and report a live event as "no longer available".
+      expect(
+        container.read(calendarEntryForNotificationProvider(liveId)),
+        isNull,
+      );
+
+      expect(
+        (await loadCalendarEntryForNotification(container, liveId))?.title,
+        'Campus Sommerfest 2026',
+      );
+      expect(
+        (await loadCalendarEntryForNotification(container, savedId))?.title,
+        'Gemerkter Vortrag',
+      );
+    });
+
+    test('a source that never answers costs at most the timeout, and what '
+        'has loaded still resolves', () async {
+      final ProviderContainer container = await containerWith(
+        saved: <SavedEventSnapshot>[
+          savedSnapshot(
+            eventRef: 'post:vortrag',
+            kind: UnifiedEventKind.postEvent,
+            title: 'Gemerkter Vortrag',
+            calendarSlug: null,
+          ),
+        ],
+        loadMonth: (DateTime anchor) => Completer<List<CalendarEntry>>().future,
+        settle: false,
+      );
+
+      final Stopwatch watch = Stopwatch()..start();
+      final CalendarEntry? found = await loadCalendarEntryForNotification(
+        container,
+        'savedEvent:post:vortrag',
+        timeout: const Duration(milliseconds: 50),
+      );
+
+      expect(found?.title, 'Gemerkter Vortrag');
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+    });
+
+    test('an id that names nothing still resolves to null', () async {
+      final ProviderContainer container = await containerWith(
+        live: <CalendarEntry>[liveEvent()],
+        settle: false,
+      );
+
+      expect(
+        await loadCalendarEntryForNotification(
+          container,
+          'publicCalendar:gone:1',
+        ),
+        isNull,
+      );
+    });
   });
 }
 
