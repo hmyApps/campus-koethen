@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/network/api_meta.dart';
@@ -15,6 +17,7 @@ import 'package:campus_koethen/features/events/application/saved_events_controll
 import 'package:campus_koethen/features/events/data/saved_events_store.dart';
 import 'package:campus_koethen/features/events/domain/saved_event_snapshot.dart';
 import 'package:campus_koethen/features/events/domain/unified_event.dart';
+import 'package:campus_koethen/features/notifications/application/daily_summary_providers.dart';
 import 'package:campus_koethen/features/notifications/application/event_reminder_candidates.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/domain/notification_request.dart';
@@ -103,6 +106,10 @@ Future<ProviderContainer> containerWith({
   List<SavedEventSnapshot> saved = const <SavedEventSnapshot>[],
   List<PublicCalendar> catalogue = const <PublicCalendar>[],
   List<Override> extra = const <Override>[],
+  Clock? clock,
+  List<CalendarEntry> Function(DateTime anchor)? liveFor,
+  Future<List<CalendarEntry>> Function(DateTime anchor)? loadMonth,
+  bool settle = true,
 }) async {
   final MemorySavedEventsStore store = MemorySavedEventsStore();
   await store.writeAll(saved);
@@ -112,7 +119,7 @@ Future<ProviderContainer> containerWith({
       keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       savedEventsStoreProvider.overrideWithValue(store),
       savedEventsClockProvider.overrideWithValue(() => kNow),
-      notificationClockProvider.overrideWithValue(_FixedClock(kNow)),
+      notificationClockProvider.overrideWithValue(clock ?? _FixedClock(kNow)),
       timeZoneResolverProvider.overrideWithValue(
         FixedTimeZoneResolver('Europe/Berlin'),
       ),
@@ -123,13 +130,19 @@ Future<ProviderContainer> containerWith({
       // Only the month the fixtures live in answers with anything; the rest of
       // the horizon is empty, exactly as an unfetched month would be.
       publicCalendarMonthEntriesProvider.overrideWith(
-        (Ref ref, DateTime anchor) async =>
-            anchor.month == 7 ? live : const <CalendarEntry>[],
+        (Ref ref, DateTime anchor) =>
+            loadMonth?.call(anchor) ??
+            Future<List<CalendarEntry>>.value(
+              liveFor?.call(anchor) ??
+                  (anchor.month == 7 ? live : const <CalendarEntry>[]),
+            ),
       ),
       ...extra,
     ],
   );
   addTearDown(container.dispose);
+  // A cold start: nothing has loaded yet when the first question is asked.
+  if (!settle) return container;
 
   // The two async sources have to have settled before the synchronous
   // candidate provider is asked, or it would legitimately answer "nothing
@@ -382,4 +395,120 @@ void main() {
       }
     });
   });
+
+  test('the month horizon moves on with the planning day (VF-N03)', () async {
+    // Open on 31 July: the horizon is July and August. A September event is
+    // out of reach until the day rolls over into August.
+    final _MutableClock clock = _MutableClock(DateTime(2026, 7, 31, 23, 50));
+    final CalendarEntry september = liveEvent(
+      eventId: '9001',
+      start: DateTime(2026, 9, 1, 16),
+    );
+    final ProviderContainer container = await containerWith(
+      clock: clock,
+      liveFor: (DateTime anchor) =>
+          anchor.month == 9 ? <CalendarEntry>[september] : <CalendarEntry>[],
+    );
+    container.listen(notificationEventEntriesProvider, (_, _) {});
+    // Let every month of the first horizon settle, so nothing but the day
+    // change itself is left to trigger a rebuild.
+    await container.read(
+      publicCalendarMonthEntriesProvider(DateTime(2026, 8)).future,
+    );
+    expect(entryIds(container), isEmpty);
+
+    // Midnight, as `NotificationHost` handles it: the planning day moves on.
+    clock.value = DateTime(2026, 8, 1, 0, 0, 1);
+    container.read(notificationPlanningDayProvider.notifier).refresh();
+    await container.read(
+      publicCalendarMonthEntriesProvider(DateTime(2026, 9)).future,
+    );
+
+    expect(entryIds(container), <String>[september.id]);
+  });
+
+  group('a tap on a cold start (F-08)', () {
+    test('the synchronous lookup knows nothing yet, the tap lookup waits for '
+        'the sources and finds the entry', () async {
+      final ProviderContainer container = await containerWith(
+        live: <CalendarEntry>[liveEvent()],
+        saved: <SavedEventSnapshot>[
+          savedSnapshot(
+            eventRef: 'post:vortrag',
+            kind: UnifiedEventKind.postEvent,
+            title: 'Gemerkter Vortrag',
+            start: DateTime(2026, 7, 23, 18),
+            calendarSlug: null,
+          ),
+        ],
+        settle: false,
+      );
+      final String liveId = liveEvent().id;
+      const String savedId = 'savedEvent:post:vortrag';
+
+      // What the tap handler used to do: read synchronously before anything
+      // has loaded — and report a live event as "no longer available".
+      expect(
+        container.read(calendarEntryForNotificationProvider(liveId)),
+        isNull,
+      );
+
+      expect(
+        (await loadCalendarEntryForNotification(container, liveId))?.title,
+        'Campus Sommerfest 2026',
+      );
+      expect(
+        (await loadCalendarEntryForNotification(container, savedId))?.title,
+        'Gemerkter Vortrag',
+      );
+    });
+
+    test('a source that never answers costs at most the timeout, and what '
+        'has loaded still resolves', () async {
+      final ProviderContainer container = await containerWith(
+        saved: <SavedEventSnapshot>[
+          savedSnapshot(
+            eventRef: 'post:vortrag',
+            kind: UnifiedEventKind.postEvent,
+            title: 'Gemerkter Vortrag',
+            calendarSlug: null,
+          ),
+        ],
+        loadMonth: (DateTime anchor) => Completer<List<CalendarEntry>>().future,
+        settle: false,
+      );
+
+      final Stopwatch watch = Stopwatch()..start();
+      final CalendarEntry? found = await loadCalendarEntryForNotification(
+        container,
+        'savedEvent:post:vortrag',
+        timeout: const Duration(milliseconds: 50),
+      );
+
+      expect(found?.title, 'Gemerkter Vortrag');
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+    });
+
+    test('an id that names nothing still resolves to null', () async {
+      final ProviderContainer container = await containerWith(
+        live: <CalendarEntry>[liveEvent()],
+        settle: false,
+      );
+
+      expect(
+        await loadCalendarEntryForNotification(
+          container,
+          'publicCalendar:gone:1',
+        ),
+        isNull,
+      );
+    });
+  });
+}
+
+class _MutableClock implements Clock {
+  _MutableClock(this.value);
+  DateTime value;
+  @override
+  DateTime now() => value;
 }

@@ -128,14 +128,21 @@ CalendarEntry publicEvent(DateTime start, {String id = 'pc1'}) => CalendarEntry(
   calendarSlug: 'campus',
 );
 
-SavedEventSnapshot savedEvent(DateTime start, {String ref = 'calendar:s1'}) =>
-    SavedEventSnapshot(
-      eventRef: ref,
-      kind: UnifiedEventKind.calendarEvent,
-      title: 'Gemerkter Vortrag',
-      start: start,
-      savedAt: kToday,
-    );
+SavedEventSnapshot savedEvent(
+  DateTime start, {
+  String ref = 'calendar:s1',
+  String title = 'Gemerkter Vortrag',
+  bool isOrphaned = false,
+  bool isCancelled = false,
+}) => SavedEventSnapshot(
+  eventRef: ref,
+  kind: UnifiedEventKind.calendarEvent,
+  title: title,
+  start: start,
+  savedAt: kToday,
+  isOrphaned: isOrphaned,
+  isCancelled: isCancelled,
+);
 
 CanteenMenu menuWith(Map<DateTime, List<String>> mealsByDay) => CanteenMenu(
   canteenSlug: 'fasanerieallee',
@@ -416,6 +423,28 @@ void main() {
       expect(candidates, hasLength(1));
       expect(candidates.single.target, '2026-08-26');
       expect(candidates.single.body, contains('Gemerkter Vortrag'));
+    });
+
+    test('an orphaned or cancelled saved event fills nothing, as in N1 '
+        '(F-04)', () async {
+      final ProviderContainer container = await harness(
+        saved: <SavedEventSnapshot>[
+          savedEvent(
+            DateTime(2026, 8, 26, 18),
+            ref: 'calendar:gone',
+            title: 'Entfernter Vortrag',
+            isOrphaned: true,
+          ),
+          savedEvent(
+            DateTime(2026, 8, 27, 18),
+            ref: 'calendar:off',
+            title: 'Abgesagter Vortrag',
+            isCancelled: true,
+          ),
+        ],
+      );
+
+      expect(candidatesOf(container), isEmpty);
     });
 
     test('a bookmark of a live calendar entry is not counted twice', () async {

@@ -30,7 +30,8 @@ import '../domain/planned_notification.dart';
 /// 1. permission and the global switch — one "no" empties the whole plan;
 /// 2. the category switches;
 /// 3. resolve each trigger into the device zone, and apply the delivery
-///    window (P7) to the categories it applies to;
+///    window (P7) to the categories it applies to — never onto or past the
+///    target a trigger names;
 /// 4. drop everything already past — missed moments are never caught up;
 /// 5. drop duplicate keys, first one wins;
 /// 6. sort deterministically;
@@ -83,7 +84,14 @@ NotificationPlan planNotifications({
       case DeliveryWindowPolicy.anyLocalTime:
         scheduledAt = desired;
       case DeliveryWindowPolicy.shiftIntoWindow:
-        scheduledAt = DeliveryWindow.shiftIntoWindow(desired);
+        // A reminder that names its target is never shifted onto or past it:
+        // a deadline at 23:59 with a one-hour lead is reminded about at
+        // 20:00 that evening, not at 07:00 after it has passed.
+        scheduledAt = switch (request.trigger) {
+          AbsoluteTrigger(before: final DateTime target?) =>
+            DeliveryWindow.shiftIntoWindowBefore(desired, target),
+          _ => DeliveryWindow.shiftIntoWindow(desired),
+        };
       case DeliveryWindowPolicy.fixedLocalTime:
         if (!DeliveryWindow.allows(desired)) {
           // Not shifted: a fixed-time category that lands outside the window

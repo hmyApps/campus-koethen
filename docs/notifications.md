@@ -66,15 +66,24 @@ Start und Resume gleichen verpasste Nachrichten ab.
 
 ### 1.1 Vollständige Neuplanung, nie ein Delta
 
-Jeder Lauf verwirft alles (`cancelAll()`) und plant den gesamten Sollzustand neu. Aktualisieren,
-Ersetzen und Stornieren haben deshalb **keinen eigenen Codepfad**: Ein abgesagter, gelöschter oder
-verschobener Eintrag wird beim nächsten Lauf schlicht nicht mehr beziehungsweise anders erzeugt.
+Jeder Lauf verwirft alle **vorgemerkten** Einträge (`cancelAllPending()`) und plant den gesamten
+Sollzustand neu. Aktualisieren, Ersetzen und Stornieren haben deshalb **keinen eigenen Codepfad**:
+Ein abgesagter, gelöschter oder verschobener Eintrag wird beim nächsten Lauf schlicht nicht mehr
+beziehungsweise anders erzeugt.
 
-Läufe sind **serialisiert**. `cancelAll()` und das erneute Einplanen sind zusammen nicht atomar;
-zwei überlappende Läufe würden einander die Einträge wegräumen. Der `NotificationScheduler` hängt
-jeden Lauf an den vorherigen an.
+**Bereits zugestellte Benachrichtigungen gehören nicht zum Sollzustand und bleiben unberührt.** Das
+Gateway ruft dafür ausschließlich `cancelAllPendingNotifications()` des Plugins auf, nie dessen
+`cancelAll()`: Letzteres entfernt in flutter_local_notifications 22.3.0 zusätzlich alles bereits
+Angezeigte (Android `NotificationManager.cancelAll()`, iOS `removeAllDeliveredNotifications`). Weil
+bei jeder Rückkehr in den Vordergrund neu geplant wird, verschwänden sonst ungelesene Hinweise —
+Tagesübersicht, neue Mail, neue Note — genau in dem Moment aus der Mitteilungsleiste, in dem die App
+geöffnet wird. Dasselbe gilt für das Abschalten: Es entfernt nur Vorgemerktes.
 
-Bewusst offen bleibt das kurze Fenster zwischen `cancelAll()` und dem letzten `schedule(...)`: Wird
+Läufe sind **serialisiert**. `cancelAllPending()` und das erneute Einplanen sind zusammen nicht
+atomar; zwei überlappende Läufe würden einander die Einträge wegräumen. Der `NotificationScheduler`
+hängt jeden Lauf an den vorherigen an.
+
+Bewusst offen bleibt das kurze Fenster zwischen `cancelAllPending()` und dem letzten `schedule(...)`: Wird
 der Prozess genau dort beendet, bleibt nichts vorgemerkt, bis die App das nächste Mal startet. Das
 ist hinnehmbar, weil jeder App-Start neu plant — und es steht in der Gerätematrix (§ 4).
 
@@ -117,6 +126,8 @@ Regeln, die dabei gelten:
   Moodle-Frist und kein Mensa-Speiseplan. Ein vorhandener Speiseplan ist nach P4 ein eigener Anteil
   der Tagesübersicht und begründet deshalb auch ohne weitere Quelle eine Meldung.
 - **Eine abgesagte Lehrveranstaltung zählt nicht** und füllt keinen Tag.
+- **Verwaiste und abgesagte gemerkte Events zählen ebenfalls nicht** — dieselbe Regel wie in N1
+  (`notifiableSavedEvents`), geprüft am Merkeintrag selbst.
 - **Moodle bleibt aggregiert.** Der Tagesbefund hat kein Feld für einen Kurs- oder Aufgabentitel,
   der Text kann also keinen nennen. Ein Tag mit einer Frist wird zusätzlich als `neutral`
   markiert.
@@ -180,14 +191,27 @@ Planer an. Würde das Fenster einen kurzen Vorlauf hinter den Eventbeginn schieb
 letzte zulässige 20:00-Grenze vor dem Event zurückgefallen. Stundenplan- und Moodle-Einträge
 erzeugen hier **nie** einen Kandidaten (P5), ganztägige Einträge dagegen schon.
 
-**Text.** „Erinnerung morgen: …" beziehungsweise „Erinnerung heute: …", wenn das Zustellfenster den
-Hinweis auf den Eventtag selbst geschoben hat. Beide Seiten — Text und Zeitpunkt — fragen dieselbe
-`DeliveryWindow`, können also nicht auseinanderlaufen.
+Dieselbe Regel gilt für die Moodle-Fristerinnerung (`moodle.deadline`): Der Auslöser beider
+Kategorien nennt sein Ziel (`AbsoluteTrigger.before` = Eventbeginn beziehungsweise Frist), und der
+Planer verschiebt über `DeliveryWindow.shiftIntoWindowBefore` **nie auf oder hinter** dieses Ziel.
+Eine Abgabe um 23:59 Uhr mit 1 Stunde Vorlauf wird deshalb um 20:00 Uhr desselben Abends
+erinnert, nicht um 07:00 Uhr am Folgetag nach Fristende.
+
+**Text.** „Morgen: …" beziehungsweise „Heute: …", wenn der Hinweis am Eventtag selbst zugestellt
+wird; liegt das Event zwei oder mehr Kalendertage nach der Zustellung (Vorlauf „2 Tage" oder
+„1 Woche"), nennt der Text Wochentag und Datum („Mittwoch, 22. Juli: …", lokalisiert über `intl`).
+Gezählt werden **Kalendertage** zwischen Zustellung und Eventbeginn, nicht 24-Stunden-Blöcke — über
+eine Zeitumstellung hinweg bleibt „morgen" also morgen. Beide Seiten — Text und Zeitpunkt — fragen
+dieselbe `DeliveryWindow`, können also nicht auseinanderlaufen.
 
 **Tap.** Der Payload trägt die `CalendarEntry.id` und sonst nichts. `NotificationTapRouter` löst
 sie über den zusammengeführten Bestand auf, fokussiert den Tag **des Eintrags** (nicht einen Tag
 aus dem Payload, den es dort nicht gibt) und öffnet `showCalendarEntrySheet`. Löst sie nicht auf,
-bleibt es bei `/calendar` plus dezentem Hinweis.
+bleibt es bei `/calendar` plus dezentem Hinweis. Vor dem Auflösen wartet der Tap
+(`loadCalendarEntryForNotification`) auf gemerkte Events, Kalenderkatalog und die Monate des
+Horizonts, höchstens `kNotificationTapSourceTimeout` (5 s) lang: Bei einem Kaltstart aus der
+Benachrichtigung ist sonst noch nichts geladen, und ein bestehendes Event würde als „nicht mehr
+verfügbar" gemeldet (Gerätematrix #20).
 
 **Eine bewusste Abweichung von § 7.2, aktenkundig:** Der Bestand beobachtet
 `publicCalendarMonthEntriesProvider` für den laufenden und den folgenden Monat. Gewartet wird nie —
@@ -217,7 +241,7 @@ Gerichtsname. Ein ausgeschöpftes Budget ist so ein Zähler und keine stille Kü
 | Terminierung             | `zonedSchedule(..., androidScheduleMode: inexactAllowWhileIdle)`                                                                                        |
 | Receiver                 | `ScheduledNotificationReceiver` und `ScheduledNotificationBootReceiver`, beide `exported="false"`                                                       |
 | Desugaring               | `isCoreLibraryDesugaringEnabled = true` + `desugar_jdk_libs:2.1.4` — Pflicht ab Plugin-Version 10, sonst schlägt bereits der Build fehl                 |
-| Kanäle                   | vier, je einer für N1/N2/N3/N4, angelegt bevor etwas geplant oder sofort angezeigt wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht     |
+| Kanäle                   | vier, je einer für N1/N2/N3/N4, angelegt bevor etwas geplant oder sofort angezeigt wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht   |
 | Kanalnamen               | aus den ARB-Dateien; ein Sprachwechsel registriert die Kanäle unter derselben Id neu, wodurch Android Name und Beschreibung übernimmt                   |
 | Kleines Symbol           | `@drawable/ic_notification`, einfarbig weiß und voll deckend — ein mehrfarbiges Icon stellt Android als graues Quadrat dar                              |
 | Sperrbildschirm          | `visibility: public` für öffentliche Inhalte, `private` für neutrale (P10). Beides greift nur unter Nutzereinstellungen, die die App nicht kontrolliert |
@@ -253,7 +277,7 @@ Aufgabentitel. Fremdtexte (Gerichtsname, Fachtitel, Eventtitel) werden nicht üb
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `notification_planner_test.dart`             | 24-Stunden-Regel, beide Verschiebungsrichtungen, einschließende Grenzwerte 07:00/20:00, Zeitzonen, Sommerzeit, Vergangenheitsfilter, doppelte Schlüssel, Budget mit deterministischer Sortierung, Opt-in und Berechtigung |
 | `notification_payload_test.dart`             | Round-Trip, unbekannte Version, entfallene Kategorie, jede Fehlform, keine personenbezogene Kennung                                                                                                                       |
-| `notification_scheduler_test.dart`           | `cancelAll` vor dem Einplanen, keine Duplikate bei doppeltem Lauf, zwei gleichzeitige Läufe → genau ein Endzustand, Teilfehler                                                                                            |
+| `notification_scheduler_test.dart`           | `cancelAllPending` vor dem Einplanen, zugestellte bleiben erhalten, keine Duplikate bei doppeltem Lauf, zwei gleichzeitige Läufe → genau ein Endzustand, Teilfehler                                                       |
 | `notification_settings_test.dart`            | Standardzustand, alle Kategorien an nach dem Opt-in, Persistenz über den Neustart, defekte und unbekannte gespeicherte Werte                                                                                              |
 | `notification_tap_router_test.dart`          | Ziel je Kategorie, optionales Gerichtsziel (auch mit Doppelpunkt im Namen), Fallback mit Hinweis, alte oder kaputte Payloads navigieren nirgendwohin                                                                      |
 | `canteen_favourite_candidates_test.dart`     | N3 rein: Abgleich nach Gerichtsnamen, leere Favoriten, leerer und abgelaufener Cache, doppelte Namen, mehrere Treffer als ein Hinweis, Preis, Kürzung langer Namen, DE/EN, Schlüssel gegen Payload                        |

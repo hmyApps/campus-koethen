@@ -169,12 +169,18 @@ class LocalNotificationGateway implements NotificationGateway {
   }
 
   @override
-  Future<bool> cancelAll() async {
+  Future<bool> cancelAllPending() async {
     try {
-      await _plugin.cancelAll();
+      // Never the plugin's `cancelAll()`: in 22.3.0 that also removes every
+      // notification already delivered (Android `NotificationManager
+      // .cancelAll()`, iOS `removeAllDeliveredNotifications`). A re-plan runs
+      // on every resume, so an unread hint would vanish from the shade the
+      // moment the reader opened the app. This one only cancels the alarms
+      // and pending requests that have not fired yet.
+      await _plugin.cancelAllPendingNotifications();
       return true;
     } catch (error) {
-      _report('cancelAll', error);
+      _report('cancelAllPendingNotifications', error);
       return false;
     }
   }

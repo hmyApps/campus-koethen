@@ -93,4 +93,35 @@ void main() {
     expect(showCalls, hasLength(1));
     expect(showCalls.single.arguments.toString(), contains('v1|mail.new|4711'));
   });
+
+  // F-01: the plugin's `cancelAll` also removes notifications that have
+  // already been delivered (Android `NotificationManager.cancelAll()`, iOS
+  // `removeAllDeliveredNotifications`). A re-plan runs on every resume, so it
+  // must only ever clear the *pending* entries.
+  for (final TargetPlatform platform in <TargetPlatform>[
+    TargetPlatform.android,
+    TargetPlatform.iOS,
+  ]) {
+    test('a re-plan clears only pending entries and keeps delivered ones '
+        '(${platform.name})', () async {
+      if (platform == TargetPlatform.iOS) {
+        IOSFlutterLocalNotificationsPlugin.registerWith();
+      }
+      final List<MethodCall> calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (MethodCall call) async {
+            calls.add(call);
+            return null;
+          });
+      final LocalNotificationGateway gateway = LocalNotificationGateway(
+        targetPlatform: platform,
+      );
+
+      expect(await gateway.cancelAllPending(), isTrue);
+
+      expect(calls.map((MethodCall call) => call.method), <String>[
+        'cancelAllPendingNotifications',
+      ]);
+    });
+  }
 }

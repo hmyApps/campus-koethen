@@ -21,35 +21,40 @@ NotificationRequest request(NotificationCategory category) =>
     );
 
 void main() {
-  test('the aggregate keeps every scheduled category after parallel merges', () {
-    final ProviderContainer container = ProviderContainer(
-      overrides: [
-        eventReminderCandidatesProvider.overrideWithValue(<NotificationRequest>[
-          request(NotificationCategory.eventReminder),
-        ]),
-        dailySummaryCandidatesProvider.overrideWithValue(<NotificationRequest>[
-          request(NotificationCategory.dailySummary),
-        ]),
-        canteenFavouriteCandidatesProvider.overrideWithValue(
-          <NotificationRequest>[request(NotificationCategory.canteenFavourite)],
-        ),
-        moodleDeadlineCandidatesProvider.overrideWithValue(
-          <NotificationRequest>[request(NotificationCategory.moodleDeadline)],
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'the aggregate keeps every scheduled category after parallel merges',
+    () {
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          eventReminderCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[request(NotificationCategory.eventReminder)],
+          ),
+          dailySummaryCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[request(NotificationCategory.dailySummary)],
+          ),
+          canteenFavouriteCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[
+              request(NotificationCategory.canteenFavourite),
+            ],
+          ),
+          moodleDeadlineCandidatesProvider.overrideWithValue(
+            <NotificationRequest>[request(NotificationCategory.moodleDeadline)],
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    expect(
-      container
-          .read(notificationCandidatesProvider)
-          .map((NotificationRequest candidate) => candidate.category),
-      const <NotificationCategory>[
-        NotificationCategory.eventReminder,
-        NotificationCategory.dailySummary,
-        NotificationCategory.canteenFavourite,
-        NotificationCategory.moodleDeadline,
-      ],
-    );
-  });
+      expect(
+        container
+            .read(notificationCandidatesProvider)
+            .map((NotificationRequest candidate) => candidate.category),
+        const <NotificationCategory>[
+          NotificationCategory.eventReminder,
+          NotificationCategory.dailySummary,
+          NotificationCategory.canteenFavourite,
+          NotificationCategory.moodleDeadline,
+        ],
+      );
+    },
+  );
 }
