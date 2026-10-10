@@ -47,6 +47,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   late final TextEditingController _applicant;
 
   FinanceApplicationDraft? _draft;
+  bool _loadFailed = false;
   bool _submitting = false;
   bool _showErrors = false;
 
@@ -84,7 +85,14 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
 
   Future<void> _load() async {
     final RequestsController controller = ref.read(requestsProvider.notifier);
-    await ref.read(requestsProvider.future);
+    try {
+      await ref.read(requestsProvider.future);
+    } catch (_) {
+      // Unreadable drafts are not "no drafts": starting a fresh one here
+      // would be saved over every draft that is still on disk.
+      if (mounted) setState(() => _loadFailed = true);
+      return;
+    }
     final String? id = widget.draftId;
     final RequestDraft? existing = id == null ? null : controller.byId(id);
     final FinanceApplicationDraft draft = existing is FinanceApplicationDraft
@@ -126,25 +134,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   Future<void> _resubmitAsNew() async {
     final FinanceApplicationDraft? draft = _draft;
     if (draft == null) return;
-    final AppLocalizations l10n = context.l10n;
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text(l10n.requestsResubmitAsNewTitle),
-        content: Text(l10n.requestsResubmitAsNewBody),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.requestsCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.requestsKeyExpiredSendAnyway),
-          ),
-        ],
-      ),
-    );
-    if (!(confirmed ?? false) || !mounted) return;
+    if (!await confirmResubmitAsNew(context) || !mounted) return;
 
     await ref.read(requestsProvider.notifier).unfreeze(draft.id);
     if (!mounted) return;
@@ -171,31 +161,78 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
     }
   }
 
-  Future<void> _update(
+  /// True while this draft is being sent, from here or from another copy of
+  /// this form (E-01, VE-N02).
+  bool _isBusy(RequestDraft draft) =>
+      _submitting || ref.read(requestsInFlightProvider).contains(draft.id);
+
+  bool _isLocked(RequestDraft draft) => draft.isFrozen || _isBusy(draft);
+
+  /// Applies [change] and saves it; false when the draft was locked.
+  Future<bool> _update(
     FinanceApplicationDraft Function(FinanceApplicationDraft) change,
   ) async {
     final FinanceApplicationDraft? current = _draft;
-    if (current == null) return;
+    if (current == null) return false;
+    // What is on the wire must not change under it — the controller refuses
+    // as well; this keeps the form from showing text that is not sent.
+    if (_isBusy(current)) return false;
     if (current.isFrozen) {
       // Reachable if the freeze happened between build and keystroke. Saying
       // so beats dropping the input without a word.
       _showMessage(context.l10n.requestsFrozenEditBlocked);
-      return;
+      return false;
     }
     final FinanceApplicationDraft next = change(current);
     setState(() => _draft = next);
     await ref.read(requestsProvider.notifier).save(next, now: DateTime.now());
+    return true;
+  }
+
+  /// Another copy of this form finished sending this draft: take over what
+  /// the store now holds, or leave if the draft became a submitted case.
+  void _adoptAfterForeignFlight() {
+    final FinanceApplicationDraft? current = _draft;
+    if (current == null || _submitting || !mounted) return;
+    final RequestDraft? stored = ref
+        .read(requestsProvider.notifier)
+        .byId(current.id);
+    if (stored is FinanceApplicationDraft) {
+      setState(() => _draft = stored);
+    } else {
+      Navigator.of(context).maybePop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final FinanceApplicationDraft? draft = _draft;
+    ref.listen<Set<String>>(requestsInFlightProvider, (
+      Set<String>? previous,
+      Set<String> next,
+    ) {
+      final String? id = _draft?.id;
+      if (id == null) return;
+      if ((previous?.contains(id) ?? false) && !next.contains(id)) {
+        _adoptAfterForeignFlight();
+      }
+    });
 
     return ScreenScaffold(
       title: l10n.requestsApplicationFormTitle,
-      body: draft == null ? const LoadingView() : _form(context, l10n, draft),
+      body: draft != null
+          ? _form(context, l10n, draft)
+          : _loadFailed
+          ? RequestDraftsUnavailableView(onRetry: _retryLoad)
+          : const LoadingView(),
     );
+  }
+
+  void _retryLoad() {
+    setState(() => _loadFailed = false);
+    ref.invalidate(requestsProvider);
+    _load();
   }
 
   Widget _form(
@@ -207,6 +244,13 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
     final AsyncValue<List<ApplicationLocation>> locations = ref.watch(
       applicationLocationsProvider,
     );
+    // E-01: nothing that is on the wire may change — not in this form, and
+    // not in a second copy of it opened while the upload runs (VE-N02).
+    final bool inFlight = ref
+        .watch(requestsInFlightProvider)
+        .contains(draft.id);
+    final bool busy = _submitting || inFlight;
+    final bool locked = draft.isFrozen || busy;
 
     String? errorFor(RequestField field) {
       final String? server = _serverErrors[field];
@@ -228,6 +272,15 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
             icon: AppIcons.cloud_off_outlined,
             title: l10n.requestsNotConnectedTitle,
             message: l10n.requestsNotConnectedBody,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (inFlight && !_submitting) ...<Widget>[
+          StatusBanner(
+            tone: StatusTone.info,
+            icon: AppIcons.hourglass_top_outlined,
+            title: l10n.requestsSubmitting,
+            message: l10n.requestsSubmitInFlightBody,
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
@@ -271,7 +324,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
           emptyText: l10n.requestsLocationsEmpty,
           errorText: l10n.requestsLocationsUnavailable,
           retryText: l10n.requestsStatusRetry,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           onRetry: () => ref.invalidate(applicationLocationsProvider),
           onSelected: (int id) => _update(
             (FinanceApplicationDraft d) => d.copyWith(locationId: id),
@@ -284,7 +337,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
         RequiredLabel(text: l10n.requestsFieldTitle),
         TextField(
           controller: _title,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           textCapitalization: TextCapitalization.sentences,
           textInputAction: TextInputAction.next,
           // Enforced in the field itself, so the limit is a fact rather than a
@@ -303,7 +356,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
         RequiredLabel(text: l10n.requestsFieldApplicant),
         TextField(
           controller: _applicant,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           maxLength: FinanceApplicationDraft.textMaxLength,
@@ -323,7 +376,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
           FileSlotField(
             slot: slot,
             attachment: draft.fileFor(slot),
-            enabled: !draft.isFrozen,
+            enabled: !locked,
             errorText: errorFor(RequestField.forSlot(slot)),
             onPick: () => _pick(slot),
             onRemove: () => _removeFile(slot),
@@ -349,8 +402,8 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
           const SizedBox(height: AppSpacing.sm),
         ],
         FilledButton.icon(
-          onPressed: _submitting ? null : _submit,
-          icon: _submitting
+          onPressed: busy ? null : _submit,
+          icon: busy
               ? const SizedBox(
                   width: AppSizes.iconSmall,
                   height: AppSizes.iconSmall,
@@ -358,9 +411,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
                 )
               : const Icon(AppIcons.send_outlined),
           label: Text(
-            _submitting
-                ? l10n.requestsSubmitting
-                : l10n.requestsSubmitApplication,
+            busy ? l10n.requestsSubmitting : l10n.requestsSubmitApplication,
           ),
         ),
       ],
@@ -368,6 +419,8 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   }
 
   Future<void> _pick(ApplicationFileSlot slot) async {
+    final FinanceApplicationDraft? draft = _draft;
+    if (draft == null || _isLocked(draft)) return;
     final AppLocalizations l10n = context.l10n;
     final PickResult result = await ref
         .read(attachmentPickerProvider)
@@ -390,12 +443,17 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
     switch (result) {
       case PickedFile(:final RequestAttachment attachment):
         final RequestAttachment? previous = _draft?.fileFor(slot);
-        await _update(
+        final bool applied = await _update(
           (FinanceApplicationDraft d) => d.withFile(slot, attachment),
         );
-        // Replace means the old copy is no longer referenced by anything.
-        if (previous != null) {
-          await ref.read(attachmentStoreProvider).delete(previous);
+        // Replace means the old copy is no longer referenced by anything. If
+        // the draft got locked meanwhile, the NEW copy is the orphan instead
+        // — the old one is what may be on its way to the committee.
+        final RequestAttachment? orphan = applied ? previous : attachment;
+        if (orphan != null) {
+          await ref
+              .read(requestsProvider.notifier)
+              .discardAttachment(draft.id, orphan);
         }
       case PickCancelled():
         return;
@@ -404,17 +462,23 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       case PickTooLarge():
         _showMessage(l10n.requestsSlotTooLarge);
       case PickFailed():
-        // Not `requestsSubmitFailed`: nothing was submitted, and saying so
+        // Not a submission message: nothing was submitted, and saying so
         // sends the reader looking for a case that does not exist.
         _showMessage(l10n.requestsPickFailed);
     }
   }
 
   Future<void> _removeFile(ApplicationFileSlot slot) async {
-    final RequestAttachment? existing = _draft?.fileFor(slot);
-    await _update((FinanceApplicationDraft d) => d.withFile(slot, null));
-    if (existing != null) {
-      await ref.read(attachmentStoreProvider).delete(existing);
+    final FinanceApplicationDraft? draft = _draft;
+    if (draft == null) return;
+    final RequestAttachment? existing = draft.fileFor(slot);
+    final bool applied = await _update(
+      (FinanceApplicationDraft d) => d.withFile(slot, null),
+    );
+    if (applied && existing != null) {
+      await ref
+          .read(requestsProvider.notifier)
+          .discardAttachment(draft.id, existing);
     }
   }
 
@@ -425,7 +489,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
 
   Future<void> _submit() async {
     final FinanceApplicationDraft? draft = _draft;
-    if (draft == null) return;
+    if (draft == null || _isBusy(draft)) return;
 
     final AppLocalizations l10n = context.l10n;
     setState(() {
@@ -458,25 +522,32 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       _uploadProgress = null;
       _cancelToken = cancel;
     });
-    final SubmitOutcome outcome = await ref
-        .read(requestsProvider.notifier)
-        .submit(
-          draft,
-          now: DateTime.now(),
-          // Up to four documents of 25 MB each: on mobile data the button
-          // spinner alone left the app looking hung for minutes.
-          onProgress: (int sent, int total) {
-            if (!mounted || total <= 0) return;
-            setState(() => _uploadProgress = sent / total);
-          },
-          cancel: cancel,
-        );
+    final SubmitOutcome outcome;
+    try {
+      outcome = await ref
+          .read(requestsProvider.notifier)
+          .submit(
+            draft,
+            now: DateTime.now(),
+            // Up to four documents of 25 MB each: on mobile data the button
+            // spinner alone left the app looking hung for minutes.
+            onProgress: (int sent, int total) {
+              if (!mounted || total <= 0) return;
+              setState(() => _uploadProgress = sent / total);
+            },
+            cancel: cancel,
+          );
+    } finally {
+      // E-04: whatever happened, the spinner must not outlive the attempt.
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _uploadProgress = null;
+          _cancelToken = null;
+        });
+      }
+    }
     if (!mounted) return;
-    setState(() {
-      _submitting = false;
-      _uploadProgress = null;
-      _cancelToken = null;
-    });
     // The controller may have frozen this draft. Until the screen adopts that,
     // it kept showing an editable form over a draft the store had already
     // locked: typing was silently discarded by `save()`, and pressing send
@@ -494,6 +565,12 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
         );
       case SubmitStoreFailed():
         setState(() => _banner = l10n.requestsSubmitStoreFailed);
+      case SubmitStoreUnavailable():
+        setState(() => _banner = l10n.requestsSubmitStoreUnavailable);
+      case SubmitInFlight():
+        setState(() => _banner = l10n.requestsSubmitInFlightBody);
+      case SubmitDraftStoreFailed():
+        setState(() => _banner = l10n.requestsSubmitDraftStoreFailed);
       case SubmitKeyExpired():
         setState(() {
           _banner = l10n.requestsKeyExpiredBody;

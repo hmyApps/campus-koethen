@@ -213,24 +213,48 @@ class FlakyRequestStore implements RequestStore {
   FlakyRequestStore({this.failCaseWrites = false});
 
   bool failCaseWrites;
+  bool failDraftWrites = false;
+
+  /// Reads that throw, like a locked keystore or an undecodable list.
+  bool failCaseReads = false;
+  bool failDraftReads = false;
+
+  /// Real asynchronous gaps, so concurrent callers genuinely interleave.
+  Duration readDelay = Duration.zero;
+  Duration writeDelay = Duration.zero;
+
+  int caseWrites = 0;
+  int draftWrites = 0;
 
   List<RequestDraft> drafts = <RequestDraft>[];
   List<SubmittedCase> cases = <SubmittedCase>[];
 
   @override
-  Future<List<RequestDraft>> readDrafts() async =>
-      List<RequestDraft>.of(drafts);
+  Future<List<RequestDraft>> readDrafts() async {
+    await Future<void>.delayed(readDelay);
+    if (failDraftReads) throw const RequestStoreUnavailable();
+    return List<RequestDraft>.of(drafts);
+  }
 
   @override
-  Future<void> writeDrafts(List<RequestDraft> next) async =>
-      drafts = List<RequestDraft>.of(next);
+  Future<void> writeDrafts(List<RequestDraft> next) async {
+    draftWrites++;
+    await Future<void>.delayed(writeDelay);
+    if (failDraftWrites) throw const RequestStoreUnavailable();
+    drafts = List<RequestDraft>.of(next);
+  }
 
   @override
-  Future<List<SubmittedCase>> readCases() async =>
-      List<SubmittedCase>.of(cases);
+  Future<List<SubmittedCase>> readCases() async {
+    await Future<void>.delayed(readDelay);
+    if (failCaseReads) throw const RequestStoreUnavailable();
+    return List<SubmittedCase>.of(cases);
+  }
 
   @override
   Future<void> writeCases(List<SubmittedCase> next) async {
+    caseWrites++;
+    await Future<void>.delayed(writeDelay);
     if (failCaseWrites) throw Exception('storage refused');
     cases = List<SubmittedCase>.of(next);
   }
@@ -242,8 +266,24 @@ class ScriptedRequestGateway implements RequestGateway {
 
   SubmissionResult result;
 
+  /// When set, every answer waits for it — an upload still in flight.
+  Completer<void>? gate;
+
+  /// When set, the gateway throws this instead of answering.
+  Object? failure;
+
   final List<String> keysUsed = <String>[];
   final List<String> fingerprints = <String>[];
+
+  Future<SubmissionResult> _answer(RequestDraft draft) async {
+    keysUsed.add(draft.idempotencyKey);
+    fingerprints.add(draft.payloadFingerprint);
+    final Completer<void>? waiting = gate;
+    if (waiting != null) await waiting.future;
+    final Object? thrown = failure;
+    if (thrown != null) throw thrown;
+    return result;
+  }
 
   @override
   Future<SubmissionResult> submitApplication(
@@ -251,11 +291,9 @@ class ScriptedRequestGateway implements RequestGateway {
     SubmissionProgress? onProgress,
     SubmissionCancelToken? cancel,
   }) {
-    keysUsed.add(draft.idempotencyKey);
-    fingerprints.add(draft.payloadFingerprint);
     // Reported so a test can assert the form actually shows progress.
     onProgress?.call(1, 1);
-    return Future<SubmissionResult>.value(result);
+    return _answer(draft);
   }
 
   @override
@@ -264,10 +302,8 @@ class ScriptedRequestGateway implements RequestGateway {
     SubmissionProgress? onProgress,
     SubmissionCancelToken? cancel,
   }) {
-    keysUsed.add(draft.idempotencyKey);
-    fingerprints.add(draft.payloadFingerprint);
     onProgress?.call(1, 1);
-    return Future<SubmissionResult>.value(result);
+    return _answer(draft);
   }
 }
 

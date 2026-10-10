@@ -826,7 +826,7 @@ class MailCacheManager implements MailCacheStore {
     lock();
     await Future.wait<void>(_writes.toList());
     await _memory.clear();
-    final EncryptedBoxWipeResult encrypted = await _encryptedBox.wipeChecked();
+    final EncryptedBoxWipeResult encrypted = await _encryptedBox.wipeAndSeal();
     final bool legacyAbsent = await _deleteLegacyAndConfirm();
     _delegate = _memory;
     return MailWipeResult(

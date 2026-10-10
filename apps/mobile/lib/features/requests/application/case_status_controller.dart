@@ -71,12 +71,29 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
   final Map<String, Future<StatusResult>> _inFlight =
       <String, Future<StatusResult>>{};
 
+  /// Set by any 429: the limit is this client's, not one case's, so no case
+  /// is asked about before it has passed (E-09).
+  DateTime? _blockedUntil;
+
+  /// Bumped on every (re)build. A fetch that started before a local wipe
+  /// belongs to an older generation, and its answer — links, documents,
+  /// personal data — is dropped instead of being written back (E-10).
+  int _generation = 0;
+
   static const int maxConcurrentRefreshes = 3;
 
   @override
-  Map<String, CaseStatusState> build() => const <String, CaseStatusState>{};
+  Map<String, CaseStatusState> build() {
+    _generation++;
+    _inFlight.clear();
+    _blockedUntil = null;
+    return const <String, CaseStatusState>{};
+  }
 
   CaseStatusState stateFor(String id) => state[id] ?? const CaseStatusState();
+
+  bool _isBlockedAt(DateTime now) =>
+      _blockedUntil != null && now.isBefore(_blockedUntil!);
 
   /// Fetches one case, joining an in-flight request for the same one.
   Future<StatusResult> refresh(
@@ -85,6 +102,11 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
     bool force = false,
   }) {
     final CaseStatusState current = stateFor(submitted.id);
+    if (!force && _isBlockedAt(now)) {
+      return Future<StatusResult>.value(
+        StatusRateLimited(retryAfter: _blockedUntil!.difference(now)),
+      );
+    }
     if (!force && current.isBlockedAt(now)) {
       return Future<StatusResult>.value(
         StatusRateLimited(retryAfter: current.blockedUntil!.difference(now)),
@@ -96,15 +118,23 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
 
     final Future<StatusResult> request = _fetch(submitted, now);
     _inFlight[submitted.id] = request;
-    return request.whenComplete(() => _inFlight.remove(submitted.id));
+    return request.whenComplete(() {
+      if (identical(_inFlight[submitted.id], request)) {
+        _inFlight.remove(submitted.id);
+      }
+    });
   }
 
   Future<StatusResult> _fetch(SubmittedCase submitted, DateTime now) async {
+    final int generation = _generation;
     _set(submitted.id, stateFor(submitted.id).copyWith(isLoading: true));
 
     final StatusResult result = await ref
         .read(statusGatewayProvider)
         .fetch(submitted.statusUrl);
+
+    // Wiped (or rebuilt) meanwhile: the answer is about data that is gone.
+    if (!ref.mounted || generation != _generation) return result;
 
     switch (result) {
       case StatusLoaded(:final CaseStatus status):
@@ -122,13 +152,17 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
               },
             );
       case StatusRateLimited(:final Duration? retryAfter):
+        final DateTime until = now.add(
+          retryAfter ?? const Duration(minutes: 1),
+        );
+        if (_blockedUntil == null || until.isAfter(_blockedUntil!)) {
+          _blockedUntil = until;
+        }
         _set(
           submitted.id,
-          stateFor(submitted.id).copyWith(
-            isLoading: false,
-            error: result,
-            blockedUntil: now.add(retryAfter ?? const Duration(minutes: 1)),
-          ),
+          stateFor(
+            submitted.id,
+          ).copyWith(isLoading: false, error: result, blockedUntil: until),
         );
       case StatusNotConnected():
       case StatusLinkInvalid():
@@ -155,7 +189,9 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
     final List<Future<void>> workers = <Future<void>>[
       for (int i = 0; i < maxConcurrentRefreshes; i++)
         Future<void>(() async {
-          while (queue.isNotEmpty) {
+          // Stops at the first 429: the remaining cases would only be
+          // refused locally anyway, and none of them may go out.
+          while (queue.isNotEmpty && !_isBlockedAt(now)) {
             final SubmittedCase next = queue.removeAt(0);
             await refresh(next, now: now);
           }
@@ -165,6 +201,7 @@ class CaseStatusController extends Notifier<Map<String, CaseStatusState>> {
   }
 
   void _set(String id, CaseStatusState value) {
+    if (!ref.mounted) return;
     state = <String, CaseStatusState>{...state, id: value};
   }
 

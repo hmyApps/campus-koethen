@@ -263,13 +263,20 @@ class GremioRequestGateway implements RequestGateway {
   ) {
     final Object? statusUrl = json['statusUrl'];
     final Object? receipt = json['receiptPdfUrl'];
-    // Without the link there is no way back to this case. Calling that a
-    // success would strand it.
+    // Without the link there is no way back to this case, so it cannot be
+    // recorded — and a foreign or plain-http link must never be handed the
+    // token. But the endpoint said 2xx: the case very likely exists. Calling
+    // that "failed" invited a fresh submission (with the student ID); as an
+    // unknown outcome the draft freezes and only an identical replay follows.
     if (statusUrl is! String || !_origin!.allows(statusUrl)) {
-      return const SubmissionFailed('accepted-without-usable-status-url');
+      return const SubmissionOutcomeUnknown.acceptedWithoutUsableLink(
+        'accepted-without-usable-status-url',
+      );
     }
     if (receipt is! String || !_origin.allows(receipt)) {
-      return const SubmissionFailed('accepted-without-usable-receipt-url');
+      return const SubmissionOutcomeUnknown.acceptedWithoutUsableLink(
+        'accepted-without-usable-receipt-url',
+      );
     }
     final Object? number = json['number'];
     return SubmissionAccepted(

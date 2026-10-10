@@ -10,6 +10,8 @@ import '../domain/request_drafts.dart';
 import '../domain/request_store.dart';
 import '../domain/submitted_case.dart';
 
+export '../domain/request_store.dart' show RequestStoreUnavailable;
+
 /// [RequestStore] on top of the app's encrypted box.
 ///
 /// Everything in here is either a credential or personal data: a draft can
@@ -21,6 +23,12 @@ import '../domain/submitted_case.dart';
 /// Writes **report their failure**. The rest of the app degrades quietly when
 /// a cache is unavailable, but here the caller has to know whether a case was
 /// safely recorded: if it was not, the draft that produced it must stay.
+///
+/// Reads **report their failure** too. "Could not read" is never folded into
+/// "nothing stored": the next write would then replace every status link on
+/// the device with whatever the caller happened to hold. A list that cannot be
+/// decoded blocks writing and stays on disk byte for byte; single entries this
+/// build cannot parse are carried through every write unchanged.
 class EncryptedRequestStore implements RequestStore {
   EncryptedRequestStore({EncryptedBox? box, LegacyDraftBox? legacy})
     : _box =
@@ -28,6 +36,9 @@ class EncryptedRequestStore implements RequestStore {
           EncryptedBox(
             boxName: 'campus_requests_secure_v1',
             keyStorageKey: 'campus_requests_secure_key_v1',
+            // Not a cache: an unopenable box is kept for a retry or the
+            // deliberate wipe, never recreated empty.
+            discardUnreadable: false,
           ),
       _legacy = legacy ?? const LegacyDraftBox();
 
@@ -51,38 +62,62 @@ class EncryptedRequestStore implements RequestStore {
   @override
   Future<List<RequestDraft>> readDrafts() async {
     await _migrateLegacyDrafts();
-    final String? raw = await _box.read(_draftsKey);
-    return _decode(raw, RequestDraft.fromJson);
+    return (await _readList(_draftsKey, RequestDraft.fromJson)).items;
   }
 
   @override
-  Future<void> writeDrafts(List<RequestDraft> drafts) async {
-    final String payload = jsonEncode(
-      drafts.map((RequestDraft d) => d.toJson()).toList(),
-    );
-    if (!await _box.writeChecked(_draftsKey, payload)) {
+  Future<void> writeDrafts(List<RequestDraft> drafts) => _writeList(
+    _draftsKey,
+    drafts.map((RequestDraft d) => d.toJson()),
+    RequestDraft.fromJson,
+  );
+
+  @override
+  Future<List<SubmittedCase>> readCases() async =>
+      (await _readList(_casesKey, SubmittedCase.fromJson)).items;
+
+  @override
+  Future<void> writeCases(List<SubmittedCase> cases) => _writeList(
+    _casesKey,
+    cases.map((SubmittedCase c) => c.toJson()),
+    SubmittedCase.fromJson,
+  );
+
+  /// Reads one stored list. **Throws** [RequestStoreUnavailable] when the box
+  /// cannot be read or the list cannot be decoded — never an empty list.
+  Future<_StoredList<T>> _readList<T>(
+    String key,
+    T? Function(Object?) parse,
+  ) async {
+    final String? raw;
+    try {
+      raw = await _box.readChecked(key);
+    } on EncryptedBoxUnavailable {
       throw const RequestStoreUnavailable();
     }
+    return _StoredList.decode(raw, parse);
   }
 
-  @override
-  Future<List<SubmittedCase>> readCases() async {
-    final String? raw = await _box.read(_casesKey);
-    return _decode(raw, SubmittedCase.fromJson);
-  }
-
-  @override
-  Future<void> writeCases(List<SubmittedCase> cases) async {
-    final String payload = jsonEncode(
-      cases.map((SubmittedCase c) => c.toJson()).toList(),
-    );
+  Future<void> _writeList<T>(
+    String key,
+    Iterable<Map<String, dynamic>> entries,
+    T? Function(Object?) parse,
+  ) async {
+    // Read what is there first: a list that cannot be read is never written
+    // over, and entries this build cannot parse travel along unchanged.
+    final _StoredList<T> stored = await _readList(key, parse);
+    final String payload = jsonEncode(<Object?>[
+      ...entries,
+      ...stored.unparsed,
+    ]);
     // Confirm this exact payload before the caller deletes the draft. Merely
     // seeing any value here could be a stale predecessor after a failed write.
-    if (!await _box.writeChecked(_casesKey, payload)) {
+    if (!await _box.writeChecked(key, payload)) {
       throw const RequestStoreUnavailable();
     }
   }
 
+  /// Lenient decoding, used for the legacy plaintext box only.
   static List<T> _decode<T>(String? raw, T? Function(Object?) parse) {
     if (raw == null) return <T>[];
     try {
@@ -109,10 +144,12 @@ class EncryptedRequestStore implements RequestStore {
     try {
       final List<RequestDraft> old = _decode(raw, RequestDraft.fromJson);
       if (old.isNotEmpty) {
-        final List<RequestDraft> existing = _decode(
-          await _box.read(_draftsKey),
+        // Strict: an unreadable encrypted box must not look empty here
+        // either, or the merge would replace its drafts with the old ones.
+        final List<RequestDraft> existing = (await _readList(
+          _draftsKey,
           RequestDraft.fromJson,
-        );
+        )).items;
         final Set<String> known = existing
             .map((RequestDraft d) => d.id)
             .toSet();
@@ -130,12 +167,42 @@ class EncryptedRequestStore implements RequestStore {
   }
 }
 
-/// Thrown when local storage could not keep what it was given.
-class RequestStoreUnavailable implements Exception {
-  const RequestStoreUnavailable();
+/// One stored list: what this build understands, and what it does not.
+class _StoredList<T> {
+  const _StoredList(this.items, this.unparsed);
 
-  @override
-  String toString() => 'RequestStoreUnavailable';
+  /// Throws [RequestStoreUnavailable] for anything that is not a JSON list.
+  static _StoredList<T> decode<T>(String? raw, T? Function(Object?) parse) {
+    if (raw == null) return _StoredList<T>(<T>[], const <Object?>[]);
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const RequestStoreUnavailable();
+    }
+    if (decoded is! List) throw const RequestStoreUnavailable();
+    final List<T> items = <T>[];
+    final List<Object?> unparsed = <Object?>[];
+    for (final Object? entry in decoded) {
+      T? parsed;
+      try {
+        parsed = parse(entry);
+      } catch (_) {
+        parsed = null;
+      }
+      if (parsed == null) {
+        unparsed.add(entry);
+      } else {
+        items.add(parsed);
+      }
+    }
+    return _StoredList<T>(items, unparsed);
+  }
+
+  final List<T> items;
+
+  /// Raw entries kept verbatim so a write never drops them.
+  final List<Object?> unparsed;
 }
 
 /// The plaintext box the first version wrote drafts to.
