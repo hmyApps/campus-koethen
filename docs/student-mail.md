@@ -132,6 +132,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   ein Fehl-Login am zentralen Hochschulkonto. Der Posteingang zeigt dann „Live-Synchronisierung
   angehalten“ mit dem Grund. Nach einem abgelehnten Passwort bleibt die Live-Verbindung bis zur
   erneuten Anmeldung aus, auch über Pause/Resume hinweg.
+- **Gemeinsame Sperre nach abgelehntem Passwort:** Live-Verbindung und periodischer
+  10-Minuten-Sync teilen sich die Sperre. Wer sie zuerst auslöst, stoppt beide: automatische
+  Syncs melden sich danach nicht mehr an, sondern zeigen den Anmeldefehler. Nur ein bewusstes
+  Aktualisieren im Posteingang versucht es erneut; gelingt es, ist die Sperre aufgehoben. Eine
+  erneute Anmeldung hebt sie ebenfalls auf.
 
 > Anmerkung: Es gibt **kein** Sync, während die App vollständig geschlossen ist — dafür
 > wären native Hintergrunddienste (WorkManager/BGTaskScheduler) nötig, die dieses MVP

@@ -163,6 +163,32 @@ class MailCacheRevision extends Notifier<int> {
 final NotifierProvider<MailCacheRevision, int> mailCacheRevisionProvider =
     NotifierProvider<MailCacheRevision, int>(MailCacheRevision.new);
 
+/// The server rejected the stored mail password in this mail session.
+///
+/// Shared by the periodic sync and the live connection so that neither keeps
+/// logging in with a password the server already refused: every failed login
+/// counts against the central university account and can lock it. A new
+/// sign-in (a new session generation) or any later successful sync clears it.
+class MailCredentialsRejection extends Notifier<MailFailure?> {
+  @override
+  MailFailure? build() {
+    ref.watch(mailSessionGenerationProvider);
+    return null;
+  }
+
+  void reject(MailFailure failure) => state = failure;
+
+  void clear() {
+    if (state != null) state = null;
+  }
+}
+
+final NotifierProvider<MailCredentialsRejection, MailFailure?>
+mailCredentialsRejectionProvider =
+    NotifierProvider<MailCredentialsRejection, MailFailure?>(
+      MailCredentialsRejection.new,
+    );
+
 /// Runs the inbox sync. The *scheduling* (app start, every
 /// [kMailSyncInterval] in the foreground, on sign-in) lives in the app shell;
 /// this controller just performs one sync on request and reports progress. All
@@ -171,9 +197,13 @@ final NotifierProvider<MailCacheRevision, int> mailCacheRevisionProvider =
 /// The sync fetches the newest 50 INBOX headers, accumulates them into the
 /// cache, and prefetches the full body (and, when enabled, attachment bytes)
 /// of every message not yet cached — so opening a mail is instant and offline.
+///
+/// Once the server rejected the stored password ([mailCredentialsRejectionProvider]),
+/// automatic syncs no longer log in; only a user-initiated refresh tries again.
 class MailSyncController extends Notifier<MailSyncStatus> {
   Future<void>? _activeSync;
   bool _queued = false;
+  bool _queuedByUser = false;
 
   @override
   MailSyncStatus build() {
@@ -182,8 +212,12 @@ class MailSyncController extends Notifier<MailSyncStatus> {
   }
 
   /// Runs one sync. Coalesces overlapping calls; never throws to the caller.
-  Future<void> syncNow() async {
+  ///
+  /// [userInitiated] marks a deliberate refresh by the reader. Only such a
+  /// refresh logs in again after the server rejected the stored password.
+  Future<void> syncNow({bool userInitiated = false}) async {
     _queued = true;
+    _queuedByUser = _queuedByUser || userInitiated;
     final Future<void>? active = _activeSync;
     if (active != null) return active;
     final Future<void> run = _runQueue();
@@ -195,14 +229,16 @@ class MailSyncController extends Notifier<MailSyncStatus> {
     try {
       while (_queued) {
         _queued = false;
-        await _syncOnce();
+        final bool byUser = _queuedByUser;
+        _queuedByUser = false;
+        await _syncOnce(userInitiated: byUser);
       }
     } finally {
       _activeSync = null;
     }
   }
 
-  Future<void> _syncOnce() async {
+  Future<void> _syncOnce({required bool userInitiated}) async {
     final MailAccountState? account = ref
         .read(mailAccountControllerProvider)
         .value;
@@ -211,6 +247,11 @@ class MailSyncController extends Notifier<MailSyncStatus> {
       mailAccountControllerProvider.notifier,
     );
     final int generation = accountController.sessionGeneration;
+    final MailFailure? rejected = ref.read(mailCredentialsRejectionProvider);
+    if (rejected != null && !userInitiated) {
+      state = state.copyWith(isSyncing: false, error: rejected);
+      return;
+    }
 
     state = state.copyWith(isSyncing: true, clearError: true);
     try {
@@ -317,10 +358,15 @@ class MailSyncController extends Notifier<MailSyncStatus> {
       }
 
       if (accountController.isSessionCurrent(generation)) {
+        ref.read(mailCredentialsRejectionProvider.notifier).clear();
         state = MailSyncStatus(isSyncing: false, lastSyncedAt: DateTime.now());
       }
     } catch (error) {
       if (accountController.isSessionCurrent(generation)) {
+        if (error is MailFailure &&
+            error.kind == MailFailureKind.invalidCredentials) {
+          ref.read(mailCredentialsRejectionProvider.notifier).reject(error);
+        }
         state = state.copyWith(isSyncing: false, error: error);
       }
     }
@@ -396,9 +442,6 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   /// The foreground owner asked for a live connection and has not stopped it.
   bool _wanted = false;
 
-  /// The server rejected this session's password.
-  MailFailure? _credentialsRejected;
-
   /// The session was replaced while a live connection was wanted. The new
   /// account is published only after its credentials are stored, so the
   /// reconnect waits for that instead of racing the replacement.
@@ -407,9 +450,8 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   @override
   MailLiveSyncStatus build() {
     ref.listen<int>(mailSessionGenerationProvider, (_, _) {
-      // A new session brings new credentials: forget the rejection and the
-      // backoff of the replaced one.
-      _credentialsRejected = null;
+      // A new session brings new credentials: forget the backoff of the
+      // replaced one (the shared rejection resets with the generation).
       _failedAttempts = 0;
       _reconnectForNewSession = _wanted;
       unawaited(_disconnect());
@@ -440,7 +482,7 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   Future<void> start() async {
     _wanted = true;
     if (_subscription != null) return;
-    final MailFailure? rejected = _credentialsRejected;
+    final MailFailure? rejected = ref.read(mailCredentialsRejectionProvider);
     if (rejected != null) {
       state = MailLiveSyncStatus(
         connection: MailLiveConnection.authRequired,
@@ -522,7 +564,7 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
       // session; a TLS failure sent no credentials, so an explicit later
       // start (resume) may try again — but never on a timer.
       if (error.kind == MailFailureKind.invalidCredentials) {
-        _credentialsRejected = error;
+        ref.read(mailCredentialsRejectionProvider.notifier).reject(error);
       }
       state = MailLiveSyncStatus(
         connection: MailLiveConnection.authRequired,

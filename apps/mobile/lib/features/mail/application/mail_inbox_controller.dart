@@ -182,7 +182,9 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
   Future<void> refresh() async {
     final MailFolder folder = ref.read(selectedMailboxProvider);
     if (folder.isInbox) {
-      await ref.read(mailSyncControllerProvider.notifier).syncNow();
+      await ref
+          .read(mailSyncControllerProvider.notifier)
+          .syncNow(userInitiated: true);
       return;
     }
     ref.read(mailPaginationProvider.notifier).reset();
