@@ -361,7 +361,8 @@ Verfassen / Senden
 Antworten
 
 - [ ] „Antworten” öffnet den Verfassen-Screen mit dem Absender als Empfänger,
-      „Re: …”-Betreff und zitiertem Originaltext.
+      „Re: …”-Betreff und zitiertem Originaltext. Trägt die Mail einen `Reply-To`-Header
+      (z. B. Verteiler, Sekretariate), ist stattdessen diese Adresse der Empfänger.
 - [ ] „Allen antworten” adressiert zusätzlich alle ursprünglichen Empfänger (Cc),
       **ohne** die eigene Adresse.
 

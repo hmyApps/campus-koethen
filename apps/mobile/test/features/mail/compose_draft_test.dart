@@ -1,6 +1,7 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'package:campus_koethen/features/mail/data/mail_cache_codec.dart';
 import 'package:campus_koethen/features/mail/domain/mail_message.dart';
 import 'package:campus_koethen/features/mail/presentation/compose_draft.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +96,64 @@ void main() {
         attribution: 'x',
       );
       expect(draft.cc, hasLength(1));
+    });
+  });
+
+  group('Reply-To', () {
+    MailMessageDetail withReplyTo() => MailMessageDetail(
+      id: '1',
+      subject: 'Projekt',
+      from: const MailAddress(email: 'alice@hs-anhalt.de', name: 'Alice'),
+      replyTo: const <MailAddress>[
+        MailAddress(email: 'team-demo@hs-anhalt.de', name: 'Demo-Team'),
+      ],
+      to: const <MailAddress>[
+        MailAddress(email: 'me@hs-anhalt.de'),
+        MailAddress(email: 'carol@hs-anhalt.de'),
+      ],
+      cc: const <MailAddress>[MailAddress(email: 'team-demo@hs-anhalt.de')],
+      date: DateTime.utc(2026, 7, 20, 9, 30),
+      body: 'Zeile eins',
+    );
+
+    test('a reply goes to the Reply-To address instead of From', () {
+      final ComposeDraft draft = ComposeDraft.reply(
+        withReplyTo(),
+        attribution: 'x',
+      );
+      expect(draft.to, <String>['team-demo@hs-anhalt.de']);
+    });
+
+    test('reply-all addresses Reply-To and keeps it out of Cc', () {
+      final ComposeDraft draft = ComposeDraft.replyAll(
+        withReplyTo(),
+        selfEmail: 'me@hs-anhalt.de',
+        attribution: 'x',
+      );
+      expect(draft.to, <String>['team-demo@hs-anhalt.de']);
+      expect(draft.cc, <String>['carol@hs-anhalt.de']);
+    });
+
+    test('survives the offline cache', () {
+      final MailMessageDetail cached = MailCacheCodec.detailFrom(
+        MailCacheCodec.detail(withReplyTo()),
+      );
+      expect(ComposeDraft.reply(cached, attribution: 'x').to, <String>[
+        'team-demo@hs-anhalt.de',
+      ]);
+    });
+
+    test('a cached message from before Reply-To was stored still replies '
+        'to From', () {
+      final Map<String, dynamic> legacy = MailCacheCodec.detail(_detail())
+        ..remove('replyTo');
+      expect(
+        ComposeDraft.reply(
+          MailCacheCodec.detailFrom(legacy),
+          attribution: 'x',
+        ).to,
+        <String>['alice@hs-anhalt.de'],
+      );
     });
   });
 }

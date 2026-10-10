@@ -805,6 +805,12 @@ class EnoughMailGateway implements MailGateway {
         email: from?.email ?? '',
         name: from?.personalName,
       ),
+      replyTo: (m.replyTo ?? const <MailAddress>[])
+          .map(
+            (MailAddress a) =>
+                model.MailAddress(email: a.email, name: a.personalName),
+          )
+          .toList(),
       to: (m.to ?? const <MailAddress>[])
           .map(
             (MailAddress a) =>

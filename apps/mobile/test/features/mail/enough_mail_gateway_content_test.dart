@@ -187,6 +187,22 @@ void main() {
 
   tearDown(() => server.close());
 
+  test('maps the Reply-To header (C-12)', () async {
+    final EnoughMailGateway gateway = await gatewayFor(<int, _Message>{
+      7: _inlinePdfs,
+    });
+
+    final MailMessageDetail detail = await gateway.fetchMessage(
+      _credentials,
+      id: '7',
+    );
+
+    expect(detail.replyTo.map((MailAddress a) => a.email), <String>[
+      'sekretariat-demo@hs-anhalt.de',
+    ]);
+    expect(detail.replyTo.single.name, 'Demo Sekretariat');
+  });
+
   group('attachments without "Content-Disposition: attachment" (C-08)', () {
     test('mark the header as having attachments', () async {
       final EnoughMailGateway gateway = await gatewayFor(<int, _Message>{
