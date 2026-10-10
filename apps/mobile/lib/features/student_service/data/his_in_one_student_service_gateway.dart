@@ -426,13 +426,13 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
     } on FormatException {
       return const CertificateUnavailable('invalid-url');
     }
-    if (!StudentServiceProfile.allowsDocumentDownload(uri)) {
+    if (!StudentServiceProfile.allowsDocumentDownloadEntry(uri)) {
       return const CertificateUnavailable('host-rejected');
     }
     try {
       final Response<ResponseBody> response = await session.fetchStream(
         uri.toString(),
-        allowsTarget: StudentServiceProfile.allowsDocumentDownload,
+        allowsTarget: StudentServiceProfile.documentDownloadRoute(),
       );
       if ((response.statusCode ?? 0) != 200) {
         return CertificateUnavailable('http-${response.statusCode}');

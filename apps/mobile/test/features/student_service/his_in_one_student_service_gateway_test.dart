@@ -541,6 +541,74 @@ void main() {
       );
     });
 
+    // D-09: AGENTS.md §2 pins the order of the two download hops.
+    test(
+      'a job link pointing straight at the untrust- host is rejected',
+      () async {
+        const String untrustEntry =
+            'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload&docId=abc-123';
+        final FakeHtmlAdapter adapter = _jobAdapter(
+          onAjax: (int call, Map<String, String> body) => FakeHtmlResponse(
+            partialResponseFinished().replaceAll(
+              '"/qisserver/rds?state=docdownload',
+              '"https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+                  '?state=docdownload',
+            ),
+          ),
+          onOther: (RequestOptions o) => const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          ),
+        );
+
+        final CertificateDownloadResult result =
+            await HisInOneStudentServiceGateway(
+              adapter,
+            ).downloadCertificate(_creds, _firstOffer());
+
+        expect(result, isA<CertificateUnavailable>());
+        expect((result as CertificateUnavailable).reason, 'host-rejected');
+        expect(adapter.urls, isNot(contains(untrustEntry)));
+      },
+    );
+
+    test('a redirect back from the untrust- host to the portal host is '
+        'rejected', () async {
+      const String backToPortal =
+          'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
+          '?state=docdownload&docId=second';
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) =>
+            FakeHtmlResponse(partialResponseFinished()),
+        onOther: (RequestOptions o) {
+          final String url = o.uri.toString();
+          if (url == backToPortal) {
+            return const FakeHtmlResponse(
+              '%PDF-1.7\nfixture',
+              contentType: 'application/pdf',
+            );
+          }
+          if (o.uri.host == 'untrust-sscportal.ssc.hs-anhalt.de') {
+            return const FakeHtmlResponse.redirect(backToPortal);
+          }
+          return FakeHtmlResponse.redirect(docDownloadRedirectTarget());
+        },
+      );
+
+      await expectLater(
+        HisInOneStudentServiceGateway(
+          adapter,
+        ).downloadCertificate(_creds, _firstOffer()),
+        throwsA(
+          const StudentServiceFailure(
+            StudentServiceFailureKind.tlsOrHostRejected,
+          ),
+        ),
+      );
+      expect(adapter.urls, isNot(contains(backToPortal)));
+    });
+
     // D-08: a configuration overlay that is there but cannot be read
     // completely is a structure change — never "the job started directly",
     // which polled for a minute against a job that was never started.

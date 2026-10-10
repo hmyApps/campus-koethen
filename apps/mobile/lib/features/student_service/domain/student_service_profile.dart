@@ -9,7 +9,7 @@ import '../../grades/domain/grade_portal_profile.dart' show gradePortalAllows;
 ///
 ///  - [allows] is the only host every piece of session traffic (login, the
 ///    "Studienservice" page, every tab-switch POST) may reach.
-///  - [allowsDocumentDownload] is a second, narrower allowlist for exactly
+///  - [documentDownloadRoute] is a second, narrower, ORDERED allowlist for exactly
 ///    one purpose: the one-time link a generated certificate's AJAX job
 ///    hands back, and the redirect it leads to. A 2026-10-01 analysis had
 ///    wrongly claimed that redirect points at a separate "untrust-"
@@ -52,17 +52,34 @@ abstract final class StudentServiceProfile {
   static bool allows(Uri uri) =>
       gradePortalAllows(uri, scheme: scheme, host: host);
 
-  /// Accepts BOTH hops of the one-time document download: the job's own
-  /// link on [host] (only `docId`), and the `307` redirect target on
-  /// [documentDownloadHost] (the richer `accountId`/`hash`/`timestamp`/
-  /// `docName` set). Neither hop's extra parameters are otherwise
-  /// constrained — the state/path/scheme/port shape is what is pinned.
-  static bool allowsDocumentDownload(Uri uri) {
+  /// The FIRST hop of the one-time document download: the job's own link,
+  /// only ever on [host] (with just `docId`).
+  static bool allowsDocumentDownloadEntry(Uri uri) => _isDocDownload(uri, host);
+
+  /// A fresh, ordered check for ONE download — the GET that starts it and
+  /// every redirect it answers with, called once per hop in that order:
+  /// the entry must be on [host]; every redirect after it only on
+  /// [documentDownloadHost] (the `307` with the richer `accountId`/`hash`/
+  /// `timestamp`/`docName` set). Never the other way round and never back:
+  /// AGENTS.md §2 pins exactly this sequence, so a flat "either host at any
+  /// hop" set would accept an order the portal never produces.
+  ///
+  /// Neither hop's extra parameters are otherwise constrained — the
+  /// state/path/scheme/port shape is what is pinned.
+  static bool Function(Uri uri) documentDownloadRoute() {
+    bool entered = false;
+    return (Uri uri) {
+      if (!entered) {
+        entered = allowsDocumentDownloadEntry(uri);
+        return entered;
+      }
+      return _isDocDownload(uri, documentDownloadHost);
+    };
+  }
+
+  static bool _isDocDownload(Uri uri, String expectedHost) {
     final List<String>? states = uri.queryParametersAll['state'];
-    final bool hostAllowed =
-        gradePortalAllows(uri, scheme: scheme, host: host) ||
-        gradePortalAllows(uri, scheme: scheme, host: documentDownloadHost);
-    return hostAllowed &&
+    return gradePortalAllows(uri, scheme: scheme, host: expectedHost) &&
         uri.path == '/qisserver/rds' &&
         !uri.hasFragment &&
         states != null &&

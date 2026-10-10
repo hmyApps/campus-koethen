@@ -256,7 +256,10 @@ deterministische Start-/Polling-/ViewState-/PDF-Tests abgesichert.
 - Der Dokument-Download läuft über eine **eigene, explizite und pfadbegrenzte Allowlist** —
   genau zwei Hosts (der Portal-Host für den ersten Sprung, `untrust-sscportal.ssc.hs-anhalt.de`
   für den zweiten, siehe oben), aber eng auf ausschließlich HTTPS, Standardport, `/qisserver/rds`
-  und `state=docdownload` geprüft, getrennt von der allgemeinen Session-Allowlist gehalten
+  und `state=docdownload` geprüft und als **geordnete** Route je Download erzwungen: Einstieg nur
+  auf dem Portal-Host, jeder folgende Redirect nur auf dem `untrust-`-Host, nie zurück (bei den
+  Druck-Buttons der Notenübersicht ist davor nur der Umweg über die Notenübersichtsseite selbst
+  erlaubt), getrennt von der allgemeinen Session-Allowlist gehalten
   (AGENTS.md §2: „kein gemeinsamer Pool"). Der Download läuft im selben kurzlebigen Cookie-Jar wie
   Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder Antwort-Hosts werden
   abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte Hosts.
