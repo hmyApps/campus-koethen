@@ -899,6 +899,71 @@ void main() {
       );
     });
 
+    test(
+      'a changed UIDVALIDITY discards the cached inbox silently (C-10)',
+      () async {
+        final store = InMemoryMailCredentialStore()..write(_creds);
+        final cache = MemoryMailCache();
+        final gateway = FakeMailGateway(
+          uidValidity: 1,
+          messagesExists: 120,
+          inbox: <MailMessageHeader>[_hdr('3'), _hdr('2'), _hdr('1')],
+          detailsById: <String, MailMessageDetail>{
+            '3': _dtl('3'),
+            '2': _dtl('2'),
+            '1': _dtl('1'),
+          },
+        );
+        final container = _container(
+          gateway: gateway,
+          store: store,
+          cache: cache,
+        );
+        await container.read(mailAccountControllerProvider.future);
+        final List<MailNewMessageEvent> events = <MailNewMessageEvent>[];
+        container.listen<MailNewMessageEvent?>(mailNewMessageEventProvider, (
+          _,
+          MailNewMessageEvent? next,
+        ) {
+          if (next != null) events.add(next);
+        });
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+        // The server rebuilt the INBOX: UID 2 now names a different message.
+        final MailMessageDetail renumbered = MailMessageDetail(
+          id: '2',
+          subject: 'Renumbered',
+          from: const MailAddress(email: 'bob@hs-anhalt.de'),
+          to: const <MailAddress>[],
+          date: DateTime.utc(2026, 7, 21),
+          body: 'Different message',
+        );
+        gateway
+          ..uidValidity = 2
+          ..inbox = <MailMessageHeader>[
+            MailMessageHeader(
+              id: '2',
+              subject: renumbered.subject,
+              from: renumbered.from,
+              date: renumbered.date,
+              isSeen: false,
+              hasAttachments: false,
+            ),
+          ]
+          ..detailsById = <String, MailMessageDetail>{'2': renumbered};
+        await container.read(mailSyncControllerProvider.notifier).syncNow();
+
+        expect(
+          (await cache.readHeaders()).map((MailMessageHeader h) => h.id),
+          <String>['2'],
+        );
+        expect((await cache.readMessage('2'))!.subject, 'Renumbered');
+        expect(await cache.cachedMessageIds(), <String>{'2'});
+        expect(await cache.readUidValidity(), 2);
+        expect(events, isEmpty, reason: 'renumbering is not new mail');
+      },
+    );
+
     test('an empty mailbox page never erases the cached inbox', () async {
       final store = InMemoryMailCredentialStore()..write(_creds);
       final cache = MemoryMailCache();

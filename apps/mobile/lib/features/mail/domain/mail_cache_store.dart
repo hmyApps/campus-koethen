@@ -68,6 +68,15 @@ abstract interface class MailCacheStore {
   /// Replaces the header index with [headers] (the caller merges first).
   Future<void> saveHeaders(List<MailMessageHeader> headers);
 
+  /// The INBOX UIDVALIDITY the cached UIDs belong to, or null when none has
+  /// been recorded yet. A server reporting a different value has renumbered
+  /// the mailbox: every cached UID may then name another message.
+  Future<int?> readUidValidity();
+
+  /// Records the UIDVALIDITY the cached INBOX UIDs belong to. Survives
+  /// [clearCachedBodies] together with the header list; [clear] removes it.
+  Future<void> saveUidValidity(int uidValidity);
+
   /// Ids of messages whose full body is cached.
   Future<Set<String>> cachedMessageIds();
 

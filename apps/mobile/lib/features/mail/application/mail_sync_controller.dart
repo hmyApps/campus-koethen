@@ -223,9 +223,9 @@ class MailSyncController extends Notifier<MailSyncStatus> {
           .mailDownloadAttachments;
 
       // 1) Newest 50 headers → merge into the accumulated cache.
-      final List<MailMessageHeader> cachedBefore = await cache.readHeaders();
-      final bool hadBaseline =
-          cachedBefore.isNotEmpty || state.lastSyncedAt != null;
+      List<MailMessageHeader> cachedBefore = await cache.readHeaders();
+      final int? knownUidValidity = await cache.readUidValidity();
+      bool hadBaseline = cachedBefore.isNotEmpty || state.lastSyncedAt != null;
       final MailHeaderPage page = await gateway.fetchHeaders(
         credentials,
         mailboxPath: kInboxPath,
@@ -233,6 +233,20 @@ class MailSyncController extends Notifier<MailSyncStatus> {
       );
       final List<MailMessageHeader> latest = page.headers;
       if (!accountController.isSessionCurrent(generation)) return;
+      final int? uidValidity = page.uidValidity;
+      if (uidValidity != null &&
+          knownUidValidity != null &&
+          uidValidity != knownUidValidity) {
+        // The server renumbered the INBOX: every cached UID may now name a
+        // different message. Drop the whole cached INBOX and start a fresh
+        // baseline — renumbered mail is not new mail.
+        await cache.clearCachedBodies();
+        await cache.saveHeaders(const <MailMessageHeader>[]);
+        if (!accountController.isSessionCurrent(generation)) return;
+        ref.read(mailOlderInboxHeadersProvider.notifier).clear();
+        cachedBefore = const <MailMessageHeader>[];
+        hadBaseline = false;
+      }
       final Set<String> knownIds = cachedBefore
           .map((MailMessageHeader header) => header.id)
           .toSet();
@@ -259,6 +273,10 @@ class MailSyncController extends Notifier<MailSyncStatus> {
         await cache.removeMessage(removedId);
       }
       if (!accountController.isSessionCurrent(generation)) return;
+      if (uidValidity != null && uidValidity != knownUidValidity) {
+        await cache.saveUidValidity(uidValidity);
+        if (!accountController.isSessionCurrent(generation)) return;
+      }
       ref
           .read(mailOlderInboxHeadersProvider.notifier)
           .reconcile(

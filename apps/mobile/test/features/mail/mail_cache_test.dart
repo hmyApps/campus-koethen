@@ -612,6 +612,29 @@ void main() {
     });
   });
 
+  test('persists the INBOX UIDVALIDITY across restarts (C-10)', () async {
+    final MailCacheManager cache = manager();
+    await cache.initialize(accountExists: true);
+    expect(await cache.readUidValidity(), isNull);
+
+    await cache.saveUidValidity(1234);
+    await cache.saveMessage(detail());
+    await cache.clearCachedBodies();
+    await Hive.close();
+
+    Hive.init(directory.path);
+    final MailCacheManager restarted = manager();
+    await restarted.initialize(accountExists: true);
+    expect(
+      await restarted.readUidValidity(),
+      1234,
+      reason: 'clearing offline bodies keeps the header list and its UIDs',
+    );
+
+    await restarted.wipe();
+    expect(await restarted.readUidValidity(), isNull);
+  });
+
   group('message removal keeps the derived indexes consistent (C-07)', () {
     MailMessageDetail message(String id, String body) => MailMessageDetail(
       id: id,

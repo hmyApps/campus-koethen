@@ -54,10 +54,19 @@ class MemoryMailCache implements MailCacheStore {
       <String, MailMessageDetail>{};
   final Map<String, MailAddressEntry> _addresses = <String, MailAddressEntry>{};
   final Map<String, DateTime> _storedAt = <String, DateTime>{};
+  int? _uidValidity;
 
   @override
   Future<List<MailMessageHeader>> readHeaders() async =>
       List<MailMessageHeader>.of(_headers);
+
+  @override
+  Future<int?> readUidValidity() async => _uidValidity;
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) async {
+    _uidValidity = uidValidity;
+  }
 
   @override
   Future<void> saveHeaders(List<MailMessageHeader> headers) async {
@@ -203,6 +212,7 @@ class MemoryMailCache implements MailCacheStore {
     _messages.clear();
     _addresses.clear();
     _storedAt.clear();
+    _uidValidity = null;
   }
 }
 
@@ -256,6 +266,7 @@ class EncryptedMailCache implements MailCacheStore {
   static const String _addressesKey = 'addresses';
   static const String _metadataKey = 'metadata.v1';
   static const String _searchKey = 'search.v1';
+  static const String _uidValidityKey = 'uidvalidity.v1';
   static const String _messagePrefix = 'msg.';
 
   final EncryptedBox _box;
@@ -290,6 +301,16 @@ class EncryptedMailCache implements MailCacheStore {
       ).map(MailCacheCodec.header).toList(),
     ),
   );
+
+  @override
+  Future<int?> readUidValidity() async {
+    final Object? decoded = _decode(await _box.read(_uidValidityKey));
+    return decoded is int && decoded > 0 ? decoded : null;
+  }
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) =>
+      _box.write(_uidValidityKey, jsonEncode(uidValidity));
 
   @override
   Future<Set<String>> cachedMessageIds() async => (await _box.keys())
@@ -819,6 +840,14 @@ class MailCacheManager implements MailCacheStore {
   Future<List<MailMessageHeader>> readHeaders() async => _locked
       ? <MailMessageHeader>[]
       : _failSoft(() => _delegate.readHeaders(), <MailMessageHeader>[]);
+
+  @override
+  Future<int?> readUidValidity() async =>
+      _locked ? null : _failSoft<int?>(() => _delegate.readUidValidity(), null);
+
+  @override
+  Future<void> saveUidValidity(int uidValidity) =>
+      _write(() => _delegate.saveUidValidity(uidValidity));
 
   @override
   Future<Set<String>> cachedMessageIds() async => _locked
