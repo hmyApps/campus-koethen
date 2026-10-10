@@ -90,9 +90,7 @@ class _SourcesSheet extends ConsumerWidget {
                   ? l10n.calendarSourceVisible
                   : l10n.calendarSourceHidden,
               child: Switch.adaptive(
-                key: ValueKey<String>(
-                  'calendar-source-${source.storageValue}',
-                ),
+                key: ValueKey<String>('calendar-source-${source.storageValue}'),
                 value: enabled.contains(source),
                 onChanged: (_) => ref
                     .read(calendarEnabledSourcesProvider.notifier)
