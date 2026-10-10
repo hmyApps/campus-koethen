@@ -86,13 +86,7 @@ class NextcloudDavGateway implements NextcloudGateway {
       throw const NextcloudFailure(NextcloudFailureKind.invalidResponse);
     }
     var wasCanceled = false;
-    CancelToken? activePollToken;
-    unawaited(
-      canceled.then((_) {
-        wasCanceled = true;
-        activePollToken?.cancel('canceled');
-      }),
-    );
+    unawaited(canceled.then((_) => wasCanceled = true));
     final Stopwatch elapsed = Stopwatch()..start();
 
     try {
@@ -103,25 +97,23 @@ class NextcloudDavGateway implements NextcloudGateway {
         if (wasCanceled) {
           throw const NextcloudFailure(NextcloudFailureKind.canceled);
         }
-        final CancelToken cancelToken = CancelToken();
-        activePollToken = cancelToken;
-        late final Response<Object?> response;
-        try {
-          response = await _dio.postUri<Object?>(
-            start.pollUri,
-            data: <String, String>{'token': start.pollToken},
-            options: Options(
-              contentType: Headers.formUrlEncodedContentType,
-              responseType: ResponseType.json,
-            ),
-            cancelToken: cancelToken,
-          );
-        } finally {
-          if (identical(activePollToken, cancelToken)) {
-            activePollToken = null;
-          }
-        }
+        // Deliberately not cancelable. Nextcloud hands out the app password
+        // in exactly one 200 answer and then forgets the flow; aborting a poll
+        // in flight could discard that answer and leave a password issued
+        // that nobody can revoke. The poll is bounded by the transport
+        // timeouts, and a 200 that lands after a cancel is revoked below.
+        final Response<Object?> response = await _dio.postUri<Object?>(
+          start.pollUri,
+          data: <String, String>{'token': start.pollToken},
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            responseType: ResponseType.json,
+          ),
+        );
         if (wasCanceled) {
+          if (response.statusCode == HttpStatus.ok) {
+            await _revokeIssuedAfterCancel(response.data);
+          }
           throw const NextcloudFailure(NextcloudFailureKind.canceled);
         }
         if (response.statusCode == HttpStatus.notFound) {
@@ -141,12 +133,8 @@ class NextcloudDavGateway implements NextcloudGateway {
           body['appPassword'],
           max: 4096,
         );
-        final NextcloudCredential issuedCredential = NextcloudCredential(
-          server: NextcloudProfile.server.toString(),
+        final NextcloudCredential issuedCredential = _issuedCredential(
           loginName: loginName,
-          // Revocation authenticates with loginName and appPassword only. Use
-          // a safe placeholder until OCS returns the canonical DAV uid.
-          userId: 'pending-login',
           appPassword: appPassword,
         );
         try {
@@ -242,6 +230,36 @@ class NextcloudDavGateway implements NextcloudGateway {
     } on DioException catch (error) {
       throw _mapDio(error);
     }
+  }
+
+  /// The credential exactly as the poll issued it, before the DAV uid is known.
+  NextcloudCredential _issuedCredential({
+    required String loginName,
+    required String appPassword,
+  }) => NextcloudCredential(
+    server: NextcloudProfile.server.toString(),
+    loginName: loginName,
+    // Revocation authenticates with loginName and appPassword only. Use a
+    // safe placeholder until OCS returns the canonical DAV uid.
+    userId: 'pending-login',
+    appPassword: appPassword,
+  );
+
+  /// Revokes an app password that was issued after the login was canceled.
+  /// It is never returned, stored or logged; a body without a usable
+  /// credential issued nothing that could be revoked.
+  Future<void> _revokeIssuedAfterCancel(Object? data) async {
+    final NextcloudCredential issued;
+    try {
+      final Map<String, Object?> body = _objectMap(data);
+      issued = _issuedCredential(
+        loginName: _boundedString(body['loginName'], max: 512),
+        appPassword: _boundedString(body['appPassword'], max: 4096),
+      );
+    } catch (_) {
+      return;
+    }
+    await _revokeIgnoringFailure(issued);
   }
 
   Future<void> _revokeIgnoringFailure(NextcloudCredential credential) async {
