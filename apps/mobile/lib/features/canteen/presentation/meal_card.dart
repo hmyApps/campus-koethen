@@ -199,12 +199,13 @@ class MealCard extends StatelessWidget {
             if (onToggleFavourite != null)
               Align(
                 alignment: AlignmentDirectional.centerEnd,
-                // Compact density is fine visually, but it also shrinks the tap
-                // target to about 40 dp — under the project's own 48 dp floor,
-                // on the main action of the card. The constraints keep the
-                // target while leaving the padding tight.
+                // No compact density: in Material 3 it shrinks the button AND
+                // its padded tap target by 8 dp, to 40 dp — under the
+                // project's own 48 dp floor, on the main action of the card —
+                // and a minimum-size constraint cannot undo that (G-06). The
+                // constraints keep the button itself at 48 dp, also where the
+                // platform does not pad tap targets.
                 child: IconButton(
-                  visualDensity: VisualDensity.compact,
                   constraints: const BoxConstraints(
                     minWidth: AppSizes.minTouchTarget,
                     minHeight: AppSizes.minTouchTarget,

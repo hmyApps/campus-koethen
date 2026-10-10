@@ -194,7 +194,15 @@ class _UnavailableFavourite extends StatelessWidget {
             ),
           ),
           IconButton(
-            visualDensity: VisualDensity.compact,
+            // No compact density: in Material 3 it shrinks the button AND its
+            // padded tap target by 8dp, to 40dp — a minimum-size constraint
+            // cannot undo that. The floor keeps the button itself at the 48dp
+            // minimum (AGENTS.md §9, G-06), also where the platform does not
+            // pad tap targets.
+            constraints: const BoxConstraints(
+              minWidth: AppSizes.minTouchTarget,
+              minHeight: AppSizes.minTouchTarget,
+            ),
             tooltip: l10n.canteenFavouriteRemove,
             onPressed: onRemove,
             icon: const Icon(AppIcons.star),
