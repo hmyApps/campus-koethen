@@ -4,10 +4,12 @@
 // The Moodle file downloader carries the token, so its host/size/cancel policy
 // is security-critical. No real network, no real token.
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:campus_koethen/core/documents/app_document.dart';
 import 'package:campus_koethen/features/moodle/data/moodle_file_downloader.dart';
+import 'package:campus_koethen/features/moodle/data/moodle_http_client.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_downloader.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_failure.dart';
 import 'package:dio/dio.dart';
@@ -145,19 +147,139 @@ void main() {
     expect(adapter.requests, hasLength(1));
   });
 
-  test('cancellation discards the download', () async {
-    final MoodleDownloadCancel cancel = MoodleDownloadCancel()..cancel();
+  test(
+    'cancellation discards the download as a cancel, not a failure',
+    () async {
+      final MoodleDownloadCancel cancel = MoodleDownloadCancel()..cancel();
+      final FakeBytesAdapter adapter = FakeBytesAdapter(
+        (RequestOptions o) => FakeBytes.single(bytes(64)),
+      );
+      await expectLater(
+        downloaderWith(adapter).download(
+          token: 'tok',
+          fileUrl: _moodleFile,
+          fileName: 'c.bin',
+          cancel: cancel,
+        ),
+        throwsA(isA<MoodleDownloadCancelled>()),
+      );
+      expect(adapter.requests, isEmpty);
+    },
+  );
+
+  test('every request carries the Moodle transport timeouts', () async {
+    // Pinned per request, so they hold even for an injected Dio without them.
     final FakeBytesAdapter adapter = FakeBytesAdapter(
-      (RequestOptions o) => FakeBytes.single(bytes(64)),
+      (RequestOptions o) => FakeBytes.single(bytes(8)),
     );
+    await downloaderWith(
+      adapter,
+    ).download(token: 'tok', fileUrl: _moodleFile, fileName: 't.bin');
+
+    final RequestOptions req = adapter.requests.single;
+    expect(req.connectTimeout, kMoodleConnectTimeout);
+    expect(req.sendTimeout, kMoodleSendTimeout);
+    expect(req.receiveTimeout, kMoodleReceiveTimeout);
+    expect(req.followRedirects, isFalse);
+  });
+
+  test('cancel aborts a request that is still waiting for headers', () async {
+    final Completer<void> requested = Completer<void>();
+    final _ScriptedAdapter adapter = _ScriptedAdapter((RequestOptions o) {
+      requested.complete();
+      // The server never answers.
+      return Completer<ResponseBody>().future;
+    });
+    final MoodleDownloadCancel cancel = MoodleDownloadCancel();
+
+    final Future<AppDocument> download = _downloader(adapter).download(
+      token: 'tok',
+      fileUrl: _moodleFile,
+      fileName: 'h.bin',
+      cancel: cancel,
+    );
+    await requested.future;
+    cancel.cancel();
+
     await expectLater(
-      downloaderWith(adapter).download(
-        token: 'tok',
-        fileUrl: _moodleFile,
-        fileName: 'c.bin',
-        cancel: cancel,
-      ),
-      throwsA(const MoodleFailure(MoodleFailureKind.downloadFailed)),
+      download.timeout(const Duration(seconds: 5)),
+      throwsA(isA<MoodleDownloadCancelled>()),
     );
   });
+
+  test('cancel aborts a body that has stopped arriving', () async {
+    final StreamController<Uint8List> body = StreamController<Uint8List>();
+    addTearDown(() => unawaited(body.close()));
+    final _ScriptedAdapter adapter = _ScriptedAdapter((RequestOptions o) {
+      // One chunk, then silence: the connection hangs mid-body.
+      body.add(bytes(16));
+      return ResponseBody(
+        body.stream,
+        200,
+        headers: <String, List<String>>{
+          Headers.contentLengthHeader: <String>['64'],
+        },
+      );
+    });
+    final MoodleDownloadCancel cancel = MoodleDownloadCancel();
+    final Completer<void> started = Completer<void>();
+
+    final Future<AppDocument> download = _downloader(adapter).download(
+      token: 'tok',
+      fileUrl: _moodleFile,
+      fileName: 's.bin',
+      cancel: cancel,
+      onProgress: (_) {
+        if (!started.isCompleted) started.complete();
+      },
+    );
+    await started.future;
+    cancel.cancel();
+
+    await expectLater(
+      download.timeout(const Duration(seconds: 5)),
+      throwsA(isA<MoodleDownloadCancelled>()),
+    );
+  });
+
+  test('a body that stops arriving times out as a timeout', () async {
+    final StreamController<Uint8List> body = StreamController<Uint8List>();
+    addTearDown(() => unawaited(body.close()));
+    final _ScriptedAdapter adapter = _ScriptedAdapter((RequestOptions o) {
+      body.add(bytes(16));
+      return ResponseBody(body.stream, 200);
+    });
+
+    await expectLater(
+      _downloader(adapter, receiveTimeout: const Duration(milliseconds: 50))
+          .download(token: 'tok', fileUrl: _moodleFile, fileName: 'x.bin')
+          .timeout(const Duration(seconds: 5)),
+      throwsA(const MoodleFailure(MoodleFailureKind.timeout)),
+    );
+  });
+}
+
+MoodleFileDownloaderImpl _downloader(
+  HttpClientAdapter adapter, {
+  Duration receiveTimeout = kMoodleReceiveTimeout,
+}) {
+  final Dio dio = Dio()..httpClientAdapter = adapter;
+  return MoodleFileDownloaderImpl(dio: dio, receiveTimeout: receiveTimeout);
+}
+
+/// An adapter whose answer is fully scripted, including never answering.
+class _ScriptedAdapter implements HttpClientAdapter {
+  _ScriptedAdapter(this.responder);
+
+  final FutureOr<ResponseBody> Function(RequestOptions options) responder;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => responder(options);
+
+  @override
+  void close({bool force = false}) {}
 }

@@ -2,11 +2,14 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
+import 'package:campus_koethen/features/moodle/data/moodle_file_downloader.dart';
 import 'package:campus_koethen/features/moodle/data/secure_moodle_token_store.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_cache.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_content.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
 import 'package:campus_koethen/features/moodle/presentation/moodle_course_screen.dart';
 import 'package:campus_koethen/features/moodle/presentation/moodle_screen.dart';
@@ -15,6 +18,7 @@ import 'package:campus_koethen/features/university_account/domain/university_ide
 import 'package:campus_koethen/features/university_account/domain/university_identity_store.dart';
 import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_icons.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -79,6 +83,8 @@ void main() {
   final DateTime t0 = DateTime.utc(2026, 7, 26, 12);
 
   group('course tabs', _courseTabTests);
+
+  group('file download', _fileDownloadTests);
 
   group('university identity reuse', () {
     testWidgets(
@@ -614,4 +620,118 @@ void _courseTabTests() {
     final TabBar bar = tester.widget<TabBar>(find.byType(TabBar));
     expect(bar.isScrollable, isTrue);
   });
+}
+
+/// Downloads run through the real downloader on a scripted connection.
+void _fileDownloadTests() {
+  final DateTime t0 = DateTime.utc(2026, 7, 26, 12);
+  const String fileUrl =
+      'https://moodle.hs-anhalt.de/webservice/pluginfile.php/1/mod_resource/content/1/uebung1.pdf';
+
+  testWidgets('cancelling a hung download unlocks the tile without an error', (
+    WidgetTester tester,
+  ) async {
+    // One chunk, then the connection goes silent.
+    final StreamController<Uint8List> body = StreamController<Uint8List>();
+    // Not awaited: `done` only completes once a listener sees it.
+    addTearDown(() => unawaited(body.close()));
+    final _StallingAdapter adapter = _StallingAdapter(body);
+    final tokens = InMemoryMoodleTokenStore()
+      ..token = const MoodleToken(value: 'tok', userId: 7, username: 'demo');
+    final cache = InMemoryMoodleCacheStore()
+      ..courses = <MoodleCourse>[
+        const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+      ];
+    cache.sections[1] = const <MoodleSection>[
+      MoodleSection(
+        name: 'Allgemeines',
+        modules: <MoodleModule>[
+          MoodleModule(
+            id: 5001,
+            name: 'Übungsblatt 1',
+            type: MoodleModuleType.resource,
+            files: <MoodleFile>[
+              MoodleFile(
+                fileName: 'uebung1.pdf',
+                fileUrl: fileUrl,
+                mimeType: 'application/pdf',
+                fileSize: 64,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ];
+
+    await pumpScreen(
+      tester,
+      const MoodleCourseScreen(courseId: 1),
+      overrides: <Override>[
+        ..._overrides(
+          api: FakeMoodleApiClient(),
+          tokens: tokens,
+          cache: cache,
+          clock: MutableClock(t0),
+        ),
+        moodleFileDownloaderProvider.overrideWithValue(
+          MoodleFileDownloaderImpl(dio: Dio()..httpClientAdapter = adapter),
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('uebung1.pdf'));
+    body.add(Uint8List.fromList(List<int>.filled(16, 65)));
+    // Let the request reach the connection and the first chunk arrive.
+    for (
+      int i = 0;
+      i < 20 && find.text('Wird geladen: 25 %').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(adapter.requests, 1);
+    expect(find.text('Wird geladen: 25 %'), findsOneWidget);
+    expect(find.byTooltip('Download abbrechen'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Download abbrechen'));
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    // A deliberate stop is not a failure, and the tile is usable again.
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('Die Datei konnte nicht geladen werden.'), findsNothing);
+    expect(find.byTooltip('Download abbrechen'), findsNothing);
+    expect(find.byIcon(AppIcons.download_outlined), findsOneWidget);
+    expect(adapter.requests, 1);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Answers with headers and whatever [body] emits — and nothing more.
+class _StallingAdapter implements HttpClientAdapter {
+  _StallingAdapter(this.body);
+
+  final StreamController<Uint8List> body;
+  int requests = 0;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests++;
+    return ResponseBody(
+      body.stream,
+      200,
+      headers: <String, List<String>>{
+        Headers.contentLengthHeader: <String>['64'],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
