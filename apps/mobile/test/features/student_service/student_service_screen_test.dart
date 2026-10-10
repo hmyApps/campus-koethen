@@ -78,8 +78,9 @@ class _StudentServiceGateway implements StudentServiceGateway {
   @override
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  ) async => const CertificateUnavailable('fixture');
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  }) async => const CertificateUnavailable('fixture');
 
   @override
   Future<StudentServiceOverview> fetchOverview(
@@ -100,8 +101,9 @@ class _FailingStudentServiceGateway implements StudentServiceGateway {
   @override
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  ) async => const CertificateUnavailable('fixture');
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  }) async => const CertificateUnavailable('fixture');
 
   @override
   Future<StudentServiceOverview> fetchOverview(

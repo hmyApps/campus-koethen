@@ -541,6 +541,37 @@ void main() {
       );
     });
 
+    // VD-N03: the poll loop honours cancellation instead of always running
+    // its full ~60 s budget.
+    test('a cancelled job stops polling at the next tick', () async {
+      int polls = 0;
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) {
+          polls = call - 1;
+          return FakeHtmlResponse(partialResponseStarted());
+        },
+      );
+
+      final CertificateDownloadResult result =
+          await HisInOneStudentServiceGateway(
+            adapter,
+            Duration.zero,
+          ).downloadCertificate(
+            _creds,
+            _firstOffer(),
+            isCancelled: () => polls >= 2,
+          );
+
+      expect(result, isA<CertificateUnavailable>());
+      expect((result as CertificateUnavailable).reason, 'cancelled');
+      expect(polls, 2);
+      expect(
+        adapter.urls.last,
+        contains('auth.logout'),
+        reason: 'the abandoned session still logs out',
+      );
+    });
+
     // D-09: AGENTS.md §2 pins the order of the two download hops.
     test(
       'a job link pointing straight at the untrust- host is rejected',

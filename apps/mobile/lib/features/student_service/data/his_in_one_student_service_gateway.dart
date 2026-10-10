@@ -141,8 +141,10 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
   @override
   Future<CertificateDownloadResult> downloadCertificate(
     GradeCredentials credentials,
-    CertificateOffer offer,
-  ) async {
+    CertificateOffer offer, {
+    bool Function()? isCancelled,
+  }) async {
+    bool cancelled() => isCancelled?.call() ?? false;
     final HisInOneSession session = _openSession();
     try {
       await _login(session, credentials);
@@ -264,7 +266,9 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         // button's own id, which would ask the server to needlessly
         // process/validate it as an input component on every tick.
         for (int attempt = 0; attempt < _maxPollAttempts; attempt++) {
+          if (cancelled()) return const CertificateUnavailable('cancelled');
           await Future<void>.delayed(_pollInterval);
+          if (cancelled()) return const CertificateUnavailable('cancelled');
           started = await _ajaxRequest(
             session,
             ajaxForm,
@@ -282,6 +286,7 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       if (downloadUrl == null) {
         return const CertificateUnavailable('job-not-finished');
       }
+      if (cancelled()) return const CertificateUnavailable('cancelled');
 
       // The real link is site-relative; resolve it against the portal
       // origin before validating/fetching (an already-absolute fallback
