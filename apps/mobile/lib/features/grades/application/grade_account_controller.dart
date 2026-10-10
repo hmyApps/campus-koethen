@@ -90,12 +90,26 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
       } catch (_) {}
       return const GradeAccountState();
     }
-    // Accounts set up before the portal choice existed default to the legacy
-    // portal — the only one that existed then.
     final GradePortal portal =
-        await _portalStore.read() ?? GradePortal.hisQisLegacy;
+        await _portalStore.read() ?? await _adoptStandardPortal();
     _sessions.activate((username: stored.username, portal: portal));
     return GradeAccountState(username: stored.username, activePortal: portal);
+  }
+
+  /// HISinOne is the standard portal. An account without a confirmed stored
+  /// choice (set up before the portal choice existed) moves to it once.
+  ///
+  /// Like [switchPortal], the cached report of the previous portal is dropped
+  /// FIRST, so its grades never appear under HISinOne's name and the first
+  /// HISinOne sync has no foreign baseline to announce as new grades. A failed
+  /// clear is fatal, so the next start tries again; a failed write of the
+  /// choice only means the move repeats on the next start.
+  Future<GradePortal> _adoptStandardPortal() async {
+    await _cache.clear();
+    try {
+      await _portalStore.write(GradePortal.hisInOne);
+    } catch (_) {}
+    return GradePortal.hisInOne;
   }
 
   /// Reads the stored credentials for a portal call, or throws if signed out.

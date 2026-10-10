@@ -46,8 +46,12 @@ ProviderContainer _container({
       hisInOneGatewayProvider.overrideWithValue(gateway),
       gradesGatewayProvider.overrideWithValue(gateway),
       gradeCredentialStoreProvider.overrideWithValue(store),
+      // The accounts in these scenarios already chose their portal. The
+      // one-time move of a choice-less 1.x account to HISinOne (which drops
+      // its cache) is covered in grade_portal_selection_test.dart.
       gradePortalStoreProvider.overrideWithValue(
-        portalStore ?? InMemoryGradePortalStore(),
+        portalStore ??
+            (InMemoryGradePortalStore()..write(GradePortal.hisInOne)),
       ),
       gradeCacheStoreProvider.overrideWithValue(cache),
       gradeClockProvider.overrideWithValue(clock),

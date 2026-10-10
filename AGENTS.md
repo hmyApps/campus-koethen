@@ -52,9 +52,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      jeweilige Konto eingerichtet wurde. Die Hochschule Anhalt betreibt zwei Prüfungsportale
      parallel; jedes hat seine EIGENE, getrennte Host-Allowlist (kein gemeinsamer Pool):
      `https://service.ssc.hs-anhalt.de` (HIS-QIS, Bestandsportal) und
-     `https://sscportal.ssc.hs-anhalt.de` (HISinOne, neueres Portal). Welches Portal ein
-     Konto nutzt, wird bei der Einrichtung einmalig ermittelt (`docs/grades.md`
-     „Portalwahl") und lokal gespeichert.
+     `https://sscportal.ssc.hs-anhalt.de` (HISinOne, neueres Portal und Standard). Welches Portal
+     ein Konto nutzt, wird bei der Einrichtung einmalig ermittelt (`docs/grades.md`
+     „Portalwahl", HISinOne zuerst) und lokal gespeichert; ein Konto ohne gespeicherte Wahl
+     wechselt einmalig auf HISinOne.
      Dieselbe HISinOne-Verbindung (für Login, Seiten und Formularaktionen **ausschließlich**
      `https://sscportal.ssc.hs-anhalt.de`, **nicht** das HIS-QIS-Bestandsportal) erweitert um
      konkret benannte, ausschließlich

@@ -311,8 +311,14 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
   ohne jede Note zurück.
 - Das Ergebnis wird persistiert (`GradePortalStore`, **dieselbe** sichere Ablage wie die
   Zugangsdaten) — jede weitere Synchronisation spricht nur noch dieses eine Portal an.
-- Nur ein **bestätigt fehlender** Portalwert (Altkonto aus der Zeit vor der Portalwahl) fällt auf
-  `hisQisLegacy` zurück. Ein Lesefehler des Keychain/Keystore oder ein unbekannter gespeicherter
+- **HISinOne ist das Standardportal.** Ein **bestätigt fehlender** Portalwert (Altkonto aus der
+  Zeit vor der Portalwahl) wird einmalig auf `hisInOne` umgestellt und gespeichert. Wie bei jedem
+  Portalwechsel wird dabei zuerst der lokale Notencache des bisherigen Portals verworfen: Dessen
+  Noten erscheinen nie unter HISinOne, und der erste HISinOne-Sync meldet keine fremden Noten als
+  „neu“. Scheitert das Verwerfen, bleibt der Fehler sichtbar und der nächste Start versucht es
+  erneut. Vor der ersten Anmeldung zeigt auch der Gateway-Rückfall auf HISinOne. Der Umschalter
+  „Prüfungsportal wechseln“ bleibt für Konten, deren Leistungen noch in HIS-QIS liegen. Ein
+  Lesefehler des Keychain/Keystore oder ein unbekannter gespeicherter
   Wert ergibt dagegen den klassifizierten Fehler `secureStorageUnavailable` mit „Erneut
   versuchen“ — nie „abgemeldet“, nie einen stillen Portalwechsel und nie den Nachhol-Wipe von
   Wallet und Studienservice-Cache, der nur bei bestätigt fehlenden Zugangsdaten läuft.

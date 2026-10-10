@@ -71,8 +71,8 @@ final Provider<ExamReportGateway> examReportGatewayProvider =
       (Ref ref) => HisInOneGradesGateway(ref.watch(hisInOneProfileProvider)),
     );
 
-/// The gateway for the account's ACTIVE portal (falls back to the legacy
-/// portal while no choice has been persisted, e.g. before the first sign-in).
+/// The gateway for the account's ACTIVE portal (falls back to HISinOne, the
+/// standard portal, while no choice is known, e.g. before the first sign-in).
 /// A single Riverpod override on this provider (as tests do) replaces the
 /// whole resolution, so existing gateway fakes keep working unchanged.
 final Provider<GradesGateway> gradesGatewayProvider = Provider<GradesGateway>((
@@ -80,7 +80,7 @@ final Provider<GradesGateway> gradesGatewayProvider = Provider<GradesGateway>((
 ) {
   final GradePortal portal =
       ref.watch(gradeAccountControllerProvider).value?.activePortal ??
-      GradePortal.hisQisLegacy;
+      GradePortal.hisInOne;
   return portal == GradePortal.hisInOne
       ? ref.watch(hisInOneGatewayProvider)
       : ref.watch(legacyQisGatewayProvider);

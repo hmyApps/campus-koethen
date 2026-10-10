@@ -352,26 +352,69 @@ void main() {
       expect(await portalStore.read(), isNull);
     });
 
-    test(
-      'an account set up before the portal choice existed defaults to the legacy portal',
-      () async {
-        final store = InMemoryGradeCredentialStore()
-          ..write(
-            const GradeCredentials(username: 'legacyUser', password: 'pw'),
-          );
-        final c = _container(
-          hisInOne: FakeGradesGateway(),
-          legacy: FakeGradesGateway(),
-          store: store,
-          portalStore: InMemoryGradePortalStore(), // no portal written
-        );
+    test('an account without a stored portal choice moves to HISinOne, the '
+        'standard portal, and keeps that choice', () async {
+      final store = InMemoryGradeCredentialStore()
+        ..write(const GradeCredentials(username: 'legacyUser', password: 'pw'));
+      final InMemoryGradePortalStore portalStore =
+          InMemoryGradePortalStore(); // no portal written (1.x account)
+      final c = _container(
+        hisInOne: FakeGradesGateway(),
+        legacy: FakeGradesGateway(),
+        store: store,
+        portalStore: portalStore,
+      );
 
-        final GradeAccountState s = await c.read(
-          gradeAccountControllerProvider.future,
-        );
+      final GradeAccountState s = await c.read(
+        gradeAccountControllerProvider.future,
+      );
 
-        expect(s.activePortal, GradePortal.hisQisLegacy);
-      },
-    );
+      expect(s.activePortal, GradePortal.hisInOne);
+      expect(portalStore.lastWritten, GradePortal.hisInOne);
+    });
+
+    test('moving an account without a portal choice drops the cached report '
+        'of the old portal, like any portal switch', () async {
+      final store = InMemoryGradeCredentialStore()
+        ..write(const GradeCredentials(username: 'legacyUser', password: 'pw'));
+      final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+      await cache.writeReport(sampleReport('Aus HIS-QIS'));
+      final c = _container(
+        hisInOne: FakeGradesGateway(),
+        legacy: FakeGradesGateway(),
+        store: store,
+        portalStore: InMemoryGradePortalStore(),
+        cache: cache,
+      );
+
+      await c.read(gradeAccountControllerProvider.future);
+
+      // HIS-QIS grades never appear under HISinOne's name, and the first
+      // HISinOne sync has no foreign baseline to report as "new grades".
+      expect(await cache.readReport(), isNull);
+    });
+
+    test('an account that already chose a portal is never moved', () async {
+      final store = InMemoryGradeCredentialStore()
+        ..write(const GradeCredentials(username: 'qisUser', password: 'pw'));
+      final InMemoryGradePortalStore portalStore = InMemoryGradePortalStore();
+      await portalStore.write(GradePortal.hisQisLegacy);
+      final InMemoryGradeCacheStore cache = InMemoryGradeCacheStore();
+      await cache.writeReport(sampleReport('Aus HIS-QIS'));
+      final c = _container(
+        hisInOne: FakeGradesGateway(),
+        legacy: FakeGradesGateway(),
+        store: store,
+        portalStore: portalStore,
+        cache: cache,
+      );
+
+      final GradeAccountState s = await c.read(
+        gradeAccountControllerProvider.future,
+      );
+
+      expect(s.activePortal, GradePortal.hisQisLegacy);
+      expect(await cache.readReport(), isNotNull);
+    });
   });
 }

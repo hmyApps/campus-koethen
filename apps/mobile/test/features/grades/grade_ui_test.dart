@@ -59,8 +59,10 @@ List<Override> _grades({
     gradesGatewayProvider.overrideWithValue(gateway),
     examReportGatewayProvider.overrideWithValue(gateway),
     gradeCredentialStoreProvider.overrideWithValue(store),
+    // Signed-in scenarios here already chose their portal; the one-time move
+    // of a choice-less 1.x account is covered in grade_portal_selection_test.
     gradePortalStoreProvider.overrideWithValue(
-      portalStore ?? InMemoryGradePortalStore(),
+      portalStore ?? (InMemoryGradePortalStore()..write(GradePortal.hisInOne)),
     ),
     gradeCacheStoreProvider.overrideWithValue(cache),
     gradeClockProvider.overrideWithValue(clock ?? MutableClock(_t0)),
