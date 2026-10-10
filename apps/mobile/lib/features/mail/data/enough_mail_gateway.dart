@@ -465,8 +465,12 @@ class EnoughMailGateway implements MailGateway {
         );
 
         if (trash != null && trash.encodedPath != mailboxPath) {
+          // enough_mail sets no response timeout for MOVE/COPY. On timeout
+          // [_withImap] closes the socket instead of sending LOGOUT.
           if (client.serverInfo.supportsMove) {
-            await client.uidMove(sequence, targetMailbox: trash);
+            await client
+                .uidMove(sequence, targetMailbox: trash)
+                .timeout(_commandTimeout);
             return;
           }
           if (!client.serverInfo.supportsUidPlus) {
@@ -475,7 +479,9 @@ class EnoughMailGateway implements MailGateway {
             // unavailable.
             throw const MailFailure(MailFailureKind.protocol);
           }
-          await client.uidCopy(sequence, targetMailbox: trash);
+          await client
+              .uidCopy(sequence, targetMailbox: trash)
+              .timeout(_commandTimeout);
           await client.uidMarkDeleted(sequence, silent: true);
           await client.uidExpunge(sequence);
           return;
@@ -737,11 +743,16 @@ class EnoughMailGateway implements MailGateway {
         // Never create a folder unprompted.
         return SentCopyResult.noSentFolder;
       }
-      await client.appendMessage(
-        mime,
-        targetMailbox: sent,
-        flags: <String>[MessageFlags.seen],
-      );
+      // Rendered once here (appendMessage would render it again) so the
+      // upload can be bounded by its size; enough_mail sets no limit itself.
+      final String text = mime.renderMessage();
+      await client
+          .appendMessageText(
+            text,
+            targetMailbox: sent,
+            flags: <String>[MessageFlags.seen],
+          )
+          .timeout(_transferTimeout(utf8.encode(text).length));
       return SentCopyResult.appended;
     });
   }

@@ -9,10 +9,13 @@ import 'package:campus_koethen/features/mail/data/enough_mail_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/hsa_mail_profile.dart';
 import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
 import 'package:campus_koethen/features/mail/domain/mail_failure.dart';
+import 'package:campus_koethen/features/mail/domain/mail_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/mail_message.dart';
-import 'package:enough_mail/enough_mail.dart' show AuthMechanism, SmtpClient;
-import 'package:enough_mail/enough_mail.dart' show SmtpResponse;
+import 'package:enough_mail/enough_mail.dart'
+    show AuthMechanism, SmtpClient, SmtpResponse;
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/fake_imap_server.dart';
 
 /// Points the gateway at loopback fakes instead of `mail.hs-anhalt.de`.
 class _LoopbackMailProfile extends HsaMailProfile {
@@ -120,7 +123,130 @@ const MailCredentials _credentials = MailCredentials(
   password: 'pw',
 );
 
+/// IMAP scaffolding for mutation tests: LOGIN, LIST (INBOX, Trash, Sent),
+/// SELECT and LOGOUT succeed; [stall] decides which command never gets an
+/// answer. Once the client starts an APPEND literal, every further line is
+/// swallowed as message data.
+List<String> Function(String, String) _imapStallingOn(String stall) {
+  bool inLiteral = false;
+  return (String tag, String command) {
+    if (inLiteral) return const <String>[];
+    if (command.startsWith(stall)) {
+      if (stall == 'APPEND') {
+        inLiteral = true;
+        return const <String>['+ Ready for literal data'];
+      }
+      return const <String>[];
+    }
+    if (command.startsWith('LOGIN ')) {
+      return <String>['$tag OK LOGIN completed'];
+    }
+    if (command.startsWith('LIST')) {
+      return <String>[
+        '* LIST (\\HasNoChildren) "/" "INBOX"',
+        '* LIST (\\HasNoChildren \\Trash) "/" "Deleted Items"',
+        '* LIST (\\HasNoChildren \\Sent) "/" "Sent Items"',
+        '$tag OK LIST completed',
+      ];
+    }
+    if (command.startsWith('SELECT')) {
+      return <String>[
+        '* 1 EXISTS',
+        '* OK [UIDVALIDITY 1] UIDs valid',
+        '* FLAGS (\\Deleted \\Seen)',
+        '$tag OK [READ-WRITE] SELECT completed',
+      ];
+    }
+    if (command.startsWith('LOGOUT')) {
+      return <String>['* BYE logging out', '$tag OK LOGOUT completed'];
+    }
+    return <String>['$tag OK done'];
+  };
+}
+
+EnoughMailGateway _fastImapGateway(FakeImapServer server) => EnoughMailGateway(
+  _LoopbackMailProfile(imap: server.port),
+  connectionTimeout: const Duration(seconds: 2),
+  commandTimeout: const Duration(milliseconds: 300),
+  cleanupTimeout: const Duration(milliseconds: 50),
+  minTransferBytesPerSecond: 1 << 30,
+);
+
 void main() {
+  group('EnoughMailGateway mailbox mutations are time-limited', () {
+    late FakeImapServer server;
+    tearDown(() => server.close());
+
+    test(
+      'a stalled UID MOVE surfaces a typed timeout',
+      () async {
+        server = await FakeImapServer.start(
+          _imapStallingOn('UID MOVE'),
+          greeting:
+              '* OK [CAPABILITY IMAP4rev1 UIDPLUS MOVE SPECIAL-USE] ready',
+        );
+
+        await expectLater(
+          _fastImapGateway(server).deleteMessage(_credentials, id: '7'),
+          throwsA(
+            isA<MailFailure>().having(
+              (MailFailure f) => f.kind,
+              'kind',
+              MailFailureKind.timeout,
+            ),
+          ),
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 10)),
+    );
+
+    test(
+      'a stalled UID COPY surfaces a typed timeout',
+      () async {
+        server = await FakeImapServer.start(
+          _imapStallingOn('UID COPY'),
+          greeting: '* OK [CAPABILITY IMAP4rev1 UIDPLUS SPECIAL-USE] ready',
+        );
+
+        await expectLater(
+          _fastImapGateway(server).deleteMessage(_credentials, id: '7'),
+          throwsA(
+            isA<MailFailure>().having(
+              (MailFailure f) => f.kind,
+              'kind',
+              MailFailureKind.timeout,
+            ),
+          ),
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 10)),
+    );
+
+    test(
+      'a stalled APPEND of the Sent copy is reported, not hung',
+      () async {
+        server = await FakeImapServer.start(
+          _imapStallingOn('APPEND'),
+          greeting: '* OK [CAPABILITY IMAP4rev1 SPECIAL-USE] ready',
+        );
+
+        final SentCopyResult result = await _fastImapGateway(server)
+            .appendToSent(
+              _credentials,
+              const OutgoingMessage(
+                to: <String>['empfang@hs-anhalt.de'],
+                subject: 'Demo',
+                text: 'Demo-Inhalt',
+              ),
+            );
+
+        expect(result, SentCopyResult.appendFailed);
+        expect(server.receivedCommands, contains(contains('APPEND')));
+      },
+      timeout: const Timeout(Duration(seconds: 10)),
+    );
+  });
+
   group('EnoughMailGateway.send', () {
     test('a submission that stalls after DATA ends with "outcome unknown", '
         'closes the socket and never retries', () async {
