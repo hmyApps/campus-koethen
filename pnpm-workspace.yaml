@@ -28,8 +28,16 @@ overrides:
   'multer@<2.4.0': '>=2.4.0 <3' # GHSA-535w-7cp7-47q4 plus aborted-upload disk-write DoS
   'tar@<7.5.21': '>=7.5.21' # GHSA-8qq5-c9xr-p97q / GHSA-r292-9mhp-454m — parse/recursion DoS
   'vite@<=6.4.2': '>=6.4.3' # server.fs.deny bypass on Windows alternate paths (high)
-  'sharp@<0.35.4': '>=0.35.4' # inherited libvips/libheif CVEs, including GHSA-rgj7-g3m4-5g8c
+  # Inherited libvips/libheif CVEs (GHSA-rgj7-g3m4-5g8c) and GHSA-wq5f-xc86-pv6w (high), fixed in
+  # 0.35.5. Reaches the CMS runtime via @strapi/upload.
+  'sharp@<0.35.5': '>=0.35.5'
   'find-my-way@<9.7.0': '>=9.7.0' # DDoS with HTTP/2 (high); reaches the backend image via prisma
+  # GHSA-jqcg-44mw-7w3h (critical). Reaches the backend runtime through express under
+  # @nestjs/platform-express; the patch stays on the 2.x line.
+  'proxy-addr@<2.0.8': '>=2.0.8 <3'
+  # GHSA-8r5x-fm3f-whwj / GHSA-p8wg-vrv2-v86f (critical), GHSA-xw65-4hp5-5hc7. Arrives with
+  # ts-jest (backend tests) and the Strapi content-type generators; patched on the 4.x line.
+  'handlebars@<4.7.10': '>=4.7.10 <5'
   # Two separate js-yaml advisories, one pin per affected major line so no
   # consumer is dragged across a major boundary.
   #   5.x: exponential parsing time in flow collections (high)
