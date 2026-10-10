@@ -2,10 +2,12 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:enough_mail/enough_mail.dart';
+import 'package:meta/meta.dart';
 
 import '../domain/hsa_mail_profile.dart';
 import '../domain/mail_credentials.dart' as domain;
@@ -29,6 +31,13 @@ import 'mail_mime_builder.dart';
 ///    exception is the explicitly cancellable foreground [watchInbox] stream.
 ///  - Raw exceptions are converted to a [MailFailure] classification; server
 ///    responses and credentials never escape this class.
+/// The slowest throughput a transfer is given time for: 64 KiB/s (about
+/// 0.5 Mbit/s, a weak mobile link). Transfers that carry a message body —
+/// fetching it, submitting it, storing the Sent copy — get the normal command
+/// timeout plus the time this rate needs for their size, instead of one fixed
+/// limit that a large attachment can never meet.
+const int kMailMinTransferBytesPerSecond = 64 * 1024;
+
 class EnoughMailGateway implements MailGateway {
   factory EnoughMailGateway(
     HsaMailProfile profile, {
@@ -36,12 +45,16 @@ class EnoughMailGateway implements MailGateway {
     Duration commandTimeout = const Duration(seconds: 20),
     Duration cleanupTimeout = const Duration(seconds: 2),
     Duration verificationTimeout = const Duration(seconds: 25),
+    int minTransferBytesPerSecond = kMailMinTransferBytesPerSecond,
+    @visibleForTesting SmtpClient Function()? smtpClientFactory,
   }) => EnoughMailGateway._(
     profile,
     connectionTimeout,
     commandTimeout,
     cleanupTimeout,
     verificationTimeout,
+    minTransferBytesPerSecond,
+    smtpClientFactory,
   );
 
   EnoughMailGateway._(
@@ -50,6 +63,8 @@ class EnoughMailGateway implements MailGateway {
     this._commandTimeout,
     this._cleanupTimeout,
     this._verificationTimeout,
+    this._minTransferBytesPerSecond,
+    this._smtpClientFactory,
   );
 
   final HsaMailProfile _profile;
@@ -57,6 +72,8 @@ class EnoughMailGateway implements MailGateway {
   final Duration _commandTimeout;
   final Duration _cleanupTimeout;
   final Duration _verificationTimeout;
+  final int _minTransferBytesPerSecond;
+  final SmtpClient Function()? _smtpClientFactory;
 
   // --- IMAP -----------------------------------------------------------------
 
@@ -117,7 +134,9 @@ class EnoughMailGateway implements MailGateway {
     Future<T> Function(SmtpClient client) body, {
     Duration? operationTimeout,
   }) async {
-    final SmtpClient client = SmtpClient(_hostnameForEhlo, isLogEnabled: false);
+    final SmtpClient client =
+        _smtpClientFactory?.call() ??
+        SmtpClient(_hostnameForEhlo, isLogEnabled: false);
     bool timedOut = false;
     try {
       final Future<T> operation = () async {
@@ -636,13 +655,47 @@ class EnoughMailGateway implements MailGateway {
     model.OutgoingMessage message,
   ) async {
     final MimeMessage mime = buildOutgoingMime(credentials, message);
-    // SMTP send only. If this throws, nothing was sent. Storing a Sent copy is
-    // a separate call so the UI is not blocked on a second IMAP round trip.
-    await _guard(() async {
-      await _withSmtp(credentials, (SmtpClient client) async {
-        await client.sendMessage(mime);
+    // SMTP send only. Storing a Sent copy is a separate call so the UI is not
+    // blocked on a second IMAP round trip.
+    bool submitting = false;
+    try {
+      await _guard(() async {
+        await _withSmtp(credentials, (SmtpClient client) async {
+          submitting = true;
+          // Bounded by size: a stalled submission must not hold the compose
+          // screen forever. On timeout [_withSmtp] closes the socket without
+          // another protocol command.
+          await client
+              .sendMessage(mime)
+              .timeout(_transferTimeout(_estimatedWireBytes(message)));
+        });
       });
-    });
+    } on MailFailure catch (failure) {
+      if (submitting && failure.kind == MailFailureKind.timeout) {
+        // The message data may already be with the server. Never report this
+        // as "not sent", which invites a duplicate, and never retry here.
+        throw const MailFailure(MailFailureKind.sendOutcomeUnknown);
+      }
+      rethrow;
+    }
+  }
+
+  /// The command timeout plus the time [bytes] need at the minimum assumed
+  /// throughput ([kMailMinTransferBytesPerSecond] by default).
+  Duration _transferTimeout(int bytes) =>
+      _commandTimeout +
+      Duration(
+        milliseconds: (bytes * 1000 / _minTransferBytesPerSecond).ceil(),
+      );
+
+  /// An upper estimate of the message on the wire: base64 grows attachments by
+  /// a third, plus room for headers and MIME boundaries.
+  static int _estimatedWireBytes(model.OutgoingMessage message) {
+    int bytes = 64 * 1024 + utf8.encode(message.text).length;
+    for (final model.OutgoingAttachment attachment in message.attachments) {
+      bytes += (attachment.bytes.length * 4 / 3).ceil();
+    }
+    return bytes;
   }
 
   @override

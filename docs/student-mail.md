@@ -20,6 +20,11 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Die kombinierte IMAP-/SMTP-Prüfung endet spätestens an ihrer Gesamtgrenze mit einem typisierten
   Timeout; der Setup-Screen bleibt dadurch nie unbegrenzt im Ladezustand und gibt das Formular
   für einen erneuten Versuch wieder frei.
+- Übertragungen mit Nachrichteninhalt sind größenabhängig begrenzt: Befehlstimeout plus die Zeit,
+  die die Datenmenge bei mindestens 64 KiB/s braucht. Bestätigt der SMTP-Server die übergebene
+  Nachricht nicht rechtzeitig, meldet die App „Ausgang unklar“ mit dem Hinweis, vor einem erneuten
+  Senden den Ordner „Gesendet“ zu prüfen, schließt die Verbindung ohne weiteres Protokollkommando
+  und sendet **nicht** automatisch erneut; der Entwurf bleibt erhalten.
 - Die Campus-Köthen-API, Strapi und der Worker sind **nie** an Mail beteiligt. Sie
   erhalten **weder Zugangsdaten noch E-Mails**.
 - Genau **zwei** Eingaben: E-Mail-Adresse + Passwort. Die Adresse ist zugleich
