@@ -8,9 +8,34 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../core/documents/app_document.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../domain/application_files.dart';
 import '../domain/request_drafts.dart';
+
+/// Shown by a form whose stored drafts could not be read.
+///
+/// Deliberately not an empty form: a fresh draft started here would be saved
+/// over every draft still on disk.
+class RequestDraftsUnavailableView extends StatelessWidget {
+  const RequestDraftsUnavailableView({required this.onRetry, super.key});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = context.l10n;
+    return EmptyView(
+      icon: AppIcons.error_outline,
+      message: l10n.requestsDraftsUnavailable,
+      action: FilledButton.icon(
+        onPressed: onRetry,
+        icon: const Icon(AppIcons.refresh),
+        label: Text(l10n.actionRetry),
+      ),
+    );
+  }
+}
 
 /// A field label that says, in words, that the field is required.
 ///

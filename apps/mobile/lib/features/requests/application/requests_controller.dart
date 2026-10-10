@@ -40,6 +40,15 @@ class SubmitStoreFailed extends SubmitOutcome {
   const SubmitStoreFailed();
 }
 
+/// Nothing was sent: the stored case list could not be read.
+///
+/// Sending first and then failing to record the answer would strand the one
+/// status link the endpoint hands out, so the attempt stops before the
+/// network is touched.
+class SubmitStoreUnavailable extends SubmitOutcome {
+  const SubmitStoreUnavailable();
+}
+
 /// Everything the gateway itself reported.
 class SubmitGatewaySaid extends SubmitOutcome {
   const SubmitGatewaySaid(this.result);
@@ -83,6 +92,21 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
 
   List<RequestDraft> get _current => state.value ?? const <RequestDraft>[];
 
+  /// The stored drafts — waiting for a load in progress, refusing a failed
+  /// one. Writing an empty stand-in would replace every stored draft.
+  Future<List<RequestDraft>> _loaded() async {
+    try {
+      await future;
+    } catch (_) {
+      throw const RequestStoreUnavailable();
+    }
+    final AsyncValue<List<RequestDraft>> current = state;
+    if (current.hasError || !current.hasValue) {
+      throw const RequestStoreUnavailable();
+    }
+    return current.requireValue;
+  }
+
   RequestDraft? byId(String id) {
     for (final RequestDraft draft in _current) {
       if (draft.id == id) return draft;
@@ -118,10 +142,11 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
   /// is refused: its bytes are the retry payload, and changing them under the
   /// same key is what turns a replay into a conflict or a duplicate.
   Future<void> save(RequestDraft draft, {required DateTime now}) async {
+    final List<RequestDraft> current = await _loaded();
     final RequestDraft? existing = byId(draft.id);
     if (existing != null && existing.isFrozen) return;
 
-    final List<RequestDraft> next = _current
+    final List<RequestDraft> next = current
         .where((RequestDraft d) => d.id != draft.id)
         .toList();
     if (!draft.isEmpty) next.add(_touch(draft, now));
@@ -136,8 +161,9 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
 
   /// Deletes a draft and the attachments it owned.
   Future<void> delete(String id) async {
+    final List<RequestDraft> current = await _loaded();
     final RequestDraft? draft = byId(id);
-    await _persist(_current.where((RequestDraft d) => d.id != id).toList());
+    await _persist(current.where((RequestDraft d) => d.id != id).toList());
     if (draft is FinanceApplicationDraft) {
       await _attachments.deleteAll(draft.files.values);
     }
@@ -161,6 +187,17 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
     SubmissionProgress? onProgress,
     SubmissionCancelToken? cancel,
   }) async {
+    // Before anything goes out: an accepted case has to be recordable, and
+    // the case list is what it is recorded into.
+    try {
+      await ref.read(submissionsProvider.future);
+    } catch (_) {
+      return const SubmitStoreUnavailable();
+    }
+    if (ref.read(submissionsProvider).hasError) {
+      return const SubmitStoreUnavailable();
+    }
+
     final PendingSubmission? pending = draft.pending;
     if (pending != null) {
       // A frozen draft may only be retried with byte-identical data.
@@ -258,6 +295,7 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
   /// Deliberately explicit: this is the one path that can produce a duplicate,
   /// and it must be a decision rather than a side effect.
   Future<void> unfreeze(String id) async {
+    final List<RequestDraft> current = await _loaded();
     final RequestDraft? draft = byId(id);
     if (draft == null) return;
     final RequestDraft thawed = switch (draft) {
@@ -265,7 +303,7 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
       FeedbackDraft() => draft.copyWith(clearPending: true),
     };
     await _persist(<RequestDraft>[
-      ..._current.where((RequestDraft d) => d.id != id),
+      ...current.where((RequestDraft d) => d.id != id),
       thawed,
     ]);
   }
@@ -281,6 +319,9 @@ final AsyncNotifierProvider<RequestsController, List<RequestDraft>>
 requestsProvider =
     AsyncNotifierProvider<RequestsController, List<RequestDraft>>(
       RequestsController.new,
+      // A failed read stays an error the screen can show and retry, instead
+      // of a "loading" state every write would wait on.
+      retry: (_, _) => null,
     );
 
 /// The file slots of an application, in form order.

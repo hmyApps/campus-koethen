@@ -1613,6 +1613,8 @@
   "requestsSubmitUnsupportedMedia": "The submission was sent in the wrong format. Please report this error.",
   "requestsSubmitOutcomeUnknown": "Whether the submission arrived could not be determined. Nothing is lost: the draft is kept unchanged, and trying again will not create a second case.",
   "requestsSubmitStoreFailed": "The case was accepted but could not be saved on this device. The draft is kept — try again right away so the status link is not lost.",
+  "requestsSubmitStoreUnavailable": "Your saved cases could not be read on this device. So that no status link is lost, nothing was sent. Please try again later.",
+  "requestsDraftsUnavailable": "Your drafts could not be read on this device. Nothing was changed.",
   "requestsFrozenTitle": "Outcome unclear",
   "requestsPickFailed": "The file could not be attached.",
   "requestsResubmitAsNewTitle": "Submit as a new case?",

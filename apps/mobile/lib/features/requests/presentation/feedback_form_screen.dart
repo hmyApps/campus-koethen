@@ -41,6 +41,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
   late final TextEditingController _text;
 
   FeedbackDraft? _draft;
+  bool _loadFailed = false;
   bool _submitting = false;
   bool _showErrors = false;
 
@@ -65,7 +66,13 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
 
   Future<void> _load() async {
     final RequestsController controller = ref.read(requestsProvider.notifier);
-    await ref.read(requestsProvider.future);
+    try {
+      await ref.read(requestsProvider.future);
+    } catch (_) {
+      // Unreadable drafts are not "no drafts" — see the application form.
+      if (mounted) setState(() => _loadFailed = true);
+      return;
+    }
     final String? id = widget.draftId;
     final RequestDraft? existing = id == null ? null : controller.byId(id);
     final FeedbackDraft draft = existing is FeedbackDraft
@@ -118,8 +125,18 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
 
     return ScreenScaffold(
       title: l10n.requestsFeedbackFormTitle,
-      body: draft == null ? const LoadingView() : _form(context, l10n, draft),
+      body: draft != null
+          ? _form(context, l10n, draft)
+          : _loadFailed
+          ? RequestDraftsUnavailableView(onRetry: _retryLoad)
+          : const LoadingView(),
     );
+  }
+
+  void _retryLoad() {
+    setState(() => _loadFailed = false);
+    ref.invalidate(requestsProvider);
+    _load();
   }
 
   Widget _form(
@@ -290,6 +307,8 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
         );
       case SubmitStoreFailed():
         setState(() => _banner = l10n.requestsSubmitStoreFailed);
+      case SubmitStoreUnavailable():
+        setState(() => _banner = l10n.requestsSubmitStoreUnavailable);
       case SubmitKeyExpired():
         setState(() => _banner = l10n.requestsKeyExpiredBody);
       case SubmitPayloadChanged():

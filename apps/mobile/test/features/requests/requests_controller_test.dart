@@ -12,6 +12,7 @@ import 'package:campus_koethen/features/requests/application/requests_controller
 import 'package:campus_koethen/features/requests/application/requests_providers.dart';
 import 'package:campus_koethen/features/requests/application/submissions_controller.dart';
 import 'package:campus_koethen/features/requests/data/attachment_picker.dart';
+import 'package:campus_koethen/features/requests/data/encrypted_request_store.dart';
 import 'package:campus_koethen/features/requests/domain/application_files.dart';
 import 'package:campus_koethen/features/requests/domain/case_status.dart';
 import 'package:campus_koethen/features/requests/domain/request_drafts.dart';
@@ -296,6 +297,165 @@ void main() {
           .read(requestsProvider.notifier)
           .unfreeze(store.drafts.single.id);
 
+      expect(store.drafts.single.isFrozen, isFalse);
+    });
+  });
+
+  group('storage that cannot be read (E-03)', () {
+    SubmittedCase storedCase(String id) => SubmittedCase(
+      id: id,
+      kind: RequestKind.feedback,
+      submittedAt: _now,
+      statusUrl: kFakeStatusUrl,
+      receiptPdfUrl: kFakeReceiptUrl,
+    );
+
+    test('an unreadable case list is an error, never an empty list', () async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..cases = <SubmittedCase>[storedCase('old-case')]
+        ..failCaseReads = true;
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+
+      await expectLater(
+        container.read(submissionsProvider.future),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+    });
+
+    test('a case is never added over a list that failed to load', () async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..cases = <SubmittedCase>[storedCase('old-case')]
+        ..failCaseReads = true;
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+      await expectLater(
+        container.read(submissionsProvider.future),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+
+      // The disk recovers, but the screen still holds the failed load.
+      store.failCaseReads = false;
+      final SubmissionsController notifier = container.read(
+        submissionsProvider.notifier,
+      );
+      await expectLater(
+        notifier.add(storedCase('new-case')),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      await expectLater(
+        notifier.remove('old-case'),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      expect(store.caseWrites, 0);
+      expect(store.cases.single.id, 'old-case');
+    });
+
+    test('a case added during the first load keeps the stored ones', () async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..cases = <SubmittedCase>[storedCase('old-case')]
+        ..readDelay = const Duration(milliseconds: 20);
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+
+      // No `await ...future` first: the form submits while the list is
+      // still being read.
+      await container
+          .read(submissionsProvider.notifier)
+          .add(storedCase('new-case'));
+
+      expect(store.cases.map((SubmittedCase c) => c.id).toSet(), <String>{
+        'old-case',
+        'new-case',
+      });
+    });
+
+    test('concurrent writes never lose a case', () async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..writeDelay = const Duration(milliseconds: 10);
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+      await container.read(submissionsProvider.future);
+      final SubmissionsController notifier = container.read(
+        submissionsProvider.notifier,
+      );
+      await notifier.add(storedCase('a'));
+
+      // A submission landing while a status refresh notes the case number.
+      await Future.wait(<Future<void>>[
+        notifier.add(storedCase('b')),
+        notifier.noteServerFacts('a', number: 'A_1'),
+        notifier.add(storedCase('c')),
+      ]);
+
+      expect(store.cases.map((SubmittedCase c) => c.id).toSet(), <String>{
+        'a',
+        'b',
+        'c',
+      });
+      expect(
+        store.cases.firstWhere((SubmittedCase c) => c.id == 'a').number,
+        'A_1',
+      );
+    });
+
+    test('a draft is never saved over drafts that failed to load', () async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..failDraftReads = true;
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+      await expectLater(
+        container.read(requestsProvider.future),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      store.failDraftReads = false;
+
+      final RequestsController notifier = container.read(
+        requestsProvider.notifier,
+      );
+      final FeedbackDraft draft = notifier
+          .createFeedback(now: _now)
+          .copyWith(areaId: 1, feedback: 'Neu.');
+      await expectLater(
+        notifier.save(draft, now: _now),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      expect(store.draftWrites, 0);
+    });
+
+    test('nothing is sent while the case list cannot be read', () async {
+      // Sending first and failing to record afterwards would strand the one
+      // status link the endpoint hands out.
+      final FlakyRequestStore store = FlakyRequestStore()..failCaseReads = true;
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(_accepted);
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitStoreUnavailable>());
+      expect(gateway.keysUsed, isEmpty);
       expect(store.drafts.single.isFrozen, isFalse);
     });
   });

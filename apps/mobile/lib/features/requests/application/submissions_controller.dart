@@ -13,8 +13,20 @@ import 'requests_providers.dart';
 /// link *is* the account — so a case that is not in this list is unreachable
 /// forever. That is why [add] must succeed before its draft is removed, and
 /// why [remove] is a deliberate, warned-about action.
+///
+/// Every write is computed from the **loaded** list and runs after the one
+/// before it has finished:
+///
+/// * while the list is still being read, a write waits for it;
+/// * if it could not be read, a write is refused with
+///   [RequestStoreUnavailable] — an empty stand-in would overwrite every
+///   stored link;
+/// * two writes never start from the same snapshot, so a submission landing
+///   during a status refresh cannot drop the other's case.
 class SubmissionsController extends AsyncNotifier<List<SubmittedCase>> {
   RequestStore get _store => ref.read(requestStoreProvider);
+
+  Future<void> _tail = Future<void>.value();
 
   @override
   Future<List<SubmittedCase>> build() async =>
@@ -35,32 +47,62 @@ class SubmissionsController extends AsyncNotifier<List<SubmittedCase>> {
     return null;
   }
 
+  /// Runs [mutation] against the loaded list, after every earlier one.
+  Future<void> _serialized(
+    Future<void> Function(List<SubmittedCase> current) mutation,
+  ) {
+    final Future<void> result = _tail.then(
+      (_) async => mutation(await _loaded()),
+    );
+    _tail = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  /// The stored list — waiting for a load in progress, refusing a failed one.
+  Future<List<SubmittedCase>> _loaded() async {
+    try {
+      await future;
+    } catch (_) {
+      throw const RequestStoreUnavailable();
+    }
+    final AsyncValue<List<SubmittedCase>> current = state;
+    if (current.hasError || !current.hasValue) {
+      throw const RequestStoreUnavailable();
+    }
+    return current.requireValue;
+  }
+
+  void _publish(List<SubmittedCase> next) {
+    if (ref.mounted) state = AsyncData<List<SubmittedCase>>(next);
+  }
+
   /// Records a case. **Throws** when storage refused it.
   ///
   /// Deliberately not best-effort: the caller is about to delete the draft
   /// that produced this, and a silently dropped write would lose the only way
   /// back to the case.
-  Future<void> add(SubmittedCase submitted) async {
-    final List<SubmittedCase> next = <SubmittedCase>[
-      ..._current.where((SubmittedCase c) => c.id != submitted.id),
-      submitted,
-    ];
-    final List<SubmittedCase> sorted = _sorted(next);
-    await _store.writeCases(sorted);
-    state = AsyncData<List<SubmittedCase>>(sorted);
-  }
+  Future<void> add(SubmittedCase submitted) =>
+      _serialized((List<SubmittedCase> current) async {
+        final List<SubmittedCase> next = _sorted(<SubmittedCase>[
+          ...current.where((SubmittedCase c) => c.id != submitted.id),
+          submitted,
+        ]);
+        await _store.writeCases(next);
+        _publish(next);
+      });
 
   /// Forgets a case locally.
   ///
   /// The status link cannot be recovered — not by the app, not by the
   /// committee, not by e-mail. The UI warns before calling this.
-  Future<void> remove(String id) async {
-    final List<SubmittedCase> next = _sorted(
-      _current.where((SubmittedCase c) => c.id != id).toList(),
-    );
-    await _store.writeCases(next);
-    state = AsyncData<List<SubmittedCase>>(next);
-  }
+  Future<void> remove(String id) =>
+      _serialized((List<SubmittedCase> current) async {
+        final List<SubmittedCase> next = _sorted(
+          current.where((SubmittedCase c) => c.id != id).toList(),
+        );
+        await _store.writeCases(next);
+        _publish(next);
+      });
 
   /// Keeps locally known metadata in step with what the server reports.
   ///
@@ -73,20 +115,27 @@ class SubmissionsController extends AsyncNotifier<List<SubmittedCase>> {
     String? number,
     String? title,
   }) async {
-    final SubmittedCase? existing = byId(id);
-    if (existing == null) return;
-    if (existing.number == number && existing.localTitle == title) return;
-    final SubmittedCase updated = existing.copyWith(
-      number: number ?? existing.number,
-      localTitle: (title ?? '').trim().isEmpty ? existing.localTitle : title,
-    );
-    final List<SubmittedCase> next = _sorted(<SubmittedCase>[
-      ..._current.where((SubmittedCase c) => c.id != id),
-      updated,
-    ]);
-    state = AsyncData<List<SubmittedCase>>(next);
     try {
-      await _store.writeCases(next);
+      await _serialized((List<SubmittedCase> current) async {
+        SubmittedCase? existing;
+        for (final SubmittedCase item in current) {
+          if (item.id == id) existing = item;
+        }
+        if (existing == null) return;
+        if (existing.number == number && existing.localTitle == title) return;
+        final SubmittedCase updated = existing.copyWith(
+          number: number ?? existing.number,
+          localTitle: (title ?? '').trim().isEmpty
+              ? existing.localTitle
+              : title,
+        );
+        final List<SubmittedCase> next = _sorted(<SubmittedCase>[
+          ...current.where((SubmittedCase c) => c.id != id),
+          updated,
+        ]);
+        _publish(next);
+        await _store.writeCases(next);
+      });
     } catch (_) {
       // Cosmetic data — a failed write here must not break the screen.
     }
@@ -97,4 +146,8 @@ final AsyncNotifierProvider<SubmissionsController, List<SubmittedCase>>
 submissionsProvider =
     AsyncNotifierProvider<SubmissionsController, List<SubmittedCase>>(
       SubmissionsController.new,
+      // A list that cannot be read stays an error until the reader retries;
+      // the screen offers that. Silent background retries would keep it
+      // "loading", and every write waiting on it.
+      retry: (_, _) => null,
     );

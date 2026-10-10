@@ -31,6 +31,19 @@ abstract interface class RequestStore {
   Future<bool> wipeEverything();
 }
 
+/// Thrown when local storage could not keep — or could not read — what it
+/// holds.
+///
+/// A failed read is reported with this rather than as an empty list: the
+/// next write would otherwise replace every stored status link with whatever
+/// the caller happened to hold.
+class RequestStoreUnavailable implements Exception {
+  const RequestStoreUnavailable();
+
+  @override
+  String toString() => 'RequestStoreUnavailable';
+}
+
 /// A volatile store, used as a safe fallback and in tests.
 class InMemoryRequestStore implements RequestStore {
   List<RequestDraft> _drafts = const <RequestDraft>[];

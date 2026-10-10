@@ -48,9 +48,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
   Future<void> _refreshStatuses() async {
     // Awaited: on the first frame the stored cases are still loading, and an
     // empty read here would leave the list showing nothing but spinners.
-    final List<SubmittedCase> cases = await ref.read(
-      submissionsProvider.future,
-    );
+    final List<SubmittedCase> cases;
+    try {
+      cases = await ref.read(submissionsProvider.future);
+    } catch (_) {
+      // Unreadable: the section shows the error and its retry instead.
+      return;
+    }
     if (!mounted || cases.isEmpty) return;
     await ref
         .read(caseStatusProvider.notifier)
@@ -59,7 +63,6 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
 
   Future<void> _refresh() async {
     ref.invalidate(submissionsProvider);
-    await ref.read(submissionsProvider.future);
     await _refreshStatuses();
   }
 

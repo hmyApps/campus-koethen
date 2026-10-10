@@ -47,6 +47,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   late final TextEditingController _applicant;
 
   FinanceApplicationDraft? _draft;
+  bool _loadFailed = false;
   bool _submitting = false;
   bool _showErrors = false;
 
@@ -84,7 +85,14 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
 
   Future<void> _load() async {
     final RequestsController controller = ref.read(requestsProvider.notifier);
-    await ref.read(requestsProvider.future);
+    try {
+      await ref.read(requestsProvider.future);
+    } catch (_) {
+      // Unreadable drafts are not "no drafts": starting a fresh one here
+      // would be saved over every draft that is still on disk.
+      if (mounted) setState(() => _loadFailed = true);
+      return;
+    }
     final String? id = widget.draftId;
     final RequestDraft? existing = id == null ? null : controller.byId(id);
     final FinanceApplicationDraft draft = existing is FinanceApplicationDraft
@@ -194,8 +202,18 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
 
     return ScreenScaffold(
       title: l10n.requestsApplicationFormTitle,
-      body: draft == null ? const LoadingView() : _form(context, l10n, draft),
+      body: draft != null
+          ? _form(context, l10n, draft)
+          : _loadFailed
+          ? RequestDraftsUnavailableView(onRetry: _retryLoad)
+          : const LoadingView(),
     );
+  }
+
+  void _retryLoad() {
+    setState(() => _loadFailed = false);
+    ref.invalidate(requestsProvider);
+    _load();
   }
 
   Widget _form(
@@ -494,6 +512,8 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
         );
       case SubmitStoreFailed():
         setState(() => _banner = l10n.requestsSubmitStoreFailed);
+      case SubmitStoreUnavailable():
+        setState(() => _banner = l10n.requestsSubmitStoreUnavailable);
       case SubmitKeyExpired():
         setState(() {
           _banner = l10n.requestsKeyExpiredBody;

@@ -31,6 +31,10 @@ class RecordingBox implements EncryptedBox {
   final int? failOnWriteNumber;
   int _writes = 0;
 
+  /// Simulates a box that cannot be opened (keystore locked, I/O error):
+  /// plain reads fold that into "absent", checked reads report it.
+  bool unavailable = false;
+
   @override
   String get boxName => 'recording';
 
@@ -38,7 +42,19 @@ class RecordingBox implements EncryptedBox {
   String get keyStorageKey => 'recording-key';
 
   @override
-  Future<String?> read(String key) async => entries[key];
+  bool get discardUnreadable => false;
+
+  @override
+  Future<String?> read(String key) async => unavailable ? null : entries[key];
+
+  @override
+  Future<String?> readChecked(String key) async {
+    if (unavailable) throw const EncryptedBoxUnavailable();
+    return entries[key];
+  }
+
+  @override
+  Future<EncryptedBoxWipeResult> wipeAndSeal() => wipeChecked();
 
   @override
   Future<void> write(String key, String value) async {
@@ -175,15 +191,120 @@ void main() {
       },
     );
 
-    test('degrades to empty rather than crashing on a corrupt box', () async {
+    // E-03: "could not read" used to come back as "nothing stored", and the
+    // next write replaced every status link on the device with a list of one.
+    test('reports an unreadable box instead of an empty list', () async {
       final RecordingBox box = RecordingBox();
-      box.entries['drafts'] = 'not json at all';
+      box.entries['cases'] = jsonEncode(<Map<String, dynamic>>[
+        _case('old-case').toJson(),
+      ]);
+      box.unavailable = true;
+      final EncryptedRequestStore store = EncryptedRequestStore(
+        box: box,
+        legacy: FakeLegacyBox(null),
+      );
+
+      await expectLater(
+        store.readCases(),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      await expectLater(
+        store.readDrafts(),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+    });
+
+    test('never writes over a stored list it cannot decode', () async {
+      final RecordingBox box = RecordingBox();
+      box.entries['cases'] = 'not json at all';
+      box.entries['drafts'] = '{"not":"a list"}';
+      final EncryptedRequestStore store = EncryptedRequestStore(
+        box: box,
+        legacy: FakeLegacyBox(null),
+      );
+
+      await expectLater(
+        store.readCases(),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      await expectLater(
+        store.writeCases(<SubmittedCase>[_case('new-case')]),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      await expectLater(
+        store.writeDrafts(<RequestDraft>[_draft('d1')]),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      // The raw bytes are left exactly as they were, for a later build or a
+      // deliberate wipe to deal with.
+      expect(box.entries['cases'], 'not json at all');
+      expect(box.entries['drafts'], '{"not":"a list"}');
+    });
+
+    test('refuses to write while the box cannot be read', () async {
+      final RecordingBox box = RecordingBox();
+      box.entries['cases'] = jsonEncode(<Map<String, dynamic>>[
+        _case('old-case').toJson(),
+      ]);
+      box.unavailable = true;
+      final EncryptedRequestStore store = EncryptedRequestStore(
+        box: box,
+        legacy: FakeLegacyBox(null),
+      );
+
+      await expectLater(
+        store.writeCases(<SubmittedCase>[_case('new-case')]),
+        throwsA(isA<RequestStoreUnavailable>()),
+      );
+      box.unavailable = false;
+      expect((await store.readCases()).single.id, 'old-case');
+    });
+
+    test('carries entries it cannot parse through every write', () async {
+      // An entry this build does not understand — a kind from a newer
+      // version, say — still holds a status link. Dropping it on the next
+      // write would lose that case for good.
+      final Map<String, dynamic> unknown = <String, dynamic>{
+        ..._case('future-case').toJson(),
+        'kind': 'kind-from-a-newer-build',
+      };
+      final RecordingBox box = RecordingBox();
+      box.entries['cases'] = jsonEncode(<Object?>[
+        _case('old-case').toJson(),
+        unknown,
+      ]);
+      final EncryptedRequestStore store = EncryptedRequestStore(
+        box: box,
+        legacy: FakeLegacyBox(null),
+      );
+
+      final List<SubmittedCase> visible = await store.readCases();
+      expect(visible.map((SubmittedCase c) => c.id), <String>['old-case']);
+      await store.writeCases(<SubmittedCase>[...visible, _case('new-case')]);
+
+      final List<Object?> raw = jsonDecode(box.entries['cases']!) as List;
+      expect(raw, hasLength(3));
+      expect(raw, contains(equals(unknown)));
+    });
+
+    test('a draft it cannot parse survives a write as well', () async {
+      final Map<String, dynamic> unknown = <String, dynamic>{
+        'id': 'draft-future',
+        'kind': 'kind-from-a-newer-build',
+      };
+      final RecordingBox box = RecordingBox();
+      box.entries['drafts'] = jsonEncode(<Object?>[unknown]);
       final EncryptedRequestStore store = EncryptedRequestStore(
         box: box,
         legacy: FakeLegacyBox(null),
       );
 
       expect(await store.readDrafts(), isEmpty);
+      await store.writeDrafts(<RequestDraft>[_draft('d1')]);
+
+      final List<Object?> raw = jsonDecode(box.entries['drafts']!) as List;
+      expect(raw, hasLength(2));
+      expect(raw, contains(equals(unknown)));
     });
   });
 
