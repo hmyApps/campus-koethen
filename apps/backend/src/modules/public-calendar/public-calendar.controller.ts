@@ -7,6 +7,7 @@ import { Locale, LocaleResolution } from '../../common/locale/locale';
 import { RequestLocale } from '../../common/locale/locale.decorator';
 import { isoDate, parseWith, refineDateRange } from '../../common/validation/query';
 import { ENV } from '../../config/app-config.module';
+import { addCalendarDays, campusToday } from '../../common/time/campus-date';
 import { Env } from '../../config/env.schema';
 import { PublicCalendarService } from './public-calendar.service';
 import {
@@ -51,9 +52,9 @@ export class PublicCalendarController {
       z.object({ from: isoDate.optional(), to: isoDate.optional() }).transform((raw) => {
         // Resolved at parse time, not at build time: the default window is
         // relative to "now", so it has to move with the clock.
-        const today = new Date().toISOString().slice(0, 10);
+        const today = campusToday();
         const from = raw.from ?? today;
-        const to = raw.to ?? new Date(Date.now() + maxDays * 86_400_000).toISOString().slice(0, 10);
+        const to = raw.to ?? addCalendarDays(today, maxDays);
         return { from, to };
       }),
       maxDays,
@@ -97,17 +98,15 @@ export class PublicCalendarController {
   @ApiOkResponse({ type: PublicCalendarListResponseDto })
   async list(@RequestLocale() locale: LocaleResolution): Promise<ApiResponse<PublicCalendarDto[]>> {
     const { data, translationFallback } = await this.calendars.listCalendars(locale);
-    const now = Date.now();
+    const today = campusToday();
     return {
       data,
       meta: buildMeta({
         ...locale,
         translationFallback,
         featureEnabled: this.env.PUBLIC_CALENDAR_ENABLED,
-        from: new Date(now).toISOString().slice(0, 10),
-        to: new Date(now + this.env.PUBLIC_CALENDAR_LOOKAHEAD_DAYS * 86_400_000)
-          .toISOString()
-          .slice(0, 10),
+        from: today,
+        to: addCalendarDays(today, this.env.PUBLIC_CALENDAR_LOOKAHEAD_DAYS),
         maxRangeDays: this.env.PUBLIC_CALENDAR_API_MAX_RANGE_DAYS,
       }),
     };

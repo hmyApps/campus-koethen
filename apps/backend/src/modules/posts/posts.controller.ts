@@ -16,6 +16,7 @@ import {
 } from '../../common/validation/query';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
+import { addCalendarDays, campusToday } from '../../common/time/campus-date';
 import { PostsService } from './posts.service';
 import {
   ChannelDto,
@@ -42,9 +43,9 @@ export class PostsController {
 
     return refineDateRange(
       z.object({ from: isoDate.optional(), to: isoDate.optional() }).transform((raw) => {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = campusToday();
         const from = raw.from ?? today;
-        const to = raw.to ?? new Date(Date.now() + maxDays * 86_400_000).toISOString().slice(0, 10);
+        const to = raw.to ?? addCalendarDays(today, maxDays);
         return { from, to };
       }),
       maxDays,

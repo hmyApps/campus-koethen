@@ -3,6 +3,7 @@ import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { addCalendarDays, campusToday } from '../../common/time/campus-date';
 import { CANTEENS, CanteenDefinition } from './canteens.config';
 import { CanteenSourceError, MeineMensaClient } from './meine-mensa.client';
 import { NormalizedMeal, normalizeDefinitions, normalizeEntry } from './meine-mensa.schema';
@@ -74,10 +75,9 @@ export class CanteenSyncService {
     return CANTEENS.length;
   }
 
-  private static dateWindow(daysAhead: number, today = new Date()): { from: string; to: string } {
-    const from = today.toISOString().slice(0, 10);
-    const to = new Date(today.getTime() + daysAhead * 86_400_000).toISOString().slice(0, 10);
-    return { from, to };
+  private static dateWindow(daysAhead: number, now = new Date()): { from: string; to: string } {
+    const from = campusToday(now);
+    return { from, to: addCalendarDays(from, daysAhead) };
   }
 
   async syncAll(): Promise<SyncOutcome[]> {

@@ -183,6 +183,36 @@ describe('CanteenSyncService persistence boundary', () => {
     );
   });
 
+  it('asks meine-mensa for the window starting on the Berlin day', async () => {
+    const canteen = CANTEENS[0]!;
+    const prisma = {
+      canteen: { findUnique: jest.fn().mockResolvedValue({ id: 'canteen-id' }) },
+      syncRun: {
+        create: jest.fn().mockResolvedValue({ id: 'run-id' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as unknown as PrismaService;
+    const fetchFoodPlans = jest.fn().mockResolvedValue(foodPlanResponseSchema.parse({ data: [] }));
+    const service = new CanteenSyncService(
+      prisma,
+      { fetchFoodPlans } as unknown as MeineMensaClient,
+      { CANTEEN_SYNC_DAYS_AHEAD: 14 } as Env,
+    );
+    (service as unknown as { persist: jest.Mock }).persist = jest.fn().mockResolvedValue(0);
+    // 00:30 CEST on 21 July is still 20 July in UTC.
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-20T22:30:00.000Z'));
+
+    try {
+      await service.syncCanteen(canteen);
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(fetchFoodPlans).toHaveBeenCalledWith(
+      expect.objectContaining({ from: '2026-07-21', to: '2026-08-04' }),
+    );
+  });
+
   it('withdraws only meals owned by the meine-mensa source', async () => {
     const { service, tx } = harness();
 

@@ -302,7 +302,7 @@ Reiner Event-Feed für Beiträge mit dem Tag `event`.
 
 | Parameter  | Typ           | Standard           | Regeln                                                                        |
 | ---------- | ------------- | ------------------ | ----------------------------------------------------------------------------- |
-| `from`     | `YYYY-MM-DD`  | heute              | optional                                                                      |
+| `from`     | `YYYY-MM-DD`  | heute              | optional; „heute“ ist der Kalendertag in `Europe/Berlin`                      |
 | `to`       | `YYYY-MM-DD`  | `from` + Lookahead | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) |
 | `channels` | CSV von Slugs | _fehlt_            | max. 25 Werte, je max. 100 Zeichen                                            |
 | `page`     | Integer >= 1  | `1`                |                                                                               |
@@ -938,7 +938,7 @@ Aggregierte Termine über **mehrere** ausgewählte Kalender. Das Abfrageinterval
 | Parameter  | Typ          | Regeln                                                                                      |
 | ---------- | ------------ | ------------------------------------------------------------------------------------------- |
 | `calendar` | Slug         | **mehrfach** angebbar, ein Slug je Kalender; dedupliziert; max. 50                          |
-| `from`     | `YYYY-MM-DD` | optional, Standard heute                                                                    |
+| `from`     | `YYYY-MM-DD` | optional, Standard heute (Kalendertag in `Europe/Berlin`)                                   |
 | `to`       | `YYYY-MM-DD` | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) ⇒ sonst `400` |
 | `locale`   | `de` \| `en` |                                                                                             |
 

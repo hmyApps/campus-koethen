@@ -67,6 +67,34 @@ describe('PublicCalendarController date range', () => {
     expect(response.meta.maxRangeDays).toBe(120);
   });
 
+  it('starts the default window on the Berlin day just after local midnight', async () => {
+    const { controller, getAggregatedEvents } = harness();
+    // 00:30 CEST on 21 July is still 20 July in UTC.
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-20T22:30:00.000Z'));
+
+    await controller.aggregated(locale, { calendar: 'beispielkalender-a' });
+
+    const [, from] = getAggregatedEvents.mock.calls[0]! as [string[], Date, Date];
+    expect(from.toISOString()).toBe('2026-07-21T00:00:00.000Z');
+  });
+
+  it('advertises the Berlin day as the start of the app list horizon', async () => {
+    const service = {
+      listCalendars: jest.fn().mockResolvedValue({ data: [], translationFallback: false }),
+    } as unknown as PublicCalendarService;
+    const controller = new PublicCalendarController(service, {
+      PUBLIC_CALENDAR_API_MAX_RANGE_DAYS: 120,
+      PUBLIC_CALENDAR_LOOKAHEAD_DAYS: 180,
+      PUBLIC_CALENDAR_ENABLED: true,
+    } as Env);
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-20T22:30:00.000Z'));
+
+    const response = await controller.list(locale);
+
+    expect(response.meta.from).toBe('2026-07-21');
+    expect(response.meta.to).toBe('2027-01-17');
+  });
+
   it('still honours an explicit range', async () => {
     const { controller, getAggregatedEvents } = harness();
 
