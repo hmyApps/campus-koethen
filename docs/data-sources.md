@@ -316,7 +316,11 @@ ein Tagesobjekt für genau diese Klasse enthält. Nur bei bestätigten Klassen w
 entfernt, und zwar je Zuordnung: Verlässt eine Klasse eine Stunde, die für andere Klassen
 weiterläuft, verliert nur diese Klasse die Stunde. Meldet die Antwort einer Klasse Fehler oder
 fehlt ihr Tagesobjekt, bleibt ihr gespeicherter Plan unverändert, ohne dass der Lauf für die übrigen
-Klassen abbricht; die Anzahl solcher Klassen steht in der Sync-Historie. Eine einzelne nicht lesbare
+Klassen abbricht. Der Lauf bleibt `success`, weil die bestätigten Klassen aktuell sind und
+`partial` den ganzen Stundenplan als veraltet markieren würde. Die Anzahl unbestätigter Klassen steht
+als abfragbare Spalte `timetable_sync_runs.groupsUnconfirmed` in der Sync-Historie (dazu eine
+Warnung im Log), sodass der Betrieb auf dauerhaft unbestätigte Klassen alarmieren kann, etwa mit
+`SELECT … WHERE kind = 'entries' AND "groupsUnconfirmed" > 0`. Eine einzelne nicht lesbare
 Stunde (kein Titel, unlesbare Zeit) behält ihre zuletzt gültige Version.
 
 ### 4.4 Personenbezogene Daten

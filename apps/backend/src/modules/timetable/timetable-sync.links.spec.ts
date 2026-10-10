@@ -466,8 +466,25 @@ describe('TimetableSyncService group links', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             status: 'success',
+            // A queryable counter for monitoring, not only free text.
+            groupsUnconfirmed: 1,
             errorMessage: expect.stringContaining('1 class'),
           }),
+        }),
+      );
+    });
+
+    it('records zero unconfirmed classes when every class confirmed its plan', async () => {
+      const { store, service } = harness({
+        [CLASS_A]: response([day(CLASS_A, [lesson(7001)])]),
+        [CLASS_B]: response([day(CLASS_B, [lesson(8001)])]),
+      });
+
+      await service.syncEntries(RANGE.from, RANGE.to);
+
+      expect(store.runUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'success', groupsUnconfirmed: 0 }),
         }),
       );
     });

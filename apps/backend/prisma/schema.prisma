@@ -319,12 +319,15 @@ model TimetableSyncRun {
   rangeFrom DateTime? @db.Date
   rangeTo   DateTime? @db.Date
 
-  groupsRequested Int @default(0)
-  recordsReceived Int @default(0)
-  recordsAccepted Int @default(0)
-  recordsRejected Int @default(0)
-  recordsWritten  Int @default(0)
-  recordsRemoved  Int @default(0)
+  groupsRequested   Int @default(0)
+  /// Entry runs: classes whose own response carried errors or no day for them.
+  /// Their stored plan was kept; the run still counts as current for the rest.
+  groupsUnconfirmed Int @default(0)
+  recordsReceived   Int @default(0)
+  recordsAccepted   Int @default(0)
+  recordsRejected   Int @default(0)
+  recordsWritten    Int @default(0)
+  recordsRemoved    Int @default(0)
 
   /// Classification only. Never a header, URL, raw payload or person's name.
   errorCode    String?

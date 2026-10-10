@@ -1055,8 +1055,10 @@ export class TimetableSyncService {
           recordsWritten: entries.size,
           recordsRemoved: removed,
           groupsRequested: groupExternalIds.size,
-          // Informational on a successful run: the confirmed classes are
-          // current, the listed ones simply kept their last stored plan.
+          // Queryable for monitoring. The run stays `success`: the confirmed
+          // classes are current, the unconfirmed ones kept their stored plan,
+          // and `partial` would mark the whole timetable as stale.
+          groupsUnconfirmed: unconfirmedGroupIds.size,
           ...(unconfirmedGroupIds.size > 0
             ? {
                 errorMessage: `${unconfirmedGroupIds.size} class(es) unconfirmed (upstream errors or no day for the class); their stored plan kept`,
