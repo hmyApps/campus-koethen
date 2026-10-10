@@ -783,7 +783,7 @@ class EnoughMailGateway implements MailGateway {
       ),
       date: m.decodeDate(),
       isSeen: m.isSeen,
-      hasAttachments: m.hasAttachments(),
+      hasAttachments: _attachmentParts(m).isNotEmpty,
     );
   }
 
@@ -828,11 +828,11 @@ class EnoughMailGateway implements MailGateway {
   /// the inline preview) and — when [includeFiles] — other types too, so a
   /// downloaded attachment is available offline.
   List<model.MailAttachment> _attachmentsOf(MimeMessage m, bool includeFiles) {
-    final List<ContentInfo> infos = m.findContentInfo();
-    return infos.map((ContentInfo info) {
+    return _attachmentParts(m).map((_MimeLeaf leaf) {
+      final ContentInfo info = leaf.info;
       final String type = info.mediaType?.text ?? 'application/octet-stream';
       final Uint8List? bytes = (info.isImage || includeFiles)
-          ? m.getPart(info.fetchId)?.decodeContentBinary()
+          ? (leaf.isRoot ? m : m.getPart(info.fetchId))?.decodeContentBinary()
           : null;
       return model.MailAttachment(
         filename: info.fileName ?? info.fetchId,
@@ -841,6 +841,114 @@ class EnoughMailGateway implements MailGateway {
         bytes: bytes,
       );
     }).toList();
+  }
+
+  /// Every part of [m] the app offers as an attachment, in message order.
+  ///
+  /// Not only `Content-Disposition: attachment`: mailers such as Apple Mail
+  /// send files `inline`, others omit the disposition altogether. Any such
+  /// non-text part counts, as does a text part with its own file name — except
+  /// the text the reader already shows as the message body. Works on a
+  /// downloaded message (`BODY[]`) and on a bare `BODYSTRUCTURE` alike.
+  List<_MimeLeaf> _attachmentParts(MimeMessage m) {
+    final BodyPart? structure = m.body;
+    final List<_MimeLeaf> leaves = <_MimeLeaf>[];
+    if (structure != null) {
+      _collectStructureLeaves(structure, leaves, isRoot: true);
+    } else {
+      _collectMimeLeaves(m, null, leaves);
+    }
+    final Set<String> bodyIds = <String>{};
+    for (final MediaSubtype subtype in <MediaSubtype>[
+      MediaSubtype.textPlain,
+      MediaSubtype.textHtml,
+    ]) {
+      final _MimeLeaf? first = leaves
+          .where(
+            (_MimeLeaf leaf) =>
+                !leaf.isExplicitAttachment &&
+                leaf.info.mediaType?.sub == subtype,
+          )
+          .firstOrNull;
+      if (first != null) bodyIds.add(first.info.fetchId);
+    }
+
+    final List<_MimeLeaf> result = <_MimeLeaf>[
+      for (final _MimeLeaf leaf in leaves)
+        if (leaf.isExplicitAttachment ||
+            (!leaf.isEmbeddedMessage &&
+                !bodyIds.contains(leaf.info.fetchId) &&
+                (!(leaf.info.mediaType?.isText ?? true) ||
+                    leaf.info.fileName != null)))
+          leaf,
+    ];
+    // Explicit attachments nested inside forwarded messages are found by the
+    // library's own walk, as before.
+    final Set<String> listed = result
+        .map((_MimeLeaf leaf) => leaf.info.fetchId)
+        .toSet();
+    for (final ContentInfo info in m.findContentInfo()) {
+      if (info.fetchId.isNotEmpty && listed.add(info.fetchId)) {
+        result.add(_MimeLeaf(info, isRoot: false));
+      }
+    }
+    return result;
+  }
+
+  static void _collectStructureLeaves(
+    BodyPart part,
+    List<_MimeLeaf> leaves, {
+    required bool isRoot,
+  }) {
+    final MediaType? media = part.contentType?.mediaType;
+    final List<BodyPart>? children = part.parts;
+    if ((media?.isMultipart ?? false) ||
+        (children != null &&
+            children.isNotEmpty &&
+            !(media?.isMessage ?? false))) {
+      for (final BodyPart child in children ?? const <BodyPart>[]) {
+        _collectStructureLeaves(child, leaves, isRoot: false);
+      }
+      return;
+    }
+    leaves.add(
+      _MimeLeaf(
+        ContentInfo(part.fetchId ?? '1')
+          ..contentType = part.contentType
+          ..contentDisposition = part.contentDisposition
+          ..cid = part.cid,
+        isRoot: isRoot,
+      ),
+    );
+  }
+
+  static void _collectMimeLeaves(
+    MimePart part,
+    String? fetchId,
+    List<_MimeLeaf> leaves,
+  ) {
+    final MediaType media = part.mediaType;
+    final List<MimePart>? children = part.parts;
+    if (media.isMultipart ||
+        (children != null && children.isNotEmpty && !media.isMessage)) {
+      final List<MimePart> parts = children ?? const <MimePart>[];
+      for (int i = 0; i < parts.length; i++) {
+        _collectMimeLeaves(
+          parts[i],
+          fetchId == null ? '${i + 1}' : '$fetchId.${i + 1}',
+          leaves,
+        );
+      }
+      return;
+    }
+    leaves.add(
+      _MimeLeaf(
+        ContentInfo(fetchId ?? '1')
+          ..contentType = part.getHeaderContentType()
+          ..contentDisposition = part.getHeaderContentDisposition(),
+        isRoot: fetchId == null,
+      ),
+    );
   }
 
   MailFolder _toFolder(Mailbox box) => MailFolder(
@@ -930,4 +1038,20 @@ class EnoughMailGateway implements MailGateway {
     }
     return MailFailureKind.protocol;
   }
+}
+
+/// One leaf of a message's MIME tree, described by its [ContentInfo].
+class _MimeLeaf {
+  _MimeLeaf(this.info, {required this.isRoot});
+
+  final ContentInfo info;
+
+  /// The whole message is this single part (no multipart container), so its
+  /// content is the message's own body rather than a numbered sub-part.
+  final bool isRoot;
+
+  bool get isExplicitAttachment =>
+      info.contentDisposition?.disposition == ContentDisposition.attachment;
+
+  bool get isEmbeddedMessage => info.mediaType?.isMessage ?? false;
 }
