@@ -319,10 +319,14 @@ class UniversityServiceConnector {
   /// from the previous account under the new one.
   ///
   /// The selected service validates first, so rejected credentials leave the
-  /// old account untouched. A real identity change then wipes every other
-  /// protocol boundary before the new identity becomes visible. Previously
-  /// linked services are reconnected independently and failures are returned
-  /// to the UI per service.
+  /// old account untouched. A changed password for the same account (same
+  /// identifier, compared trimmed and case-insensitively) wipes nothing: the
+  /// new secret is retained and every linked service is reconnected in place.
+  /// Only a real account change (any other identifier, including a username
+  /// instead of the mail address) wipes every other protocol boundary before
+  /// the new identity becomes visible. Previously linked services are
+  /// reconnected independently and failures are returned to the UI per
+  /// service.
   Future<UniversityServiceConnectionResult> replaceIdentityAndReconnect(
     DirectService validationService,
     UniversityIdentity identity, {
@@ -367,6 +371,15 @@ class UniversityServiceConnector {
           replacement,
           displayName: validationDisplayName,
         );
+
+        if (_isSameAccount(previous, replacement)) {
+          return _replacePasswordAndReconnect(
+            previous,
+            replacement,
+            snapshot,
+            validationService: validationService,
+          );
+        }
 
         var cleanupFailed = false;
         for (final DirectService service
@@ -477,6 +490,62 @@ class UniversityServiceConnector {
     }
     return restored;
   }
+
+  /// A new password for the unchanged account (C-09): no personal data of
+  /// another account can surface, so nothing is wiped. The verified secret
+  /// replaces the central one and every linked service is reconnected in
+  /// place; a failure stays with that service and keeps its local data.
+  Future<UniversityServiceConnectionResult> _replacePasswordAndReconnect(
+    UniversityIdentity previous,
+    UniversityIdentity replacement,
+    UniversityServiceConnectionSnapshot snapshot, {
+    required DirectService validationService,
+  }) async {
+    final UniversityAccountController account = _ref.read(
+      universityAccountControllerProvider.notifier,
+    );
+    try {
+      await account.retainVerified(replacement);
+    } catch (error, stackTrace) {
+      // Secure storage drops a partially written pair; put the previous one
+      // back so the next start still has an identity.
+      try {
+        await account.retainVerified(previous);
+      } catch (_) {
+        throw const UniversityAccountFailure(
+          UniversityAccountFailureKind.accountChangeRollbackIncomplete,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final Set<DirectService> reconnected = <DirectService>{};
+    final Set<DirectService> failed = <DirectService>{};
+    for (final DirectService service in snapshot.connected) {
+      if (service == validationService) continue;
+      try {
+        await _reconnectLinked(
+          service,
+          replacement,
+          displayName: snapshot.displayNameFor(service),
+        );
+        reconnected.add(service);
+      } catch (_) {
+        failed.add(service);
+      }
+    }
+    return UniversityServiceConnectionResult(
+      identityChanged: true,
+      reconnectedServices: reconnected,
+      failedReconnections: failed,
+    );
+  }
+
+  /// The university login accepts a username and its mail address alike, but
+  /// they are not treated as equal here: only the same identifier, ignoring
+  /// surrounding whitespace and letter case, counts as the same account.
+  static bool _isSameAccount(UniversityIdentity a, UniversityIdentity b) =>
+      a.identifier.trim().toLowerCase() == b.identifier.trim().toLowerCase();
 
   /// Re-establishes a link that existed before this account update. For
   /// HSA-GPT that link already rests on the user's explicit consent, so the

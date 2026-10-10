@@ -408,6 +408,179 @@ void main() {
     },
   );
 
+  group('password-only change (C-09)', () {
+    const UniversityIdentity newPassword = UniversityIdentity(
+      identifier: 'student@hs-anhalt.de',
+      password: 'changed-secret',
+    );
+
+    Map<DirectService, _RecordingAdapter> allAdapters() =>
+        <DirectService, _RecordingAdapter>{
+          for (final DirectService service in DirectService.values)
+            service: _RecordingAdapter(),
+        };
+
+    test(
+      'keeps every linked service and reconnects it without a wipe',
+      () async {
+        final _MemoryIdentityStore store = _MemoryIdentityStore()
+          ..value = _identity;
+        final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+        final ProviderContainer container = _container(
+          store,
+          adapters,
+          snapshot: const UniversityServiceConnectionSnapshot(
+            connected: <DirectService>{
+              DirectService.mail,
+              DirectService.moodle,
+            },
+            mailDisplayName: 'Max Mustermensch',
+          ),
+        );
+        addTearDown(container.dispose);
+
+        final UniversityServiceConnectionResult result = await container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword);
+
+        for (final _RecordingAdapter adapter in adapters.values) {
+          expect(adapter.disconnects, 0);
+        }
+        expect(store.value, newPassword);
+        expect(result.failedReconnections, isEmpty);
+        expect(result.reconnectedServices, <DirectService>{
+          DirectService.mail,
+          DirectService.moodle,
+        });
+        expect(adapters[DirectService.grades]!.connectedWith, newPassword);
+        expect(adapters[DirectService.mail]!.connectedWith, newPassword);
+        expect(
+          adapters[DirectService.mail]!.connectedWithDisplayName,
+          'Max Mustermensch',
+        );
+        expect(adapters[DirectService.moodle]!.connectedWith, newPassword);
+      },
+    );
+
+    test('compares the identifier case-insensitively', () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            const UniversityIdentity(
+              identifier: ' Student@HS-Anhalt.de ',
+              password: 'changed-secret',
+            ),
+          );
+
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+    });
+
+    test('a username instead of the mail address still counts as an account '
+        'change', () async {
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(universityServiceConnectorProvider)
+          .replaceIdentityAndReconnect(
+            DirectService.grades,
+            const UniversityIdentity(
+              identifier: 'student',
+              password: 'changed-secret',
+            ),
+          );
+
+      expect(adapters[DirectService.mail]!.disconnects, 1);
+      expect(adapters[DirectService.moodle]!.disconnects, 1);
+    });
+
+    test(
+      'a failed reconnect is reported per service and never wipes it',
+      () async {
+        final _MemoryIdentityStore store = _MemoryIdentityStore()
+          ..value = _identity;
+        final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+        adapters[DirectService.moodle]!.connectError = StateError('offline');
+        final ProviderContainer container = _container(
+          store,
+          adapters,
+          snapshot: const UniversityServiceConnectionSnapshot(
+            connected: <DirectService>{
+              DirectService.mail,
+              DirectService.moodle,
+            },
+          ),
+        );
+        addTearDown(container.dispose);
+
+        final UniversityServiceConnectionResult result = await container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword);
+
+        expect(store.value, newPassword);
+        expect(result.reconnectedServices, <DirectService>{DirectService.mail});
+        expect(result.failedReconnections, <DirectService>{
+          DirectService.moodle,
+        });
+        expect(adapters[DirectService.moodle]!.disconnects, 0);
+      },
+    );
+
+    test('a failed central write restores the previous identity without '
+        'touching any service', () async {
+      final StateError retentionError = StateError('transient');
+      final _MemoryIdentityStore store = _MemoryIdentityStore()
+        ..value = _identity
+        ..nextWriteError = retentionError;
+      final Map<DirectService, _RecordingAdapter> adapters = allAdapters();
+      final ProviderContainer container = _container(
+        store,
+        adapters,
+        snapshot: const UniversityServiceConnectionSnapshot(
+          connected: <DirectService>{DirectService.mail},
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(universityServiceConnectorProvider)
+            .replaceIdentityAndReconnect(DirectService.grades, newPassword),
+        throwsA(same(retentionError)),
+      );
+
+      expect(store.value, _identity);
+      for (final _RecordingAdapter adapter in adapters.values) {
+        expect(adapter.disconnects, 0);
+      }
+      expect(adapters[DirectService.mail]!.connections, isEmpty);
+    });
+  });
+
   test(
     'rejected replacement credentials leave the old identity and services untouched',
     () async {
