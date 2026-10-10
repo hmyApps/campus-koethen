@@ -6,11 +6,18 @@
 // tests is the non-bypassable host/token policy, not Moodle's behaviour.
 
 import 'package:campus_koethen/features/moodle/data/moodle_http_client.dart';
+import 'package:campus_koethen/features/moodle/data/moodle_repository_impl.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_announcement.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_assignment.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_content.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_failure.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_html_adapter.dart';
+import '../../support/fake_moodle.dart';
 
 MoodleHttpClient clientWith(FakeHtmlAdapter adapter) {
   final Dio dio = Dio();
@@ -141,4 +148,101 @@ void main() {
       throwsA(const MoodleFailure(MoodleFailureKind.serviceUnavailable)),
     );
   });
+
+  group('an empty HTTP 200 body is never an empty result', () {
+    // Every whitelisted read function returns a JSON structure. A blank 200
+    // is a broken answer, and reading it as "nothing there" used to replace
+    // the cached announcements with an empty list (AGENTS §4).
+    test('announcements', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter(
+        (RequestOptions o) => const FakeHtmlResponse(''),
+      );
+      await expectLater(
+        clientWith(adapter).getAnnouncements(token: 'tok', courseId: 101),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('announcements when only the discussion call is blank', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        final Map<String, dynamic> data = o.data as Map<String, dynamic>;
+        if (data['wsfunction'] == 'mod_forum_get_forums_by_courses') {
+          return const FakeHtmlResponse('[{"id":3001,"type":"news"}]');
+        }
+        return const FakeHtmlResponse('   ');
+      });
+      await expectLater(
+        clientWith(adapter).getAnnouncements(token: 'tok', courseId: 101),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('assignments', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter(
+        (RequestOptions o) => const FakeHtmlResponse(''),
+      );
+      await expectLater(
+        clientWith(adapter).getAssignments(token: 'tok', courseIds: <int>[1]),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+
+    test('deadlines', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter(
+        (RequestOptions o) => const FakeHtmlResponse(''),
+      );
+      await expectLater(
+        clientWith(adapter).getUpcomingDeadlines(token: 'tok'),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+    });
+  });
+
+  test(
+    'a broken announcement answer keeps the cached course detail intact',
+    () async {
+      const MoodleAnnouncement cachedAnnouncement = MoodleAnnouncement(
+        id: 8001,
+        courseId: 1,
+        subject: 'Willkommen',
+        message: 'Demo-Ankündigung',
+      );
+      const MoodleAssignment cachedAssignment = MoodleAssignment(
+        id: 9001,
+        courseId: 1,
+        name: 'Übungsblatt 1 Abgabe',
+      );
+      final InMemoryMoodleCacheStore cache = InMemoryMoodleCacheStore()
+        ..courses = <MoodleCourse>[
+          const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+        ];
+      cache.sections[1] = const <MoodleSection>[];
+      cache.assignments[1] = const <MoodleAssignment>[cachedAssignment];
+      cache.announcements[1] = const <MoodleAnnouncement>[cachedAnnouncement];
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        final Map<String, dynamic> data = o.data as Map<String, dynamic>;
+        return switch (data['wsfunction']) {
+          'core_course_get_contents' => const FakeHtmlResponse('[]'),
+          'mod_assign_get_assignments' => const FakeHtmlResponse(
+            '{"courses":[],"warnings":[]}',
+          ),
+          // A blank 200 from the forum list.
+          _ => const FakeHtmlResponse(''),
+        };
+      });
+      final MoodleRepositoryImpl repo = MoodleRepositoryImpl(
+        apiClient: clientWith(adapter),
+        tokenStore: InMemoryMoodleTokenStore()
+          ..token = const MoodleToken(value: 'tok', userId: 7),
+        cacheStore: cache,
+      );
+
+      await expectLater(
+        repo.refreshCourseDetail(1),
+        throwsA(const MoodleFailure(MoodleFailureKind.invalidResponse)),
+      );
+      expect(cache.announcements[1], <MoodleAnnouncement>[cachedAnnouncement]);
+      expect(cache.assignments[1], <MoodleAssignment>[cachedAssignment]);
+    },
+  );
 }
