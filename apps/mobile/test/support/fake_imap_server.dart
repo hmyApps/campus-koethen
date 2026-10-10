@@ -13,11 +13,20 @@ import 'dart:io';
 /// parsing of the response. Each connected test can inspect
 /// [receivedCommands] to assert on that command text.
 class FakeImapServer {
-  FakeImapServer._(this._server, this.onCommand, this._greeting);
+  FakeImapServer._(
+    this._server,
+    this.onCommand,
+    this._greeting,
+    this._replyDelay,
+  );
 
   final ServerSocket _server;
   final List<String> Function(String tag, String command) onCommand;
   final String _greeting;
+
+  /// Optional per-command delay before the reply is written, to model a slow
+  /// link without real network latency.
+  final Duration Function(String command)? _replyDelay;
 
   /// Every command line received, across all connections, in order.
   final List<String> receivedCommands = <String>[];
@@ -25,12 +34,18 @@ class FakeImapServer {
   static Future<FakeImapServer> start(
     List<String> Function(String tag, String command) onCommand, {
     String greeting = '* OK IMAP4rev1 fake server ready',
+    Duration Function(String command)? replyDelay,
   }) async {
     final ServerSocket server = await ServerSocket.bind(
       InternetAddress.loopbackIPv4,
       0,
     );
-    final FakeImapServer fake = FakeImapServer._(server, onCommand, greeting);
+    final FakeImapServer fake = FakeImapServer._(
+      server,
+      onCommand,
+      greeting,
+      replyDelay,
+    );
     server.listen(fake._handleConnection);
     return fake;
   }
@@ -63,8 +78,18 @@ class FakeImapServer {
     final String command = spaceIndex == -1
         ? ''
         : line.substring(spaceIndex + 1);
-    for (final String replyLine in onCommand(tag, command)) {
-      socket.write('$replyLine\r\n');
+    final List<String> reply = onCommand(tag, command);
+    void write() {
+      for (final String replyLine in reply) {
+        socket.write('$replyLine\r\n');
+      }
+    }
+
+    final Duration delay = _replyDelay?.call(command) ?? Duration.zero;
+    if (delay == Duration.zero) {
+      write();
+    } else {
+      Future<void>.delayed(delay, write);
     }
   }
 

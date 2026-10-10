@@ -116,7 +116,7 @@ class EnoughMailGateway implements MailGateway {
       // A timed-out command must not be followed by another protocol command:
       // close the socket directly so the abandoned Future cannot keep the
       // login alive in the background. Normal logout stays best effort only.
-      if (!timedOut) {
+      if (!timedOut && _abandoned[client] != true) {
         try {
           await client.logout().timeout(_cleanupTimeout);
         } catch (_) {}
@@ -126,6 +126,11 @@ class EnoughMailGateway implements MailGateway {
       } catch (_) {}
     }
   }
+
+  /// IMAP connections a request gave up on after a timed-out command while
+  /// still returning a partial result: they are closed without LOGOUT, like a
+  /// timed-out request.
+  final Expando<bool> _abandoned = Expando<bool>('abandoned IMAP connection');
 
   // --- SMTP -----------------------------------------------------------------
 
@@ -389,15 +394,21 @@ class EnoughMailGateway implements MailGateway {
       ) async {
         await _select(client, mailboxPath);
         final int uid = int.parse(id);
-        final FetchImapResult result = await client.uidFetchMessages(
-          MessageSequence.fromRange(uid, uid, isUidSequence: true),
-          '(UID FLAGS ENVELOPE BODY.PEEK[])',
-          responseTimeout: _commandTimeout,
-        );
-        if (result.messages.isEmpty) {
+        final MimeMessage? structure = (await _fetchStructures(client, <int>[
+          uid,
+        ]))[uid];
+        if (structure == null) {
           throw const MailFailure(MailFailureKind.protocol);
         }
-        return _toDetail(result.messages.first, includeAttachmentBytes);
+        final MimeMessage? message = await _fetchContent(
+          client,
+          structure,
+          includeAttachmentBytes: includeAttachmentBytes,
+        );
+        if (message == null) {
+          throw const MailFailure(MailFailureKind.protocol);
+        }
+        return _toDetail(message, includeAttachmentBytes);
       });
     });
   }
@@ -418,26 +429,170 @@ class EnoughMailGateway implements MailGateway {
         final List<int> uids = ids
             .map(int.tryParse)
             .whereType<int>()
+            .where((int uid) => uid > 0)
             .toList(growable: false);
-        final List<model.MailMessageDetail> details =
-            <model.MailMessageDetail>[];
-        // One session, one fetch per id: enough_mail returns whole messages per
-        // UID; a tighter batch API is not worth the risk of partial parsing.
-        for (final int uid in uids) {
-          final FetchImapResult result = await client.uidFetchMessages(
-            MessageSequence.fromRange(uid, uid, isUidSequence: true),
-            '(UID FLAGS ENVELOPE BODY.PEEK[])',
-            responseTimeout: _commandTimeout,
+        if (uids.isEmpty) return const <model.MailMessageDetail>[];
+        final Map<int, MimeMessage> structures = await _fetchStructures(
+          client,
+          uids,
+        );
+        // Smallest first: one huge message can no longer keep every other
+        // message of the batch from being prefetched.
+        final List<int> bySize = uids.where(structures.containsKey).toList()
+          ..sort(
+            (int a, int b) =>
+                (structures[a]!.size ?? 0).compareTo(structures[b]!.size ?? 0),
           );
-          if (result.messages.isNotEmpty) {
-            details.add(
-              _toDetail(result.messages.first, includeAttachmentBytes),
+        final Map<int, model.MailMessageDetail> details =
+            <int, model.MailMessageDetail>{};
+        for (final int uid in bySize) {
+          try {
+            final MimeMessage? message = await _fetchContent(
+              client,
+              structures[uid]!,
+              includeAttachmentBytes: includeAttachmentBytes,
             );
+            if (message != null) {
+              details[uid] = _toDetail(message, includeAttachmentBytes);
+            }
+          } catch (error) {
+            // A refused or unparseable message only costs itself: it is
+            // skipped and loads on demand when opened.
+            if (!_isConnectionFailure(error)) continue;
+            // The connection is unusable now. Without any result this is the
+            // batch's failure; otherwise keep what arrived and close the socket
+            // without another protocol command.
+            if (details.isEmpty) rethrow;
+            _abandoned[client] = true;
+            break;
           }
         }
-        return details;
+        return <model.MailMessageDetail>[
+          for (final int uid in uids)
+            if (details[uid] != null) details[uid]!,
+        ];
       });
     });
+  }
+
+  /// Size (`RFC822.SIZE`) and MIME structure of [uids] in one cheap round
+  /// trip, keyed by UID. Nothing of the content is downloaded.
+  Future<Map<int, MimeMessage>> _fetchStructures(
+    ImapClient client,
+    List<int> uids,
+  ) async {
+    final FetchImapResult result = await client.uidFetchMessages(
+      MessageSequence.fromIds(uids, isUid: true),
+      '(UID RFC822.SIZE BODYSTRUCTURE)',
+      responseTimeout: _commandTimeout,
+    );
+    return <int, MimeMessage>{
+      for (final MimeMessage message in result.messages)
+        if (message.uid != null) message.uid!: message,
+    };
+  }
+
+  /// Downloads the content of one message described by [structure].
+  ///
+  /// Without [includeAttachmentBytes] only the text parts and the images (for
+  /// the inline preview) of a multipart message are fetched — attachment files
+  /// stay on the server until a tap asks for them. The time limit follows the
+  /// size of what is actually transferred.
+  Future<MimeMessage?> _fetchContent(
+    ImapClient client,
+    MimeMessage structure, {
+    required bool includeAttachmentBytes,
+  }) async {
+    final int uid = structure.uid!;
+    final MessageSequence sequence = MessageSequence.fromRange(
+      uid,
+      uid,
+      isUidSequence: true,
+    );
+    final BodyPart? body = structure.body;
+    final List<BodyPart>? parts = (includeAttachmentBytes || body == null)
+        ? null
+        : _partsWithoutFiles(body);
+    if (parts == null) {
+      final FetchImapResult result = await client
+          .uidFetchMessages(sequence, '(UID FLAGS ENVELOPE BODY.PEEK[])')
+          .timeout(_transferTimeout(structure.size ?? 0));
+      return result.messages.firstOrNull;
+    }
+
+    final int bytes = parts.fold<int>(
+      _headerAllowanceBytes,
+      (int total, BodyPart part) => total + (part.size ?? 0),
+    );
+    final String criteria =
+        '(UID FLAGS BODY.PEEK[HEADER] '
+        '${parts.map((BodyPart part) => 'BODY.PEEK[${part.fetchId}]').join(' ')})';
+    final FetchImapResult result = await client
+        .uidFetchMessages(sequence, criteria)
+        .timeout(_transferTimeout(bytes));
+    final MimeMessage? fetched = result.messages.firstOrNull;
+    if (fetched == null) return null;
+    // The structure goes in first: copying the parts afterwards gives each one
+    // its MIME type and transfer encoding from it.
+    return MimeMessage()
+      ..uid = uid
+      ..flags = fetched.flags
+      ..body = body
+      ..headers = fetched.headers
+      ..copyIndividualParts(fetched);
+  }
+
+  /// Room for the message header on top of the fetched part sizes.
+  static const int _headerAllowanceBytes = 64 * 1024;
+
+  /// The parts to download while attachment files stay on the server: every
+  /// text part that is not an attachment (the body and its alternatives) and
+  /// every image. Null when nothing would be left out, or for structures the
+  /// partial path leaves alone (a single part, an embedded message) — those
+  /// are fetched whole, as before.
+  static List<BodyPart>? _partsWithoutFiles(BodyPart body) {
+    if (!(body.contentType?.mediaType.isMultipart ?? false)) return null;
+    final List<BodyPart> leaves = <BodyPart>[];
+    if (!_collectLeafParts(body, leaves)) return null;
+    final List<BodyPart> wanted = leaves.where((BodyPart part) {
+      final MediaType? media = part.contentType?.mediaType;
+      if (media == null || media.isImage) return true;
+      return media.isText &&
+          part.contentDisposition?.disposition != ContentDisposition.attachment;
+    }).toList();
+    if (wanted.length == leaves.length ||
+        wanted.any((BodyPart part) => part.fetchId == null)) {
+      return null;
+    }
+    return wanted;
+  }
+
+  /// Collects the leaves below multipart containers. False when the tree
+  /// holds an embedded message, whose part numbering the partial path does
+  /// not handle.
+  static bool _collectLeafParts(BodyPart part, List<BodyPart> leaves) {
+    final MediaType? media = part.contentType?.mediaType;
+    if (media?.isMessage ?? false) return false;
+    if (media?.isMultipart ?? false) {
+      for (final BodyPart child in part.parts ?? const <BodyPart>[]) {
+        if (!_collectLeafParts(child, leaves)) return false;
+      }
+      return true;
+    }
+    leaves.add(part);
+    return true;
+  }
+
+  /// Whether [error] leaves the IMAP connection unusable for further
+  /// commands (as opposed to one message being refused or unparseable).
+  static bool _isConnectionFailure(Object error) {
+    if (error is TimeoutException ||
+        error is SocketException ||
+        error is TlsException) {
+      return true;
+    }
+    return error is ImapException &&
+        (error.message ?? '').toLowerCase().contains('timeout');
   }
 
   @override

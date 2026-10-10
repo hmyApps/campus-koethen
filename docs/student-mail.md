@@ -107,6 +107,12 @@ Hochschule Anhalt verbindet. Es gibt bewusst **keinen** serverseitigen Mail-Prox
   Nicht-Bild-Anhänge automatisch für die Offline-Nutzung geladen. Ist sie aus, lädt ein bewusster
   Tipp den fehlenden Anhang live vom Mailserver, legt ihn für die INBOX im verschlüsselten Cache
   ab und öffnet ihn anschließend. Bilder werden ohnehin inline aus dem Speicher angezeigt.
+  Ist die Einstellung aus, lädt die App von einer mehrteiligen Mail nur die Textteile und Bilder
+  (vorab per `BODYSTRUCTURE` ermittelt); Dateianhänge bleiben bis zum Tipp auf dem Server.
+- **Große Mails:** Inhalte werden mit größenabhängigem Zeitlimit geladen (siehe oben). Ein
+  Vorladelauf beginnt mit den kleinsten Nachrichten; eine vom Server verweigerte oder nicht
+  lesbare Nachricht wird übersprungen und erst beim Öffnen geladen. Bricht die Verbindung bei
+  einer großen Nachricht ab, bleiben die bereits geladenen Inhalte erhalten.
 - **Empfängervorschläge:** Beim Verfassen durchsucht das An-/Cc-Feld nach 250 ms Debounce direkt
   das authentifizierte Exchange-Adressbuch per EWS `ResolveNames` und mischt die Treffer mit
   Adressen aus der verschlüsselt gecachten Mailhistorie (From/To/Cc). Schlägt EWS fehl oder ist
