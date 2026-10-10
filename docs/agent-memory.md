@@ -47,10 +47,12 @@ lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat tei
 
 - [ ] Sicherheits-Patches für `pnpm audit` (siehe oben) über Overrides in `pnpm-workspace.yaml` bzw. den
       exakten `compression`-Pin im Backend; danach alle Gates erneut.
-- [ ] Maintainer-Entscheidungen: A-07 (Mensa-IDs im DTO), A-08 (`STRAPI_BASE_URL`-Default), VA-N02 (Speiseplan
-      `to` = from+14 vs. Doku +13), B-11 (`workflow_dispatch` in `images.yml`), D-10 (`/api/ai-req` vs. AGENTS),
-      D-11 (ungenutztes HAWKI-E2EE-Modul), E-13 (Moodle-Auto-Sync stündlich vs. Doku 24 h), G-07 (App-IDs),
-      G-08 (Quellcode-Link im About, braucht Release-URL).
+- [ ] Release-Gate G-08: Quellcode-Link im About (AGPL) fehlt; braucht die festgelegte öffentliche Repo-URL
+      (`docs/product/mvp.md` §6, Gate 3).
+- [x] 2026-10-11 Doku-Drift aufgelöst, Doku/AGENTS folgen dem Code: A-07 (Mensa-IDs als dokumentierte Ausnahme),
+      A-08 (lokaler `STRAPI_BASE_URL`-Default), VA-N02 (`to` = from+14), B-11 (manueller `images.yml`-Start im
+      README beschrieben), D-10 (`POST /api/ai-req`), D-11 (E2EE-Modul nicht angebunden), E-13 (Moodle stündlich
+      im Vordergrund), G-07 (Store-Kennungen). PROD-Domains in AGENTS §10 und `mvp.md` als geklärt eingetragen.
 - [ ] Bewusste Abweichungen bestätigen: B-10 `.invalid`-Kalender im Perf-Seed bleiben aktiv; D-06 fehlende Portalwahl
       fällt weiter auf HIS-QIS zurück (1.x-Migration); HSA-GPT wird bei Kontowechsel ohne erneute Zustimmung neu
       verbunden; jedes HSA-GPT-Neuverbinden rotiert das Token.

@@ -247,8 +247,10 @@ ein Dependency-Audit für Node **und** Dart sowie Greps gegen hartkodierte UI-Te
 Verwendung von `food.image_url`. Nach einem vollständig grünen Lauf auf `main` oder einem
 Version-Tag baut [`.github/workflows/images.yml`](.github/workflows/images.yml) die Backend- und
 CMS-Images für `linux/amd64`, prüft sie vor der Veröffentlichung mit Trivy und veröffentlicht sie
-mit SBOM und Provenance unter `ghcr.io/leviora-studio/campus-koethen/{backend,cms}`. Es findet kein
-automatisches Deployment statt.
+mit SBOM und Provenance unter `ghcr.io/leviora-studio/campus-koethen/{backend,cms}`. Zusätzlich
+lässt sich `images.yml` manuell (`workflow_dispatch`) für einen expliziten Rebuild starten. Ein
+manueller Start durchläuft die CI-Gates nicht selbst, scannt aber weiterhin mit Trivy und
+überschreibt auf `main` den Tag `main`. Es findet kein automatisches Deployment statt.
 
 ## Lizenz
 

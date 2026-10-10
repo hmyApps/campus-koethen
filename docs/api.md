@@ -526,7 +526,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 | Parameter | Typ          | Standard         | Regeln                                              |
 | --------- | ------------ | ---------------- | --------------------------------------------------- |
 | `from`    | `YYYY-MM-DD` | heute            | „heute“ ist der Kalendertag in `Europe/Berlin`      |
-| `to`      | `YYYY-MM-DD` | `from` + 13 Tage | `to >= from`, Spanne **max. 31 Tage** ⇒ sonst `400` |
+| `to`      | `YYYY-MM-DD` | `from` + 14 Tage | `to >= from`, Spanne **max. 31 Tage** ⇒ sonst `400` |
 | `locale`  | `de` \| `en` | `de`             |                                                     |
 
 ```jsonc
@@ -569,7 +569,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
     "lastSuccessfulSyncAt": "2026-07-22T12:00:04.000Z",
     "dataStale": false,
     "from": "2026-07-20",
-    "to": "2026-08-02",
+    "to": "2026-08-03",
   },
 }
 ```
@@ -577,6 +577,10 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 Verbindliche Regeln:
 
 - **Es gibt kein Bildfeld.** `food.image_url` der Quelle wird weder gespeichert noch ausgeliefert.
+- `id` (Gericht) und `counterId` (Ausgabestelle) sind die IDs der Quelle meine-mensa. Das ist eine
+  bewusste Ausnahme von der Regel gegen interne Fremd-IDs (AGENTS §7). `id` ändert sich, sobald
+  ein Gericht neu veröffentlicht wird; Clients behandeln sie als undurchsichtigen Schlüssel und
+  merken Favoriten über den Gerichtsnamen.
 - `amount` ist ein **String in Dezimaldarstellung**, damit keine Float-Rundung entsteht. Die
   Formatierung übernimmt der Client locale-gerecht.
 - Es werden **alle** in der Quelle vorhandenen Preisgruppen ausgeliefert. Fehlt eine Gruppe, fehlt

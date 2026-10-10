@@ -79,12 +79,16 @@ und im Datei-Downloader:
 - Persönliche Moodle-Daten liegen nur **verschlüsselt** lokal (`EncryptedMoodleCache` über die
   geteilte `EncryptedBox`: 256-Bit-Schlüssel im Secure Storage — dieselbe Krypto-Infrastruktur wie
   bei den Noten, keine zweite Implementierung).
-- **24-Stunden-Rolling-Sync:** lazy beim Öffnen, höchstens **ein** automatischer Versuch pro
-  rollenden 24 h, **kein** Hintergrund-Timer/Polling. Gleichzeitige Aufrufe werden zu einem
-  Netzaufruf zusammengeführt (Single-Flight). Ein fehlgeschlagener Auto-Versuch wird nicht bei jedem
-  Rebuild wiederholt (`lastAttempt` wird vorab gesetzt). `lastAttempt` und `lastSuccess` werden
-  getrennt geführt; nur ein **vollständig validierter** Erfolg ersetzt den Cache.
-- Manuelles Aktualisieren (in Moodle **und** im Kalender sichtbar) umgeht die 24-h-Sperre, bleibt
+- **Stündlicher Vordergrund-Sync:** Der app-weite Vordergrund-Scheduler (`AppSyncHost`) ruft beim
+  App-Start und danach stündlich `maybeAutoSync()` auf (`kMoodleAutoSyncInterval = 1 h`), solange
+  die App aktiv ist; zusätzlich beim Öffnen der Moodle-Übersicht und des Kalenders. Höchstens
+  **ein** automatischer Versuch pro rollender Stunde; im pausierten
+  Zustand läuft weder Timer noch Netzaufruf, es gibt **kein** Hintergrund-Polling. Gleichzeitige
+  Aufrufe werden zu einem Netzaufruf zusammengeführt (Single-Flight). Ein fehlgeschlagener
+  Auto-Versuch wird nicht bei jedem Rebuild wiederholt (`lastAttempt` wird vorab gesetzt).
+  `lastAttempt` und `lastSuccess` werden getrennt geführt; nur ein **vollständig validierter**
+  Erfolg ersetzt den Cache.
+- Manuelles Aktualisieren (in Moodle **und** im Kalender sichtbar) umgeht die Stundensperre, bleibt
   aber Single-Flight.
 - Eine ungültige/unbekannte Antwort **löscht nie** den letzten guten Cache. Eine gültige leere
   `inprogress`-Kursliste ist dagegen maßgeblich und entfernt Kurse, die Moodle nicht mehr als

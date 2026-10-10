@@ -28,16 +28,17 @@ Seiten der App.
 
 ## 1. Produktidentität
 
-|                            |                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
-| Projektname                | Campus Köthen App                                                                               |
-| Sichtbarer App-Name        | Campus Köthen                                                                                   |
-| Bundle-ID / Application ID | `dev.erikengler.campuskoethen`                                                                  |
-| Lizenz                     | `AGPL-3.0-only`                                                                                 |
-| Copyright                  | Copyright © 2026 Leviora Studio und Jona Loreen Sommer                                          |
-| App-Anbieter               | Erik Engler, handelnd unter „Leviora Studio“                                                    |
-| Backend und Redaktion      | Studierendenschaft der Hochschule Anhalt, vertreten durch den Sprecherrat des Studierendenrates |
-| Sprachen                   | Deutsch (Standard/Fallback), Englisch                                                           |
+|                            |                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| Projektname                | Campus Köthen App                                                                                 |
+| Sichtbarer App-Name        | Campus Köthen                                                                                     |
+| Bundle-ID / Application ID | Android `erikengler.campuskoethen`, iOS `campus-koethen` (Store-Kennungen, nicht ändern)          |
+| PROD-Domains               | API `campus-koethen-api.sturahsa.de`, CMS `koethen-cms.sturahsa.de`, Anträge `antrag.sturahsa.de` |
+| Lizenz                     | `AGPL-3.0-only`                                                                                   |
+| Copyright                  | Copyright © 2026 Leviora Studio und Jona Loreen Sommer                                            |
+| App-Anbieter               | Erik Engler, handelnd unter „Leviora Studio“                                                      |
+| Backend und Redaktion      | Studierendenschaft der Hochschule Anhalt, vertreten durch den Sprecherrat des Studierendenrates   |
+| Sprachen                   | Deutsch (Standard/Fallback), Englisch                                                             |
 
 ## 2. Zielgruppe und Nutzen
 
@@ -468,7 +469,9 @@ werden:
 
 1. **SMTP** — für Strapi-Einladungen und Passwort-Reset.
 2. **Offsite-Backups** — beide Datenbanken und Strapi-Uploads.
-3. **PROD-Domains.**
+3. **Quellcode-Hinweis (AGPL-3.0-only)** — der About-Screen nennt die Lizenz, verlinkt den Quellcode
+   aber noch nicht. Dafür muss die öffentliche Repository-URL festgelegt werden; sie kommt dann wie
+   die übrigen Adressen aus dem Build-Environment, mit eigenem ARB-Text in DE/EN.
 4. **Freigabe realer Kontaktdaten** und ggf. Personenfotos (Rechtsgrundlage).
 5. **Nutzungsfreigabe der Mensa-Datenquelle** durch den Betreiber.
 6. **Nutzungsfreigabe der WebUntis-Stundenplanquelle** — Erlaubnis zur automatisierten Nutzung
@@ -491,3 +494,6 @@ werden:
 10. **Nextcloud-Abnahme** — realer Login Flow v2, SSO-Rückkehr, DAV-Zugriff, Offline-Widerruf und
     App-Passwort-Löschung auf Android und iOS mit einem freigegebenen Testkonto prüfen; aktualisierte
     Datenschutzhinweise vor Veröffentlichung organisatorisch freigeben.
+
+Geklärt: die PROD-Domains (siehe [Abschnitt 1](#1-produktidentität)). Sie bleiben Build- und
+Deployment-Environment und werden nicht als Konstanten in den Quellcode übernommen.

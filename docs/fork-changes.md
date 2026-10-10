@@ -49,9 +49,10 @@ Gerät, kein Backend-Proxy, kein Tracking, Zugangsdaten nur im Keychain/Keystore
 Aus dem Mehragenten-Bughunt ([`bughunt-audit-2026-10-07.md`](bughunt-audit-2026-10-07.md)) sind 85
 von 94 validierten Funden behoben, darunter alle 9 mit hoher Schwere: u. a. die IMAP-Reconnect-Schleife
 gegen den Hochschul-Login, der mögliche Verlust von Antrags-Statuslinks, Moodle-Erinnerungen nach
-Fristende sowie Fehler im Stundenplan- und Kalender-Sync des Backends. Die übrigen neun Funde mit
-niedriger Schwere sind als Maintainer-Entscheidung offen; Stand und Folgeaufgaben stehen in
-[`agent-memory.md`](agent-memory.md).
+Fristende sowie Fehler im Stundenplan- und Kalender-Sync des Backends. Von den übrigen neun
+Funden mit niedriger Schwere wurden acht durch Anpassung von Doku und `AGENTS.md` an den Code
+aufgelöst; der fehlende Quellcode-Link im About-Screen bleibt als Release-Gate offen. Stand und
+Folgeaufgaben stehen in [`agent-memory.md`](agent-memory.md).
 
 ---
 

@@ -8,7 +8,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
 
 ## 1. Projektidentität — nicht verhandelbar
 
-- Sichtbarer App-Name: **Campus Köthen**. Technische Kennung: `dev.erikengler.campuskoethen`.
+- Sichtbarer App-Name: **Campus Köthen**. Technische Kennungen: Android-`applicationId`
+  `erikengler.campuskoethen` (Kotlin-Namespace `dev.erikengler.campuskoethen`), iOS-Bundle-ID
+  `campus-koethen` (Widget `campus-koethen.CampusCalendarWidget`). Diese Store-Kennungen werden
+  nicht geändert — eine neue Kennung wäre im Store eine neue App ohne Update-Pfad.
 - Das Projekt ist **unabhängig und inoffiziell**. Es darf an keiner Stelle den Eindruck einer
   offiziellen Anwendung der Hochschule Anhalt erwecken.
 - **Verboten:** Logos, Wappen, geschützte Markenassets, kopierte Designsysteme der Hochschule;
@@ -124,17 +127,23 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      Details: [`docs/requests.md`](docs/requests.md).
    - der **HSA-GPT-Chat** (HAWKI, der KI-Dienst der Hochschule Anhalt) → direkt und **nur** zu
      `https://ki.hs-anhalt.de`. Anmeldung erfolgt mit denselben, bereits hinterlegten
-     Hochschulzugangsdaten; das Passwort wird dabei einmalig verwendet, um über HAWKIs eigene
+     Hochschulzugangsdaten über HAWKIs Web-Login (`GET /login`, `POST /req/login`, danach
+     `/logout`); das Passwort wird dabei einmalig verwendet, um über HAWKIs eigene
      Profilfunktion (`POST /req/profile/create-token`) ein persönliches, jederzeit über
      `POST /req/profile/revoke-token` widerrufbares Sanctum-API-Token zu erzeugen. Gespeichert wird
      ausschließlich dieses Token, **niemals** das Passwort. Jede weitere Aktion — Modell-Liste
-     (`GET /api/hawki/v1/ai-models`) und Chat-Anfrage (`POST /api/hawki/v1/ai-req`) — läuft
+     (`GET /api/hawki/v1/ai-models`) und Chat-Anfrage (`POST /api/ai-req`; HAWKI registriert diese
+     Route ohne `/hawki/v1`-Präfix, am 2026-10-06 gegen die Live-Instanz bestätigt) — läuft
      ausschließlich mit diesem Bearer-Token gegen HAWKIs eigene, zustandslose externe API; der
      Chatverlauf besteht nur im Arbeitsspeicher der App, solange die Ansicht offen ist, und wird
      nie an ein Campus-Köthen-Backend gesendet oder dort gespeichert. Kein Zugriff auf HAWKIs
      interne SSE-Streaming-Route, kein E2EE-/Passkey-Schema dieses Diensts, keine Prompt- oder
-     Antwortinhalte in Logs. HSA-GPT bekommt einen eigenen, expliziten Zustimmungsbildschirm statt
-     einer Checkbox im allgemeinen Ersteinrichtungs-Assistenten, da die Verbindung direkt vom Gerät
+     Antwortinhalte in Logs. Das im Quellbaum liegende Modul
+     `apps/mobile/lib/features/hsa_ki/crypto/` (HAWKIs E2EE-Schema, mit Tests) ist von keinem
+     Produktionscode importiert und wird nicht angebunden, solange diese Regel gilt. HSA-GPT ist
+     derzeit in „Mehr“ vorübergehend deaktiviert, weil `ki.hs-anhalt.de` noch HAWKI 2.4.0 ohne die
+     benötigte Modell-API betreibt. HSA-GPT bekommt einen eigenen, expliziten Zustimmungsbildschirm
+     statt einer Checkbox im allgemeinen Ersteinrichtungs-Assistenten, da die Verbindung direkt vom Gerät
      erfolgt und die Antworten HAWKIs eigene sind, nicht die von Campus Köthen.
 
    Für diese Ausnahmen gilt: **kein** Backend-Proxy, **keine** serverseitige Speicherung, **kein**
@@ -188,7 +197,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    Read-only-Token. Kein direkter Zugriff auf Strapi-Tabellen, keine gemeinsame Prisma-Verbindung.
 3. Redaktionelle Inhalte leben in Strapi. Importierte Mensadaten und Sync-Zustände leben in der
    operativen PostgreSQL-Datenbank. Getrennte Datenbanken, getrennte Rollen.
-4. Die Strapi-Adresse ist **nie** eine Quellcode-Konstante — ausschließlich `STRAPI_BASE_URL`.
+4. Die Strapi-Adresse kommt aus `STRAPI_BASE_URL`. Einzige Ausnahme im Quellcode: Fehlt die
+   Variable ganz, setzt das Env-Schema des Backends den lokalen Entwicklungswert
+   `http://127.0.0.1:1337`. Alle Compose-Umgebungen (lokal, Test, Produktion) setzen
+   `STRAPI_BASE_URL` beziehungsweise `BACKEND_STRAPI_BASE_URL` explizit.
 5. DEV und PROD unterscheiden sich **nur** durch Environment/Secrets, nie durch Quellcode.
 6. Strapi stellt **keine** unauthentifizierte Content-API bereit. Das Plugin `users-permissions`
    ist bewusst nicht installiert; dadurch existiert keine versehentlich freischaltbare Public
@@ -246,7 +258,9 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
   mit Lockfile; `--frozen-lockfile` in CI.
 - Öffentliche DTOs leaken **keine** Strapi-Internas (`data`, `attributes`, `documentId`,
   `populate`-Metadaten) und keine internen Fremd-IDs wie WebUntis-IDs, `location_id` oder eine
-  Google-Kalender-ID als eigenständiges Feld.
+  Google-Kalender-ID als eigenständiges Feld. Bewusste, in `docs/api.md` dokumentierte Ausnahme:
+  Mensa-Gerichte tragen als `id` die Gericht-ID und als `counterId` die Ausgabestellen-ID von
+  meine-mensa. Die App behandelt `id` als undurchsichtige Zeichenkette und nutzt `counterId` nicht.
 - Query-Parameter werden validiert und begrenzt (insbesondere `pageSize` und Datumsbereiche).
 - Flutter: Riverpod, go_router, dio, `hive_ce` für den Inhaltscache.
   `SharedPreferences` **nur** für kleine skalare Einstellungen — kein JSON-Großspeicher.
@@ -276,4 +290,9 @@ Diese Platzhalter dürfen nicht durch erfundene Werte ersetzt werden. Die vollst
 aktuelle Liste aller organisatorischen, rechtlichen, datenquellenbezogenen und technischen
 Release-Gates steht in `README.md` und `docs/product/mvp.md`:
 
-- SMTP · Offsite-Backups · PROD-Domains
+- SMTP · Offsite-Backups
+
+Geklärt sind die PROD-Domains: Campus API `https://campus-koethen-api.sturahsa.de`, Strapi
+`https://koethen-cms.sturahsa.de`, Antragsportal (`REQUESTS_BASE_URL`) `https://antrag.sturahsa.de`.
+Sie bleiben Build- beziehungsweise Deployment-Environment und werden nicht als Konstanten in den
+Quellcode übernommen.
