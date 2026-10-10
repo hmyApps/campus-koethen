@@ -100,13 +100,28 @@ nie**; erst ein vollständig erfolgreicher Abruf fügt hinzu/aktualisiert/deakti
   gesehene `occurrenceKey` → Status/`lastSuccessfulSyncAt` setzen.
 - **Gültiger leerer** Feed = erfolgreicher leerer Snapshot (kein Fehler).
 - **Unveränderter Hash/304** = teure Parse-/Persistenzphase überspringen, Status/Zeitstempel trotzdem
-  aktualisieren.
+  aktualisieren. Diese Abkürzung gilt nur für Kalender im Status `ready`/`stale`, deren gespeicherte
+  Expansion (`lastExpandedTo`) höchstens einen Tag hinter dem aktuellen Fensterende liegt. Sonst
+  wird der Feed ohne `If-None-Match`/`If-Modified-Since` geladen und vollständig neu expandiert,
+  damit Serientermine am wandernden Fensterende erscheinen. Vergangene Termine vor dem Fenster
+  werden mangels festgelegter Aufbewahrungsfrist nicht automatisch entfernt.
+- **Katalogänderungen:** Ändern sich `includeEventDescription`/`includeEventLocation`, verwirft der
+  Katalog-Sync ETag, Last-Modified und `lastContentHash`; der nächste Lauf parst neu. Die API gibt
+  Beschreibung/Ort ohnehin nur bei gesetztem Flag aus. Zeigt ein Slug auf eine **andere**
+  Google-Kalender-ID, werden alle Sync-Felder zurückgesetzt (Status `pending`), und alle Termine
+  des alten Feeds werden gelöscht. Ein Feed-Lauf schreibt nur, solange ID und Flags noch dem Stand
+  bei Laufbeginn entsprechen.
 - **Temporärer Fehler** (Timeout/Netz/5xx/429): letzten Stand behalten, Kalender `stale`, weiter
   ausliefern.
 - **Beschädigt/zu groß/Recurrence-Limit:** keine destruktive Übernahme; `stale` (mit Vorstand) bzw.
   `invalid` (ohne) — bei erstem Sync nicht öffentlich.
 - **Freigabe entzogen** (404/410/403): Status `revoked`/`unavailable`, Termine gelöscht, aus dem
-  öffentlichen Katalog entfernt.
+  öffentlichen Katalog entfernt. Status, Löschung und das Zurücksetzen von ETag/Last-Modified/Hash
+  geschehen in einer Transaktion, sodass ein unverändert zurückkehrender Feed wieder vollständig
+  importiert wird.
+- **Synthetische Kalender:** Nur Zeilen mit `source = strapi` werden vom Katalog-Sync stillgelegt
+  oder vom Event-Sync abgerufen. Die Nutzertest-Daten (`source = user-test`) bleiben unberührt, und
+  Kalender-IDs unter der reservierten TLD `.invalid` werden nie bei Google angefragt.
 - Jeder Feed-Lauf schreibt genau eine strukturierte Betriebsmetrik mit `status`, `durationMs`,
   UTF-8-genauen `responseBytes`, `errorClass` und Ergebniszählern. URL, Google-Kalender-ID,
   Kalender-Slug und Feed-Inhalte erscheinen nicht in diesen Logs. Die interne Zuordnung bleibt

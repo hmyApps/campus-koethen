@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:campus_koethen/features/mail/data/enough_mail_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/hsa_mail_profile.dart';
 import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
+import 'package:campus_koethen/features/mail/domain/mail_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/mail_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -209,11 +210,9 @@ void main() {
         7: _inlinePdfs,
       });
 
-      final List<MailMessageHeader> headers = await gateway.fetchHeaders(
-        _credentials,
-      );
+      final MailHeaderPage page = await gateway.fetchHeaders(_credentials);
 
-      expect(headers.single.hasAttachments, isTrue);
+      expect(page.headers.single.hasAttachments, isTrue);
     });
 
     test('are listed with their file names and bytes', () async {

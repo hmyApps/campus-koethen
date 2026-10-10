@@ -67,6 +67,66 @@ void main() {
     );
   });
 
+  // D-06: a keystore that fails to read is not an account that is gone. The
+  // signed-out path runs a catch-up wipe of linked personal data, so only a
+  // CONFIRMED absence may ever read as "no account".
+  test('credential read surfaces a keystore failure, never "signed out"', () {
+    for (final String failing in <String>[
+      'grades.qis.username',
+      'grades.qis.password',
+    ]) {
+      final _ControlledStorage storage = _ControlledStorage(
+        values: <String, String>{
+          'grades.qis.username': 'student',
+          'grades.qis.password': 'secret',
+        },
+        failingReads: <String>{failing},
+      );
+      expect(
+        SecureGradeCredentialStore(storage).read(),
+        throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+        reason: failing,
+      );
+    }
+  });
+
+  test('credential read reports a confirmed absence as null', () async {
+    expect(await SecureGradeCredentialStore(_ControlledStorage()).read(), null);
+  });
+
+  test('portal read surfaces a keystore failure instead of a fallback', () {
+    final _ControlledStorage storage = _ControlledStorage(
+      values: <String, String>{'grades.active.portal': 'hisInOne'},
+      failingReads: <String>{'grades.active.portal'},
+    );
+    expect(
+      SecureGradePortalStore(storage).read(),
+      throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+    );
+  });
+
+  test('portal read classifies an unrecognised stored value', () {
+    final _ControlledStorage storage = _ControlledStorage(
+      values: <String, String>{'grades.active.portal': 'somethingElse'},
+    );
+    expect(
+      SecureGradePortalStore(storage).read(),
+      throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+    );
+  });
+
+  test('portal read reports a confirmed absence as null', () async {
+    expect(await SecureGradePortalStore(_ControlledStorage()).read(), null);
+    expect(
+      await SecureGradePortalStore(
+        _ControlledStorage(
+          values: <String, String>{'grades.active.portal': 'hisInOne'},
+        ),
+      ).read(),
+      GradePortal.hisInOne,
+    );
+  });
+
   test('grade cache clear rejects an incomplete encrypted wipe', () async {
     final EncryptedGradeCache cache = EncryptedGradeCache(
       _WipeBox(const EncryptedBoxWipeResult(keyAbsent: false, boxAbsent: true)),
@@ -93,13 +153,18 @@ class _ControlledStorage extends FlutterSecureStorage {
     Map<String, String>? values,
     Set<String>? droppedWrites,
     Set<String>? droppedDeletes,
+    Set<String>? failingReads,
   }) : values = values ?? <String, String>{},
        droppedWrites = droppedWrites ?? <String>{},
-       droppedDeletes = droppedDeletes ?? <String>{};
+       droppedDeletes = droppedDeletes ?? <String>{},
+       failingReads = failingReads ?? <String>{};
 
   final Map<String, String> values;
   final Set<String> droppedWrites;
   final Set<String> droppedDeletes;
+
+  /// Keys whose read throws, like a keystore that failed to open.
+  final Set<String> failingReads;
 
   @override
   Future<String?> read({
@@ -110,7 +175,12 @@ class _ControlledStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async => values[key];
+  }) async {
+    if (failingReads.contains(key)) {
+      throw StateError('keystore unavailable');
+    }
+    return values[key];
+  }
 
   @override
   Future<void> write({

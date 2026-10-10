@@ -3,6 +3,11 @@ export interface TimetableGroupEvidence {
   shortName: string;
   longName: string;
   department: string | null;
+  /**
+   * Semester catalogues (timetable contexts) that list this group. Aliases are
+   * only ever consolidated inside one of them; an empty list is its own scope.
+   */
+  contextIds: readonly string[];
   entryIds: readonly string[];
 }
 
@@ -14,22 +19,35 @@ export interface TimetableGroupEvidence {
  * populated row points at the exact same set of lessons. Divergent non-empty
  * plans stay visible: they are different groups even if upstream labelled them
  * identically, and hiding either one would lose a real timetable.
+ *
+ * Consolidation happens per semester catalogue. Around a semester change the
+ * sync window covers two catalogues, and the next semester's same-named group
+ * — typically still without lessons — is a different cohort, not an alias of
+ * the current one. A group listed in several catalogues stays visible as long
+ * as it represents at least one of them.
  */
 export function resolveTimetableGroupVisibility(
   groups: readonly TimetableGroupEvidence[],
 ): Map<string, boolean> {
   const byPublicIdentity = new Map<string, TimetableGroupEvidence[]>();
   for (const group of groups) {
-    const key = JSON.stringify([group.shortName, group.longName, group.department]);
-    const matches = byPublicIdentity.get(key) ?? [];
-    matches.push(group);
-    byPublicIdentity.set(key, matches);
+    const scopes: Array<string | null> =
+      group.contextIds.length > 0 ? [...new Set(group.contextIds)] : [null];
+    for (const scope of scopes) {
+      const key = JSON.stringify([scope, group.shortName, group.longName, group.department]);
+      const matches = byPublicIdentity.get(key) ?? [];
+      matches.push(group);
+      byPublicIdentity.set(key, matches);
+    }
   }
 
   const visibility = new Map<string, boolean>();
+  const mark = (id: string, visible: boolean): void => {
+    visibility.set(id, (visibility.get(id) ?? false) || visible);
+  };
   for (const matches of byPublicIdentity.values()) {
     if (matches.length === 1) {
-      visibility.set(matches[0]!.id, true);
+      mark(matches[0]!.id, true);
       continue;
     }
 
@@ -38,14 +56,14 @@ export function resolveTimetableGroupVisibility(
       populated.map((group) => [...new Set(group.entryIds)].sort().join('\u0000')),
     );
     if (populated.length > 1 && fingerprints.size > 1) {
-      for (const group of matches) visibility.set(group.id, true);
+      for (const group of matches) mark(group.id, true);
       continue;
     }
 
     const candidates = populated.length > 0 ? populated : matches;
     const representative = [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0]!;
     for (const group of matches) {
-      visibility.set(group.id, group.id === representative.id);
+      mark(group.id, group.id === representative.id);
     }
   }
   return visibility;

@@ -53,6 +53,24 @@ describe('TtlCache', () => {
     expect(factory).toHaveBeenCalledTimes(2);
   });
 
+  it('never answers with an expired entry, not even when the refresh fails', async () => {
+    // Deliberately no stale-on-error: a stale answer would carry no staleness
+    // marker, and a post list filtered by its validity window at request time
+    // would keep showing a post past its `validUntil` for as long as the CMS
+    // is down. The class comment once promised otherwise; this pins the truth.
+    const factory = jest
+      .fn()
+      .mockResolvedValueOnce('first')
+      .mockRejectedValueOnce(new Error('upstream unavailable'));
+    const cache = new TtlCache<string>(1_000);
+
+    await expect(cache.getOrSet('key', factory)).resolves.toBe('first');
+    jest.advanceTimersByTime(1_001);
+
+    await expect(cache.getOrSet('key', factory)).rejects.toThrow('upstream unavailable');
+    expect(cache.size).toBe(0);
+  });
+
   it('does not grow without bound when the keys keep changing', async () => {
     // The rooms endpoint takes its cache key from validated query parameters,
     // so an unauthenticated caller decides how many DISTINCT keys exist. An

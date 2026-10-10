@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'package:html/parser.dart' as html_parser;
+
 final RegExp _scriptStylePattern = RegExp(
   r'<(script|style)[^>]*>.*?</\1>',
   dotAll: true,
@@ -40,14 +42,20 @@ String htmlToPlainText(String? html) {
   text = text.replaceAll(_blockClosePattern, '\n');
   // Remove all remaining tags.
   text = text.replaceAll(_allTagsPattern, '');
-  // Decode the handful of entities worth handling.
-  text = text
-      .replaceAll('&nbsp;', ' ')
-      .replaceAll('&amp;', '&')
-      .replaceAll('&lt;', '<')
-      .replaceAll('&gt;', '>')
-      .replaceAll('&quot;', '"')
-      .replaceAll('&#39;', "'");
+  text = _decodeCharacterReferences(text);
   // Collapse excessive blank lines and trailing whitespace.
   return normalizeMailBody(text);
+}
+
+/// Decodes every HTML character reference — named (`&uuml;`), decimal
+/// (`&#8364;`) and hexadecimal (`&#x20AC;`) — in a single pass, with the
+/// HTML5 parser's own entity table, so `&amp;lt;` yields the literal `&lt;`
+/// instead of being decoded twice.
+///
+/// Every remaining `<` is escaped first: the parser then only ever sees
+/// character data, so neither leftover tag-shaped text nor a decoded `&lt;`
+/// can turn into markup. The result is plain text either way.
+String _decodeCharacterReferences(String text) {
+  if (!text.contains('&')) return text;
+  return html_parser.parseFragment(text.replaceAll('<', '&lt;')).text ?? '';
 }

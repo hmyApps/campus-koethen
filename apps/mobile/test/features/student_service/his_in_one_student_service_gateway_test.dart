@@ -54,6 +54,47 @@ FakeHtmlResponse _happyPath(RequestOptions o) {
   return const FakeHtmlResponse('not found', statusCode: 404);
 }
 
+/// A certificate-download script: login, landing and report tab as on the
+/// real portal; every AJAX round trip goes to [onAjax] (1-based call count)
+/// and everything else that is not part of that fixed flow to [onOther].
+FakeHtmlAdapter _jobAdapter({
+  required FakeHtmlResponse Function(int call, Map<String, String> body) onAjax,
+  FakeHtmlResponse Function(RequestOptions o)? onOther,
+}) {
+  int ajaxCalls = 0;
+  return FakeHtmlAdapter((RequestOptions o) {
+    final String url = o.uri.toString();
+    if (url.contains('auth.login')) {
+      return const FakeHtmlResponse.redirect(_landingUrl);
+    }
+    if (url == _landingUrl) {
+      return const FakeHtmlResponse(hisInOneAuthenticatedLandingHtml);
+    }
+    if (url.contains('auth.logout')) {
+      return const FakeHtmlResponse('bye');
+    }
+    if (url.contains('studyService/start.xhtml') && o.method == 'GET') {
+      return FakeHtmlResponse(studyServiceStgStudentHtml());
+    }
+    if (url.contains('studyService/start.xhtml') && o.method == 'POST') {
+      final Map<String, String> body = Map<String, String>.from(o.data as Map);
+      if (body.containsKey('studyserviceForm:content.10')) {
+        return FakeHtmlResponse(studyServiceReportHtml());
+      }
+      if (body['javax.faces.partial.ajax'] == 'true') {
+        return onAjax(++ajaxCalls, body);
+      }
+    }
+    return onOther?.call(o) ??
+        const FakeHtmlResponse('not found', statusCode: 404);
+  });
+}
+
+CertificateOffer _firstOffer() =>
+    HisInOneStudentServiceParser.readCertificateOffers(
+      studyServiceReportHtml(),
+    ).first;
+
 void main() {
   group('fetchOverview', () {
     test(
@@ -499,6 +540,145 @@ void main() {
         'offer-no-longer-listed',
       );
     });
+
+    // VD-N03: the poll loop honours cancellation instead of always running
+    // its full ~60 s budget.
+    test('a cancelled job stops polling at the next tick', () async {
+      int polls = 0;
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) {
+          polls = call - 1;
+          return FakeHtmlResponse(partialResponseStarted());
+        },
+      );
+
+      final CertificateDownloadResult result =
+          await HisInOneStudentServiceGateway(
+            adapter,
+            Duration.zero,
+          ).downloadCertificate(
+            _creds,
+            _firstOffer(),
+            isCancelled: () => polls >= 2,
+          );
+
+      expect(result, isA<CertificateUnavailable>());
+      expect((result as CertificateUnavailable).reason, 'cancelled');
+      expect(polls, 2);
+      expect(
+        adapter.urls.last,
+        contains('auth.logout'),
+        reason: 'the abandoned session still logs out',
+      );
+    });
+
+    // D-09: AGENTS.md §2 pins the order of the two download hops.
+    test(
+      'a job link pointing straight at the untrust- host is rejected',
+      () async {
+        const String untrustEntry =
+            'https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+            '?state=docdownload&docId=abc-123';
+        final FakeHtmlAdapter adapter = _jobAdapter(
+          onAjax: (int call, Map<String, String> body) => FakeHtmlResponse(
+            partialResponseFinished().replaceAll(
+              '"/qisserver/rds?state=docdownload',
+              '"https://untrust-sscportal.ssc.hs-anhalt.de/qisserver/rds'
+                  '?state=docdownload',
+            ),
+          ),
+          onOther: (RequestOptions o) => const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          ),
+        );
+
+        final CertificateDownloadResult result =
+            await HisInOneStudentServiceGateway(
+              adapter,
+            ).downloadCertificate(_creds, _firstOffer());
+
+        expect(result, isA<CertificateUnavailable>());
+        expect((result as CertificateUnavailable).reason, 'host-rejected');
+        expect(adapter.urls, isNot(contains(untrustEntry)));
+      },
+    );
+
+    test('a redirect back from the untrust- host to the portal host is '
+        'rejected', () async {
+      const String backToPortal =
+          'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
+          '?state=docdownload&docId=second';
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) =>
+            FakeHtmlResponse(partialResponseFinished()),
+        onOther: (RequestOptions o) {
+          final String url = o.uri.toString();
+          if (url == backToPortal) {
+            return const FakeHtmlResponse(
+              '%PDF-1.7\nfixture',
+              contentType: 'application/pdf',
+            );
+          }
+          if (o.uri.host == 'untrust-sscportal.ssc.hs-anhalt.de') {
+            return const FakeHtmlResponse.redirect(backToPortal);
+          }
+          return FakeHtmlResponse.redirect(docDownloadRedirectTarget());
+        },
+      );
+
+      await expectLater(
+        HisInOneStudentServiceGateway(
+          adapter,
+        ).downloadCertificate(_creds, _firstOffer()),
+        throwsA(
+          const StudentServiceFailure(
+            StudentServiceFailureKind.tlsOrHostRejected,
+          ),
+        ),
+      );
+      expect(adapter.urls, isNot(contains(backToPortal)));
+    });
+
+    // D-08: a configuration overlay that is there but cannot be read
+    // completely is a structure change — never "the job started directly",
+    // which polled for a minute against a job that was never started.
+    test(
+      'an incomplete configuration overlay fails closed without polling',
+      () async {
+        final FakeHtmlAdapter adapter = _jobAdapter(
+          onAjax: (int call, Map<String, String> body) => FakeHtmlResponse(
+            partialResponseNeedsConfiguration().replaceAll(
+              ' selected="selected"',
+              '',
+            ),
+          ),
+        );
+
+        await expectLater(
+          HisInOneStudentServiceGateway(
+            adapter,
+            Duration.zero,
+          ).downloadCertificate(_creds, _firstOffer()),
+          throwsA(
+            isA<StudentServiceFailure>().having(
+              (StudentServiceFailure f) => f.kind,
+              'kind',
+              StudentServiceFailureKind.portalStructureChanged,
+            ),
+          ),
+        );
+        expect(
+          adapter.requests.where(
+            (RequestOptions r) =>
+                r.data is Map &&
+                (r.data as Map)['javax.faces.partial.ajax'] == 'true',
+          ),
+          hasLength(1),
+          reason: 'only the job click itself, no poll ticks',
+        );
+      },
+    );
 
     test(
       'an AJAX job rejected by the portal is surfaced as portalUnavailable',

@@ -9,7 +9,7 @@ InlineText _t(String text) => InlineText(text: text);
 
 ParagraphBlock _p(String text) => ParagraphBlock(<InlineNode>[_t(text)]);
 
-const ImageBlock _image = ImageBlock(url: 'https://cdn.example/a.jpg');
+const ImageBlock _image = ImageBlock(url: '/v1/media/uploads/a.jpg');
 
 void main() {
   group('the preview text', () {

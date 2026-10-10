@@ -112,6 +112,57 @@ describe('TimetableSyncService catalogue duplicate reconciliation', () => {
       data: { catalogVisible: false },
     });
   });
+
+  it('reconciles aliases per semester catalogue, never across semesters', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    // Right after a semester change: the next semester's same-named group has
+    // no lessons in the window yet and was hidden behind the old one.
+    const groups = [
+      {
+        id: 'summer',
+        shortName: 'MER2',
+        longName: '2.Sem.Ernährungstherapie Master',
+        department: 'FB1',
+        catalogVisible: true,
+        contexts: [{ contextId: 'context-ss' }],
+      },
+      {
+        id: 'winter',
+        shortName: 'MER2',
+        longName: '2.Sem.Ernährungstherapie Master',
+        department: 'FB1',
+        catalogVisible: false,
+        contexts: [{ contextId: 'context-ws' }],
+      },
+    ];
+    const prisma = {
+      timetableGroup: { findMany: jest.fn().mockResolvedValue(groups), updateMany },
+      timetableEntryGroup: {
+        findMany: jest.fn().mockResolvedValue([{ groupId: 'summer', entryId: 'lesson-1' }]),
+      },
+    };
+    const service = new TimetableSyncService(
+      prisma as unknown as PrismaService,
+      {} as WebUntisClient,
+      {} as Env,
+    );
+
+    await service.reconcileGroupCatalogue(
+      new Date('2026-09-23T00:00:00.000Z'),
+      new Date('2026-10-21T00:00:00.000Z'),
+    );
+
+    expect(prisma.timetableGroup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ contexts: { select: { contextId: true } } }),
+      }),
+    );
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['winter'] } },
+      data: { catalogVisible: true },
+    });
+  });
 });
 
 /**
@@ -210,6 +261,9 @@ describe('TimetableSyncService entry write phase', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       timetableEntryGroup: {
+        // No stored links: what gets withdrawn is covered state-based in
+        // timetable-sync.links.spec.ts.
+        findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },

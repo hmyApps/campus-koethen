@@ -5,6 +5,7 @@ import 'package:campus_koethen/core/network/api_client.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
+import 'package:campus_koethen/core/theme/app_dimensions.dart';
 import 'package:campus_koethen/features/canteen/application/canteen_filter_controller.dart';
 import 'package:campus_koethen/features/canteen/presentation/canteen_favourites_screen.dart';
 import 'package:campus_koethen/features/canteen/presentation/meal_card.dart';
@@ -143,6 +144,29 @@ void main() {
 
     expect(find.text('Verschwundenes Gericht'), findsOneWidget);
     expect(find.text('Aktuell nicht im Speiseplan'), findsOneWidget);
+  });
+
+  testWidgets('every remove button is at least 48dp (G-06)', (
+    WidgetTester tester,
+  ) async {
+    // One favourite on today's menu (rendered as a meal card) and one that
+    // is not (the "unavailable" row) — both carry a remove button.
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore(<String, Object>{
+      PreferenceKeys.canteenFavourites: <String>[
+        'Gemüsepfanne',
+        'Verschwundenes Gericht',
+      ],
+    });
+
+    await pumpFavourites(tester, store: store);
+
+    final Finder buttons = find.byTooltip('Aus Favoriten entfernen');
+    expect(buttons, findsNWidgets(2));
+    for (final Element button in buttons.evaluate()) {
+      final Size size = tester.getSize(find.byWidget(button.widget));
+      expect(size.width, greaterThanOrEqualTo(AppSizes.minTouchTarget));
+      expect(size.height, greaterThanOrEqualTo(AppSizes.minTouchTarget));
+    }
   });
 
   testWidgets('removing a favourite here persists immediately', (

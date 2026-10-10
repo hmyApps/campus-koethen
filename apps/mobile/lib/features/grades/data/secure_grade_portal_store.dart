@@ -19,17 +19,25 @@ class SecureGradePortalStore implements GradePortalStore {
 
   static const String _portalKey = 'grades.active.portal';
 
+  /// Returns `null` ONLY when no choice is stored — an account set up before
+  /// the portal choice existed, which the account controller deliberately
+  /// maps to the legacy portal. A keystore that fails to read, or a stored
+  /// value this version does not recognise, throws
+  /// [GradeFailureKind.secureStorageUnavailable] instead: silently reading
+  /// either as "no choice" moved HISinOne accounts onto the legacy portal.
   @override
   Future<GradePortal?> read() async {
+    final String? raw;
     try {
-      final String? raw = await _storage.read(key: _portalKey);
-      for (final GradePortal p in GradePortal.values) {
-        if (p.name == raw) return p;
-      }
-      return null;
+      raw = await _storage.read(key: _portalKey);
     } catch (_) {
-      return null;
+      throw const GradeFailure(GradeFailureKind.secureStorageUnavailable);
     }
+    if (raw == null) return null;
+    for (final GradePortal p in GradePortal.values) {
+      if (p.name == raw) return p;
+    }
+    throw const GradeFailure(GradeFailureKind.secureStorageUnavailable);
   }
 
   @override

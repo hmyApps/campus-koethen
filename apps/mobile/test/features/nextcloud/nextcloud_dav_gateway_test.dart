@@ -170,6 +170,92 @@ void main() {
     expect(revocations, 1);
   });
 
+  group('cancelling while a poll is in flight', () {
+    final NextcloudLoginStart start = NextcloudLoginStart(
+      loginUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/flow/id'),
+      pollUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/poll'),
+      pollToken: 'poll-secret',
+    );
+
+    test(
+      'revokes an app password whose 200 arrives after the cancel',
+      () async {
+        final Completer<void> pollStarted = Completer<void>();
+        final Completer<_Response> pollAnswer = Completer<_Response>();
+        final List<Object?> revocations = <Object?>[];
+        final _Adapter adapter = _Adapter((RequestOptions request) {
+          if (request.uri.path == '/login/v2/poll') {
+            pollStarted.complete();
+            return pollAnswer.future;
+          }
+          if (request.uri.path == '/ocs/v2.php/core/apppassword') {
+            expect(request.method, 'DELETE');
+            revocations.add(request.headers['authorization']);
+            return _Response.json(<String, Object?>{
+              'ocs': <String, Object?>{
+                'meta': <String, Object?>{'statuscode': 100},
+                'data': <String, Object?>{},
+              },
+            });
+          }
+          throw StateError('Unexpected ${request.method} ${request.path}');
+        });
+        final Completer<void> canceled = Completer<void>();
+
+        final Future<NextcloudCredential> login = _gateway(
+          adapter,
+        ).completeLogin(start, canceled: canceled.future);
+        await pollStarted.future;
+        canceled.complete();
+        // Nextcloud answers this one poll with the freshly issued password and
+        // forgets the flow: nobody can fetch it again.
+        pollAnswer.complete(
+          _Response.json(<String, Object?>{
+            'server': 'https://cloud.hs-anhalt.de',
+            'loginName': 'student-login',
+            'appPassword': 'issued-secret',
+          }),
+        );
+
+        await expectLater(
+          login,
+          throwsA(const NextcloudFailure(NextcloudFailureKind.canceled)),
+        );
+        expect(revocations, <Object?>[
+          'Basic ${base64Encode(utf8.encode('student-login:issued-secret'))}',
+        ]);
+      },
+    );
+
+    test('stops after a pending 404 without revoking anything', () async {
+      final Completer<void> pollStarted = Completer<void>();
+      final Completer<_Response> pollAnswer = Completer<_Response>();
+      var polls = 0;
+      final _Adapter adapter = _Adapter((RequestOptions request) {
+        if (request.uri.path == '/login/v2/poll') {
+          polls++;
+          pollStarted.complete();
+          return pollAnswer.future;
+        }
+        throw StateError('Unexpected ${request.method} ${request.path}');
+      });
+      final Completer<void> canceled = Completer<void>();
+
+      final Future<NextcloudCredential> login = _gateway(
+        adapter,
+      ).completeLogin(start, canceled: canceled.future);
+      await pollStarted.future;
+      canceled.complete();
+      pollAnswer.complete(const _Response('', 404));
+
+      await expectLater(
+        login,
+        throwsA(const NextcloudFailure(NextcloudFailureKind.canceled)),
+      );
+      expect(polls, 1);
+    });
+  });
+
   test('lists one folder and file through a Depth 1 PROPFIND', () async {
     final _Adapter adapter = _Adapter((RequestOptions request) {
       expect(request.method, 'PROPFIND');

@@ -711,6 +711,7 @@
   "mailErrorServerUnreachable": "The mail server is currently unavailable.",
   "mailErrorProtocol": "Unexpected response from the mail server.",
   "mailErrorSessionClosed": "The mailbox was disconnected in the meantime.",
+  "mailErrorMailboxChanged": "The inbox was rebuilt on the mail server. Please refresh it and try again.",
   "mailErrorSendOutcomeUnknown": "Outcome unclear: the mail server did not confirm the submission in time. The message may have been sent anyway – check your Sent folder before sending it again.",
   "mailErrorSecureStorage": "Secure storage is not available on this device. Your credentials cannot be saved.",
   "mailErrorGeneric": "Something went wrong. Please try again later.",

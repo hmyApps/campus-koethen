@@ -4,9 +4,14 @@
 import 'package:campus_koethen/core/cache/cache_providers.dart';
 import 'package:campus_koethen/core/cache/content_cache.dart';
 import 'package:campus_koethen/core/locale/locale_providers.dart';
+import 'package:campus_koethen/core/network/api_meta.dart';
+import 'package:campus_koethen/core/network/loaded.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
+import 'package:campus_koethen/features/calendar/application/public_calendar_providers.dart';
+import 'package:campus_koethen/features/calendar/domain/public_calendar.dart';
 import 'package:campus_koethen/features/events/application/event_providers.dart';
 import 'package:campus_koethen/features/events/application/saved_events_controller.dart';
+import 'package:campus_koethen/features/events/data/event_posts_repository.dart';
 import 'package:campus_koethen/features/events/data/saved_events_store.dart';
 import 'package:campus_koethen/features/events/domain/saved_event_snapshot.dart';
 import 'package:campus_koethen/features/events/domain/saved_events_rules.dart';
@@ -604,6 +609,222 @@ void main() {
         );
       },
     );
+  });
+
+  group('an incomplete live load never orphans (VG-N01)', () {
+    Map<String, dynamic> eventPost(String slug) => <String, dynamic>{
+      'slug': slug,
+      'title': 'Event $slug',
+      'publishedAt': '2026-08-01T09:00:00.000Z',
+      'channels': <Object>[],
+      'tag': <String, dynamic>{'slug': 'event', 'name': 'Event'},
+      'primaryChannel': <String, dynamic>{
+        'slug': 'campus-events',
+        'name': 'Campus Events',
+      },
+      'content': <Object>[],
+      'eventStart': '2026-08-10T18:00:00.000Z',
+      'eventEnd': '2026-08-10T20:00:00.000Z',
+      'eventAllDay': false,
+    };
+
+    /// Pages of `/v1/posts/events`, one post each, optionally failing on one.
+    FakeHttpAdapter postPages({required int totalPages, int? failOnPage}) =>
+        FakeHttpAdapter((RequestOptions options) {
+          final int page =
+              int.tryParse('${options.queryParameters['page'] ?? 1}') ?? 1;
+          if (page == failOnPage) {
+            throw DioException(
+              requestOptions: options,
+              type: DioExceptionType.connectionError,
+            );
+          }
+          return FakeHttpResponse(
+            envelope(
+              <Object>[eventPost('p$page')],
+              meta: <String, dynamic>{
+                'from': '2026-08-01',
+                'to': '2026-08-31',
+                'pagination': <String, dynamic>{
+                  'page': page,
+                  'pageSize': 50,
+                  'total': totalPages,
+                  'totalPages': totalPages,
+                },
+              },
+            ),
+          );
+        });
+
+    Future<ProviderContainer> containerFor(
+      MemorySavedEventsStore store,
+      FakeHttpAdapter adapter, {
+      List<Override> overrides = const <Override>[],
+    }) async {
+      final ProviderContainer container = ProviderContainer(
+        overrides: <Override>[
+          savedEventsStoreProvider.overrideWithValue(store),
+          savedEventsClockProvider.overrideWithValue(
+            () => DateTime.utc(2026, 8, 5),
+          ),
+          localeCodeProvider.overrideWithValue('de'),
+          contentCacheProvider.overrideWithValue(
+            SafeContentCache(MemoryContentCache()),
+          ),
+          apiClientProvider.overrideWithValue(fakeApiClient(adapter)),
+          ...overrides,
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(savedEventsControllerProvider.future);
+      return container;
+    }
+
+    bool orphaned(ProviderContainer container) => container
+        .read(savedEventsControllerProvider)
+        .requireValue
+        .single
+        .isOrphaned;
+
+    test(
+      'a later page that failed to load leaves the saved event alone',
+      () async {
+        final MemorySavedEventsStore store = MemorySavedEventsStore();
+        await store.writeAll(<SavedEventSnapshot>[
+          // Inside the server window, but on the page that never arrived.
+          _snapshot(eventRef: 'post:p2', start: DateTime.utc(2026, 8, 10)),
+        ]);
+        final ProviderContainer container = await containerFor(
+          store,
+          postPages(totalPages: 2, failOnPage: 2),
+        );
+
+        final EventPostsResult result = await container.read(
+          eventPostsOverviewProvider.future,
+        );
+
+        expect(result.fromCache, isFalse);
+        expect(result.isTruncated, isTrue);
+        expect(
+          orphaned(container),
+          isFalse,
+          reason:
+              'the post may well be on the page that could not be fetched — '
+              'an incomplete list is no evidence that it was removed',
+        );
+      },
+    );
+
+    test(
+      'a load cut off at the 10×50 ceiling leaves the saved event alone',
+      () async {
+        final MemorySavedEventsStore store = MemorySavedEventsStore();
+        await store.writeAll(<SavedEventSnapshot>[
+          _snapshot(eventRef: 'post:p11', start: DateTime.utc(2026, 8, 10)),
+        ]);
+        final ProviderContainer container = await containerFor(
+          store,
+          postPages(totalPages: 11),
+        );
+
+        final EventPostsResult result = await container.read(
+          eventPostsOverviewProvider.future,
+        );
+
+        expect(result.isTruncated, isTrue);
+        expect(orphaned(container), isFalse);
+      },
+    );
+
+    test(
+      'a complete live load still orphans a genuinely missing post',
+      () async {
+        // Sanity check that the guard did not switch the rule off altogether.
+        final MemorySavedEventsStore store = MemorySavedEventsStore();
+        await store.writeAll(<SavedEventSnapshot>[
+          _snapshot(eventRef: 'post:gone', start: DateTime.utc(2026, 8, 10)),
+        ]);
+        final ProviderContainer container = await containerFor(
+          store,
+          postPages(totalPages: 2),
+        );
+
+        final EventPostsResult result = await container.read(
+          eventPostsOverviewProvider.future,
+        );
+
+        expect(result.isTruncated, isFalse);
+        expect(orphaned(container), isTrue);
+      },
+    );
+
+    test('a calendar response the server cut short leaves the saved calendar '
+        'event alone', () async {
+      final MemorySavedEventsStore store = MemorySavedEventsStore();
+      await store.writeAll(<SavedEventSnapshot>[
+        _snapshot(
+          eventRef: 'calendar:beyond-ceiling',
+          kind: UnifiedEventKind.calendarEvent,
+          start: DateTime.utc(2026, 8, 10),
+          channelSlug: null,
+          calendarSlug: 'demo-kalender',
+        ),
+      ]);
+      final FakeHttpAdapter adapter = FakeHttpAdapter(
+        (RequestOptions options) => FakeHttpResponse(
+          envelope(
+            <Object>[
+              <String, dynamic>{
+                'id': 'within-ceiling',
+                'calendarSlug': 'demo-kalender',
+                'title': 'Demo-Termin',
+                'start': '2026-08-09T10:00:00.000Z',
+                'end': '2026-08-09T11:00:00.000Z',
+              },
+            ],
+            meta: <String, dynamic>{
+              'from': '2026-08-01',
+              'to': '2026-08-31',
+              'truncated': true,
+            },
+          ),
+        ),
+      );
+      final ProviderContainer container = await containerFor(
+        store,
+        adapter,
+        overrides: <Override>[
+          publicCalendarsCatalogProvider.overrideWith(
+            (Ref ref) async => const Loaded<List<PublicCalendar>>(
+              value: <PublicCalendar>[
+                PublicCalendar(
+                  id: 'demo-1',
+                  slug: 'demo-kalender',
+                  name: 'Demo-Kalender',
+                  colorHex: '#5B3FD0',
+                  sortOrder: 0,
+                  defaultSubscribed: true,
+                  googleOpenUrl: 'https://calendar.google.com/calendar/embed',
+                ),
+              ],
+              meta: ApiMeta.empty,
+            ),
+          ),
+        ],
+      );
+
+      final Loaded<List<PublicCalendarEvent>> loaded = await container.read(
+        eventCalendarsOverviewProvider.future,
+      );
+
+      expect(loaded.fromCache, isFalse);
+      expect(loaded.meta.truncated, isTrue);
+      expect(
+        orphaned(container),
+        isFalse,
+        reason: 'the server cut the list at its event ceiling',
+      );
+    });
   });
 }
 

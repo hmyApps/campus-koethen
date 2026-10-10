@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 
 import '../../../core/documents/app_document.dart';
@@ -10,10 +12,26 @@ import '../../../core/documents/app_document.dart';
 typedef MoodleDownloadProgress = void Function(double? fraction);
 
 /// A cancellation handle passed into a download.
+///
+/// [whenCancelled] lets the transport abort the request itself. A flag alone
+/// was only looked at between body chunks, so a connection that hung before
+/// the headers or mid-body could not be cancelled at all.
 class MoodleDownloadCancel {
-  bool _cancelled = false;
-  bool get isCancelled => _cancelled;
-  void cancel() => _cancelled = true;
+  final Completer<void> _cancelled = Completer<void>();
+  bool get isCancelled => _cancelled.isCompleted;
+  Future<void> get whenCancelled => _cancelled.future;
+  void cancel() {
+    if (!_cancelled.isCompleted) _cancelled.complete();
+  }
+}
+
+/// Thrown when a download ends because [MoodleDownloadCancel.cancel] was
+/// called. A deliberate stop, not a failure: callers show no error for it.
+class MoodleDownloadCancelled implements Exception {
+  const MoodleDownloadCancelled();
+
+  @override
+  String toString() => 'MoodleDownloadCancelled';
 }
 
 /// Port: on-demand download of a single Moodle file.

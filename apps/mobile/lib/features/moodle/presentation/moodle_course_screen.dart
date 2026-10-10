@@ -393,8 +393,11 @@ class _FileTileState extends ConsumerState<_FileTile> {
           builder: (BuildContext _) => DocumentViewerScreen(document: doc),
         ),
       );
+    } on MoodleDownloadCancelled {
+      // A deliberate stop is not a failure: no error message for it.
     } catch (error) {
-      if (!mounted) return;
+      // Whatever the transport reports after a cancel is the cancel's doing.
+      if (!mounted || cancel.token.isCancelled) return;
       messenger.showSnackBar(
         SnackBar(content: Text(moodleFailureMessage(l10n, error))),
       );

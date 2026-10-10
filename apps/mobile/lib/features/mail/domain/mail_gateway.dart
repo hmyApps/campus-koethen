@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import 'mail_credentials.dart';
+import 'mail_failure.dart';
 import 'mail_folder.dart';
 import 'mail_message.dart';
 
@@ -20,6 +21,28 @@ enum SentCopyResult {
 /// Signals emitted by the foreground IMAP watcher. No message content crosses
 /// this stream; a change only asks the normal cache sync to reconcile.
 enum MailLiveSignal { connected, pollingFallback, changed }
+
+/// One page of headers plus the state of the mailbox it was read from.
+///
+/// The mailbox state is what makes a page interpretable: [messagesExists]
+/// tells whether the page covered the whole mailbox, [uidValidity] whether
+/// its UIDs still mean the same messages as the ones cached earlier.
+class MailHeaderPage {
+  const MailHeaderPage({
+    required this.headers,
+    required this.messagesExists,
+    this.uidValidity,
+  });
+
+  /// The headers of this page, newest first.
+  final List<MailMessageHeader> headers;
+
+  /// Number of messages in the mailbox when the page was read (IMAP EXISTS).
+  final int messagesExists;
+
+  /// The mailbox's UIDVALIDITY, or null when the server did not report one.
+  final int? uidValidity;
+}
 
 /// The single boundary to enough_mail.
 ///
@@ -41,7 +64,9 @@ abstract interface class MailGateway {
   /// Without [beforeId], the newest headers are returned. When [beforeId] is
   /// set, only messages with an older IMAP UID are considered; this provides a
   /// stable cursor even while new mail arrives or other messages are deleted.
-  Future<List<MailMessageHeader>> fetchHeaders(
+  /// The page also reports the mailbox's EXISTS count and UIDVALIDITY as seen
+  /// by the same SELECT.
+  Future<MailHeaderPage> fetchHeaders(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     int limit = 50,
@@ -79,19 +104,29 @@ abstract interface class MailGateway {
   });
 
   /// Marks a message as \Seen. Best effort — failure is non-fatal to the caller.
+  ///
+  /// With [expectedUidValidity], nothing is changed unless the selected
+  /// mailbox still reports that UIDVALIDITY; otherwise this throws
+  /// [MailFailureKind.mailboxChanged].
   Future<void> markSeen(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   });
 
   /// Moves one message to the server's Trash folder. When the message already
   /// lives in Trash it is permanently removed. Implementations must address it
   /// by IMAP UID, never by the unstable sequence number.
+  ///
+  /// With [expectedUidValidity], nothing is changed unless the selected
+  /// mailbox still reports that UIDVALIDITY; otherwise this throws
+  /// [MailFailureKind.mailboxChanged].
   Future<void> deleteMessage(
     MailCredentials credentials, {
     String mailboxPath = kInboxPath,
     required String id,
+    int? expectedUidValidity,
   });
 
   /// Watches INBOX changes using IMAP IDLE, with a bounded NOOP polling

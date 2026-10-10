@@ -206,6 +206,32 @@ describe('GooglePublicIcsClient', () => {
     expect(pulled).toBeLessThan(10);
   });
 
+  it('spaces concurrent requests apart instead of releasing them together', async () => {
+    // The event job runs four feeds at once through ONE client. Each caller
+    // used to measure its wait from the same `lastRequestAt` and only stamp it
+    // after sleeping, so every waiting caller woke up — and hit Google — at the
+    // same instant. The slot has to be reserved before the wait.
+    const spacing = 60;
+    const sentAt: number[] = [];
+    const { fetch } = recordingFetch(() => {
+      sentAt.push(Date.now());
+      return calendarResponse(VALID_ICS);
+    });
+    const client = new GooglePublicIcsClient(
+      { ...CONFIG, retryAttempts: 0, requestSpacingMs: spacing },
+      fetch,
+    );
+
+    await Promise.all(Array.from({ length: 4 }, () => client.fetchCalendar(SYNTHETIC_ID)));
+
+    expect(sentAt).toHaveLength(4);
+    const ordered = [...sentAt].sort((a, b) => a - b);
+    for (let index = 1; index < ordered.length; index += 1) {
+      // A little timer slack, but nowhere near "simultaneous".
+      expect(ordered[index]! - ordered[index - 1]!).toBeGreaterThanOrEqual(spacing - 15);
+    }
+  });
+
   it('never leaks the feed URL or calendar id in a thrown error', async () => {
     const { fetch } = recordingFetch(() => new Response('nope', { status: 404 }));
     const client = new GooglePublicIcsClient({ ...CONFIG, retryAttempts: 0 }, fetch);

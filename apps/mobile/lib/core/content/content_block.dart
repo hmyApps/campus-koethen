@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import '../links/safe_link_launcher.dart';
+import '../network/api_config.dart';
 import '../network/json.dart';
 
 /// Inline node inside a rich text block.
@@ -133,7 +134,11 @@ sealed class ContentBlock {
         return ListItemBlock(children);
       case 'image':
         final String? url = asString(map['url']);
-        if (url == null || !SafeLinkLauncher.isAllowed(url)) return null;
+        // An image is not an outbound link: the API publishes it as a path on
+        // its own media route (`/v1/media/uploads/…`), never as an absolute
+        // URL. Accept exactly what `RemoteImage` can resolve against the
+        // Campus API — no foreign host, no plaintext, no other scheme (G-01).
+        if (url == null || ApiConfig.resolveMediaUrl(url) == null) return null;
         return ImageBlock(
           url: url,
           alternativeText: asString(map['alternativeText']),

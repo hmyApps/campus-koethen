@@ -10,9 +10,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_routes.dart';
 import '../application/calendar_providers.dart';
+import '../domain/calendar_entry.dart';
 import 'calendar_home_widget_gateway.dart';
 import 'calendar_home_widget_payload.dart';
 import 'calendar_home_widget_settings.dart';
+
+/// Whether [data] may replace the payload the OS home widget last persisted.
+///
+/// * A source still **loading without data** holds the sync back: it answers
+///   in a moment, and syncing now would only blank its entries in between.
+/// * A **failed** source does not recover by waiting. Holding back on any
+///   error froze the widget for good behind, for example, a connected Moodle
+///   account without a course cache whose sync keeps failing (F-07). The
+///   entries that are there are synced; only a failure with nothing to show
+///   keeps the last payload.
+///
+/// Exchange appointments never reach the widget payload, so they never count
+/// as something to show.
+bool calendarHomeWidgetMaySync(CalendarData data) {
+  bool hasEntriesOf(CalendarSource source) =>
+      data.entries.any((CalendarEntry entry) => entry.source == source);
+
+  if ((data.timetableLoading && !hasEntriesOf(CalendarSource.timetable)) ||
+      (data.moodleLoading && !hasEntriesOf(CalendarSource.moodle)) ||
+      (data.publicCalendarsLoading &&
+          !hasEntriesOf(CalendarSource.publicCalendar))) {
+    return false;
+  }
+  final bool anySourceFailed =
+      data.hasTimetableError ||
+      data.hasMoodleError ||
+      data.hasPublicCalendarError;
+  return !anySourceFailed ||
+      data.entries.any(
+        (CalendarEntry entry) =>
+            entry.source != CalendarSource.exchangeCalendar,
+      );
+}
 
 class CalendarHomeWidgetHost extends ConsumerStatefulWidget {
   const CalendarHomeWidgetHost({required this.child, super.key});
@@ -105,14 +139,7 @@ class _CalendarHomeWidgetHostState extends ConsumerState<CalendarHomeWidgetHost>
     }
 
     final CalendarData data = ref.watch(calendarListDataProvider(now));
-    final bool incomplete =
-        data.timetableLoading ||
-        data.moodleLoading ||
-        data.publicCalendarsLoading ||
-        data.hasTimetableError ||
-        data.hasMoodleError ||
-        data.hasPublicCalendarError;
-    if (!incomplete) {
+    if (calendarHomeWidgetMaySync(data)) {
       final CalendarHomeWidgetPayload payload = buildCalendarHomeWidgetPayload(
         entries: data.entries,
         now: now,

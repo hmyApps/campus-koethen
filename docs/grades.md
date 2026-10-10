@@ -256,7 +256,10 @@ deterministische Start-/Polling-/ViewState-/PDF-Tests abgesichert.
 - Der Dokument-Download läuft über eine **eigene, explizite und pfadbegrenzte Allowlist** —
   genau zwei Hosts (der Portal-Host für den ersten Sprung, `untrust-sscportal.ssc.hs-anhalt.de`
   für den zweiten, siehe oben), aber eng auf ausschließlich HTTPS, Standardport, `/qisserver/rds`
-  und `state=docdownload` geprüft, getrennt von der allgemeinen Session-Allowlist gehalten
+  und `state=docdownload` geprüft und als **geordnete** Route je Download erzwungen: Einstieg nur
+  auf dem Portal-Host, jeder folgende Redirect nur auf dem `untrust-`-Host, nie zurück (bei den
+  Druck-Buttons der Notenübersicht ist davor nur der Umweg über die Notenübersichtsseite selbst
+  erlaubt), getrennt von der allgemeinen Session-Allowlist gehalten
   (AGENTS.md §2: „kein gemeinsamer Pool"). Der Download läuft im selben kurzlebigen Cookie-Jar wie
   Job-Start und Polling. Andere Pfade, Statuswerte, Ports, User-Info oder Antwort-Hosts werden
   abgewiesen; es gibt keine generische Freigabe für von der Antwort genannte Hosts.
@@ -308,6 +311,11 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
   ohne jede Note zurück.
 - Das Ergebnis wird persistiert (`GradePortalStore`, **dieselbe** sichere Ablage wie die
   Zugangsdaten) — jede weitere Synchronisation spricht nur noch dieses eine Portal an.
+- Nur ein **bestätigt fehlender** Portalwert (Altkonto aus der Zeit vor der Portalwahl) fällt auf
+  `hisQisLegacy` zurück. Ein Lesefehler des Keychain/Keystore oder ein unbekannter gespeicherter
+  Wert ergibt dagegen den klassifizierten Fehler `secureStorageUnavailable` mit „Erneut
+  versuchen“ — nie „abgemeldet“, nie einen stillen Portalwechsel und nie den Nachhol-Wipe von
+  Wallet und Studienservice-Cache, der nur bei bestätigt fehlenden Zugangsdaten läuft.
 - Im Notenbereich gibt es einen sichtbaren, faktischen Umschalter „Prüfungsportal wechseln" mit
   Anzeige des aktiven Hosts. Ein Wechsel verwirft den lokalen Cache und synchronisiert neu.
 - „Noten-Verbindung und lokale Noten löschen" entfernt auch die Portalwahl in **einem** Schritt,

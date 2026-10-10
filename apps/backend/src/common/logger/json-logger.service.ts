@@ -33,6 +33,16 @@ const URL_CREDENTIALS_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/)([^:/\s@]+):([^@/\s]+
 /** Bearer tokens that slipped into a free-text message. */
 const BEARER_PATTERN = /\b(bearer\s+)[A-Za-z0-9._~+/-]{8,}=*/gi;
 
+/** Machine-readable error codes such as `P2025` or `ECONNREFUSED`, never free text. */
+const ERROR_CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+
+function errorCode(error: Error): string | number | undefined {
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === 'number' && Number.isFinite(code)) return code;
+  if (typeof code === 'string' && ERROR_CODE_PATTERN.test(code)) return code;
+  return undefined;
+}
+
 export function redactValue(value: unknown, depth = 0): unknown {
   if (depth > 6) {
     return '[truncated]';
@@ -46,11 +56,18 @@ export function redactValue(value: unknown, depth = 0): unknown {
     return value.map((entry) => redactValue(entry, depth + 1));
   }
   if (value instanceof Error) {
+    const code = errorCode(value);
+    const identity = { name: value.name, ...(code === undefined ? {} : { code }) };
+    // The message is free text — whatever the failing code interpolated, a
+    // query value or an address — and a stack starts with that very message.
+    // Production logs get only what classifies the failure.
+    if (process.env['NODE_ENV'] === 'production') {
+      return identity;
+    }
     return {
-      name: value.name,
+      ...identity,
       message: redactValue(value.message, depth + 1),
-      // Stacks can contain interpolated arguments; keep them out of production logs.
-      stack: process.env['NODE_ENV'] === 'production' ? undefined : value.stack,
+      stack: typeof value.stack === 'string' ? redactValue(value.stack, depth + 1) : undefined,
     };
   }
   if (value && typeof value === 'object') {
