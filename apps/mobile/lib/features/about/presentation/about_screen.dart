@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../app/app_modules.dart';
+import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_typography.dart';
@@ -15,6 +16,7 @@ import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
+import '../domain/source_code_links.dart';
 
 /// Version information the About screen shows.
 class AppVersionInfo {
@@ -89,6 +91,23 @@ class AboutScreen extends ConsumerWidget {
           Text(l10n.aboutCopyright, style: text.bodyMedium),
           const SizedBox(height: AppSpacing.md),
           Text(l10n.aboutFontNotice, style: text.bodySmall),
+          SectionHeader(
+            label: l10n.aboutSourceCodeLabel,
+            padding: const EdgeInsets.only(
+              top: AppSpacing.xl,
+              bottom: AppSpacing.sm,
+            ),
+          ),
+          Text(l10n.aboutSourceCodeNotice, style: text.bodyMedium),
+          const SizedBox(height: AppSpacing.sm),
+          _SourceCodeLink(
+            label: l10n.aboutSourceCodeOriginal,
+            url: SourceCodeLinks.original,
+          ),
+          _SourceCodeLink(
+            label: l10n.aboutSourceCodeFork,
+            url: SourceCodeLinks.fork,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -108,6 +127,45 @@ class AboutScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xxl),
         ],
+      ),
+    );
+  }
+}
+
+/// One public repository link, opened only through the safe link launcher.
+class _SourceCodeLink extends ConsumerWidget {
+  const _SourceCodeLink({required this.label, required this.url});
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: TextButton.icon(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(
+            AppSizes.minTouchTarget,
+            AppSizes.minTouchTarget,
+          ),
+        ),
+        onPressed: () async {
+          final AppLocalizations l10n = context.l10n;
+          final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
+            context,
+          );
+          final LinkLaunchResult result = await ref
+              .read(linkLauncherProvider)
+              .open(url);
+          if (result != LinkLaunchResult.opened) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.aboutSourceCodeLinkFailed)),
+            );
+          }
+        },
+        icon: const Icon(AppIcons.open_in_new),
+        label: Text(label),
       ),
     );
   }

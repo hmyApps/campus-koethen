@@ -1,6 +1,7 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'package:campus_koethen/core/links/safe_link_launcher.dart';
 import 'package:campus_koethen/core/widgets/brand_mark.dart';
 import 'package:campus_koethen/features/about/presentation/about_screen.dart';
 import 'package:flutter/material.dart';
@@ -83,4 +84,45 @@ void main() {
     );
     expect((image.image as ResizeImage).width, 192);
   });
+
+  testWidgets('the source code section opens the original project and the '
+      'fork this version is built from (AGPL)', (WidgetTester tester) async {
+    final _RecordingLauncher launcher = _RecordingLauncher();
+    await pumpScreen(
+      tester,
+      const AboutScreen(),
+      overrides: <Override>[
+        linkLauncherProvider.overrideWithValue(launcher),
+        appVersionProvider.overrideWith(
+          (ref) async =>
+              const AppVersionInfo(version: '1.0.0', buildNumber: '1'),
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    final Finder original = find.text('Originalprojekt auf GitHub');
+    await tester.scrollUntilVisible(original, 200);
+    await tester.tap(original);
+    await tester.pumpAndSettle();
+    final Finder fork = find.text('Quellcode dieser Version (Fork)');
+    await tester.scrollUntilVisible(fork, 200);
+    await tester.tap(fork);
+    await tester.pumpAndSettle();
+
+    expect(launcher.opened, <String>[
+      'https://github.com/Leviora-Studio/campus-koethen',
+      'https://github.com/hmyApps/campus-koethen',
+    ]);
+  });
+}
+
+class _RecordingLauncher implements SafeLinkLauncher {
+  final List<String> opened = <String>[];
+
+  @override
+  Future<LinkLaunchResult> open(String? rawUrl) async {
+    if (rawUrl != null) opened.add(rawUrl);
+    return LinkLaunchResult.opened;
+  }
 }

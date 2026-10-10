@@ -469,31 +469,32 @@ werden:
 
 1. **SMTP** — für Strapi-Einladungen und Passwort-Reset.
 2. **Offsite-Backups** — beide Datenbanken und Strapi-Uploads.
-3. **Quellcode-Hinweis (AGPL-3.0-only)** — der About-Screen nennt die Lizenz, verlinkt den Quellcode
-   aber noch nicht. Dafür muss die öffentliche Repository-URL festgelegt werden; sie kommt dann wie
-   die übrigen Adressen aus dem Build-Environment, mit eigenem ARB-Text in DE/EN.
-4. **Freigabe realer Kontaktdaten** und ggf. Personenfotos (Rechtsgrundlage).
-5. **Nutzungsfreigabe der Mensa-Datenquelle** durch den Betreiber.
-6. **Nutzungsfreigabe der WebUntis-Stundenplanquelle** — Erlaubnis zur automatisierten Nutzung
+3. **Freigabe realer Kontaktdaten** und ggf. Personenfotos (Rechtsgrundlage).
+4. **Nutzungsfreigabe der Mensa-Datenquelle** durch den Betreiber.
+5. **Nutzungsfreigabe der WebUntis-Stundenplanquelle** — Erlaubnis zur automatisierten Nutzung
    der internen View-API, akzeptable Abrufrate, Stabilitätszusage beziehungsweise offizielle API,
    gewünschte Quellenangabe sowie zulässige Speicherung und Aufbewahrung von Lehrpersonennamen.
    Bis dahin bleibt `WEBUNTIS_ENABLED=false` — auch in den versionierten Produktions- und
    Test-Templates. Vor jedem Rollout wird zusätzlich der effektive, nicht versionierte Wert auf
    dem Zielsystem geprüft und `GET /v1/timetable/status` muss in Produktion
    `featureEnabled: false` melden. Ein Template allein belegt den realen Deploymentwert nicht.
-7. **Abstimmung über die Prüfungsportale** — automatisierte Nutzung von HIS-QIS und HISinOne mit der
+6. **Abstimmung über die Prüfungsportale** — automatisierte Nutzung von HIS-QIS und HISinOne mit der
    Hochschule Anhalt klären; das schließt die lesenden HISinOne-Funktionen auf der Seite
    „Studienservice" (Bescheinigungen, Personen-/Kontaktdaten, Studiengangsübersicht) ausdrücklich
    ein.
-8. **Veröffentlichungsrechte je öffentlichem Kalender** — Zustimmung des Inhabers, zulässiger
+7. **Veröffentlichungsrechte je öffentlichem Kalender** — Zustimmung des Inhabers, zulässiger
    Quellenhinweis, ob Beschreibung und Ort gezeigt werden dürfen, Ansprechpartner und Verhalten
    bei Entzug der Freigabe. Bis Kalender gepflegt sind, bleibt `PUBLIC_CALENDAR_ENABLED=false`.
-9. **Reale Gebäudepläne** — Herkunft, Bearbeitungs- und Veröffentlichungsrecht, Ausschluss
+8. **Reale Gebäudepläne** — Herkunft, Bearbeitungs- und Veröffentlichungsrecht, Ausschluss
    sicherheitsrelevanter Pläne (Flucht-, Rettungs- und Schließpläne), Personenbezug bei Büros und
    ein Pflegeprozess für Umbauten. Bis dahin bleibt es beim fiktiven Demo-Plan.
-10. **Nextcloud-Abnahme** — realer Login Flow v2, SSO-Rückkehr, DAV-Zugriff, Offline-Widerruf und
-    App-Passwort-Löschung auf Android und iOS mit einem freigegebenen Testkonto prüfen; aktualisierte
-    Datenschutzhinweise vor Veröffentlichung organisatorisch freigeben.
+9. **Nextcloud-Abnahme** — realer Login Flow v2, SSO-Rückkehr, DAV-Zugriff, Offline-Widerruf und
+   App-Passwort-Löschung auf Android und iOS mit einem freigegebenen Testkonto prüfen; aktualisierte
+   Datenschutzhinweise vor Veröffentlichung organisatorisch freigeben.
+
+Geklärt: der Quellcode-Hinweis (AGPL-3.0-only). Der About-Screen verlinkt das Originalprojekt
+`github.com/Leviora-Studio/campus-koethen` und zusätzlich den Fork `github.com/hmyApps/campus-koethen`,
+aus dem diese Version gebaut wird.
 
 Geklärt: die PROD-Domains (siehe [Abschnitt 1](#1-produktidentität)). Sie bleiben Build- und
 Deployment-Environment und werden nicht als Konstanten in den Quellcode übernommen.
