@@ -356,12 +356,19 @@ class _DraftTile extends ConsumerWidget {
       FinanceApplicationDraft(:final String title) => title,
       FeedbackDraft(:final String feedback) => feedback,
     };
+    // VE-N02: a draft whose upload is still running (the form may have been
+    // left meanwhile) says so and cannot be deleted from under it.
+    final bool inFlight = ref
+        .watch(requestsInFlightProvider)
+        .contains(draft.id);
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: ListTile(
         leading: Icon(
-          draft.isFrozen
+          inFlight
+              ? AppIcons.send_outlined
+              : draft.isFrozen
               ? AppIcons.hourglass_top_outlined
               : AppIcons.edit_note_outlined,
         ),
@@ -373,14 +380,16 @@ class _DraftTile extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          draft.isFrozen
+          inFlight
+              ? l10n.requestsSubmitting
+              : draft.isFrozen
               ? l10n.requestsFrozenTitle
               : AppDateFormats.dateTime(draft.updatedAt, locale),
         ),
         trailing: IconButton(
           tooltip: l10n.requestsDeleteDraft,
           icon: const Icon(AppIcons.delete_outline),
-          onPressed: () => _confirmDelete(context, ref, l10n),
+          onPressed: inFlight ? null : () => _confirmDelete(context, ref, l10n),
         ),
         onTap: () => switch (draft) {
           FinanceApplicationDraft() => context.pushNamed(

@@ -266,8 +266,24 @@ class ScriptedRequestGateway implements RequestGateway {
 
   SubmissionResult result;
 
+  /// When set, every answer waits for it — an upload still in flight.
+  Completer<void>? gate;
+
+  /// When set, the gateway throws this instead of answering.
+  Object? failure;
+
   final List<String> keysUsed = <String>[];
   final List<String> fingerprints = <String>[];
+
+  Future<SubmissionResult> _answer(RequestDraft draft) async {
+    keysUsed.add(draft.idempotencyKey);
+    fingerprints.add(draft.payloadFingerprint);
+    final Completer<void>? waiting = gate;
+    if (waiting != null) await waiting.future;
+    final Object? thrown = failure;
+    if (thrown != null) throw thrown;
+    return result;
+  }
 
   @override
   Future<SubmissionResult> submitApplication(
@@ -275,11 +291,9 @@ class ScriptedRequestGateway implements RequestGateway {
     SubmissionProgress? onProgress,
     SubmissionCancelToken? cancel,
   }) {
-    keysUsed.add(draft.idempotencyKey);
-    fingerprints.add(draft.payloadFingerprint);
     // Reported so a test can assert the form actually shows progress.
     onProgress?.call(1, 1);
-    return Future<SubmissionResult>.value(result);
+    return _answer(draft);
   }
 
   @override
@@ -288,10 +302,8 @@ class ScriptedRequestGateway implements RequestGateway {
     SubmissionProgress? onProgress,
     SubmissionCancelToken? cancel,
   }) {
-    keysUsed.add(draft.idempotencyKey);
-    fingerprints.add(draft.payloadFingerprint);
     onProgress?.call(1, 1);
-    return Future<SubmissionResult>.value(result);
+    return _answer(draft);
   }
 }
 

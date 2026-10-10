@@ -4,12 +4,16 @@
 /// What the two forms and the detail view actually put on screen.
 library;
 
+import 'dart:async';
+
 import 'package:campus_koethen/core/links/safe_link_launcher.dart';
 import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/theme/app_colors.dart';
 import 'package:campus_koethen/core/theme/app_icons.dart';
+import 'package:campus_koethen/features/requests/application/requests_controller.dart';
 import 'package:campus_koethen/features/requests/application/requests_providers.dart';
 import 'package:campus_koethen/features/requests/data/attachment_picker.dart';
+import 'package:campus_koethen/features/requests/domain/application_files.dart';
 import 'package:campus_koethen/features/requests/domain/application_location.dart';
 import 'package:campus_koethen/features/requests/domain/case_status.dart';
 import 'package:campus_koethen/features/requests/domain/feedback_area.dart';
@@ -21,6 +25,7 @@ import 'package:campus_koethen/features/requests/domain/status_gateway.dart';
 import 'package:campus_koethen/features/requests/domain/submitted_case.dart';
 import 'package:campus_koethen/features/requests/presentation/application_form_screen.dart';
 import 'package:campus_koethen/features/requests/presentation/feedback_form_screen.dart';
+import 'package:campus_koethen/features/requests/presentation/request_form_parts.dart';
 import 'package:campus_koethen/features/requests/presentation/requests_screen.dart';
 import 'package:campus_koethen/features/requests/presentation/submission_detail_screen.dart';
 import 'package:flutter/material.dart';
@@ -452,6 +457,148 @@ void main() {
       expect(find.textContaining('Bitte'), findsNothing);
       expect(find.textContaining('Ungültige'), findsNothing);
       expect(find.textContaining('Unbekanntes'), findsNothing);
+    });
+  });
+
+  group('a submission in flight (E-01, VE-N02)', () {
+    FinanceApplicationDraft completeApplication() => FinanceApplicationDraft(
+      id: 'draft-app',
+      createdAt: _now,
+      updatedAt: _now,
+      idempotencyKey: '550e8400-e29b-41d4-a716-446655440000',
+      locationId: 1,
+      title: 'Grillabend',
+      applicant: 'Testperson',
+      files: const <ApplicationFileSlot, RequestAttachment>{
+        ApplicationFileSlot.financeRequest: RequestAttachment(
+          fileName: 'antrag.pdf',
+          path: 'fake-antrag',
+          sizeBytes: 3,
+        ),
+        ApplicationFileSlot.studentCard: RequestAttachment(
+          fileName: 'ausweis.pdf',
+          path: 'fake-ausweis',
+          sizeBytes: 3,
+        ),
+      },
+    );
+
+    testWidgets('locks every field and file slot while uploading', (
+      WidgetTester tester,
+    ) async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..drafts = <RequestDraft>[completeApplication()];
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(
+        const SubmissionOutcomeUnknown('transport'),
+      )..gate = Completer<void>();
+      await pumpScreen(
+        tester,
+        const ApplicationFormScreen(draftId: 'draft-app'),
+        overrides: _overrides(store: store, gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder send = find.text('Antrag einreichen');
+      await tester.ensureVisible(send);
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verbindlich absenden'));
+      // Not pumpAndSettle: the upload spinner never settles.
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(gateway.keysUsed, hasLength(1));
+
+      // Replacing or removing a file now would delete the bytes on the wire.
+      expect(
+        tester
+            .widgetList<FileSlotField>(find.byType(FileSlotField))
+            .every((FileSlotField slot) => !slot.enabled),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .every((TextField field) => field.enabled == false),
+        isTrue,
+      );
+
+      gateway.gate!.complete();
+      await tester.pumpAndSettle();
+      // An unclear outcome keeps it locked — as a frozen draft now.
+      expect(find.text('Ausgang unklar'), findsWidgets);
+    });
+
+    testWidgets('locks the feedback form while uploading', (
+      WidgetTester tester,
+    ) async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..drafts = <RequestDraft>[
+          FeedbackDraft(
+            id: 'draft-fb',
+            createdAt: _now,
+            updatedAt: _now,
+            idempotencyKey: '550e8400-e29b-41d4-a716-446655440000',
+            areaId: 1,
+            feedback: 'Mein Hinweis',
+          ),
+        ];
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(
+        const SubmissionRateLimited(),
+      )..gate = Completer<void>();
+      await pumpScreen(
+        tester,
+        const FeedbackFormScreen(draftId: 'draft-fb'),
+        overrides: _overrides(store: store, gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder send = find.text('Feedback absenden');
+      await tester.ensureVisible(send);
+      await tester.tap(send);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .every((TextField field) => field.enabled == false),
+        isTrue,
+      );
+
+      // A plain rejection unlocks it again — and the spinner is gone.
+      gateway.gate!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .every((TextField field) => field.enabled != false),
+        isTrue,
+      );
+      expect(find.text('Wird übermittelt …'), findsNothing);
+    });
+
+    testWidgets('the list marks a running upload and keeps it', (
+      WidgetTester tester,
+    ) async {
+      final FlakyRequestStore store = FlakyRequestStore()
+        ..drafts = <RequestDraft>[completeApplication()];
+      final ProviderContainer container = await pumpScreen(
+        tester,
+        const RequestsScreen(),
+        overrides: _overrides(store: store),
+      );
+      await tester.pumpAndSettle();
+
+      // The form was left while its upload kept running.
+      container.read(requestsInFlightProvider.notifier).start('draft-app');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Wird übermittelt …'), findsOneWidget);
+      final IconButton delete = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, AppIcons.delete_outline),
+      );
+      expect(delete.onPressed, isNull);
     });
   });
 

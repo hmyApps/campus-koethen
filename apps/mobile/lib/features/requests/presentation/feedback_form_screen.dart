@@ -102,9 +102,31 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
     }
   }
 
+  /// True while this draft is being sent, from here or from another copy of
+  /// this form (E-01, VE-N02).
+  bool _isBusy(RequestDraft draft) =>
+      _submitting || ref.read(requestsInFlightProvider).contains(draft.id);
+
+  /// Another copy of this form finished sending this draft: take over what
+  /// the store now holds, or leave if the draft became a submitted case.
+  void _adoptAfterForeignFlight() {
+    final FeedbackDraft? current = _draft;
+    if (current == null || _submitting || !mounted) return;
+    final RequestDraft? stored = ref
+        .read(requestsProvider.notifier)
+        .byId(current.id);
+    if (stored is FeedbackDraft) {
+      setState(() => _draft = stored);
+    } else {
+      Navigator.of(context).maybePop();
+    }
+  }
+
   Future<void> _update(FeedbackDraft Function(FeedbackDraft) change) async {
     final FeedbackDraft? current = _draft;
     if (current == null) return;
+    // What is on the wire must not change under it.
+    if (_isBusy(current)) return;
     if (current.isFrozen) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,6 +144,16 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final FeedbackDraft? draft = _draft;
+    ref.listen<Set<String>>(requestsInFlightProvider, (
+      Set<String>? previous,
+      Set<String> next,
+    ) {
+      final String? id = _draft?.id;
+      if (id == null) return;
+      if ((previous?.contains(id) ?? false) && !next.contains(id)) {
+        _adoptAfterForeignFlight();
+      }
+    });
 
     return ScreenScaffold(
       title: l10n.requestsFeedbackFormTitle,
@@ -148,6 +180,13 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
     final AsyncValue<List<FeedbackArea>> areas = ref.watch(
       feedbackAreasProvider,
     );
+    // E-01 / VE-N02: locked while this draft is on the wire, here or from a
+    // second copy of the form.
+    final bool inFlight = ref
+        .watch(requestsInFlightProvider)
+        .contains(draft.id);
+    final bool busy = _submitting || inFlight;
+    final bool locked = draft.isFrozen || busy;
 
     String? errorFor(RequestField field) {
       final String? server = _serverErrors[field];
@@ -169,6 +208,15 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
             icon: AppIcons.cloud_off_outlined,
             title: l10n.requestsNotConnectedTitle,
             message: l10n.requestsNotConnectedBody,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (inFlight && !_submitting) ...<Widget>[
+          StatusBanner(
+            tone: StatusTone.info,
+            icon: AppIcons.hourglass_top_outlined,
+            title: l10n.requestsSubmitting,
+            message: l10n.requestsSubmitInFlightBody,
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
@@ -205,7 +253,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
           emptyText: l10n.requestsAreasEmpty,
           errorText: l10n.requestsAreasUnavailable,
           retryText: l10n.requestsStatusRetry,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           onRetry: () => ref.invalidate(feedbackAreasProvider),
           onSelected: (int id) =>
               _update((FeedbackDraft d) => d.copyWith(areaId: id)),
@@ -217,7 +265,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
         RequiredLabel(text: l10n.requestsFieldSubmitterName, isRequired: false),
         TextField(
           controller: _name,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
           maxLength: FeedbackDraft.nameMaxLength,
@@ -240,7 +288,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
         RequiredLabel(text: l10n.requestsFieldFeedback),
         TextField(
           controller: _text,
-          enabled: !draft.isFrozen,
+          enabled: !locked,
           textCapitalization: TextCapitalization.sentences,
           keyboardType: TextInputType.multiline,
           minLines: 7,
@@ -258,8 +306,8 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
 
         const SizedBox(height: AppSpacing.lg),
         FilledButton.icon(
-          onPressed: _submitting ? null : _submit,
-          icon: _submitting
+          onPressed: busy ? null : _submit,
+          icon: busy
               ? const SizedBox(
                   width: AppSizes.iconSmall,
                   height: AppSizes.iconSmall,
@@ -267,7 +315,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
                 )
               : const Icon(AppIcons.send_outlined),
           label: Text(
-            _submitting ? l10n.requestsSubmitting : l10n.requestsSubmitFeedback,
+            busy ? l10n.requestsSubmitting : l10n.requestsSubmitFeedback,
           ),
         ),
       ],
@@ -276,7 +324,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
 
   Future<void> _submit() async {
     final FeedbackDraft? draft = _draft;
-    if (draft == null) return;
+    if (draft == null || _isBusy(draft)) return;
 
     final AppLocalizations l10n = context.l10n;
     setState(() {
@@ -289,11 +337,16 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
     if (!RequestValidation.validate(draft).isValid) return;
 
     setState(() => _submitting = true);
-    final SubmitOutcome outcome = await ref
-        .read(requestsProvider.notifier)
-        .submit(draft, now: DateTime.now());
+    final SubmitOutcome outcome;
+    try {
+      outcome = await ref
+          .read(requestsProvider.notifier)
+          .submit(draft, now: DateTime.now());
+    } finally {
+      // E-04: whatever happened, the spinner must not outlive the attempt.
+      if (mounted) setState(() => _submitting = false);
+    }
     if (!mounted) return;
-    setState(() => _submitting = false);
     // The controller may have frozen this draft; the local copy has to follow
     // or the form stays editable over a draft the store has already locked.
     _adoptStoredDraft();
@@ -309,6 +362,10 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
         setState(() => _banner = l10n.requestsSubmitStoreFailed);
       case SubmitStoreUnavailable():
         setState(() => _banner = l10n.requestsSubmitStoreUnavailable);
+      case SubmitInFlight():
+        setState(() => _banner = l10n.requestsSubmitInFlightBody);
+      case SubmitDraftStoreFailed():
+        setState(() => _banner = l10n.requestsSubmitDraftStoreFailed);
       case SubmitKeyExpired():
         setState(() => _banner = l10n.requestsKeyExpiredBody);
       case SubmitPayloadChanged():

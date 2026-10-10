@@ -5,6 +5,7 @@
 /// twice.
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:campus_koethen/features/requests/application/case_status_controller.dart';
@@ -298,6 +299,219 @@ void main() {
           .unfreeze(store.drafts.single.id);
 
       expect(store.drafts.single.isFrozen, isFalse);
+    });
+  });
+
+  group('a submission in flight (E-01, VE-N02)', () {
+    Future<
+      (
+        ProviderContainer,
+        FlakyRequestStore,
+        ScriptedRequestGateway,
+        FakeAttachmentStore,
+        FinanceApplicationDraft,
+      )
+    >
+    sending() async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final FakeAttachmentStore attachments = FakeAttachmentStore();
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(_accepted)
+        ..gate = Completer<void>();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: attachments,
+      );
+      await container.read(requestsProvider.future);
+      await container.read(submissionsProvider.future);
+      final RequestAttachment card = (await attachments.put(
+        'ausweis.pdf',
+        Uint8List.fromList(<int>[2]),
+      ))!;
+      final FinanceApplicationDraft draft = container
+          .read(requestsProvider.notifier)
+          .createApplication(now: _now)
+          .copyWith(
+            locationId: 1,
+            title: 'Titel',
+            applicant: 'Person',
+            files: <ApplicationFileSlot, RequestAttachment>{
+              ApplicationFileSlot.studentCard: card,
+            },
+          );
+      await container.read(requestsProvider.notifier).save(draft, now: _now);
+      return (container, store, gateway, attachments, draft);
+    }
+
+    test('locks the draft until the attempt has ended', () async {
+      final (container, store, gateway, attachments, draft) = await sending();
+      final RequestsController controller = container.read(
+        requestsProvider.notifier,
+      );
+
+      final Future<SubmitOutcome> running = controller.submit(draft, now: _now);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(requestsInFlightProvider), contains(draft.id));
+
+      // Every way of changing what is being sent is refused meanwhile.
+      await controller.save(draft.copyWith(title: 'Anders'), now: _now);
+      await controller.delete(draft.id);
+      await controller.unfreeze(draft.id);
+      await controller.discardAttachment(
+        draft.id,
+        draft.fileFor(ApplicationFileSlot.studentCard)!,
+      );
+      expect((store.drafts.single as FinanceApplicationDraft).title, 'Titel');
+      expect(attachments.entries, hasLength(1));
+
+      // A second form on the same draft cannot start a parallel upload.
+      expect(await controller.submit(draft, now: _now), isA<SubmitInFlight>());
+      expect(gateway.keysUsed, hasLength(1));
+
+      gateway.gate!.complete();
+      expect(await running, isA<SubmitRecorded>());
+      expect(container.read(requestsInFlightProvider), isEmpty);
+    });
+
+    test('a deleted draft is not brought back by the freeze', () async {
+      final (container, store, gateway, attachments, draft) = await sending();
+      gateway.result = const SubmissionOutcomeUnknown('transport');
+      final RequestsController controller = container.read(
+        requestsProvider.notifier,
+      );
+
+      final Future<SubmitOutcome> running = controller.submit(draft, now: _now);
+      await Future<void>.delayed(Duration.zero);
+      await controller.delete(draft.id);
+      gateway.gate!.complete();
+      await running;
+
+      // The delete was refused, so the one stored draft is the frozen one —
+      // and its student card is still there to replay.
+      expect(store.drafts.single.isFrozen, isTrue);
+      expect(attachments.entries, hasLength(1));
+    });
+
+    test('attachments of a draft at rest can be discarded', () async {
+      final (container, _, _, attachments, draft) = await sending();
+
+      await container
+          .read(requestsProvider.notifier)
+          .discardAttachment(
+            draft.id,
+            draft.fileFor(ApplicationFileSlot.studentCard)!,
+          );
+
+      expect(attachments.entries, isEmpty);
+    });
+  });
+
+  group('storage failing around a submission (VE-N01, E-04)', () {
+    test('an accepted but unrecorded case freezes the draft', () async {
+      // VE-N01: the endpoint has the case under this key. An edit followed
+      // by "try again" would answer 409 and the status link would be gone.
+      final FlakyRequestStore store = FlakyRequestStore(failCaseWrites: true);
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(_accepted);
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+      await container.read(submissionsProvider.future);
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitStoreFailed>());
+      expect(store.drafts.single.isFrozen, isTrue);
+
+      // Only the identical payload may go out again.
+      final FeedbackDraft frozen = store.drafts.single as FeedbackDraft;
+      expect(
+        await container
+            .read(requestsProvider.notifier)
+            .submit(frozen.copyWith(feedback: 'Anders'), now: _now),
+        isA<SubmitPayloadChanged>(),
+      );
+      store.failCaseWrites = false;
+      expect(
+        await container
+            .read(requestsProvider.notifier)
+            .submit(frozen, now: _now),
+        isA<SubmitRecorded>(),
+      );
+      expect(gateway.keysUsed.toSet(), hasLength(1));
+      expect(store.cases.single.statusUrl, kFakeStatusUrl);
+    });
+
+    test('a freeze that cannot be stored is reported, not thrown', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(
+          const SubmissionOutcomeUnknown('transport'),
+        ),
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+      store.failDraftWrites = true;
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitDraftStoreFailed>());
+      // This session still refuses edits even though the disk did not keep
+      // the freeze.
+      expect(
+        container.read(requestsProvider.notifier).byId(draft.id)!.isFrozen,
+        isTrue,
+      );
+      expect(container.read(requestsInFlightProvider), isEmpty);
+    });
+
+    test('a recorded case stays recorded when the draft cannot go', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+      await container.read(submissionsProvider.future);
+      store.failDraftWrites = true;
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitRecorded>());
+      expect(store.cases.single.statusUrl, kFakeStatusUrl);
+    });
+
+    test('a gateway that throws counts as an unknown outcome', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(_accepted)
+        ..failure = StateError('client bug');
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitGatewaySaid>());
+      expect(
+        (outcome as SubmitGatewaySaid).result,
+        isA<SubmissionOutcomeUnknown>(),
+      );
+      expect(store.drafts.single.isFrozen, isTrue);
     });
   });
 

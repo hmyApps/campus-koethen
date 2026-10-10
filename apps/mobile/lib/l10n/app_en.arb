@@ -1615,6 +1615,8 @@
   "requestsSubmitStoreFailed": "The case was accepted but could not be saved on this device. The draft is kept — try again right away so the status link is not lost.",
   "requestsSubmitStoreUnavailable": "Your saved cases could not be read on this device. So that no status link is lost, nothing was sent. Please try again later.",
   "requestsDraftsUnavailable": "Your drafts could not be read on this device. Nothing was changed.",
+  "requestsSubmitInFlightBody": "This draft is being sent right now. Until the attempt has finished, it cannot be changed, deleted or sent again.",
+  "requestsSubmitDraftStoreFailed": "Whether the submission arrived is unclear, and the draft could not be saved on this device. Do not change it, and send it again unchanged as soon as possible — that is the only way to avoid a second case.",
   "requestsFrozenTitle": "Outcome unclear",
   "requestsPickFailed": "The file could not be attached.",
   "requestsResubmitAsNewTitle": "Submit as a new case?",
