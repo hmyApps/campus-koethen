@@ -73,27 +73,25 @@ void main() {
     expect(state.selectedModelId, isNull);
   });
 
-  test(
-    'sending without a selected model is refused before any gateway call',
-    () async {
-      final _Gateway gateway = _Gateway();
-      final ProviderContainer container = _container(
-        store: _MemoryCredentialStore()..value = _credential,
-        gateway: gateway,
-      );
-      addTearDown(container.dispose);
-      await container.read(hsaKiChatControllerProvider.future);
+  test('sending without any available model is refused before a message is '
+      'sent', () async {
+    final _Gateway gateway = _Gateway();
+    final ProviderContainer container = _container(
+      store: _MemoryCredentialStore()..value = _credential,
+      gateway: gateway,
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiChatControllerProvider.future);
 
-      await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
+    await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
 
-      final HsaKiChatState state = container
-          .read(hsaKiChatControllerProvider)
-          .value!;
-      expect(state.messages, isEmpty);
-      expect(state.lastError, HsaKiFailureKind.portalStructureChanged);
-      expect(gateway.sendMessageCalls, 0);
-    },
-  );
+    final HsaKiChatState state = container
+        .read(hsaKiChatControllerProvider)
+        .value!;
+    expect(state.messages, isEmpty);
+    expect(state.lastError, HsaKiFailureKind.portalStructureChanged);
+    expect(gateway.sendMessageCalls, 0);
+  });
 
   test('send appends the user turn optimistically, then the reply once it '
       'arrives', () async {
@@ -142,23 +140,182 @@ void main() {
     expect(state.messages, hasLength(1));
     expect(state.messages.single.role, HsaKiMessageRole.user);
   });
+
+  group('chat lifecycle (D-03)', () {
+    test('a new HSA-GPT session starts with an empty chat and never sends the '
+        'previous history', () async {
+      final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!');
+      final ProviderContainer container = _container(
+        store: _MemoryCredentialStore()..value = _credential,
+        gateway: gateway,
+      );
+      addTearDown(container.dispose);
+      await container.read(hsaKiChatControllerProvider.future);
+      await container.read(hsaKiChatControllerProvider.notifier).send('A');
+      expect(
+        container.read(hsaKiChatControllerProvider).value!.messages,
+        hasLength(2),
+      );
+
+      // Disconnect and reconnect (possibly another account) both advance
+      // the session generation.
+      container.read(hsaKiSessionGenerationProvider.notifier).advance();
+      final HsaKiChatState fresh = await container.read(
+        hsaKiChatControllerProvider.future,
+      );
+      expect(fresh.messages, isEmpty);
+
+      await container.read(hsaKiChatControllerProvider.notifier).send('B');
+      expect(gateway.sentHistories.last, hasLength(1));
+      expect(gateway.sentHistories.last.single.text, 'B');
+    });
+
+    test('disconnecting mid-send never leaves the composer locked', () async {
+      final _Gateway gateway = _Gateway(models: _models, blockSend: true);
+      final ProviderContainer container = _container(
+        store: _MemoryCredentialStore()..value = _credential,
+        gateway: gateway,
+      );
+      addTearDown(container.dispose);
+      await container.read(hsaKiChatControllerProvider.future);
+
+      final Future<void> sending = container
+          .read(hsaKiChatControllerProvider.notifier)
+          .send('Hallo');
+      await gateway.sendEntered.future;
+      container.read(hsaKiSessionGenerationProvider.notifier).advance();
+      gateway.releaseSend.complete();
+      await sending;
+
+      final HsaKiChatState state = await container.read(
+        hsaKiChatControllerProvider.future,
+      );
+      expect(state.isSending, isFalse);
+      expect(state.messages, isEmpty);
+    });
+
+    test('a failed model list is retried by the next send', () async {
+      final _Gateway gateway = _Gateway(
+        models: _models,
+        failingModelLists: 1,
+        reply: 'Moin!',
+      );
+      final ProviderContainer container = _container(
+        store: _MemoryCredentialStore()..value = _credential,
+        gateway: gateway,
+      );
+      addTearDown(container.dispose);
+      final HsaKiChatState opened = await container.read(
+        hsaKiChatControllerProvider.future,
+      );
+      expect(opened.models, isEmpty);
+
+      await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
+
+      final HsaKiChatState state = container
+          .read(hsaKiChatControllerProvider)
+          .value!;
+      expect(gateway.listModelsCalls, 2);
+      expect(state.selectedModelId, 'gpt-4');
+      expect(state.messages, hasLength(2));
+      expect(state.lastError, isNull);
+    });
+
+    test(
+      'an unavailable keystore while opening does not brick the chat',
+      () async {
+        final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!');
+        final ProviderContainer container = _container(
+          store: _MemoryCredentialStore()
+            ..value = _credential
+            ..failingReads = 1,
+          gateway: gateway,
+        );
+        addTearDown(container.dispose);
+        // Let the first build finish, but not Riverpod's delayed automatic
+        // retry: the open chat itself has to stay usable.
+        await pumpEventQueue();
+        expect(container.read(hsaKiChatControllerProvider).hasValue, isTrue);
+
+        await container
+            .read(hsaKiChatControllerProvider.notifier)
+            .send('Hallo');
+
+        final HsaKiChatState state = container
+            .read(hsaKiChatControllerProvider)
+            .value!;
+        expect(state.messages, hasLength(2));
+        expect(state.isSending, isFalse);
+      },
+    );
+
+    test('the history is discarded once no chat screen shows it', () async {
+      final _Gateway gateway = _Gateway(models: _models, reply: 'Moin!');
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          hsaKiCredentialStoreProvider.overrideWithValue(
+            _MemoryCredentialStore()..value = _credential,
+          ),
+          hsaKiGatewayProvider.overrideWithValue(gateway),
+        ],
+      );
+      addTearDown(container.dispose);
+      final ProviderSubscription<AsyncValue<HsaKiChatState>> screen = container
+          .listen<AsyncValue<HsaKiChatState>>(
+            hsaKiChatControllerProvider,
+            (_, _) {},
+          );
+      await container.read(hsaKiChatControllerProvider.future);
+      await container.read(hsaKiChatControllerProvider.notifier).send('Hallo');
+
+      screen.close();
+      await container.pump();
+
+      container.listen<AsyncValue<HsaKiChatState>>(
+        hsaKiChatControllerProvider,
+        (_, _) {},
+      );
+      final HsaKiChatState reopened = await container.read(
+        hsaKiChatControllerProvider.future,
+      );
+      expect(reopened.messages, isEmpty);
+    });
+  });
 }
 
+/// The chat is auto-disposed; like the open chat screen, every test keeps
+/// one listener on it.
 ProviderContainer _container({
   required _MemoryCredentialStore store,
   required _Gateway gateway,
-}) => ProviderContainer(
-  overrides: [
-    hsaKiCredentialStoreProvider.overrideWithValue(store),
-    hsaKiGatewayProvider.overrideWithValue(gateway),
-  ],
-);
+}) {
+  final ProviderContainer container = ProviderContainer(
+    overrides: [
+      hsaKiCredentialStoreProvider.overrideWithValue(store),
+      hsaKiGatewayProvider.overrideWithValue(gateway),
+    ],
+  );
+  container.listen<AsyncValue<HsaKiChatState>>(
+    hsaKiChatControllerProvider,
+    (_, _) {},
+  );
+  return container;
+}
 
 class _MemoryCredentialStore implements HsaKiCredentialStore {
   HsaKiCredential? value;
 
+  /// The next n reads fail like an unavailable keystore.
+  int failingReads = 0;
+
   @override
-  Future<HsaKiCredential?> read() async => value;
+  Future<HsaKiCredential?> read() async {
+    if (failingReads > 0) {
+      failingReads--;
+      throw const HsaKiFailure(HsaKiFailureKind.secureStorageUnavailable);
+    }
+    return value;
+  }
 
   @override
   Future<void> write(HsaKiCredential credential) async => value = credential;
@@ -171,12 +328,17 @@ class _Gateway implements HsaKiGateway {
   _Gateway({
     this.models = const <HsaKiModel>[],
     this.listModelsFails = false,
+    this.failingModelLists = 0,
     this.reply = '',
     this.blockSend = false,
   });
 
   final List<HsaKiModel> models;
   final bool listModelsFails;
+
+  /// Only the first n model lists fail.
+  int failingModelLists;
+  final List<List<HsaKiMessage>> sentHistories = <List<HsaKiMessage>>[];
   final String reply;
   final bool blockSend;
   final Completer<void> sendEntered = Completer<void>();
@@ -200,6 +362,10 @@ class _Gateway implements HsaKiGateway {
   Future<List<HsaKiModel>> listModels(HsaKiCredential credential) async {
     listModelsCalls++;
     if (listModelsFails) throw StateError('unavailable');
+    if (failingModelLists > 0) {
+      failingModelLists--;
+      throw const HsaKiFailure(HsaKiFailureKind.portalUnavailable);
+    }
     return models;
   }
 
@@ -210,6 +376,7 @@ class _Gateway implements HsaKiGateway {
     required List<HsaKiMessage> messages,
   }) async {
     sendMessageCalls++;
+    sentHistories.add(List<HsaKiMessage>.of(messages));
     if (!sendEntered.isCompleted) sendEntered.complete();
     if (blockSend) await releaseSend.future;
     return reply;
