@@ -710,6 +710,7 @@
   "mailErrorServerUnreachable": "The mail server is currently unavailable.",
   "mailErrorProtocol": "Unexpected response from the mail server.",
   "mailErrorSessionClosed": "The mailbox was disconnected in the meantime.",
+  "mailErrorMailboxChanged": "The inbox was rebuilt on the mail server. Please refresh it and try again.",
   "mailErrorSecureStorage": "Secure storage is not available on this device. Your credentials cannot be saved.",
   "mailErrorGeneric": "Something went wrong. Please try again later.",
   "gradesTitle": "Grades",

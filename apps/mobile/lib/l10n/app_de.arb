@@ -1229,6 +1229,8 @@
   "@mailErrorProtocol": {},
   "mailErrorSessionClosed": "Das Postfach wurde in der Zwischenzeit getrennt.",
   "@mailErrorSessionClosed": {},
+  "mailErrorMailboxChanged": "Der Posteingang wurde auf dem Mailserver neu aufgebaut. Bitte aktualisiere ihn und versuche es erneut.",
+  "@mailErrorMailboxChanged": {},
   "mailErrorSecureStorage": "Die sichere Ablage auf diesem Gerät ist nicht verfügbar. Die Zugangsdaten können nicht gespeichert werden.",
   "@mailErrorSecureStorage": {},
   "mailErrorGeneric": "Es ist ein Fehler aufgetreten. Bitte versuche es später erneut.",
