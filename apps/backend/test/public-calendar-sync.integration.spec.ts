@@ -326,6 +326,36 @@ describe('PublicCalendarSyncService (integration)', () => {
       expect(outcome.status).toBe('notModified');
       expect(await prisma.publicCalendarEvent.count()).toBe(1);
     });
+
+    it('keeps past occurrences for one year after they ended, then removes them', async () => {
+      await seedReadyCalendar();
+      const calendar = await prisma.publicCalendar.findUniqueOrThrow({
+        where: { slug: 'beispielkalender-a' },
+      });
+      const day = 86_400_000;
+      const past = (key: string, endedDaysAgo: number) => {
+        const endsAt = new Date(Date.now() - endedDaysAgo * day);
+        return {
+          calendarId: calendar.id,
+          occurrenceKey: key,
+          uid: key,
+          title: key,
+          startsAt: new Date(endsAt.getTime() - 3_600_000),
+          endsAt,
+        };
+      };
+      await prisma.publicCalendarEvent.createMany({
+        data: [past('vor-400-tagen', 400), past('vor-300-tagen', 300)],
+      });
+
+      await sync.syncEvents();
+
+      const keys = (await prisma.publicCalendarEvent.findMany({ select: { occurrenceKey: true } }))
+        .map((row) => row.occurrenceKey)
+        .sort();
+      expect(keys).not.toContain('vor-400-tagen');
+      expect(keys).toContain('vor-300-tagen');
+    });
   });
 
   describe('read model', () => {

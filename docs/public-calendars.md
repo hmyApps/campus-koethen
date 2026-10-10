@@ -103,8 +103,13 @@ nie**; erst ein vollständig erfolgreicher Abruf fügt hinzu/aktualisiert/deakti
   aktualisieren. Diese Abkürzung gilt nur für Kalender im Status `ready`/`stale`, deren gespeicherte
   Expansion (`lastExpandedTo`) höchstens einen Tag hinter dem aktuellen Fensterende liegt. Sonst
   wird der Feed ohne `If-None-Match`/`If-Modified-Since` geladen und vollständig neu expandiert,
-  damit Serientermine am wandernden Fensterende erscheinen. Vergangene Termine vor dem Fenster
-  werden mangels festgelegter Aufbewahrungsfrist nicht automatisch entfernt.
+  damit Serientermine am wandernden Fensterende erscheinen.
+- **Aufbewahrung vergangener Termine: ein Jahr.** Zu Beginn jedes Event-Laufs entfernt der Worker
+  alle Termine, deren Ende mehr als ein Kalenderjahr zurückliegt (`PUBLIC_CALENDAR_RETENTION_YEARS`).
+  Die Regel hängt nur am Alter, nie an einer Feed-Antwort; ein fehlgeschlagener Download löscht
+  also weiterhin nichts. Da `PUBLIC_CALENDAR_LOOKBACK_DAYS` höchstens 365 beträgt, holt das
+  Sync-Fenster entfernte Termine nie zurück. Ein Fehler beim Aufräumen blockiert den Feed-Sync nicht
+  und wird beim nächsten Lauf wiederholt.
 - **Katalogänderungen:** Ändern sich `includeEventDescription`/`includeEventLocation`, verwirft der
   Katalog-Sync ETag, Last-Modified und `lastContentHash`; der nächste Lauf parst neu. Die API gibt
   Beschreibung/Ort ohnehin nur bei gesetztem Flag aus. Zeigt ein Slug auf eine **andere**

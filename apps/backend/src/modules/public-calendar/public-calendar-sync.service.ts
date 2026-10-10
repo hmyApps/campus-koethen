@@ -44,6 +44,9 @@ export interface EventOutcome {
 
 const PUBLIC_CALENDAR_FEED_CONCURRENCY = 4;
 
+/** Past occurrences are kept for this many calendar years after they ended. */
+export const PUBLIC_CALENDAR_RETENTION_YEARS = 1;
+
 const DAY_MS = 86_400_000;
 
 /** Owner of the rows the catalogue mirrors from Strapi. */
@@ -277,7 +280,35 @@ export class PublicCalendarSyncService {
     };
   }
 
+  /**
+   * Removes occurrences that ended more than {@link PUBLIC_CALENDAR_RETENTION_YEARS}
+   * calendar year(s) before `now`. A pure age rule, independent of any feed
+   * answer, so it never conflicts with "a failed download keeps the data".
+   * `PUBLIC_CALENDAR_LOOKBACK_DAYS` is capped at 365, so the sync window never
+   * reaches back far enough to re-import what this removes.
+   */
+  async pruneExpiredEvents(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime());
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - PUBLIC_CALENDAR_RETENTION_YEARS);
+    const removed = await this.prisma.publicCalendarEvent.deleteMany({
+      where: { endsAt: { lt: cutoff } },
+    });
+    if (removed.count > 0) {
+      this.logger.log(
+        `Public-calendar retention: removed ${removed.count} occurrences that ended before ${cutoff.toISOString()}`,
+      );
+    }
+    return removed.count;
+  }
+
   async syncEvents(): Promise<EventOutcome[]> {
+    try {
+      await this.pruneExpiredEvents();
+    } catch {
+      // Retention is housekeeping; it must never block the feed sync itself.
+      this.logger.warn('Public-calendar retention failed; retried on the next event run');
+    }
+
     // Only the slug: `syncCalendarEvents` reads the row it needs itself, so
     // selecting the whole record here meant pulling every calendar twice per
     // run — including `lastEtag`, `lastModified` and `lastContentHash`, the

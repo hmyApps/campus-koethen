@@ -48,6 +48,8 @@ function matchesFilter(value: unknown, filter: Row): boolean {
         return !(operand as unknown[]).some((item) => same(value, item));
       case 'gte':
         return time(value) >= time(operand);
+      case 'lt':
+        return time(value) < time(operand);
       case 'lte':
         return time(value) <= time(operand);
       case 'not':
@@ -592,6 +594,67 @@ describe('PublicCalendarSyncService lifecycle', () => {
       expect(outcome.status).toBe('notModified');
       expect(google.lastCall().conditional.etag).toBe('"v1"');
       expect(store.eventsOf(SLUG)).toHaveLength(stored);
+    });
+  });
+
+  describe('retention of past occurrences (one year)', () => {
+    function pastEvent(id: string, endedDaysAgo: number, now: Date): Row {
+      const end = new Date(now.getTime() - endedDaysAgo * 86_400_000);
+      return {
+        id,
+        calendarId: store.calendar(SLUG)['id'],
+        occurrenceKey: id,
+        uid: id,
+        recurrenceId: null,
+        sequence: null,
+        title: id,
+        description: null,
+        location: null,
+        startsAt: new Date(end.getTime() - 3_600_000),
+        endsAt: end,
+        allDay: false,
+        status: 'confirmed',
+        sourceUpdatedAt: null,
+      };
+    }
+
+    it('drops occurrences that ended more than a year ago on every event run', async () => {
+      await seedReady();
+      const now = new Date();
+      store.events.push(
+        pastEvent('vor-400-tagen', 400, now),
+        pastEvent('vor-367-tagen', 367, now),
+        pastEvent('vor-300-tagen', 300, now),
+        pastEvent('vor-40-tagen', 40, now),
+      );
+
+      await sync.syncEvents();
+
+      const titles = store.eventsOf(SLUG).map((row) => row['title']);
+      expect(titles).not.toContain('vor-400-tagen');
+      expect(titles).not.toContain('vor-367-tagen');
+      expect(titles).toEqual(expect.arrayContaining(['vor-300-tagen', 'vor-40-tagen']));
+    });
+
+    it('keeps the year boundary to the calendar year, not 365 days', async () => {
+      await seedReady();
+      // Only the two occurrences below count; the seeded one is dated today.
+      store.events = [];
+      const now = new Date('2028-03-01T12:00:00.000Z'); // 2028 is a leap year
+      store.events.push(
+        // Ended 2027-03-01T11:00Z: a year and an hour ago — removed.
+        {
+          ...pastEvent('ein-jahr-und-eine-stunde', 0, now),
+          endsAt: new Date('2027-03-01T11:00:00.000Z'),
+        },
+        // Ended 2027-03-01T13:00Z: 366 days minus an hour ago, inside the year — kept.
+        { ...pastEvent('knapp-ein-jahr', 0, now), endsAt: new Date('2027-03-01T13:00:00.000Z') },
+      );
+
+      expect(await sync.pruneExpiredEvents(now)).toBe(1);
+      const titles = store.eventsOf(SLUG).map((row) => row['title']);
+      expect(titles).toContain('knapp-ein-jahr');
+      expect(titles).not.toContain('ein-jahr-und-eine-stunde');
     });
   });
 
