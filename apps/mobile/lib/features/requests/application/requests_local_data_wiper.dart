@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/attachment_picker.dart';
 import '../domain/attachment_store.dart';
 import '../domain/request_store.dart';
+import 'case_status_controller.dart';
 import 'requests_controller.dart';
 import 'requests_providers.dart';
 import 'submissions_controller.dart';
@@ -41,9 +42,17 @@ class RequestsLocalDataWiper {
     }
 
     // Drops the in-memory copies too. Without this the screens keep showing
-    // drafts and cases whose bytes are already gone from disk.
+    // drafts and cases whose bytes are already gone from disk — and the
+    // loaded statuses would keep links, download URLs and personal data in
+    // memory until the process ends (E-10). Fetches still running are
+    // discarded by the status controller when they return.
     _ref.invalidate(requestsProvider);
     _ref.invalidate(submissionsProvider);
+    _ref.invalidate(caseStatusProvider);
+    // Rebuilt now rather than on its next read: a fetch returning after this
+    // point must already see the new generation, or its own state read would
+    // rebuild first and then write the old answer into the fresh state.
+    _ref.read(caseStatusProvider);
     return complete;
   }
 }

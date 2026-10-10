@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:campus_koethen/features/requests/application/case_status_controller.dart';
 import 'package:campus_koethen/features/requests/application/requests_controller.dart';
+import 'package:campus_koethen/features/requests/application/requests_local_data_wiper.dart';
 import 'package:campus_koethen/features/requests/application/requests_providers.dart';
 import 'package:campus_koethen/features/requests/application/submissions_controller.dart';
 import 'package:campus_koethen/features/requests/data/attachment_picker.dart';
@@ -779,6 +780,93 @@ void main() {
         now: _now.add(const Duration(seconds: 61)),
       );
       expect(status.calls, 2);
+    });
+
+    test('a 429 on one case pauses every case (E-09)', () async {
+      // The rate limit belongs to this client, not to one case: "nothing is
+      // sent until Retry-After has passed" (docs/requests.md §7).
+      final ScriptedStatusGateway status = ScriptedStatusGateway(
+        const StatusRateLimited(retryAfter: Duration(seconds: 60)),
+      );
+      final ProviderContainer container = _container(
+        store: FlakyRequestStore(),
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+        status: status,
+      );
+      await container.read(submissionsProvider.future);
+      final CaseStatusController controller = container.read(
+        caseStatusProvider.notifier,
+      );
+
+      await controller.refresh(caseOf('a'), now: _now);
+      final StatusResult other = await controller.refresh(
+        caseOf('b'),
+        now: _now.add(const Duration(seconds: 30)),
+      );
+
+      expect(status.calls, 1);
+      expect(other, isA<StatusRateLimited>());
+
+      await controller.refresh(
+        caseOf('b'),
+        now: _now.add(const Duration(seconds: 61)),
+      );
+      expect(status.calls, 2);
+    });
+
+    test('refreshing the list stops at the first 429 (E-09)', () async {
+      final ScriptedStatusGateway status = ScriptedStatusGateway(
+        const StatusRateLimited(retryAfter: Duration(seconds: 60)),
+        delay: const Duration(milliseconds: 5),
+      );
+      final ProviderContainer container = _container(
+        store: FlakyRequestStore(),
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+        status: status,
+      );
+      await container.read(submissionsProvider.future);
+
+      await container.read(caseStatusProvider.notifier).refreshAll(
+        <SubmittedCase>[for (int i = 0; i < 9; i++) caseOf('case-$i')],
+        now: _now,
+      );
+
+      // Only what was already in flight when the 429 came back.
+      expect(
+        status.calls,
+        lessThanOrEqualTo(CaseStatusController.maxConcurrentRefreshes),
+      );
+    });
+
+    test('wiping local data drops statuses held in memory (E-10)', () async {
+      final ScriptedStatusGateway status = ScriptedStatusGateway(
+        StatusLoaded(_loadedStatus()),
+        delay: const Duration(milliseconds: 20),
+      );
+      final ProviderContainer container = _container(
+        store: FlakyRequestStore(),
+        gateway: ScriptedRequestGateway(_accepted),
+        attachments: FakeAttachmentStore(),
+        status: status,
+      );
+      await container.read(submissionsProvider.future);
+      final CaseStatusController controller = container.read(
+        caseStatusProvider.notifier,
+      );
+      await controller.refresh(caseOf('a'), now: _now);
+      expect(container.read(caseStatusProvider), isNotEmpty);
+
+      // One more fetch is still running when the wipe happens.
+      final Future<StatusResult> late = controller.refresh(
+        caseOf('b'),
+        now: _now.add(const Duration(minutes: 5)),
+      );
+      expect(await container.read(requestsLocalDataWiperProvider).wipe(), true);
+      await late;
+
+      expect(container.read(caseStatusProvider), isEmpty);
     });
 
     test('refreshes many cases at a bounded concurrency', () async {
