@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../app/app_routes.dart';
@@ -319,7 +320,8 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
             .read(selectedMailboxProvider.notifier)
             .select(const MailFolder.inbox());
       }
-      ref.read(appRouterProvider).go(target.location);
+      final GoRouter router = ref.read(appRouterProvider);
+      router.go(target.location);
 
       if (!target.resolved) {
         final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
@@ -336,9 +338,16 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
       // One more frame: `go` has been called but the calendar has not built
       // yet, and a sheet pushed onto the navigator before it does would sit
       // above the previous screen.
+      //
+      // The sheet goes onto the router's root navigator. This host sits in
+      // the `MaterialApp.router` builder, above that navigator, so its own
+      // context has none to push onto (F-08).
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        unawaited(showCalendarEntrySheet(context, entry));
+        final BuildContext? navigatorContext =
+            router.routerDelegate.navigatorKey.currentContext;
+        if (navigatorContext == null || !navigatorContext.mounted) return;
+        unawaited(showCalendarEntrySheet(navigatorContext, entry));
       });
     });
     // After the wait above the app may be idle with no frame pending; make
