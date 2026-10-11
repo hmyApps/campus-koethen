@@ -92,7 +92,11 @@ und im Datei-Downloader:
   aber Single-Flight.
 - Eine ungültige/unbekannte Antwort **löscht nie** den letzten guten Cache. Eine gültige leere
   `inprogress`-Kursliste ist dagegen maßgeblich und entfernt Kurse, die Moodle nicht mehr als
-  aktuell einstuft; eine leere Deadline-Antwort behält weiterhin den letzten guten Bestand.
+  aktuell einstuft; eine leere Deadline-Antwort behält weiterhin den letzten guten Bestand. Weil
+  Moodle eine Frist nach der Abgabe aus seiner Liste entfernt, gilt dieser behaltene Bestand dann
+  als **unbestätigt** (`MoodleSyncMarks.deadlinesConfirmed`, über einen Neustart hinweg): Der
+  Kalender zeigt ihn weiter, Fristerinnerungen (N4) und die Fristenzahl der Tagesübersicht (N2)
+  entstehen daraus nicht mehr. Die nächste nicht leere Antwort bestätigt die Liste wieder.
 
 **„Moodle-Verbindung und lokale Daten löschen"** entfernt Token, Nutzer-ID, verschlüsselten Cache,
 Cache-Schlüssel, Sync-Zeitstempel und alle zugehörigen Riverpod-Zustände. Ein optionaler zentraler
@@ -139,6 +143,18 @@ TabBar ist `isScrollable`, weil drei gleich breite Drittel eines 320 px breiten 
 ist schlechter als eine Wischgeste. Widgettests prüfen beides bei 320 px und doppelter
 Schrift.
 
+### Im Browser öffnen
+
+Was die App nicht selbst darstellt — Tests, Foren, Seiten und alle übrigen Aktivitätstypen außer
+Dateien, Links und Textfeldern —, kennzeichnet die Kursansicht mit „Dieser Inhaltstyp wird in der
+App nicht unterstützt." und öffnet es per Tap in Moodle Web. Jede Aufgabe bietet denselben Weg
+(„In Moodle im Browser öffnen"), denn Abgaben bleiben in der App ausgeschlossen. Der Link entsteht
+in `MoodleProfile.moduleWebUri` als `https://moodle.hs-anhalt.de/mod/<modname>/view.php?id=<cmid>`:
+**ohne** Token, ohne Nutzer-ID, nur für einen schlichten Plugin-Namen und eine positive cmid, und
+nur, wenn er die exakte Moodle-Origin trifft. Geöffnet wird er über den `SafeLinkLauncher` im
+externen Browser; die Anmeldung dort ist Sache von Moodle Web. Den Kursfortschritt zeigt die
+Kursliste bewusst nicht an.
+
 ## 7. Fehlerklassen
 
 `invalidCredentials`, `tokenRejected`, `tokenExpired`, `networkUnavailable`, `timeout`,
@@ -151,5 +167,5 @@ Schrift.
 Alle Tests laufen gegen **synthetische Fixtures** mit fiktiven Kursen („Beispielkurs Informatik",
 „Musterseminar", „Übungsblatt 1"). Es gibt **keine** echten Moodle-Aufrufe und **keine** echten
 Zugangsdaten/Token/Kursdaten im Repository. Sicherheitskritische Pfade (Host-/Token-Policy,
-Redirect-Ablehnung, Größenlimit, „leere Antwort löscht Cache nicht", 24-h-Policy, Kalender-Merge)
+Redirect-Ablehnung, Größenlimit, „leere Antwort löscht Cache nicht", 1-h-Policy, Kalender-Merge)
 sind durch Unit-Tests abgesichert.

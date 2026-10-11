@@ -92,8 +92,8 @@ String? _canteen(DailySummaryDay day, AppLocalizations l10n) {
   if (favourite != null) {
     return l10n.notificationDailySummaryCanteenFavourite(favourite);
   }
-  // A plain menu is mentioned when the day already earns a notification, but
-  // never earns one by itself — see [DailySummaryDay.hasRelevantEntry].
+  // A plain menu is one of the four N2 sources, so it earns the day an
+  // overview even on its own — see [DailySummaryDay.hasRelevantEntry].
   if (day.hasCanteenMenu) return l10n.notificationDailySummaryCanteenMenu;
   return null;
 }
