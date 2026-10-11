@@ -130,6 +130,33 @@ void main() {
     expect(stats.entryCount, lessThan(8));
   });
 
+  test('a write within budget does not decode the whole box again', () async {
+    // Every write used to run the full prune, which JSON-decodes every entry
+    // (up to 128 of them, up to 20 MB). Observable here through the corrupt
+    // entry that only a full pass drops. The pass at open has already run.
+    await cache.prune();
+    await box.put('broken', '{not json');
+
+    await cache.write('small', <String, dynamic>{'value': 'a'});
+
+    expect(box.containsKey('broken'), isTrue);
+    expect(await cache.read('small'), isNotNull);
+  });
+
+  test('a write past the entry budget still prunes', () async {
+    final HiveContentCache bounded = HiveContentCache(
+      box,
+      budget: const ContentCacheBudget(maxEntries: 1, maxBytes: 1024 * 1024),
+    );
+    await bounded.prune();
+    await box.put('broken', '{not json');
+
+    await bounded.write('small', <String, dynamic>{'value': 'a'});
+
+    expect(box.containsKey('broken'), isFalse);
+    expect((await bounded.stats()).entryCount, 1);
+  });
+
   test(
     'prunes old range windows but preserves their newest successful entry',
     () async {

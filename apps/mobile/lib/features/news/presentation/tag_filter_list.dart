@@ -83,6 +83,10 @@ class TagFilterList extends ConsumerWidget {
               Semantics(
                 selected: selected == null,
                 label: l10n.newsTagFilterAllSemanticLabel,
+                // excludeSemantics drops the chip's own tap action, so the
+                // merged node has to carry it.
+                onTap: () =>
+                    ref.read(newsTagFilterProvider.notifier).select(null),
                 excludeSemantics: true,
                 child: ChoiceChip(
                   label: Text(l10n.newsTagFilterAllLabel),
@@ -95,6 +99,8 @@ class TagFilterList extends ConsumerWidget {
                 Semantics(
                   selected: selected == tag.slug,
                   label: l10n.newsTagFilterTagSemanticLabel(tag.name),
+                  onTap: () =>
+                      ref.read(newsTagFilterProvider.notifier).select(tag.slug),
                   excludeSemantics: true,
                   child: ChoiceChip(
                     // Long or localised names wrap inside the chip instead of

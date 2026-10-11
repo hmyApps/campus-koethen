@@ -182,6 +182,21 @@ void main() {
     expect(find.text(l10n.moduleContactsTitle), findsOneWidget);
   });
 
+  testWidgets('a screen reader can activate an available module row', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    final AppLocalizations l10n = await pumpMore(tester);
+
+    expect(
+      tester.getSemantics(
+        find.bySemanticsLabel(RegExp('^${l10n.moduleContactsTitle}')),
+      ),
+      isSemantics(isButton: true, hasTapAction: true),
+    );
+    handle.dispose();
+  });
+
   testWidgets('every row stays a 48dp target', (WidgetTester tester) async {
     await pumpMore(tester);
     for (final Element element in find.byType(ListTile).evaluate()) {

@@ -9,6 +9,7 @@ import 'package:campus_koethen/core/cache/content_cache.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
+import 'package:campus_koethen/features/news/application/news_auto_refresh.dart';
 import 'package:campus_koethen/features/news/application/news_channel_feed_controller.dart';
 import 'package:campus_koethen/features/news/data/news_models.dart';
 import 'package:dio/dio.dart';
@@ -86,6 +87,18 @@ ProviderContainer _container(_ChannelFeed feed) {
   );
   addTearDown(container.dispose);
   return container;
+}
+
+/// Runs the app-wide news auto refresh.
+///
+/// This fake serves only one channel's articles, so the main feed the refresh
+/// also reloads fails here; only the channel feed is under test.
+Future<void> _autoRefresh(ProviderContainer container) async {
+  try {
+    await container.read(newsAutoRefreshProvider.notifier).run();
+  } on Object {
+    // The main feed is not served by this fake.
+  }
 }
 
 List<String> _slugs(NewsChannelFeedState state) =>
@@ -318,6 +331,67 @@ void main() {
             .requireValue,
       ),
       <String>['english'],
+    );
+  });
+
+  group('foreground auto refresh', () {
+    test('reloads a channel feed that is still on its first page', () async {
+      final _ChannelFeed feed = _ChannelFeed(
+        'campus-news',
+        <int, List<String>?>{
+          1: <String>['a', 'b'],
+          2: <String>['c', 'd'],
+        },
+      );
+      final ProviderContainer container = _container(feed);
+      await container.read(
+        newsChannelFeedControllerProvider('campus-news').future,
+      );
+
+      await _autoRefresh(container);
+      await container.read(
+        newsChannelFeedControllerProvider('campus-news').future,
+      );
+
+      int firstPageRequests = 0;
+      for (int i = 0; i < feed.requestedPages.length; i++) {
+        if (feed.requestedPages[i] == 1 &&
+            feed.requestedChannels[i] == 'campus-news') {
+          firstPageRequests++;
+        }
+      }
+      expect(firstPageRequests, 2);
+    });
+
+    test(
+      'leaves a channel feed alone that was scrolled past page one',
+      () async {
+        final _ChannelFeed feed = _ChannelFeed(
+          'campus-news',
+          <int, List<String>?>{
+            1: <String>['a', 'b'],
+            2: <String>['c', 'd'],
+          },
+        );
+        final ProviderContainer container = _container(feed);
+        await container.read(
+          newsChannelFeedControllerProvider('campus-news').future,
+        );
+        await container
+            .read(newsChannelFeedControllerProvider('campus-news').notifier)
+            .loadMore();
+
+        await _autoRefresh(container);
+        await container.read(
+          newsChannelFeedControllerProvider('campus-news').future,
+        );
+
+        final NewsChannelFeedState state = container
+            .read(newsChannelFeedControllerProvider('campus-news'))
+            .value!;
+        expect(state.page, 2);
+        expect(_slugs(state), <String>['a', 'b', 'c', 'd']);
+      },
     );
   });
 

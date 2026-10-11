@@ -121,6 +121,9 @@ class _Tab extends StatelessWidget {
       button: true,
       selected: selected,
       label: '${destination.tooltip}, $positionLabel',
+      // excludeSemantics drops the InkWell's own tap action along with its
+      // child nodes, so the merged node has to carry the action itself.
+      onTap: onTap,
       excludeSemantics: true,
       child: Tooltip(
         message: destination.tooltip,

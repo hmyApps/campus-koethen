@@ -8,6 +8,7 @@ import '../../../core/locale/locale_providers.dart';
 import '../../../core/network/loaded.dart';
 import '../data/news_models.dart';
 import '../data/news_repository.dart';
+import 'news_auto_refresh.dart';
 
 /// Everything the channel screen needs to draw its article list.
 ///
@@ -78,6 +79,12 @@ class NewsChannelFeedController extends AsyncNotifier<NewsChannelFeedState> {
   Future<NewsChannelFeedState> build() async {
     final int generation = ++_generation;
     _activeScope = null;
+    // The foreground auto refresh reloads only a feed still on its first
+    // page; a reader further down keeps their place.
+    ref.listen<int>(newsAutoRefreshProvider, (int? _, int _) {
+      if ((state.value?.page ?? 1) > 1) return;
+      ref.invalidateSelf();
+    });
     final _NewsChannelFeedScope scope = _NewsChannelFeedScope(
       generation: generation,
       locale: ref.watch(localeCodeProvider),

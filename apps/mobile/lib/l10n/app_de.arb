@@ -2024,6 +2024,24 @@
   "@campusMapResetZoom": {
     "description": "Tooltip zum Zurücksetzen von Zoom und Verschiebung."
   },
+  "campusMapInfoTooltip": "Über diesen Plan",
+  "@campusMapInfoTooltip": {
+    "description": "Tooltip der Schaltfläche, die den Informationsdialog zum Plan öffnet."
+  },
+  "campusMapSchematicNotice": "Schematischer Etagenplan: vereinfacht, nicht maßstabsgetreu und kein Flucht- oder Rettungsplan.",
+  "@campusMapSchematicNotice": {
+    "description": "Hinweis im Informationsdialog, dass der Plan schematisch ist (docs/campus-map.md, Abschnitt 8)."
+  },
+  "campusMapSourceAttribution": "Plangrundlage: {source}",
+  "@campusMapSourceAttribution": {
+    "description": "Quellenangabe des Gebäudeplans im Informationsdialog.",
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "Hochschule Anhalt"
+      }
+    }
+  },
   "campusMapRoomNotOnMap": "Dieser Raum ist im mitgelieferten Plan nicht enthalten.",
   "@campusMapRoomNotOnMap": {
     "description": "Hinweis bei einem roomKey ohne Geometrie im lokalen Kartenasset."

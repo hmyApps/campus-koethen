@@ -78,6 +78,11 @@ class _ModuleRow extends StatelessWidget {
         ? l10n.moreModuleTemporarilyUnavailable
         : module.subtitle(l10n);
     final double contentOpacity = disabled ? 0.45 : 1;
+    // Pushed rather than switched to: a module opened from here belongs to
+    // this stack, which is what keeps "Mehr" highlighted while it is open.
+    final VoidCallback? open = disabled
+        ? null
+        : () => GoRouter.of(context).push(module.route);
 
     return Semantics(
       button: true,
@@ -85,11 +90,12 @@ class _ModuleRow extends StatelessWidget {
       label: subtitle == null
           ? module.title(l10n)
           : '${module.title(l10n)}. $subtitle',
+      // excludeSemantics drops the InkWell's own tap action along with its
+      // child nodes, so the merged node has to carry the action itself.
+      onTap: open,
       excludeSemantics: true,
       child: InkWell(
-        // Pushed rather than switched to: a module opened from here belongs to
-        // this stack, which is what keeps "Mehr" highlighted while it is open.
-        onTap: disabled ? null : () => GoRouter.of(context).push(module.route),
+        onTap: open,
         child: Opacity(
           opacity: contentOpacity,
           child: Padding(

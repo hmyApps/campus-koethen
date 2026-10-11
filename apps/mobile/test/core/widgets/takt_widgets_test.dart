@@ -7,6 +7,7 @@ import 'package:campus_koethen/core/theme/app_dimensions.dart';
 import 'package:campus_koethen/core/theme/app_metrics.dart';
 import 'package:campus_koethen/core/widgets/brand_mark.dart';
 import 'package:campus_koethen/core/widgets/marker.dart';
+import 'package:campus_koethen/core/widgets/panel.dart';
 import 'package:campus_koethen/core/widgets/screen_scaffold.dart';
 import 'package:campus_koethen/core/widgets/section_header.dart';
 import 'package:campus_koethen/core/widgets/time_rail.dart';
@@ -559,6 +560,33 @@ void main() {
     });
   });
 
+  group('Panel', () {
+    testWidgets('a labelled tappable panel keeps its tap for a screen reader', (
+      WidgetTester tester,
+    ) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      int taps = 0;
+      await pumpScreen(
+        tester,
+        Scaffold(
+          body: Panel(
+            semanticLabel: 'Karte',
+            onTap: () => taps++,
+            child: const Text('Inhalt'),
+          ),
+        ),
+      );
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Karte')),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+      tester.semantics.tap(find.semantics.byLabel('Karte'));
+      expect(taps, 1);
+      handle.dispose();
+    });
+  });
+
   group('TaktNavigationBar', () {
     const List<TaktDestination> destinations = <TaktDestination>[
       TaktDestination(
@@ -636,6 +664,34 @@ void main() {
       // to MaterialLocalizations, so only the shape is asserted here.
       expect(find.bySemanticsLabel(RegExp('^News, .*1.*2')), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('^Mensa, .*2.*2')), findsOneWidget);
+    });
+
+    testWidgets('a screen reader can activate a tab', (
+      WidgetTester tester,
+    ) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      int? tapped;
+      await pumpScreen(
+        tester,
+        Scaffold(
+          bottomNavigationBar: TaktNavigationBar(
+            semanticLabel: 'Hauptnavigation',
+            destinations: destinations,
+            selectedIndex: 1,
+            onSelected: (int index) => tapped = index,
+          ),
+        ),
+      );
+
+      final Finder news = find.bySemanticsLabel(RegExp('^News,'));
+      expect(
+        tester.getSemantics(news),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+
+      tester.semantics.tap(find.semantics.byLabel(RegExp('^News,')));
+      expect(tapped, 0);
+      handle.dispose();
     });
 
     testWidgets('keeps every tab a 48dp target', (WidgetTester tester) async {

@@ -41,6 +41,7 @@ class CalendarHomeWidgetSettingsController
   @override
   CalendarHomeWidgetSettings build() {
     ref.watch(keyValueStoreProvider);
+    ref.watch(preferencesResetGenerationProvider);
     final bool enabled =
         _store.getInt(PreferenceKeys.calendarHomeWidgetEnabled) == 1;
     return CalendarHomeWidgetSettings(

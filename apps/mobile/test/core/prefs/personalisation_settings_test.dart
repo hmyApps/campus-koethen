@@ -8,6 +8,7 @@ import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/preference_keys.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/theme/appearance_preferences.dart';
+import 'package:campus_koethen/features/calendar/home_widget/calendar_home_widget_settings.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -260,6 +261,47 @@ void main() {
       expect(container.read(settingsProvider).accentScheme, AccentScheme.pink);
     });
 
+    test('switches the home screen widget off in memory, too', () async {
+      // The widget keys were removed from the store only: the live provider
+      // stayed enabled, and the home screen kept showing titles and places
+      // until the next start.
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      final ProviderContainer container = _container(store);
+      final CalendarHomeWidgetSettingsController widget = container.read(
+        calendarHomeWidgetSettingsProvider.notifier,
+      );
+      await widget.setEnabled(true);
+      await widget.setShowDetails(true);
+
+      await container.read(settingsProvider.notifier).resetLocalPreferences();
+
+      expect(
+        container.read(calendarHomeWidgetSettingsProvider),
+        const CalendarHomeWidgetSettings(enabled: false, showDetails: false),
+      );
+    });
+
+    test(
+      'reports an incomplete reset when the store cannot remove a key',
+      () async {
+        // SET-6 for real: the shared_preferences store used to swallow a failed
+        // removal, so the controller always saw success.
+        final _RefusingRemoveStore store = _RefusingRemoveStore();
+        final ProviderContainer container = _container(store);
+        final SettingsController controller = container.read(
+          settingsProvider.notifier,
+        );
+        await controller.setAccentScheme(AccentScheme.amber);
+
+        expect(await controller.resetLocalPreferences(), isFalse);
+        // The published state matches what is actually persisted.
+        expect(
+          container.read(settingsProvider).accentScheme,
+          AccentScheme.amber,
+        );
+      },
+    );
+
     test('does not touch keys owned by the secure personal services', () async {
       // The reset is scoped to presentation and preferences. Credentials and
       // encrypted caches belong to "remove account" inside each service — a
@@ -302,4 +344,10 @@ void main() {
       );
     },
   );
+}
+
+/// A store whose removals fail without throwing, like a `false` commit.
+class _RefusingRemoveStore extends InMemoryKeyValueStore {
+  @override
+  Future<bool> remove(String key) async => false;
 }

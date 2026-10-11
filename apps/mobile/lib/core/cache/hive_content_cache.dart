@@ -34,6 +34,10 @@ class HiveContentCache implements ContentCache {
   final DateTime Function() _now;
   final ContentCacheBudget budget;
 
+  /// The longest a write goes without a full [prune] pass.
+  static const Duration _pruneInterval = Duration(days: 1);
+  DateTime? _lastPrunedAt;
+
   /// Opens the cache box. Returns a [MemoryContentCache] when Hive is not
   /// usable on this device, so the app keeps working without persistence.
   static Future<ContentCache> open() async {
@@ -94,7 +98,32 @@ class HiveContentCache implements ContentCache {
     if (_byteLength(raw) > budget.maxBytes) return;
     await _box.put(key, raw);
     await _touch(key, now);
-    await prune();
+    if (_needsPrune(now)) await prune();
+  }
+
+  /// Whether the full [prune] pass is due after a write.
+  ///
+  /// The pass JSON-decodes every entry — up to [ContentCacheBudget.maxEntries]
+  /// documents and [ContentCacheBudget.maxBytes] of them — which used to run
+  /// on every single write. The budgets are checked here from keys and raw
+  /// sizes alone; the time-based range retention is caught by the pass at
+  /// [open] and at the latest a day after the previous one.
+  bool _needsPrune(DateTime now) {
+    final DateTime? last = _lastPrunedAt;
+    if (last == null || now.difference(last) >= _pruneInterval) return true;
+    int entries = 0;
+    int ranges = 0;
+    int bytes = 0;
+    for (final String key in _box.keys.whereType<String>()) {
+      if (key == _accessMetadataKey) continue;
+      entries++;
+      if (CacheKeys.isRangeNamespace(CacheKeys.namespaceOf(key))) ranges++;
+      final String? raw = _box.get(key);
+      if (raw != null) bytes += _byteLength(raw);
+    }
+    return entries > budget.maxEntries ||
+        ranges > budget.maxRangeEntries ||
+        bytes > budget.maxBytes;
   }
 
   @override
@@ -117,6 +146,7 @@ class HiveContentCache implements ContentCache {
 
   Future<void> prune() async {
     final DateTime now = _now().toUtc();
+    _lastPrunedAt = now;
     final Map<String, String> access = _readAccessMetadata();
     final List<_CacheRecord> records = <_CacheRecord>[];
     final List<String> invalid = <String>[];

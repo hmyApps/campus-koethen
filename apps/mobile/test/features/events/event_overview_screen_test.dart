@@ -250,6 +250,29 @@ void main() {
       expect(find.byType(ErrorView), findsNothing);
     });
 
+    testWidgets('a refresh that fails again raises no unhandled error', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(
+        tester,
+        events: <UnifiedEvent>[_event()],
+        posts: AsyncError<EventPostsResult>(
+          Exception('boom'),
+          StackTrace.empty,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Aktualisieren'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('Event-Beiträge sind derzeit nicht verfügbar.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('the calendar source failing names the calendar source', (
       WidgetTester tester,
     ) async {

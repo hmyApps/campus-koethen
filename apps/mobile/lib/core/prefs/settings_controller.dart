@@ -180,6 +180,23 @@ final Provider<KeyValueStore> keyValueStoreProvider = Provider<KeyValueStore>(
   (Ref ref) => InMemoryKeyValueStore(),
 );
 
+/// Counts the local preference resets of this process.
+///
+/// A controller that owns keys [SettingsController.resetLocalPreferences]
+/// clears watches this, so its in-memory state follows the store.
+class PreferencesResetGeneration extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void _bump() => state = state + 1;
+}
+
+final NotifierProvider<PreferencesResetGeneration, int>
+preferencesResetGenerationProvider =
+    NotifierProvider<PreferencesResetGeneration, int>(
+      PreferencesResetGeneration.new,
+    );
+
 /// Reads and writes [AppSettings].
 class SettingsController extends Notifier<AppSettings> {
   static const int maxAdditionalTimetableGroups = 12;
@@ -476,7 +493,7 @@ class SettingsController extends Notifier<AppSettings> {
       // reset behind a snack bar that said it was done — and the untouched
       // values came back at the next start (SET-6).
       try {
-        await _store.remove(key);
+        if (!await _store.remove(key)) complete = false;
       } catch (_) {
         complete = false;
       }
@@ -484,6 +501,9 @@ class SettingsController extends Notifier<AppSettings> {
     // Rebuilt from the store rather than assumed: after a partial failure the
     // published state has to match what is actually persisted.
     state = _read();
+    // Settings with a controller of their own (the home screen widget) have
+    // to re-read the store as well, or their live state outlasts the reset.
+    ref.read(preferencesResetGenerationProvider.notifier)._bump();
     return complete;
   }
 

@@ -31,12 +31,18 @@ class PostImagePreview extends StatelessWidget {
         ? l10n.newsOpenImage
         : l10n.newsOpenImageWithDescription(description);
 
+    void open() =>
+        _showOriginalImage(context, url, l10n, alternativeText: description);
+
     return Tooltip(
       message: l10n.newsOpenImage,
       excludeFromSemantics: true,
       child: Semantics(
         button: true,
         label: semanticLabel,
+        // excludeSemantics drops the InkWell's tap action, so the merged node
+        // has to carry it itself.
+        onTap: open,
         excludeSemantics: true,
         child: Stack(
           children: <Widget>[
@@ -68,12 +74,7 @@ class PostImagePreview extends StatelessWidget {
                 type: MaterialType.transparency,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(AppRadius.card),
-                  onTap: () => _showOriginalImage(
-                    context,
-                    url,
-                    l10n,
-                    alternativeText: description,
-                  ),
+                  onTap: open,
                 ),
               ),
             ),
