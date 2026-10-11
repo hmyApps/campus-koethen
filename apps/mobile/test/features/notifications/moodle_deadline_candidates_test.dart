@@ -78,4 +78,38 @@ void main() {
       hasLength(2),
     );
   });
+
+  test('a reminder target resolves back to its deadline, and only to it', () {
+    final DateTime now = DateTime.utc(2026, 10, 6, 8);
+    final MoodleDeadline first = MoodleDeadline(
+      id: 1,
+      title: 'A',
+      dueAt: DateTime.utc(2026, 10, 8, 12),
+    );
+    final MoodleDeadline second = MoodleDeadline(
+      id: 2,
+      title: 'B',
+      dueAt: DateTime.utc(2026, 10, 9, 12),
+    );
+    final List<NotificationRequest> requests = moodleDeadlineRequests(
+      deadlines: <MoodleDeadline>[first, second],
+      now: now,
+      lead: const Duration(hours: 24),
+      copy: const _Copy(),
+    );
+
+    expect(
+      findMoodleDeadlineForNotification(<MoodleDeadline>[
+        first,
+        second,
+      ], requests.last.target),
+      second,
+    );
+    expect(
+      findMoodleDeadlineForNotification(<MoodleDeadline>[
+        first,
+      ], requests.last.target),
+      isNull,
+    );
+  });
 }

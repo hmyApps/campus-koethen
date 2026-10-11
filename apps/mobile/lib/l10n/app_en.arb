@@ -1968,7 +1968,7 @@
   "@notificationChannelGradeChangeDescription": {},
   "notificationMoodleDeadlineTitle": "Moodle deadline approaching",
   "@notificationMoodleDeadlineTitle": {},
-  "notificationMoodleDeadlineBody": "Open Moodle in Campus Köthen to view the deadline.",
+  "notificationMoodleDeadlineBody": "Open Campus Köthen to see the deadline in the calendar.",
   "@notificationMoodleDeadlineBody": {},
   "notificationGradeChangeTitle": "New grade entered",
   "@notificationGradeChangeTitle": {},

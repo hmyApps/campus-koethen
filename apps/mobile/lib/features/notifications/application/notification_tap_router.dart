@@ -77,6 +77,7 @@ class NotificationTapRouter {
   const NotificationTapRouter({
     this.preferredCanteenSlug,
     this.findCalendarEntry,
+    this.findMoodleDeadlineDay,
   });
 
   /// The canteen the reader currently prefers, used to tell "the hint is for
@@ -90,6 +91,12 @@ class NotificationTapRouter {
   /// takes its "now" as an argument: it keeps this class a pure mapping from
   /// a string to a destination, testable without a container.
   final CalendarEntry? Function(String id)? findCalendarEntry;
+
+  /// Resolves the opaque target of a Moodle deadline reminder against the
+  /// locally cached deadlines and answers the local day it is due on, or
+  /// `null` when the deadline is no longer known. Injected for the same
+  /// reason as [findCalendarEntry].
+  final DateTime? Function(String target)? findMoodleDeadlineDay;
 
   /// The destination for [raw], or `null` when nothing can be said about it.
   NotificationTapTarget? resolve(String? raw) {
@@ -152,7 +159,23 @@ class NotificationTapRouter {
           focusMealName: parts!.group(3),
         );
       case NotificationCategory.moodleDeadline:
-        return const NotificationTapTarget(location: AppRoutes.moodle);
+        // The Moodle overview lists courses, not deadlines, so the reminder
+        // opens the calendar on the day the deadline is due — the one screen
+        // that shows it. The payload stays an opaque key; the day comes from
+        // the local cache.
+        final DateTime? deadlineDay = findMoodleDeadlineDay?.call(
+          payload.target,
+        );
+        if (deadlineDay == null) {
+          return const NotificationTapTarget(
+            location: AppRoutes.calendar,
+            resolved: false,
+          );
+        }
+        return NotificationTapTarget(
+          location: AppRoutes.calendar,
+          focusDay: deadlineDay,
+        );
       case NotificationCategory.gradeChange:
         return const NotificationTapTarget(location: AppRoutes.grades);
       case NotificationCategory.newMail:

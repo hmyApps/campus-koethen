@@ -22,6 +22,7 @@ import '../../mail/application/mail_sync_controller.dart';
 import '../../mail/domain/mail_folder.dart';
 import '../application/daily_summary_providers.dart';
 import '../application/event_reminder_candidates.dart';
+import '../application/moodle_deadline_candidates.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_settings_controller.dart';
 import '../application/notification_tap_router.dart';
@@ -274,6 +275,17 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
       );
       if (!mounted) return;
     }
+    // The same for a Moodle deadline: its opaque key is resolved against the
+    // local deadline cache, which a cold start has not read yet.
+    DateTime? moodleDeadlineDay;
+    if (parsed != null &&
+        parsed.category == NotificationCategory.moodleDeadline) {
+      moodleDeadlineDay = await loadMoodleDeadlineDayForNotification(
+        ProviderScope.containerOf(context, listen: false),
+        parsed.target,
+      );
+      if (!mounted) return;
+    }
     // Deferred to the next frame: a cold start resolves the launch payload
     // before the router has built its first route, and pushing into a
     // navigator that does not exist yet is how a notification tap turns into
@@ -284,6 +296,7 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         preferredCanteenSlug: ref.read(settingsProvider).preferredCanteenSlug,
         findCalendarEntry: (String id) =>
             eventEntry ?? ref.read(calendarEntryForNotificationProvider(id)),
+        findMoodleDeadlineDay: (String _) => moodleDeadlineDay,
       ).resolve(payload);
       if (target == null) return;
 
