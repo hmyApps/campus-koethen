@@ -84,7 +84,9 @@ export function createRoomGuard(logger: GuardLogger) {
       return next();
     }
 
-    if (context.action === 'create' || context.action === 'delete') {
+    // `clone` (admin "Duplicate") creates a new room through the entries
+    // layer and never passes the `create` action, so it is refused as well.
+    if (context.action === 'create' || context.action === 'clone' || context.action === 'delete') {
       throw new CatalogManagedError(
         'Rooms are catalogue managed. Use "pnpm --filter @campus/cms rooms:sync" to create or ' +
           'deactivate rooms; editorial fields and contact relations stay editable here.',
