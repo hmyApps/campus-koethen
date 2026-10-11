@@ -385,6 +385,26 @@ void main() {
     });
   });
 
+  testWidgets('an Exchange appointment shows a place that is not a room', (
+    WidgetTester tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      CalendarEntry(
+        id: 'exchange:1',
+        source: CalendarSource.exchangeCalendar,
+        title: 'Sprechstunde (fiktiv)',
+        start: DateTime(2026, 5, 11, 14),
+        end: DateTime(2026, 5, 11, 15),
+        location: 'Online',
+        details: const ExchangeCalendarDetails(location: 'Online'),
+      ),
+    );
+
+    expect(find.text('Ort'), findsOneWidget);
+    expect(find.text('Online'), findsOneWidget);
+  });
+
   testWidgets('an entry without details still shows everything it has', (
     WidgetTester tester,
   ) async {

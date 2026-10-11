@@ -337,7 +337,19 @@ class CalendarEntrySheet extends ConsumerWidget {
           ),
         ],
       ],
-      ExchangeCalendarDetails() => const <Widget>[],
+      // Exchange locations are free text ("Online", an address, a room):
+      // always shown as such; a resolvable campus room additionally gets
+      // its link below.
+      ExchangeCalendarDetails(:final String? location) => <Widget>[
+        if (location != null && location.trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          _DetailRow(
+            icon: AppIcons.place_outlined,
+            label: l10n.calendarDetailLocation,
+            values: <String>[location],
+          ),
+        ],
+      ],
       // Nothing beyond the flattened fields: the top "Quelle" row above
       // already names the canteen via `entry.sourceLabel`.
       CanteenFavouriteMealCalendarDetails() => const <Widget>[],
