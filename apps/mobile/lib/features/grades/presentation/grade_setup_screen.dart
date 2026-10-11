@@ -125,11 +125,12 @@ class _GradeSetupScreenState extends ConsumerState<GradeSetupScreen> {
   Future<void> _openPortal() async {
     final AppLocalizations l10n = context.l10n;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    // Before setup the account's portal is not known yet; the legacy portal's
-    // public entry page is the long-standing "open in browser" target.
+    // Before setup the account's portal is not known yet; HISinOne is the
+    // standard portal setup tries first (docs/grades.md "Portalwahl"), so its
+    // public entry page is the "open in browser" target here.
     final LinkLaunchResult result = await ref
         .read(linkLauncherProvider)
-        .open(ref.read(legacyQisProfileProvider).portalUrl);
+        .open(ref.read(hisInOneProfileProvider).portalUrl);
     if (result != LinkLaunchResult.opened) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.errorLinkNotOpened)));
     }
