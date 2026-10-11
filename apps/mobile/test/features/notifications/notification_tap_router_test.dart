@@ -223,7 +223,6 @@ void main() {
     const Set<String> known = <String>{
       AppRoutes.calendar,
       AppRoutes.canteen,
-      AppRoutes.moodle,
       AppRoutes.grades,
       AppRoutes.mail,
     };
@@ -240,11 +239,35 @@ void main() {
     }
   });
 
-  test('academic alerts open their privacy-safe overview routes', () {
-    expect(
-      router.resolve('v1|moodle.deadline|deadline-a1b2')?.location,
-      AppRoutes.moodle,
-    );
+  group('a Moodle deadline reminder', () {
+    test('opens the calendar on the deadline day', () {
+      final NotificationTapRouter withDeadline = NotificationTapRouter(
+        findMoodleDeadlineDay: (String target) =>
+            target == 'deadline-a1b2' ? DateTime(2026, 10, 8) : null,
+      );
+
+      final NotificationTapTarget? target = withDeadline.resolve(
+        'v1|moodle.deadline|deadline-a1b2',
+      );
+
+      expect(target?.location, AppRoutes.calendar);
+      expect(target?.focusDay, DateTime(2026, 10, 8));
+      expect(target?.resolved, isTrue);
+    });
+
+    test('a deadline no longer known falls back to the calendar and says '
+        'so', () {
+      final NotificationTapTarget? target = router.resolve(
+        'v1|moodle.deadline|deadline-gone',
+      );
+
+      expect(target?.location, AppRoutes.calendar);
+      expect(target?.focusDay, isNull);
+      expect(target?.resolved, isFalse);
+    });
+  });
+
+  test('a grade change opens its privacy-safe overview route', () {
     expect(
       router.resolve('v1|grade.change|grades')?.location,
       AppRoutes.grades,

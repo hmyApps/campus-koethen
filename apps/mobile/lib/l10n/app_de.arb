@@ -1536,20 +1536,10 @@
   "@moodlePasswordRequired": {},
   "moodlePrivacyNote": "Diese Moodle-Anmeldung speichert nur ein Sitzungstoken. Dein Passwort wird dabei nicht im Moodle-Konto gespeichert; im optionalen zentralen Hochschulzugang kann es nach deiner ausdrücklichen Bestätigung getrennt sicher hinterlegt sein.",
   "@moodlePrivacyNote": {},
-  "moodleCoursesTitle": "Meine Kurse",
-  "@moodleCoursesTitle": {},
   "moodleNoCoursesTitle": "Keine Kurse",
   "@moodleNoCoursesTitle": {},
   "moodleNoCoursesMessage": "In Moodle sind derzeit keine Kurse für dich sichtbar.",
   "@moodleNoCoursesMessage": {},
-  "moodleCourseProgress": "{percent}% abgeschlossen",
-  "@moodleCourseProgress": {
-    "placeholders": {
-      "percent": {
-        "type": "int"
-      }
-    }
-  },
   "moodleLastUpdated": "Zuletzt aktualisiert: {time}",
   "@moodleLastUpdated": {
     "placeholders": {
@@ -2990,7 +2980,7 @@
   "@notificationChannelGradeChangeDescription": {},
   "notificationMoodleDeadlineTitle": "Moodle-Frist rückt näher",
   "@notificationMoodleDeadlineTitle": {},
-  "notificationMoodleDeadlineBody": "Öffne Moodle in Campus Köthen, um die Frist anzusehen.",
+  "notificationMoodleDeadlineBody": "Öffne Campus Köthen, um die Frist im Kalender anzusehen.",
   "@notificationMoodleDeadlineBody": {},
   "notificationGradeChangeTitle": "Neue Note eingetragen",
   "@notificationGradeChangeTitle": {},

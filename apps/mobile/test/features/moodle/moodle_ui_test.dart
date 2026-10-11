@@ -4,10 +4,12 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:campus_koethen/core/links/safe_link_launcher.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/moodle/data/moodle_file_downloader.dart';
 import 'package:campus_koethen/features/moodle/data/secure_moodle_token_store.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
+import 'package:campus_koethen/features/moodle/domain/moodle_assignment.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_cache.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_content.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_course.dart';
@@ -83,6 +85,8 @@ void main() {
   final DateTime t0 = DateTime.utc(2026, 7, 26, 12);
 
   group('course tabs', _courseTabTests);
+
+  group('open in browser', _openInBrowserTests);
 
   group('file download', _fileDownloadTests);
 
@@ -536,6 +540,147 @@ void main() {
     await tester.tap(find.byTooltip('Suche schließen'));
     await tester.pumpAndSettle();
     expect(find.text('Rechnernetze'), findsOneWidget);
+  });
+}
+
+/// Records what would have been handed to the OS, and hands nothing over.
+class _RecordingLinkLauncher extends SafeLinkLauncher {
+  final List<String?> opened = <String?>[];
+
+  @override
+  Future<LinkLaunchResult> open(String? rawUrl) async {
+    opened.add(rawUrl);
+    return LinkLaunchResult.opened;
+  }
+}
+
+/// Activities the app cannot show open in Moodle Web, through a token-free
+/// link to exactly moodle.hs-anhalt.de (AGENTS.md § 2).
+void _openInBrowserTests() {
+  final DateTime t0 = DateTime.utc(2026, 7, 26, 12);
+
+  Future<_RecordingLinkLauncher> pumpCourse(
+    WidgetTester tester, {
+    List<MoodleSection> sections = const <MoodleSection>[],
+    List<MoodleAssignment> assignments = const <MoodleAssignment>[],
+  }) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _RecordingLinkLauncher launcher = _RecordingLinkLauncher();
+    final FakeMoodleApiClient api = FakeMoodleApiClient()
+      ..sections = sections
+      ..assignments = assignments;
+    await pumpScreen(
+      tester,
+      const MoodleCourseScreen(courseId: 1),
+      overrides: <Override>[
+        ..._overrides(
+          api: api,
+          tokens: InMemoryMoodleTokenStore()
+            ..token = const MoodleToken(
+              value: 'tok',
+              userId: 7,
+              username: 'demo',
+            ),
+          cache: InMemoryMoodleCacheStore()
+            ..courses = <MoodleCourse>[
+              const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+            ],
+          clock: MutableClock(t0),
+        ),
+        linkLauncherProvider.overrideWithValue(launcher),
+      ],
+    );
+    await tester.pumpAndSettle();
+    return launcher;
+  }
+
+  testWidgets('an activity the app cannot show says so and opens in Moodle', (
+    WidgetTester tester,
+  ) async {
+    final _RecordingLinkLauncher launcher = await pumpCourse(
+      tester,
+      sections: <MoodleSection>[
+        const MoodleSection(
+          name: 'Woche 1',
+          modules: <MoodleModule>[
+            MoodleModule(
+              id: 4711,
+              name: 'Übungsquiz 1',
+              type: MoodleModuleType.quiz,
+              rawType: 'quiz',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(
+      find.text('Dieser Inhaltstyp wird in der App nicht unterstützt.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Übungsquiz 1'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.opened, <String>[
+      'https://moodle.hs-anhalt.de/mod/quiz/view.php?id=4711',
+    ]);
+  });
+
+  testWidgets('a label stays plain text without a link', (
+    WidgetTester tester,
+  ) async {
+    final _RecordingLinkLauncher launcher = await pumpCourse(
+      tester,
+      sections: <MoodleSection>[
+        const MoodleSection(
+          name: 'Woche 1',
+          modules: <MoodleModule>[
+            MoodleModule(
+              id: 12,
+              name: 'Hinweis',
+              type: MoodleModuleType.label,
+              rawType: 'label',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.tap(find.text('Hinweis'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Dieser Inhaltstyp wird in der App nicht unterstützt.'),
+      findsNothing,
+    );
+    expect(launcher.opened, isEmpty);
+  });
+
+  testWidgets('an assignment opens its Moodle page for handing in', (
+    WidgetTester tester,
+  ) async {
+    final _RecordingLinkLauncher launcher = await pumpCourse(
+      tester,
+      assignments: <MoodleAssignment>[
+        const MoodleAssignment(
+          id: 50,
+          courseId: 1,
+          name: 'Übungsblatt 1',
+          cmid: 815,
+        ),
+      ],
+    );
+    await tester.tap(find.text('Aufgaben'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('In Moodle im Browser öffnen'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.opened, <String>[
+      'https://moodle.hs-anhalt.de/mod/assign/view.php?id=815',
+    ]);
   });
 }
 

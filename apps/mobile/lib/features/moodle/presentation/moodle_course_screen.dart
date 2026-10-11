@@ -296,13 +296,43 @@ class _ModuleTile extends ConsumerWidget {
       );
     }
 
-    // A description-only module (label/page snippet).
+    // A label is text placed on the course page itself; there is nothing
+    // further to open.
+    if (module.type == MoodleModuleType.label) {
+      return ListTile(
+        leading: Icon(_iconFor(module.type)),
+        title: Text(module.name),
+        subtitle: module.description.isEmpty
+            ? null
+            : Text(module.description, style: text.bodySmall),
+      );
+    }
+
+    // Any other activity (quiz, forum, page, …) the app does not render. It
+    // says so and opens the activity's own page in Moodle Web — a token-free
+    // link to exactly moodle.hs-anhalt.de, through the safe launcher.
+    final Uri? webLink = ref
+        .read(moodleProfileProvider)
+        .moduleWebUri(modName: module.rawType, cmid: module.id);
     return ListTile(
       leading: Icon(_iconFor(module.type)),
       title: Text(module.name),
-      subtitle: module.description.isEmpty
+      subtitle: Text(
+        <String>[
+          if (module.description.isNotEmpty) module.description,
+          l10n.moodleModuleUnsupported,
+        ].join('\n'),
+        style: text.bodySmall,
+      ),
+      trailing: webLink == null
           ? null
-          : Text(module.description, style: text.bodySmall),
+          : Tooltip(
+              message: l10n.moodleOpenInBrowser,
+              child: const Icon(AppIcons.open_in_new),
+            ),
+      onTap: webLink == null
+          ? null
+          : () => _openExternal(context, ref, webLink.toString()),
     );
   }
 
@@ -315,22 +345,22 @@ class _ModuleTile extends ConsumerWidget {
     MoodleModuleType.label => AppIcons.label_outline,
     _ => AppIcons.circle_outlined,
   };
+}
 
-  Future<void> _openExternal(
-    BuildContext context,
-    WidgetRef ref,
-    String url,
-  ) async {
-    final AppLocalizations l10n = context.l10n;
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    final LinkLaunchResult result = await ref
-        .read(linkLauncherProvider)
-        .open(url);
-    if (result != LinkLaunchResult.opened) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.moodleOpenLinkFailed)),
-      );
-    }
+/// Hands [url] to the safe launcher — never with a token — and says so when
+/// the OS could not open it.
+Future<void> _openExternal(
+  BuildContext context,
+  WidgetRef ref,
+  String url,
+) async {
+  final AppLocalizations l10n = context.l10n;
+  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+  final LinkLaunchResult result = await ref
+      .read(linkLauncherProvider)
+      .open(url);
+  if (result != LinkLaunchResult.opened) {
+    messenger.showSnackBar(SnackBar(content: Text(l10n.moodleOpenLinkFailed)));
   }
 }
 
@@ -518,15 +548,19 @@ class _AssignmentsTab extends StatelessWidget {
   }
 }
 
-class _AssignmentTile extends StatelessWidget {
+class _AssignmentTile extends ConsumerWidget {
   const _AssignmentTile({required this.assignment, required this.locale});
 
   final MoodleAssignment assignment;
   final String locale;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
+    // Handing in happens in Moodle Web; the app only reads (AGENTS.md § 2).
+    final Uri? webLink = ref
+        .read(moodleProfileProvider)
+        .moduleWebUri(modName: 'assign', cmid: assignment.cmid);
     final TextTheme text = Theme.of(context).textTheme;
     final String due = assignment.dueDate == null
         ? l10n.moodleAssignmentNoDue
@@ -550,6 +584,12 @@ class _AssignmentTile extends StatelessWidget {
             status: assignment.status,
             dueDate: assignment.dueDate,
           ),
+          if (webLink != null)
+            TextButton.icon(
+              onPressed: () => _openExternal(context, ref, webLink.toString()),
+              icon: const Icon(AppIcons.open_in_new),
+              label: Text(l10n.moodleOpenInBrowser),
+            ),
           const Divider(height: AppSpacing.lg),
         ],
       ),

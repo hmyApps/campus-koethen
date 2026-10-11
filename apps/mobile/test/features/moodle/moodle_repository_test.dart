@@ -126,6 +126,35 @@ void main() {
       },
     );
 
+    test('an empty deadline response keeps the cache but marks it '
+        'unconfirmed', () async {
+      // Moodle drops an action event once it is submitted, so "nothing left"
+      // arrives as an empty list. The last good list stays (AGENTS.md § 4),
+      // but it is no longer what Moodle reports and must not drive reminders.
+      cache.deadlines = <MoodleDeadline>[deadline(1)];
+      api.courses = <MoodleCourse>[
+        const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+      ];
+      api.deadlines = <MoodleDeadline>[];
+
+      final MoodleOverview overview = await repo.refreshOverview();
+
+      expect(cache.deadlines, hasLength(1));
+      expect(overview.deadlines, hasLength(1));
+      expect(overview.deadlinesConfirmed, isFalse);
+      expect(cache.marks.deadlinesConfirmed, isFalse);
+    });
+
+    test('a non-empty deadline response confirms the list again', () async {
+      cache.marks = const MoodleSyncMarks(deadlinesConfirmed: false);
+      api.deadlines = <MoodleDeadline>[deadline(2)];
+
+      final MoodleOverview overview = await repo.refreshOverview();
+
+      expect(overview.deadlinesConfirmed, isTrue);
+      expect(cache.marks.deadlinesConfirmed, isTrue);
+    });
+
     test('a failed fetch throws and leaves the cache untouched', () async {
       cache.courses = <MoodleCourse>[
         const MoodleCourse(id: 1, fullName: 'Alter Kurs'),
@@ -195,6 +224,30 @@ void main() {
         expect(await repo.cachedCourseDetail(1), isNotNull);
       },
     );
+
+    test('a draft saved after the due date is not flagged late', () async {
+      // "Late" describes a submission. A draft is not one, and the overdue
+      // chip already says what is wrong with it.
+      cache.courses = <MoodleCourse>[
+        const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+      ];
+      final DateTime due = DateTime.fromMillisecondsSinceEpoch(
+        1704672000 * 1000,
+      );
+      api.assignments = <MoodleAssignment>[
+        MoodleAssignment(id: 51, courseId: 1, name: 'Entwurf', dueDate: due),
+      ];
+      api.statuses = <int, MoodleSubmissionStatus>{
+        51: MoodleSubmissionStatus(
+          state: MoodleSubmissionState.draft,
+          submittedAt: due.add(const Duration(days: 1)),
+        ),
+      };
+
+      final MoodleCourseDetail detail = await repo.refreshCourseDetail(1);
+
+      expect(detail.assignments.single.status!.isLate, isFalse);
+    });
   });
 
   group('request concurrency', () {

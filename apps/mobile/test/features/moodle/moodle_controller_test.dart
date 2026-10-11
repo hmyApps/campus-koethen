@@ -225,6 +225,41 @@ void main() {
       expect(s.deadlines, hasLength(1));
     });
 
+    test('an unconfirmed deadline list is kept but not offered for '
+        'reminders, also after a restart', () async {
+      final api = FakeMoodleApiClient()
+        ..courses = <MoodleCourse>[course(1)]
+        ..deadlines = <MoodleDeadline>[];
+      final cache = InMemoryMoodleCacheStore()
+        ..deadlines = <MoodleDeadline>[deadline(9)];
+      final c = await connected(
+        api: api,
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+
+      await c.read(moodleControllerProvider.notifier).refresh();
+
+      final MoodleOverviewState s = c
+          .read(moodleControllerProvider)
+          .requireValue;
+      expect(s.deadlines, hasLength(1));
+      expect(s.deadlinesConfirmed, isFalse);
+      expect(s.reminderDeadlines, isEmpty);
+
+      // A fresh start reads the flag back from the sync marks.
+      final restarted = await connected(
+        api: api,
+        cache: cache,
+        clock: MutableClock(t0),
+      );
+      final MoodleOverviewState again = restarted
+          .read(moodleControllerProvider)
+          .requireValue;
+      expect(again.deadlines, hasLength(1));
+      expect(again.reminderDeadlines, isEmpty);
+    });
+
     test(
       'an attempt younger than one hour prevents an automatic call',
       () async {

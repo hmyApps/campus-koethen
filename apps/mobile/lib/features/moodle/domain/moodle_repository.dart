@@ -16,10 +16,18 @@ import 'moodle_downloader.dart';
 /// The course list plus upcoming deadlines fetched together on a sync.
 @immutable
 class MoodleOverview {
-  const MoodleOverview({required this.courses, required this.deadlines});
+  const MoodleOverview({
+    required this.courses,
+    required this.deadlines,
+    this.deadlinesConfirmed = true,
+  });
 
   final List<MoodleCourse> courses;
   final List<MoodleDeadline> deadlines;
+
+  /// False when [deadlines] is the kept previous list because Moodle answered
+  /// with an empty one; see `MoodleSyncMarks.deadlinesConfirmed`.
+  final bool deadlinesConfirmed;
 }
 
 /// Everything shown on a course detail page.

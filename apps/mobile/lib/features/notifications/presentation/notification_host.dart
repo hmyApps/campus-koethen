@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../app/app_routes.dart';
@@ -21,6 +22,7 @@ import '../../mail/application/mail_sync_controller.dart';
 import '../../mail/domain/mail_folder.dart';
 import '../application/daily_summary_providers.dart';
 import '../application/event_reminder_candidates.dart';
+import '../application/moodle_deadline_candidates.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_settings_controller.dart';
 import '../application/notification_tap_router.dart';
@@ -273,6 +275,17 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
       );
       if (!mounted) return;
     }
+    // The same for a Moodle deadline: its opaque key is resolved against the
+    // local deadline cache, which a cold start has not read yet.
+    DateTime? moodleDeadlineDay;
+    if (parsed != null &&
+        parsed.category == NotificationCategory.moodleDeadline) {
+      moodleDeadlineDay = await loadMoodleDeadlineDayForNotification(
+        ProviderScope.containerOf(context, listen: false),
+        parsed.target,
+      );
+      if (!mounted) return;
+    }
     // Deferred to the next frame: a cold start resolves the launch payload
     // before the router has built its first route, and pushing into a
     // navigator that does not exist yet is how a notification tap turns into
@@ -283,6 +296,7 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         preferredCanteenSlug: ref.read(settingsProvider).preferredCanteenSlug,
         findCalendarEntry: (String id) =>
             eventEntry ?? ref.read(calendarEntryForNotificationProvider(id)),
+        findMoodleDeadlineDay: (String _) => moodleDeadlineDay,
       ).resolve(payload);
       if (target == null) return;
 
@@ -319,7 +333,8 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
             .read(selectedMailboxProvider.notifier)
             .select(const MailFolder.inbox());
       }
-      ref.read(appRouterProvider).go(target.location);
+      final GoRouter router = ref.read(appRouterProvider);
+      router.go(target.location);
 
       if (!target.resolved) {
         final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
@@ -336,9 +351,16 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
       // One more frame: `go` has been called but the calendar has not built
       // yet, and a sheet pushed onto the navigator before it does would sit
       // above the previous screen.
+      //
+      // The sheet goes onto the router's root navigator. This host sits in
+      // the `MaterialApp.router` builder, above that navigator, so its own
+      // context has none to push onto (F-08).
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        unawaited(showCalendarEntrySheet(context, entry));
+        final BuildContext? navigatorContext =
+            router.routerDelegate.navigatorKey.currentContext;
+        if (navigatorContext == null || !navigatorContext.mounted) return;
+        unawaited(showCalendarEntrySheet(navigatorContext, entry));
       });
     });
     // After the wait above the app may be idle with no frame pending; make

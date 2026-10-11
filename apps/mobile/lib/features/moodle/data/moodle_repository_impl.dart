@@ -181,6 +181,12 @@ class MoodleRepositoryImpl implements MoodleRepository {
       fetchedDeadlines,
       oldDeadlines,
     );
+    // Moodle drops an action event once it is submitted, so an empty list is
+    // also how "the last open assignment was handed in" arrives. The kept list
+    // stays visible, but it is no longer confirmed and must not keep N4
+    // reminders or the N2 count alive for work that is already done.
+    final bool deadlinesConfirmed =
+        fetchedDeadlines.isNotEmpty || (oldDeadlines?.isEmpty ?? true);
 
     _ensureCurrent(lease);
     await _cache.writeCourses(effectiveCourses);
@@ -191,12 +197,19 @@ class MoodleRepositoryImpl implements MoodleRepository {
     final DateTime now = _clock.now();
     final MoodleSyncMarks marks = await _cache.readMarks();
     _ensureCurrent(lease);
-    await _cache.writeMarks(marks.copyWith(lastAttempt: now, lastSuccess: now));
+    await _cache.writeMarks(
+      marks.copyWith(
+        lastAttempt: now,
+        lastSuccess: now,
+        deadlinesConfirmed: deadlinesConfirmed,
+      ),
+    );
     _ensureCurrent(lease);
 
     return MoodleOverview(
       courses: effectiveCourses,
       deadlines: effectiveDeadlines,
+      deadlinesConfirmed: deadlinesConfirmed,
     );
   }
 
@@ -414,8 +427,13 @@ class MoodleRepositoryImpl implements MoodleRepository {
   ) {
     final DateTime? due = assignment.dueDate;
     final DateTime? submitted = status.submittedAt;
+    // Only a real submission can be late. A draft's `timemodified` is just
+    // the last edit, and the overdue chip already covers a missing hand-in.
     final bool late =
-        due != null && submitted != null && submitted.isAfter(due);
+        status.state == MoodleSubmissionState.submitted &&
+        due != null &&
+        submitted != null &&
+        submitted.isAfter(due);
     return late ? status.copyWith(isLate: true) : status;
   }
 }

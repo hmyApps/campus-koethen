@@ -19,7 +19,7 @@ OpenAPI-Vertrag sind **unverändert**.
 
 ```text
 domain/          reine Werte und Verträge, ohne Flutter und ohne Plugin
-  notification_category.dart      vier Kategorien (N1/N2/N3 geplant, N4 sofort)
+  notification_category.dart      sechs Kategorien (N1–N4 geplant, N5/N6 sofort)
   notification_request.dart       ein Kandidat: Kategorie, Ziel, Auslöser, Text, Sichtbarkeit
   planned_notification.dart       ein eingeplanter Eintrag + der 31-Bit-Systemschlüssel
   notification_plan.dart          Sollzustand + Diagnose (Zähler, keine Inhalte)
@@ -30,7 +30,9 @@ domain/          reine Werte und Verträge, ohne Flutter und ohne Plugin
   notification_gateway.dart       Port zum Betriebssystem (+ Noop-Variante)
 
 application/
+  event_reminder_candidates.dart  N1: öffentliche und gemerkte Events → Kandidaten
   canteen_favourite_candidates.dart  N3: Speiseplan × Favoriten → Kandidaten (reine Funktion)
+  moodle_deadline_candidates.dart N4: bestätigte Moodle-Fristen → Kandidaten, Tap-Auflösung
   notification_planner.dart       REINE FUNKTION: Kandidaten → vollständiger Sollzustand
   notification_scheduler.dart     serialisierte, vollständige Neuplanung
   notification_settings_controller.dart
@@ -50,7 +52,7 @@ presentation/
   notification_host.dart             Lebenszyklus, Kanäle, Anwenden des Plans, Tap-Routing
 ```
 
-### 1.0.1 Neue E-Mail (N4)
+### 1.0.1 Neue E-Mail (N6)
 
 `mail.new` ist keine vorausgeplante Erinnerung und belegt keinen Platz im 60er-Planungsbudget.
 Solange die App im Vordergrund ist, meldet IMAP IDLE eine mögliche Änderung. Der normale
@@ -58,7 +60,7 @@ Mail-Sync bestätigt anschließend mindestens eine bisher unbekannte UID; erst d
 `NotificationHost` `showNow(...)` auf. Der erste Inbox-Sync setzt nur die Ausgangsbasis.
 
 Die Kategorie unterliegt demselben globalen Opt-in, ihrem eigenen Schalter und der
-Betriebssystemberechtigung wie N1–N3. Titel und Text sind neutral und enthalten weder Absender noch
+Betriebssystemberechtigung wie N1–N5. Titel und Text sind neutral und enthalten weder Absender noch
 Betreff; der validierte Payload enthält nur die numerische IMAP-UID und öffnet den Posteingang.
 Account-Wipe beziehungsweise Kontowechsel sind über die Mail-Session-Generation gegen verspätete
 Ereignisse abgesichert. Bei pausierter oder geschlossener App ist keine Live-Zustellung zugesagt;
@@ -155,6 +157,9 @@ Moodle-Verbindung (am Gate `MoodleScreen`, weil der Setup-Screen im selben Momen
 | `event.reminder`    | `n1:<CalendarEntry.id>`         | `v1\|event.reminder\|<CalendarEntry.id>`                      |
 | `daily.summary`     | `n2:<YYYY-MM-DD>`               | `v1\|daily.summary\|<YYYY-MM-DD>`                             |
 | `canteen.favourite` | `n3:<canteenSlug>:<YYYY-MM-DD>` | `v1\|canteen.favourite\|<slug>:<YYYY-MM-DD>[:<Gerichtsname>]` |
+| `moodle.deadline`   | `n4:deadline-<Hash>`            | `v1\|moodle.deadline\|deadline-<Hash>`                        |
+| `grade.change`      | `n5:latest`                     | `v1\|grade.change\|grades`                                    |
+| `mail.new`          | `n6:<IMAP-UID>`                 | `v1\|mail.new\|<IMAP-UID>`                                    |
 
 Schlüssel, Payload und die vom Betriebssystem verlangte Ganzzahl werden **alle drei** aus
 Kategorie und Ziel abgeleitet und können deshalb nicht auseinanderlaufen. Der optionale
@@ -166,9 +171,21 @@ Doppelpunkt enthalten. Ein Name mit `|` verliert das Gerichtsziel, nicht den Hin
 übernommen, nicht neu gebildet. Die Ganzzahl ist ein deterministischer 31-Bit-FNV-1a-Hash; eine
 Kollision wäre folgenlos, weil ohnehin vollständig neu geplant wird.
 
-**Kein Payload trägt eine Moodle-Kennung oder einen anderen personenbezogenen Bezeichner.** Nach
-P5 gibt es keine Moodle- und keine Stundenplan-Einzelhinweise, und damit auch keine Kategorie, die
-so etwas bräuchte. Ein Test hält das fest.
+**Kein Payload trägt eine Moodle-Kennung oder einen anderen personenbezogenen Bezeichner.** Die
+Moodle-Fristerinnerung (N4) nennt als Ziel nur einen undurchsichtigen FNV-1a-Hash aus Frist-ID und
+Fälligkeit (`deadline-<Hash>`); Titel, Kurs und Moodle-ID erscheinen weder im Text noch im
+Payload. Ein Tap löst den Hash ausschließlich gegen den lokalen, verschlüsselten Fristen-Cache auf
+(`loadMoodleDeadlineDayForNotification`, ebenfalls höchstens `kNotificationTapSourceTimeout` lang
+wartend) und öffnet den Kalender in der Tagesansicht am Fälligkeitstag — die Moodle-Kursliste zeigt
+keine Fristen. Ist die Frist nicht mehr bekannt, bleibt es bei `/calendar` plus dezentem Hinweis.
+Stundenplan-Einzelhinweise gibt es nach P5 weiterhin nicht. N5 (`grade.change`) trägt das feste
+Ziel `grades`, N6 (`mail.new`) nur die numerische IMAP-UID.
+
+N4 und die Fristenzahl der Tagesübersicht (N2) lesen nur eine **bestätigte** Fristenliste
+(`MoodleOverviewState.reminderDeadlines`). Moodle lässt eine Frist nach der Abgabe aus seiner Liste
+fallen; liefert es deshalb eine leere Liste, bleibt der letzte Bestand nach AGENTS.md § 4 zwar im
+Kalender sichtbar, ist aber als unbestätigt markiert (`MoodleSyncMarks.deadlinesConfirmed`, auch
+über einen Neustart) und erzeugt keine Erinnerung mehr.
 
 ### 1.4 N1 — `event.reminder`, eine lokal konfigurierbare Erinnerung je Event
 
@@ -206,7 +223,9 @@ dieselbe `DeliveryWindow`, können also nicht auseinanderlaufen.
 
 **Tap.** Der Payload trägt die `CalendarEntry.id` und sonst nichts. `NotificationTapRouter` löst
 sie über den zusammengeführten Bestand auf, fokussiert den Tag **des Eintrags** (nicht einen Tag
-aus dem Payload, den es dort nicht gibt) und öffnet `showCalendarEntrySheet`. Löst sie nicht auf,
+aus dem Payload, den es dort nicht gibt) und öffnet `showCalendarEntrySheet` auf dem
+Root-Navigator des GoRouters (`routerDelegate.navigatorKey`) — der `NotificationHost` sitzt im
+`MaterialApp.router`-Builder **oberhalb** dieses Navigators und hat selbst keinen. Löst sie nicht auf,
 bleibt es bei `/calendar` plus dezentem Hinweis. Vor dem Auflösen wartet der Tap
 (`loadCalendarEntryForNotification`) auf gemerkte Events, Kalenderkatalog und die Monate des
 Horizonts, höchstens `kNotificationTapSourceTimeout` (5 s) lang: Bei einem Kaltstart aus der
@@ -221,6 +240,16 @@ einen Abruf an, und § 7.2 sagt „löst nie einen Netzabruf aus". Der laufende 
 Kalender ohnehin geholt; der Folgemonat ist der Unterschied. Wer die Regel wörtlich will, braucht
 einen reinen Cache-Lesepfad in `CachedEndpoint` — der wäre allerdings vom Abrufzyklus entkoppelt
 und verlöre den Auslöser „nach dem nächsten erfolgreichen Abruf neu planen".
+
+### 1.4a Zeitzone
+
+Geplant wird in der IANA-Zone des Geräts (`DeviceTimeZoneResolver`). Nennt das Gerät keine oder
+eine der gebündelten Datenbank unbekannte Zone, gilt sein aktueller UTC-Versatz — aber stets unter
+einem **echten** tz-Namen (`locationForDeviceOffset`): `UTC`, `Etc/GMT∓h` für ganze Stunden, sonst
+eine Region mit genau diesem Versatz (bevorzugt ohne Sommerzeit). Der Name des Ortes geht als
+`timeZoneName` an die native Seite von flutter_local_notifications 22.3.0 und landet dort in
+`java.time.ZoneId.of` (Android) beziehungsweise `NSTimeZone timeZoneWithName:` (iOS); ein
+erfundener Name wie das frühere `device-offset-<Minuten>` ließ dort jede Planung still scheitern.
 
 ### 1.5 Diagnose
 
@@ -241,7 +270,7 @@ Gerichtsname. Ein ausgeschöpftes Budget ist so ein Zähler und keine stille Kü
 | Terminierung             | `zonedSchedule(..., androidScheduleMode: inexactAllowWhileIdle)`                                                                                        |
 | Receiver                 | `ScheduledNotificationReceiver` und `ScheduledNotificationBootReceiver`, beide `exported="false"`                                                       |
 | Desugaring               | `isCoreLibraryDesugaringEnabled = true` + `desugar_jdk_libs:2.1.4` — Pflicht ab Plugin-Version 10, sonst schlägt bereits der Build fehl                 |
-| Kanäle                   | vier, je einer für N1/N2/N3/N4, angelegt bevor etwas geplant oder sofort angezeigt wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht   |
+| Kanäle                   | sechs, je einer für N1–N6, angelegt bevor etwas geplant oder sofort angezeigt wird. Ein Kanal ist **kein** Gruppenschlüssel und berührt P8 nicht        |
 | Kanalnamen               | aus den ARB-Dateien; ein Sprachwechsel registriert die Kanäle unter derselben Id neu, wodurch Android Name und Beschreibung übernimmt                   |
 | Kleines Symbol           | `@drawable/ic_notification`, einfarbig weiß und voll deckend — ein mehrfarbiges Icon stellt Android als graues Quadrat dar                              |
 | Sperrbildschirm          | `visibility: public` für öffentliche Inhalte, `private` für neutrale (P10). Beides greift nur unter Nutzereinstellungen, die die App nicht kontrolliert |
@@ -301,7 +330,7 @@ ohne Gerät prüfbar ist (§ 3); die Matrix unten steht weiterhin offen.
 | #   | Fall                                                             | Erwartet                                                                                               |
 | --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | 1   | Erster Start, Android 13+ und iOS                                | **kein** Systemdialog, keine Benachrichtigung vorgemerkt                                               |
-| 2   | Opt-in über einen kontextuellen Einstiegspunkt                   | erst das In-App-Sheet, dann der Systemdialog; danach sind alle vier Kategorien an                      |
+| 2   | Opt-in über einen kontextuellen Einstiegspunkt                   | erst das In-App-Sheet, dann der Systemdialog; danach sind alle sechs Kategorien an                     |
 | 3   | „Nicht jetzt" im Sheet                                           | kein Systemdialog, Zustand bleibt „nie gefragt", kein erneutes Fragen am selben Einstiegspunkt         |
 | 4   | Berechtigung im Dialog abgelehnt                                 | Hauptschalter aus, Banner mit Weg in die Systemeinstellungen, **kein** erneuter Dialog                 |
 | 5   | Berechtigung nachträglich in den Systemeinstellungen entzogen    | beim Zurückkehren erkannt: Banner erscheint, vorgemerkte Einträge werden entfernt                      |

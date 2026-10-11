@@ -112,6 +112,14 @@ void main() {
     final MoodleSyncMarks back = decodeMarks(encodeMarks(marks));
     expect(back.lastAttempt, marks.lastAttempt);
     expect(back.lastSuccess, marks.lastSuccess);
+    expect(back.deadlinesConfirmed, isTrue);
+  });
+
+  test('sync marks keep an unconfirmed deadline list across a restart', () {
+    const MoodleSyncMarks marks = MoodleSyncMarks(deadlinesConfirmed: false);
+    expect(decodeMarks(encodeMarks(marks)).deadlinesConfirmed, isFalse);
+    // Marks written before the flag existed describe a confirmed list.
+    expect(decodeMarks('{"lastAttempt":null}').deadlinesConfirmed, isTrue);
   });
 
   test(
