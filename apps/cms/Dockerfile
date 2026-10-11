@@ -93,7 +93,12 @@ ENV NODE_ENV=production \
 WORKDIR /opt/app
 
 # The node:* images already ship an unprivileged `node` user (uid 1000).
-COPY --from=build --chown=node:node /opt/deploy ./
+#
+# Code, dependencies and the admin bundle are copied ROOT-owned (world-readable,
+# not writable by `node`): the running process must not be able to rewrite its
+# own code. Only the directories Strapi really writes at runtime are handed to
+# `node` below.
+COPY --from=build /opt/deploy ./
 
 # `pnpm deploy` packs the package the way `npm pack` would, so it skips
 # git-ignored paths — which is exactly where `strapi build` puts its output.
@@ -101,18 +106,24 @@ COPY --from=build --chown=node:node /opt/deploy ./
 # Vite client entry (.strapi/client) are therefore copied explicitly. Without
 # these the container would have no admin UI and would try to rebuild at
 # startup.
-COPY --from=build --chown=node:node /repo/apps/cms/dist ./dist
-COPY --from=build --chown=node:node /repo/apps/cms/.strapi ./.strapi
+COPY --from=build /repo/apps/cms/dist ./dist
+COPY --from=build /repo/apps/cms/.strapi ./.strapi
 
-# Uploads live on a persistent volume; the directory must exist and be owned by
-# the runtime user before the volume is mounted over it.
+# The ONLY runtime-writable paths inside /opt/app:
 #
-# `.tmp` is created for the same reason: /opt/app itself stays root-owned so the
-# application cannot rewrite its own code, but Strapi needs a scratch directory
-# when it boots programmatically — which is exactly how `rooms-sync` starts it.
-# Without this the documented production command dies with EACCES.
+#  - public/uploads: media uploads, on a persistent volume. The directory must
+#    exist and be owned by the runtime user before the volume is mounted over
+#    it. The rest of public/ (robots.txt) stays root-owned.
+#  - .tmp: Strapi's scratch directory when it boots programmatically — which is
+#    exactly how `rooms-sync` starts it. Without it the documented production
+#    command dies with EACCES.
+#
+# Everything else Strapi writes at runtime goes outside /opt/app: upload
+# processing uses os.tmpdir() (/tmp) and the update notifier keeps its state in
+# the `node` user's home. database/migrations ships with the image, so Strapi's
+# ensureDir on it does not need to create anything.
 RUN mkdir -p /opt/app/public/uploads /opt/app/.tmp \
- && chown -R node:node /opt/app/public /opt/app/.tmp
+ && chown -R node:node /opt/app/public/uploads /opt/app/.tmp
 
 # Room-sync runtime contract.
 #

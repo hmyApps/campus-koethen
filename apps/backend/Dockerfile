@@ -83,13 +83,18 @@ ENV NODE_ENV=production \
 WORKDIR /opt/app
 
 # node:alpine already ships an unprivileged `node` user (uid 1000).
-COPY --from=build --chown=node:node /opt/deploy/node_modules ./node_modules
-COPY --from=build --chown=node:node /opt/deploy/dist ./dist
-COPY --from=build --chown=node:node /opt/deploy/package.json ./package.json
+#
+# Everything is copied ROOT-owned (world-readable, not writable by `node`): the
+# API, the worker and the migration task only read their code, so the running
+# process cannot rewrite it. Nothing under /opt/app is written at runtime; logs
+# go to stdout and the Prisma schema engine is installed at build time.
+COPY --from=build /opt/deploy/node_modules ./node_modules
+COPY --from=build /opt/deploy/dist ./dist
+COPY --from=build /opt/deploy/package.json ./package.json
 # Migrations travel with the image so `prisma migrate deploy` can be run as a
 # one-off task against the server database.
-COPY --from=build --chown=node:node /opt/deploy/prisma ./prisma
-COPY --from=build --chown=node:node /opt/deploy/prisma.config.ts ./prisma.config.ts
+COPY --from=build /opt/deploy/prisma ./prisma
+COPY --from=build /opt/deploy/prisma.config.ts ./prisma.config.ts
 
 # A deployment image that carries migrations but cannot execute them is not a
 # deployable artefact. Keep this assertion in the image build itself so the
