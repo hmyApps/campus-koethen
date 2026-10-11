@@ -213,6 +213,26 @@ void main() {
     expect(gateway.revokeCalls, 0);
     expect(store.value, isNull);
   });
+
+  test('disconnect still wipes the local token when the central identity '
+      'cannot be read', () async {
+    final _MemoryCredentialStore store = _MemoryCredentialStore()
+      ..value = _credential;
+    final _Gateway gateway = _Gateway();
+    final ProviderContainer container = _container(
+      store: store,
+      gateway: gateway,
+      identityStore: _MemoryIdentityStore(readFails: true),
+    );
+    addTearDown(container.dispose);
+    await container.read(hsaKiAccountControllerProvider.future);
+
+    await container.read(hsaKiAccountControllerProvider.notifier).disconnect();
+
+    expect(gateway.revokeCalls, 0);
+    expect(store.value, isNull);
+    expect(container.read(hsaKiAccountControllerProvider).value, isNull);
+  });
 }
 
 ProviderContainer _container({
@@ -249,10 +269,16 @@ class _MemoryCredentialStore implements HsaKiCredentialStore {
 }
 
 class _MemoryIdentityStore implements UniversityIdentityStore {
+  _MemoryIdentityStore({this.readFails = false});
+
+  final bool readFails;
   UniversityIdentity? value;
 
   @override
-  Future<UniversityIdentity?> read() async => value;
+  Future<UniversityIdentity?> read() async {
+    if (readFails) throw StateError('secure store unavailable');
+    return value;
+  }
 
   @override
   Future<void> write(UniversityIdentity identity) async => value = identity;
