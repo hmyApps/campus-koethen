@@ -160,6 +160,18 @@ export class PostsService {
     }
   }
 
+  /**
+   * A post is reachable only through an active channel — the detail route
+   * applies {@link ACTIVE_CHANNEL_FILTER} — so naming a channel explicitly
+   * must not bring back posts of a deactivated one: the feed would link to a
+   * detail that answers 404.
+   */
+  private static channelFilter(channels: string[]): Record<string, unknown> {
+    return channels.length > 0
+      ? { slug: { $in: channels }, ...ACTIVE_CHANNEL_FILTER }
+      : ACTIVE_CHANNEL_FILTER;
+  }
+
   private static toApiError(error: unknown): ApiError {
     if (error instanceof StrapiRequestError) {
       return new ApiError(error.kind === 'timeout' ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_UNAVAILABLE');
@@ -341,11 +353,7 @@ export class PostsService {
       $and: validityFilter(new Date().toISOString()),
     };
 
-    if (query.channels.length > 0) {
-      filters['channels'] = { slug: { $in: query.channels } };
-    } else {
-      filters['channels'] = ACTIVE_CHANNEL_FILTER;
-    }
+    filters['channels'] = PostsService.channelFilter(query.channels);
 
     if (query.tags.length > 0) {
       filters['tag'] = { slug: { $in: query.tags }, isActive: { $eq: true } };
@@ -496,11 +504,7 @@ export class PostsService {
       ],
     };
 
-    if (query.channels.length > 0) {
-      filters['channels'] = { slug: { $in: query.channels } };
-    } else {
-      filters['channels'] = ACTIVE_CHANNEL_FILTER;
-    }
+    filters['channels'] = PostsService.channelFilter(query.channels);
 
     const baseQuery = {
       filters,

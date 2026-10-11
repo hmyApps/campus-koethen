@@ -575,6 +575,21 @@ describe('PostsService', () => {
 
         expect(result.data.map((p) => p.slug).sort()).toEqual(['open-event', 'windowed-event']);
       });
+
+      it('never lists an event of an inactive channel, even when that channel is named', async () => {
+        const { client } = strapiHolding([
+          eventPost('orphaned-event', { channels: [inactiveChannel] }),
+          eventPost('current-event'),
+        ]);
+
+        const result = await new PostsService(client).getEvents(de, {
+          ...may2030,
+          channels: ['retired', 'campus-news'],
+          channelsParamPresent: true,
+        });
+
+        expect(result.data.map((p) => p.slug)).toEqual(['current-event']);
+      });
     });
 
     describe('GET /v1/posts', () => {
@@ -595,6 +610,25 @@ describe('PostsService', () => {
           pageSize: 20,
         });
 
+        expect(result.data.map((p) => p.slug)).toEqual(['current']);
+      });
+
+      it('never lists a post of an inactive channel, even when that channel is named', async () => {
+        const { client } = strapiHolding([
+          post('orphaned', { channels: [inactiveChannel] }),
+          post('current', { channels: [activeChannel] }),
+        ]);
+
+        const result = await new PostsService(client).getPosts(de, {
+          channels: ['retired', 'campus-news'],
+          channelsParamPresent: true,
+          tags: [],
+          tagsParamPresent: false,
+          page: 1,
+          pageSize: 20,
+        });
+
+        // The detail route refuses `orphaned`; the feed must not link to it.
         expect(result.data.map((p) => p.slug)).toEqual(['current']);
       });
     });

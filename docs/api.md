@@ -242,8 +242,9 @@ in Strapi angelegter Tag erscheint hier — und damit in der App — ohne Codeä
 | ------------------------------ | ------------------------------------- |
 | Parameter **fehlt**            | alle aktiven Kanäle                   |
 | `?channels=` (vorhanden, leer) | **bewusst keine** Kanäle ⇒ `data: []` |
-| `?channels=campus-news`        | nur dieser Kanal                      |
+| `?channels=campus-news`        | nur dieser Kanal, sofern er aktiv ist |
 | unbekannter Slug enthalten     | wird ignoriert, kein Fehler           |
+| inaktiver Slug enthalten       | wird ignoriert, kein Fehler           |
 | mehr als 25 Slugs              | `400 VALIDATION_FAILED`               |
 
 Der Unterschied zwischen „fehlt“ und „leer“ ist wichtig: Deaktiviert der Nutzer **alle** Kanäle,
