@@ -48,6 +48,8 @@ void main() {
     Map<String, dynamic>? catalogueMeta,
     bool lateEvent = false,
     bool truncatedRange = false,
+    bool truncatedMonth = false,
+    bool catalogueFails = false,
     bool groupEndpointFails = false,
     bool timetableEntry = false,
     KeyValueStore? store,
@@ -56,6 +58,9 @@ void main() {
     final FakeHttpAdapter adapter = FakeHttpAdapter((RequestOptions options) {
       requests.add(options);
       if (options.path == '/calendars') {
+        if (catalogueFails) {
+          return const FakeHttpResponse(<String, dynamic>{}, statusCode: 500);
+        }
         return FakeHttpResponse(
           envelope(<Object>[_calendar], meta: catalogueMeta),
         );
@@ -123,6 +128,33 @@ void main() {
             },
           ]),
         );
+      }
+      if (truncatedMonth && options.path == '/calendars/events') {
+        final DateTime from = DateTime.parse(
+          options.queryParameters['from'] as String,
+        );
+        final DateTime to = DateTime.parse(
+          options.queryParameters['to'] as String,
+        );
+        if (to.difference(from).inDays > 25) {
+          return FakeHttpResponse(
+            envelope(<Object>[], meta: <String, dynamic>{'truncated': true}),
+          );
+        }
+        if (from.isAfter(DateTime(2026, 9, 10))) {
+          return FakeHttpResponse(
+            envelope(<Object>[
+              <String, dynamic>{
+                'id': 'month-split-event',
+                'calendarId': 'cal-1',
+                'calendarSlug': 'campus',
+                'title': 'Monatstermin nach Teilung',
+                'start': '2026-09-28T09:00:00.000Z',
+                'end': '2026-09-28T10:00:00.000Z',
+              },
+            ]),
+          );
+        }
       }
       if (truncatedRange && options.path == '/calendars/events') {
         if (options.queryParameters['from'] == '2026-09-24' &&
@@ -226,6 +258,48 @@ void main() {
       reason: 'both days ask for the identical window',
     );
   });
+
+  test(
+    'the month waits for the catalogue instead of returning nothing',
+    () async {
+      final ProviderContainer c = container();
+
+      await c.read(
+        publicCalendarMonthEntriesProvider(DateTime(2026, 5, 4)).future,
+      );
+
+      expect(eventRequests(), hasLength(1));
+    },
+  );
+
+  test(
+    'a failed catalogue surfaces as a month error, not as no events',
+    () async {
+      final ProviderContainer c = container(catalogueFails: true);
+
+      await expectLater(
+        c.read(publicCalendarMonthEntriesProvider(DateTime(2026, 5, 4)).future),
+        throwsA(anything),
+      );
+    },
+  );
+
+  test(
+    'the month splits a truncated response instead of dropping events',
+    () async {
+      final ProviderContainer c = container(truncatedMonth: true);
+      await loadCatalogue(c);
+
+      final List<CalendarEntry> entries = await c.read(
+        publicCalendarMonthEntriesProvider(DateTime(2026, 9, 15)).future,
+      );
+
+      expect(
+        entries.map((CalendarEntry entry) => entry.title),
+        contains('Monatstermin nach Teilung'),
+      );
+    },
+  );
 
   test('a day in another month does fetch its own window', () async {
     final ProviderContainer c = container();
