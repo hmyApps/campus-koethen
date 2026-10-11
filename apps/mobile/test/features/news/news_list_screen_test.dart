@@ -199,6 +199,27 @@ void main() {
     expect(last.queryParameters['tags'], 'event');
   });
 
+  testWidgets('a screen reader can pick a tag in the filter sheet', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    final FakeHttpAdapter adapter = workingApi();
+    await _pumpFeed(tester, adapter: adapter);
+
+    await tester.tap(find.byTooltip('Filter'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Alle Themen anzeigen')),
+      isSemantics(hasTapAction: true),
+    );
+    tester.semantics.tap(find.semantics.byLabel('Nach Event filtern'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.requests.last.queryParameters['tags'], 'event');
+    handle.dispose();
+  });
+
   testWidgets('the event view has a visibly labelled entry point', (
     WidgetTester tester,
   ) async {

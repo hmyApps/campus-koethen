@@ -301,6 +301,25 @@ void main() {
       );
     });
 
+    testWidgets('a screen reader can activate every channel link', (
+      WidgetTester tester,
+    ) async {
+      await _pumpCard(
+        tester,
+        _article(
+          channels: const <NewsChannelRef>[
+            NewsChannelRef(slug: 'fb5-news', name: 'FB5-News'),
+          ],
+        ),
+      );
+
+      final List<SemanticsNode> linkNodes = _linkNodes(tester);
+      expect(linkNodes, isNotEmpty);
+      for (final SemanticsNode node in linkNodes) {
+        expect(node, isSemantics(isLink: true, hasTapAction: true));
+      }
+    });
+
     testWidgets('uses a focusable 48 dp button for every channel', (
       WidgetTester tester,
     ) async {
@@ -407,6 +426,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Mehr anzeigen'), findsOneWidget);
     expect(find.text('Weniger anzeigen'), findsNothing);
+  });
+
+  testWidgets('a screen reader can open a post image', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCard(
+      tester,
+      _article(heroImage: const NewsImage(url: '/v1/media/uploads/hero.jpg')),
+    );
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Bild im Vollbild öffnen')),
+      isSemantics(isButton: true, hasTapAction: true),
+    );
   });
 
   testWidgets('only the real actions announce themselves as buttons', (

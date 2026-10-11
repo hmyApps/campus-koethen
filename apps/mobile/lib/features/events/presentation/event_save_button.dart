@@ -68,8 +68,14 @@ class EventSaveButton extends ConsumerWidget {
     }
 
     return Semantics(
+      // A node of its own: otherwise the label melts into the card around it
+      // and the action is lost with the excluded IconButton semantics.
+      container: true,
+      button: true,
+      enabled: !unavailable,
       toggled: saved,
       label: tooltip,
+      onTap: unavailable ? null : toggle,
       excludeSemantics: true,
       child: IconButton(
         tooltip: tooltip,

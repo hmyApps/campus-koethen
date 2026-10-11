@@ -973,6 +973,24 @@ void _selectionTests() {
     );
   });
 
+  testWidgets('a screen reader can open the building picker', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await pumpMap(tester);
+
+    final String label = 'Gebäude auswählen, aktuell ${buildingName(ratke)}';
+    expect(
+      tester.getSemantics(find.bySemanticsLabel(label)),
+      isSemantics(isButton: true, hasTapAction: true),
+    );
+
+    tester.semantics.tap(find.semantics.byLabel(label));
+    await tester.pumpAndSettle();
+    expect(find.text(buildingName('koethen-01')), findsOneWidget);
+    handle.dispose();
+  });
+
   testWidgets('the floor picker switches storeys inside the building', (
     WidgetTester tester,
   ) async {

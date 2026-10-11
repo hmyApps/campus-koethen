@@ -94,6 +94,9 @@ class Panel extends StatelessWidget {
       panel = Semantics(
         label: semanticLabel,
         button: onTap != null,
+        // excludeSemantics drops the InkWell's tap action, so the merged node
+        // carries it itself.
+        onTap: onTap,
         excludeSemantics: true,
         child: panel,
       );

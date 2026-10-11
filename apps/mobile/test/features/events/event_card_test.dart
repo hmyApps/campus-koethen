@@ -155,6 +155,22 @@ void main() {
     expect(find.byTooltip('Event merken'), findsOneWidget);
   });
 
+  testWidgets('a screen reader can toggle the save button', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await _pumpCard(tester, _postEvent());
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Event merken')),
+      isSemantics(isButton: true, hasTapAction: true),
+    );
+    tester.semantics.tap(find.semantics.byLabel('Event merken'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Event nicht mehr merken'), findsOneWidget);
+    handle.dispose();
+  });
+
   testWidgets('a failed save stays unsaved and shows a storage error', (
     WidgetTester tester,
   ) async {

@@ -864,6 +864,11 @@ class _MapSegmentState<T> extends State<_MapSegment<T>> {
   /// break activation by keyboard to gain a border.
   bool _focused = false;
 
+  /// Opens the menu from the merged semantics node: `excludeSemantics` below
+  /// drops the menu button's own tap action, so the node has to carry it.
+  final GlobalKey<PopupMenuButtonState<T>> _menu =
+      GlobalKey<PopupMenuButtonState<T>>();
+
   /// Below this a label is an abbreviation, not a word.
   ///
   /// Two or three glyphs and an ellipsis say less than the icon beside them
@@ -933,6 +938,7 @@ class _MapSegmentState<T> extends State<_MapSegment<T>> {
       label: widget.semanticLabel,
       button: interactive,
       readOnly: !interactive,
+      onTap: interactive ? () => _menu.currentState?.showButtonMenu() : null,
       excludeSemantics: true,
       child: FocusRing(
         focused: _focused,
@@ -942,6 +948,7 @@ class _MapSegmentState<T> extends State<_MapSegment<T>> {
                 skipTraversal: true,
                 onFocusChange: (bool value) => setState(() => _focused = value),
                 child: PopupMenuButton<T>(
+                  key: _menu,
                   tooltip: widget.tooltip,
                   initialValue: widget.value,
                   onSelected: widget.onSelected,
