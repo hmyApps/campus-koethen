@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 
 import '../domain/feedback_area.dart';
+import '../domain/gremio_origin.dart';
 import 'requests_api_config.dart';
 
 /// The areas feedback can be addressed to.
@@ -27,7 +28,9 @@ class FeedbackAreasRepository {
   /// Transport failures are left to throw so the caller's `AsyncValue` can
   /// offer a retry.
   Future<List<FeedbackArea>> fetch() async {
-    if (_baseUrl.isEmpty) return const <FeedbackArea>[];
+    // HTTPS or nothing (AGENTS.md §2): an `http://` value is "not
+    // connected", exactly like an empty one — never a plaintext request.
+    if (GremioOrigin.parse(_baseUrl) == null) return const <FeedbackArea>[];
 
     final Response<dynamic> response = await _dio.get<dynamic>(
       '$_baseUrl${RequestsApiConfig.feedbackAreasPath}',

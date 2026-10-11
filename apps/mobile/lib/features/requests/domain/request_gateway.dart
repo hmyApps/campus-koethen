@@ -96,6 +96,26 @@ class SubmissionRateLimited extends SubmissionResult {
   final Duration? retryAfter;
 }
 
+/// Why an attempt ended before anything went on the wire.
+enum SubmissionNotSentReason {
+  /// The person cancelled before the request was dispatched.
+  cancelled,
+
+  /// The encrypted attachment store could not be read.
+  attachmentsUnavailable,
+}
+
+/// Nothing left the device.
+///
+/// Distinct from [SubmissionOutcomeUnknown] on purpose: there is no case that
+/// could exist, so the draft must **not** freeze — freezing locked the form
+/// for no reason and made the next attempt look like a replay.
+class SubmissionNotSent extends SubmissionResult {
+  const SubmissionNotSent(this.reason);
+
+  final SubmissionNotSentReason reason;
+}
+
 /// Reached nobody, or the answer was ambiguous: no network, timeout, 5xx.
 ///
 /// **The outcome is unknown.** The case may or may not have been filed, which
@@ -134,10 +154,11 @@ typedef SubmissionProgress = void Function(int sent, int total);
 abstract interface class RequestGateway {
   /// [onProgress] reports upload progress; [cancel] abandons the request.
   ///
-  /// A cancelled submission produces [SubmissionOutcomeUnknown], exactly like
-  /// a timeout — the bytes may or may not have arrived, and the draft has to
-  /// be frozen either way so a retry replays under the same key rather than
-  /// filing a second case.
+  /// A submission cancelled while the request was under way produces
+  /// [SubmissionOutcomeUnknown], exactly like a timeout — the bytes may or may
+  /// not have arrived, and the draft has to be frozen so a retry replays under
+  /// the same key rather than filing a second case. Cancelled before anything
+  /// was dispatched, it is [SubmissionNotSent].
   Future<SubmissionResult> submitApplication(
     FinanceApplicationDraft draft, {
     SubmissionProgress? onProgress,

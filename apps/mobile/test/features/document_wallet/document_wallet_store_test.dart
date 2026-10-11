@@ -97,6 +97,39 @@ void main() {
       expect(await store.readAll(), isEmpty);
     },
   );
+
+  test('an unreadable box is a storage failure, not an empty wallet', () async {
+    final _MemoryBox box = _MemoryBox();
+    final EncryptedDocumentWalletStore store = EncryptedDocumentWalletStore(
+      box,
+    );
+    await store.save(
+      WalletDocument(
+        kind: WalletDocumentKind.transcript,
+        filename: 'Leistungsuebersicht.pdf',
+        mediaType: 'application/pdf',
+        bytes: pdf('grades'),
+        savedAt: DateTime.utc(2026),
+      ),
+    );
+    box.unavailable = true;
+
+    await expectLater(
+      store.readAll(),
+      throwsA(
+        isA<DocumentWalletFailure>().having(
+          (DocumentWalletFailure f) => f.kind,
+          'kind',
+          DocumentWalletFailureKind.storageUnavailable,
+        ),
+      ),
+    );
+    // A deletion that cannot be checked is not confirmed either.
+    await expectLater(
+      store.delete(WalletDocumentKind.transcript),
+      throwsA(isA<DocumentWalletFailure>()),
+    );
+  });
 }
 
 class _MemoryBox extends EncryptedBox {
@@ -104,8 +137,18 @@ class _MemoryBox extends EncryptedBox {
 
   final Map<String, String> values = <String, String>{};
 
+  /// A box that cannot be opened: plain reads fold that into "absent",
+  /// checked reads report it, deletes do nothing.
+  bool unavailable = false;
+
   @override
-  Future<String?> read(String key) async => values[key];
+  Future<String?> read(String key) async => unavailable ? null : values[key];
+
+  @override
+  Future<String?> readChecked(String key) async {
+    if (unavailable) throw const EncryptedBoxUnavailable();
+    return values[key];
+  }
 
   @override
   Future<bool> writeChecked(String key, String value) async {
@@ -114,7 +157,9 @@ class _MemoryBox extends EncryptedBox {
   }
 
   @override
-  Future<void> delete(String key) async => values.remove(key);
+  Future<void> delete(String key) async {
+    if (!unavailable) values.remove(key);
+  }
 
   @override
   Future<EncryptedBoxWipeResult> wipeChecked() async {

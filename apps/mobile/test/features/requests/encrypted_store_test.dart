@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:campus_koethen/core/cache/encrypted_box.dart';
 import 'package:campus_koethen/features/requests/data/encrypted_attachment_store.dart';
 import 'package:campus_koethen/features/requests/data/encrypted_request_store.dart';
+import 'package:campus_koethen/features/requests/domain/attachment_store.dart';
 import 'package:campus_koethen/features/requests/domain/request_drafts.dart';
 import 'package:campus_koethen/features/requests/domain/submitted_case.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -442,6 +443,34 @@ void main() {
         ),
         isNull,
       );
+    });
+
+    test('a box it cannot open is reported, not read as a gone file', () async {
+      // Read tolerantly, a locked keystore looked like a missing file — and
+      // the form then blamed the student-card slot for a storage fault.
+      final RecordingBox box = RecordingBox();
+      final EncryptedAttachmentStore store = EncryptedAttachmentStore(box: box);
+      final RequestAttachment stored = (await store.put(
+        'ausweis.pdf',
+        Uint8List.fromList(<int>[1, 2, 3]),
+      ))!;
+      box.unavailable = true;
+
+      await expectLater(
+        store.openRead(stored),
+        throwsA(isA<AttachmentStoreUnavailable>()),
+      );
+      await expectLater(
+        store.read(stored),
+        throwsA(isA<AttachmentStoreUnavailable>()),
+      );
+      expect(box.entries, isNotEmpty, reason: 'nothing is discarded');
+    });
+
+    test('its own box is never recreated empty when unreadable', () {
+      // The attachments include the copy of the student card. A box its valid
+      // key cannot open stays on disk for a retry or the deliberate wipe.
+      expect(EncryptedAttachmentStore.defaultBox().discardUnreadable, isFalse);
     });
 
     test('deleting removes the bytes', () async {

@@ -56,6 +56,25 @@ abstract final class RequestLabels {
     SubmissionOutcomeUnknown(acceptedWithoutUsableLink: true) =>
       l10n.requestsSubmitAcceptedUnusable,
     SubmissionOutcomeUnknown() => l10n.requestsSubmitOutcomeUnknown,
+    SubmissionNotSent(reason: SubmissionNotSentReason.cancelled) =>
+      l10n.requestsSubmitNotSentCancelled,
+    SubmissionNotSent(reason: SubmissionNotSentReason.attachmentsUnavailable) =>
+      l10n.requestsSubmitAttachmentsUnavailable,
+  };
+
+  /// Whether [result] refuses a replay outright — the endpoint looked at the
+  /// identical payload and said no (400, 404, 413, 415).
+  ///
+  /// A frozen draft stays frozen after such an answer; the form only *offers*
+  /// the deliberate release as a new case, because the advice in the message
+  /// ("choose another location") cannot be followed while every field is
+  /// locked.
+  static bool isDefinitiveRefusal(SubmissionResult result) => switch (result) {
+    SubmissionRejected() ||
+    SubmissionTargetGone() ||
+    SubmissionTooLarge() ||
+    SubmissionUnsupportedMedia() => true,
+    _ => false,
   };
 
   /// What a failed status read means for the reader.

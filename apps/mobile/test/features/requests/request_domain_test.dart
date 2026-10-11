@@ -236,6 +236,33 @@ void main() {
       );
     });
 
+    test('counts user-perceived characters like the text field does', () {
+      // `TextField.maxLength` counts grapheme clusters. Counting UTF-16 units
+      // here flagged a title the field itself had accepted as too long.
+      const String emoji = '\u{1F389}';
+      final String title = emoji * 200;
+      expect(title.length, 400, reason: 'two UTF-16 units each');
+
+      expect(
+        RequestValidation.validate(
+          _application(title: title, applicant: emoji * 200),
+        ).isValid,
+        isTrue,
+      );
+      expect(
+        RequestValidation.validate(
+          _feedback(submitterName: emoji * 200, feedback: emoji * 10000),
+        ).isValid,
+        isTrue,
+      );
+      expect(
+        RequestValidation.validate(
+          _application(title: emoji * 201),
+        ).errorFor(RequestField.title),
+        RequestFieldError.titleTooLong,
+      );
+    });
+
     test('caps the name at 200 and the text at 10000 characters', () {
       final RequestValidation result = RequestValidation.validate(
         _feedback(submitterName: 'x' * 201, feedback: 'y' * 10001),
@@ -490,6 +517,19 @@ void main() {
       final Map<String, dynamic> broken = applicationStatusBody()
         ..remove('statusUrl');
       expect(CaseStatus.fromJson(broken), isNull);
+    });
+
+    test('leaves a missing document filename empty for the UI to name', () {
+      // A hardcoded German fallback ended up as the viewer title (AGENTS §6).
+      final StatusDocument? document = StatusDocument.fromJson(
+        <String, dynamic>{
+          'kind': 'other',
+          'downloadUrl': '$kFakeStatusUrl/documents/1',
+        },
+      );
+      expect(document, isNotNull);
+      expect(document!.filename, isNull);
+      expect(document.label, 'other');
     });
 
     test('never names a link in its own description', () {

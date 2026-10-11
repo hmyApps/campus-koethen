@@ -1,6 +1,10 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+// `characters` is re-exported by the widgets library; only the extension is
+// used, nothing that touches the widget tree.
+import 'package:flutter/widgets.dart' show StringCharacters;
+
 import 'application_files.dart';
 import 'request_drafts.dart';
 
@@ -97,14 +101,14 @@ class RequestValidation {
     final String title = draft.title.trim();
     if (title.isEmpty) {
       errors[RequestField.title] = RequestFieldError.titleMissing;
-    } else if (title.length > FinanceApplicationDraft.textMaxLength) {
+    } else if (_length(title) > FinanceApplicationDraft.textMaxLength) {
       errors[RequestField.title] = RequestFieldError.titleTooLong;
     }
 
     final String applicant = draft.applicant.trim();
     if (applicant.isEmpty) {
       errors[RequestField.applicant] = RequestFieldError.applicantMissing;
-    } else if (applicant.length > FinanceApplicationDraft.textMaxLength) {
+    } else if (_length(applicant) > FinanceApplicationDraft.textMaxLength) {
       errors[RequestField.applicant] = RequestFieldError.applicantTooLong;
     }
 
@@ -130,6 +134,12 @@ class RequestValidation {
     return RequestValidation(errors);
   }
 
+  /// User-perceived characters, the unit `TextField.maxLength` counts in.
+  ///
+  /// Counting UTF-16 units here flagged an emoji title as too long that the
+  /// field itself had accepted, leaving no way to tell what to shorten.
+  static int _length(String value) => value.characters.length;
+
   static RequestValidation _feedback(FeedbackDraft draft) {
     final Map<RequestField, RequestFieldError> errors =
         <RequestField, RequestFieldError>{};
@@ -139,7 +149,7 @@ class RequestValidation {
     }
 
     // Optional by design — only a *given* name has to fit.
-    if (draft.submitterName.trim().length > FeedbackDraft.nameMaxLength) {
+    if (_length(draft.submitterName.trim()) > FeedbackDraft.nameMaxLength) {
       errors[RequestField.submitterName] =
           RequestFieldError.submitterNameTooLong;
     }
@@ -147,7 +157,7 @@ class RequestValidation {
     final String text = draft.feedback.trim();
     if (text.isEmpty) {
       errors[RequestField.feedback] = RequestFieldError.feedbackMissing;
-    } else if (text.length > FeedbackDraft.textMaxLength) {
+    } else if (_length(text) > FeedbackDraft.textMaxLength) {
       errors[RequestField.feedback] = RequestFieldError.feedbackTooLong;
     }
 

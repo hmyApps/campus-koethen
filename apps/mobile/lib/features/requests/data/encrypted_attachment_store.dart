@@ -29,13 +29,20 @@ import '../domain/request_drafts.dart';
 class EncryptedAttachmentStore
     implements AttachmentStore, StreamingAttachmentStore {
   EncryptedAttachmentStore({EncryptedBox? box, Random? random})
-    : _box =
-          box ??
-          EncryptedBox(
-            boxName: 'campus_request_files_v1',
-            keyStorageKey: 'campus_request_files_key_v1',
-          ),
+    : _box = box ?? defaultBox(),
       _random = random ?? Random.secure();
+
+  /// The production box.
+  ///
+  /// Not a cache: it holds the only copy of what the person picked, the
+  /// student card included. A box its valid key cannot open is kept for a
+  /// retry or the deliberate wipe, never recreated empty
+  /// (docs/requests.md §8).
+  static EncryptedBox defaultBox() => EncryptedBox(
+    boxName: 'campus_request_files_v1',
+    keyStorageKey: 'campus_request_files_key_v1',
+    discardUnreadable: false,
+  );
 
   static const String _prefix = 'attachment:';
   static const int chunkBytes = 256 * 1024;
@@ -141,9 +148,16 @@ class EncryptedAttachmentStore
     }
   }
 
+  /// Throws [AttachmentStoreUnavailable] when the box cannot be read: that is
+  /// a storage fault, not a missing file, and must not be reported as one.
   @override
   Future<StoredAttachmentStream?> openRead(RequestAttachment attachment) async {
-    final String? raw = await _box.read(attachment.path);
+    final String? raw;
+    try {
+      raw = await _box.readChecked(attachment.path);
+    } on EncryptedBoxUnavailable {
+      throw const AttachmentStoreUnavailable();
+    }
     if (raw == null) return null;
     try {
       final Object? decoded = jsonDecode(raw);
@@ -189,7 +203,7 @@ class EncryptedAttachmentStore
   ) async* {
     int total = 0;
     for (int index = 0; index < chunkCount; index++) {
-      final String? encoded = await _box.read(_chunkKey(id, index));
+      final String? encoded = await _box.readChecked(_chunkKey(id, index));
       if (encoded == null) throw const FormatException('missing chunk');
       final Uint8List chunk = base64Decode(encoded);
       total += chunk.length;

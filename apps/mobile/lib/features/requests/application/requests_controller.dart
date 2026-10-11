@@ -95,6 +95,14 @@ class SubmitPayloadChanged extends SubmitOutcome {
   const SubmitPayloadChanged();
 }
 
+/// The requests data on this device was wiped while this attempt ran.
+///
+/// Whatever the attempt produced — a status link, a frozen draft — is
+/// dropped rather than written back into the store the person just emptied.
+class SubmitDiscarded extends SubmitOutcome {
+  const SubmitDiscarded();
+}
+
 /// Locally stored drafts, newest first.
 class RequestsController extends AsyncNotifier<List<RequestDraft>> {
   RequestStore get _store => ref.read(requestStoreProvider);
@@ -236,24 +244,31 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
     );
     // Claimed before the first await, so two taps cannot both get past it.
     if (inFlight.contains(draft.id)) return const SubmitInFlight();
-    inFlight.start(draft.id);
+    final SubmissionCancelToken token = cancel ?? SubmissionCancelToken();
+    final int generation = inFlight.start(draft.id, token);
     try {
-      return await _submit(
+      final SubmitOutcome outcome = await _submit(
         draft,
         now: now,
         onProgress: onProgress,
-        cancel: cancel,
+        cancel: token,
+        isCurrent: () => inFlight.isCurrent(generation),
       );
+      return inFlight.isCurrent(generation) ? outcome : const SubmitDiscarded();
     } finally {
       inFlight.finish(draft.id);
     }
   }
 
+  /// [isCurrent] turns false once the local requests data was wiped while
+  /// this attempt ran. From then on nothing is written: no case, no frozen
+  /// draft — the store the person just emptied stays empty.
   Future<SubmitOutcome> _submit(
     RequestDraft draft, {
     required DateTime now,
+    required SubmissionCancelToken cancel,
+    required bool Function() isCurrent,
     SubmissionProgress? onProgress,
-    SubmissionCancelToken? cancel,
   }) async {
     // Before anything goes out: an accepted case has to be recordable, and
     // the case list is what it is recorded into.
@@ -298,7 +313,10 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
       result = const SubmissionOutcomeUnknown('client-error');
     }
 
-    if (result is SubmissionAccepted) return _record(draft, result, now);
+    if (!isCurrent()) return const SubmitDiscarded();
+    if (result is SubmissionAccepted) {
+      return _record(draft, result, now, isCurrent);
+    }
 
     if (result is SubmissionOutcomeUnknown) {
       // Freeze: the case may exist. The key and the exact payload have to
@@ -314,6 +332,7 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
     RequestDraft draft,
     SubmissionAccepted accepted,
     DateTime now,
+    bool Function() isCurrent,
   ) async {
     final SubmittedCase submitted = SubmittedCase(
       id: draft.id,
@@ -337,9 +356,11 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
       // — is kept rather than deleted on the way past a crash. And frozen:
       // the endpoint holds this key now, so only a byte-identical replay can
       // fetch the link again; an edited retry would end in a 409.
+      if (!isCurrent()) return const SubmitDiscarded();
       await _freezeSafely(draft, now);
       return const SubmitStoreFailed();
     }
+    if (!isCurrent()) return const SubmitDiscarded();
 
     try {
       await _persist(
@@ -391,19 +412,25 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
     ]);
   }
 
-  /// Lets the user abandon a frozen draft.
+  /// Lets the user abandon a frozen draft and send it as a **new** case.
   ///
-  /// Used when the key has expired and they decide the case never arrived.
-  /// Deliberately explicit: this is the one path that can produce a duplicate,
-  /// and it must be a decision rather than a side effect.
+  /// Used when the key has expired, or the replay was refused outright, and
+  /// they decide to go on. Deliberately explicit: this is the one path that
+  /// can produce a duplicate, and it must be a decision rather than a side
+  /// effect.
+  ///
+  /// The draft gets a fresh idempotency key (docs/requests.md §4): it may be
+  /// edited now, and under the old key a server that still knows it would
+  /// answer the changed payload with a 409 instead of a new case.
   Future<void> unfreeze(String id) async {
     if (_isInFlight(id)) return;
     final List<RequestDraft> current = await _loaded();
     final RequestDraft? draft = byId(id);
     if (draft == null) return;
+    final String key = IdempotencyKey.generate();
     final RequestDraft thawed = switch (draft) {
-      FinanceApplicationDraft() => draft.copyWith(clearPending: true),
-      FeedbackDraft() => draft.copyWith(clearPending: true),
+      FinanceApplicationDraft() => draft.asNewCase(idempotencyKey: key),
+      FeedbackDraft() => draft.asNewCase(idempotencyKey: key),
     };
     await _persist(<RequestDraft>[
       ...current.where((RequestDraft d) => d.id != id),
@@ -419,16 +446,42 @@ class RequestsController extends AsyncNotifier<List<RequestDraft>> {
 }
 
 /// The ids of drafts whose submission is running right now.
+///
+/// Also the handle a local wipe uses on them: [abandonAll] cancels every
+/// running upload and makes its result stale, so nothing it returns is
+/// written back into the emptied store.
 class RequestsInFlight extends Notifier<Set<String>> {
+  final Map<String, SubmissionCancelToken> _tokens =
+      <String, SubmissionCancelToken>{};
+  int _generation = 0;
+
   @override
   Set<String> build() => const <String>{};
 
   bool contains(String id) => state.contains(id);
 
-  void start(String id) => state = <String>{...state, id};
+  /// Marks [id] as being sent; returns the generation the attempt belongs to.
+  int start(String id, [SubmissionCancelToken? cancel]) {
+    if (cancel != null) _tokens[id] = cancel;
+    state = <String>{...state, id};
+    return _generation;
+  }
 
-  void finish(String id) =>
-      state = <String>{...state.where((String other) => other != id)};
+  void finish(String id) {
+    _tokens.remove(id);
+    state = <String>{...state.where((String other) => other != id)};
+  }
+
+  /// Whether an attempt started in [generation] may still write its result.
+  bool isCurrent(int generation) => generation == _generation;
+
+  /// Cancels every running upload and discards what they return.
+  void abandonAll() {
+    _generation++;
+    for (final SubmissionCancelToken token in _tokens.values.toList()) {
+      token.cancel();
+    }
+  }
 }
 
 final NotifierProvider<RequestsInFlight, Set<String>> requestsInFlightProvider =
