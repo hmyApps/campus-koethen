@@ -12,6 +12,7 @@ import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show Database;
 
+import '../domain/chat_key_backup.dart';
 import '../domain/chat_models.dart';
 import '../domain/matrix_failure.dart';
 import '../domain/matrix_gateway.dart';
@@ -19,6 +20,7 @@ import '../domain/matrix_homeserver.dart';
 import '../domain/matrix_user_id.dart';
 import 'encrypted_matrix_database.dart';
 import 'matrix_origin_http_client.dart';
+import 'uia_password_responder.dart';
 
 /// Loads vodozemac (Olm/Megolm) once per process.
 ///
@@ -257,6 +259,85 @@ class SdkMatrixGateway implements MatrixGateway {
     await _untilJoined(client, roomId);
     return roomId;
   });
+
+  @override
+  Future<ChatKeyBackupState> keyBackupState() => _guard(() async {
+    final Client client = _requireClient();
+    if (client.encryption == null) return ChatKeyBackupState.unavailable;
+    final ({
+      bool keyBackupEnabled,
+      bool crossSigningEnabled,
+      bool initialized,
+      bool connected,
+    })
+    identity = await client.getCryptoIdentityState();
+    if (!identity.initialized) return ChatKeyBackupState.notSetUp;
+    return identity.connected
+        ? ChatKeyBackupState.ready
+        : ChatKeyBackupState.locked;
+  });
+
+  @override
+  Future<String> setUpKeyBackup({String? password}) => _guard(() async {
+    final Client client = _requireEncryptedClient();
+    // Setting up over an existing backup would wipe it; that is the
+    // explicit reset, never a side effect.
+    if ((await client.getCryptoIdentityState()).initialized) {
+      throw const MatrixFailure(MatrixFailureKind.notAllowed);
+    }
+    return _confirmedWith(password, client, client.initCryptoIdentity);
+  });
+
+  @override
+  Future<void> unlockKeyBackup(String recoveryKey) => _guard(() async {
+    final Client client = _requireEncryptedClient();
+    try {
+      await client.restoreCryptoIdentity(recoveryKey.trim());
+    } on InvalidPassphraseException {
+      throw const MatrixFailure(MatrixFailureKind.invalidRecoveryKey);
+    }
+  });
+
+  @override
+  Future<String> resetKeyBackup({required String password}) => _guard(() async {
+    final Client client = _requireEncryptedClient();
+    return _confirmedWith(password, client, client.initCryptoIdentity);
+  });
+
+  Client _requireEncryptedClient() {
+    final Client client = _requireClient();
+    if (client.encryption == null) {
+      throw const MatrixFailure(MatrixFailureKind.encryptionUnavailable);
+    }
+    return client;
+  }
+
+  /// Runs [operation], answering a re-authentication request from the server
+  /// once with [password], or refusing it when there is none.
+  static Future<T> _confirmedWith<T>(
+    String? password,
+    Client client,
+    Future<T> Function() operation,
+  ) async {
+    final UiaPasswordResponder responder = UiaPasswordResponder(
+      requests: client.onUiaRequest.stream,
+      password: password,
+      userId: client.userID ?? '',
+    )..start();
+    try {
+      return await operation();
+    } catch (error) {
+      if (responder.passwordMissing) {
+        throw const MatrixFailure(MatrixFailureKind.passwordRequired);
+      }
+      if (responder.passwordRejected) {
+        throw const MatrixFailure(MatrixFailureKind.invalidCredentials);
+      }
+      rethrow;
+    } finally {
+      await responder.stop();
+    }
+  }
 
   String _requireUserId(Client client, String input) {
     final String? userId = parseMatrixUserId(

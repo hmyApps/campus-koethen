@@ -40,6 +40,12 @@ enum MatrixFailureKind {
   /// The server does not know the person or room asked for.
   notFound,
 
+  /// The recovery key entered does not unlock the key backup.
+  invalidRecoveryKey,
+
+  /// The server wants the account password to confirm this step.
+  passwordRequired,
+
   /// The server ended the session, e.g. signed out from another device.
   /// Local data has been wiped; a new login starts fresh.
   sessionEnded,

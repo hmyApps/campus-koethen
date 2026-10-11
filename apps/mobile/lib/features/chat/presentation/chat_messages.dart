@@ -30,6 +30,8 @@ String chatFailureMessage(AppLocalizations l10n, Object error) {
     MatrixFailureKind.notAllowed => l10n.chatErrorNotAllowed,
     MatrixFailureKind.notFound => l10n.chatErrorNotFound,
     MatrixFailureKind.sessionEnded => l10n.chatErrorSessionEnded,
+    MatrixFailureKind.invalidRecoveryKey => l10n.chatErrorInvalidRecoveryKey,
+    MatrixFailureKind.passwordRequired => l10n.chatErrorPasswordRequired,
     MatrixFailureKind.unknown => l10n.chatErrorUnknown,
   };
 }

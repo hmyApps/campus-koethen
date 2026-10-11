@@ -59,9 +59,15 @@ lokal.
   entschlüsselbare Nachrichten werden ehrlich als solche angezeigt, nie als leer.
 - Lässt sich vodozemac auf dem Gerät nicht laden, bleibt der Chat aus (`encryptionUnavailable`) statt
   unverschlüsselt zu laufen.
-- Phase 1 enthält außerdem die Einrichtung bzw. Wiederherstellung des Schlüssel-Backups
-  (Wiederherstellungsschlüssel) und die Verifizierung eines neuen Geräts mit einem bestehenden.
-  Bis dahin sind Nachrichten aus der Zeit vor der Anmeldung auf diesem Gerät nicht lesbar.
+- **Schlüssel-Backup** (Kontomenü und Hinweis über den Unterhaltungen): Einrichten erzeugt
+  Cross-Signing, sicheren Geheimspeicher und Online-Schlüssel-Backup und zeigt den
+  Wiederherstellungsschlüssel **einmal**; die Ansicht lässt sich erst nach Bestätigung der
+  Aufbewahrung verlassen, die App speichert ihn nie. Ein neues Gerät entsperrt das Backup mit dem
+  Schlüssel. Ist er verloren, setzt „Zurücksetzen“ nach Warnung und mit Passwort ein neues Backup
+  auf; nur mit dem alten Schlüssel lesbare Nachrichten bleiben unlesbar. Verlangt der Server eine
+  Bestätigung (UIA), wird genau einmal mit dem gerade eingegebenen Passwort geantwortet, sonst
+  abgelehnt — die Anfrage hängt nie. Die Raumschlüssel liegen auf dem Server nur verschlüsselt.
+- Offen in Phase 1: die Verifizierung eines neuen Geräts mit einem bestehenden (SAS-Emoji).
 
 ## 5. Phasen
 
@@ -83,7 +89,7 @@ lokal.
 | Datenschutzhinweis (nur in Builds mit Chat)                                   | fertig |
 | Neue Direkt- und Gruppenchats anlegen (verschlüsselt, privat)                 | fertig |
 | Vom Server beendete Sitzung erkennen, lokal löschen, erklären                 | fertig |
-| Schlüssel-Backup / Wiederherstellungsschlüssel                                | offen  |
+| Schlüssel-Backup / Wiederherstellungsschlüssel (App-Logik, ohne Server-Test)  | fertig |
 | Geräteverifizierung (SAS-Emoji)                                               | offen  |
 | Geräteprüfung ohne Konto (vodozemac, Verschlüsselung, Login-Ablehnung)        | fertig |
 | Test mit Testkonto gegen einen echten Server (Sync, Senden, E2EE)             | offen  |

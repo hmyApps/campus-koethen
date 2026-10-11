@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:campus_koethen/features/chat/domain/chat_key_backup.dart';
 import 'package:campus_koethen/features/chat/domain/chat_models.dart';
 import 'package:campus_koethen/features/chat/domain/matrix_failure.dart';
 import 'package:campus_koethen/features/chat/domain/matrix_gateway.dart';
@@ -125,6 +126,43 @@ class FakeMatrixGateway implements MatrixGateway {
     if (failure != null) throw failure;
     groups.add((name, invite));
     return createdRoomId;
+  }
+
+  ChatKeyBackupState backupState = ChatKeyBackupState.notSetUp;
+  MatrixFailure? backupFailure;
+
+  /// The recovery key set-up and reset hand out. Demo value.
+  String recoveryKey = 'EsTd emoD emoD emoD';
+  final List<String?> backupPasswords = <String?>[];
+  final List<String> unlockAttempts = <String>[];
+
+  @override
+  Future<ChatKeyBackupState> keyBackupState() async => backupState;
+
+  @override
+  Future<String> setUpKeyBackup({String? password}) async {
+    backupPasswords.add(password);
+    final MatrixFailure? failure = backupFailure;
+    if (failure != null) throw failure;
+    backupState = ChatKeyBackupState.ready;
+    return recoveryKey;
+  }
+
+  @override
+  Future<void> unlockKeyBackup(String recoveryKey) async {
+    unlockAttempts.add(recoveryKey);
+    final MatrixFailure? failure = backupFailure;
+    if (failure != null) throw failure;
+    backupState = ChatKeyBackupState.ready;
+  }
+
+  @override
+  Future<String> resetKeyBackup({required String password}) async {
+    backupPasswords.add(password);
+    final MatrixFailure? failure = backupFailure;
+    if (failure != null) throw failure;
+    backupState = ChatKeyBackupState.ready;
+    return recoveryKey;
   }
 
   @override

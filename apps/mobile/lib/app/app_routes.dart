@@ -97,6 +97,8 @@ abstract final class AppRoutes {
   static const String chat = '/more/chat';
   static const String chatRoomPath = 'room';
   static const String chatRoom = '/more/chat/room';
+  static const String chatKeyBackupPath = 'key-backup';
+  static const String chatKeyBackup = '/more/chat/key-backup';
 
   // Campus map, nested under More.
   static const String campusMapPath = 'campus-map';

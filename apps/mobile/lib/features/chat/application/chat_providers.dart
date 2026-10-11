@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/encrypted_matrix_database.dart';
 import '../data/sdk_matrix_gateway.dart';
 import '../data/secure_matrix_database_key_store.dart';
+import '../domain/chat_key_backup.dart';
 import '../domain/chat_models.dart';
 import '../domain/matrix_failure.dart';
 import '../domain/matrix_gateway.dart';
@@ -112,6 +113,47 @@ final AsyncNotifierProvider<ChatSessionController, MatrixAccount?>
 chatSessionControllerProvider =
     AsyncNotifierProvider<ChatSessionController, MatrixAccount?>(
       ChatSessionController.new,
+      retry: (_, _) => null,
+    );
+
+/// The key backup of the signed-in account; `null` while signed out.
+class ChatKeyBackupController extends AsyncNotifier<ChatKeyBackupState?> {
+  @override
+  Future<ChatKeyBackupState?> build() async {
+    final MatrixAccount? account = chatAccountOf(
+      ref.watch(chatSessionControllerProvider),
+    );
+    if (account == null) return null;
+    return ref.read(matrixGatewayProvider).keyBackupState();
+  }
+
+  /// Returns the new recovery key, for the caller to show exactly once.
+  Future<String> setUp({String? password}) async {
+    final MatrixGateway gateway = ref.read(matrixGatewayProvider);
+    final String recoveryKey = await gateway.setUpKeyBackup(password: password);
+    state = AsyncData<ChatKeyBackupState?>(await gateway.keyBackupState());
+    return recoveryKey;
+  }
+
+  Future<void> unlock(String recoveryKey) async {
+    final MatrixGateway gateway = ref.read(matrixGatewayProvider);
+    await gateway.unlockKeyBackup(recoveryKey);
+    state = AsyncData<ChatKeyBackupState?>(await gateway.keyBackupState());
+  }
+
+  /// Returns the new recovery key, for the caller to show exactly once.
+  Future<String> reset({required String password}) async {
+    final MatrixGateway gateway = ref.read(matrixGatewayProvider);
+    final String recoveryKey = await gateway.resetKeyBackup(password: password);
+    state = AsyncData<ChatKeyBackupState?>(await gateway.keyBackupState());
+    return recoveryKey;
+  }
+}
+
+final AsyncNotifierProvider<ChatKeyBackupController, ChatKeyBackupState?>
+chatKeyBackupControllerProvider =
+    AsyncNotifierProvider<ChatKeyBackupController, ChatKeyBackupState?>(
+      ChatKeyBackupController.new,
       retry: (_, _) => null,
     );
 

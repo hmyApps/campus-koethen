@@ -1,6 +1,7 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'chat_key_backup.dart';
 import 'chat_models.dart';
 
 /// The device-direct connection to the configured Matrix homeserver
@@ -53,6 +54,21 @@ abstract interface class MatrixGateway {
   Future<void> acceptInvite(String roomId);
 
   Future<void> declineInvite(String roomId);
+
+  Future<ChatKeyBackupState> keyBackupState();
+
+  /// Creates the account's key backup (with cross-signing) and returns the
+  /// new recovery key. It is shown once and never stored by the app.
+  /// [password] answers the server only if it asks to confirm this step.
+  Future<String> setUpKeyBackup({String? password});
+
+  /// Unlocks the existing key backup on this device with [recoveryKey].
+  Future<void> unlockKeyBackup(String recoveryKey);
+
+  /// Recovery key lost: replaces the account's key backup and encryption
+  /// identity. History only the old key could open stays unreadable.
+  /// Returns the new recovery key.
+  Future<String> resetKeyBackup({required String password});
 
   /// Stops syncing and closes the database. The session stays stored.
   Future<void> dispose();

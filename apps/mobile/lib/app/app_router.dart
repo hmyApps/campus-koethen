@@ -9,6 +9,7 @@ import '../features/about/presentation/about_screen.dart';
 import '../features/campusmap/presentation/campus_map_screen.dart';
 import '../features/canteen/presentation/canteen_favourites_screen.dart';
 import '../features/canteen/presentation/canteen_screen.dart';
+import '../features/chat/presentation/chat_key_backup_screen.dart';
 import '../features/chat/presentation/chat_room_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
 import '../features/contacts/presentation/contact_area_screen.dart';
@@ -245,6 +246,11 @@ GoRouter createAppRouter({
                 builder: (BuildContext _, GoRouterState _) =>
                     const ChatScreen(),
                 routes: <RouteBase>[
+                  GoRoute(
+                    path: AppRoutes.chatKeyBackupPath,
+                    builder: (BuildContext _, GoRouterState _) =>
+                        const ChatKeyBackupScreen(),
+                  ),
                   GoRoute(
                     path: AppRoutes.chatRoomPath,
                     builder: (BuildContext _, GoRouterState state) =>

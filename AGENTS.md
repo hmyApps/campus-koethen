@@ -153,7 +153,10 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      Senden abgewiesen, Redirects werden nicht verfolgt, `.well-known`-Discovery und eine vom Nutzer
      gewählte Serveradresse gibt es nicht. Die Anmeldung erfolgt mit Matrix-Benutzername und Passwort
      (Testbetrieb) beziehungsweise später über die Konten der Hochschule Anhalt; das Passwort wird nur
-     für den Login verwendet und **nie** gespeichert. Sitzungstoken, Geräte- und Raumschlüssel sowie
+     für den Login und für eine vom Server verlangte Bestätigung beim Einrichten oder Zurücksetzen des
+     Schlüssel-Backups verwendet und **nie** gespeichert. Das Schlüssel-Backup legt die Raumschlüssel
+     nur verschlüsselt auf dem Homeserver ab; der Wiederherstellungsschlüssel wird einmal angezeigt und
+     von der App nie gespeichert. Sitzungstoken, Geräte- und Raumschlüssel sowie
      Nachrichten liegen ausschließlich in der lokalen SDK-Datenbank, die mit SQLite3MultipleCiphers
      verschlüsselt ist; deren Schlüssel liegt nur im Keychain/Keystore. Ende-zu-Ende-Verschlüsselung
      (Olm/Megolm über vodozemac) ist von Anfang an Teil des Clients. Kein Push-Gateway: Synchronisation

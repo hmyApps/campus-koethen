@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:campus_koethen/features/chat/data/encrypted_matrix_database.dart';
 import 'package:campus_koethen/features/chat/data/sdk_matrix_gateway.dart';
 import 'package:campus_koethen/features/chat/data/secure_matrix_database_key_store.dart';
+import 'package:campus_koethen/features/chat/domain/chat_key_backup.dart';
 import 'package:campus_koethen/features/chat/domain/chat_models.dart';
 import 'package:campus_koethen/features/chat/domain/matrix_failure.dart';
 import 'package:campus_koethen/features/chat/domain/matrix_gateway.dart';
@@ -417,6 +418,42 @@ void main() {
       await expectLater(
         gateway.startDirectChat(FakeHomeserver.peerId),
         failure(MatrixFailureKind.notFound),
+      );
+    });
+  });
+
+  group('key backup without end-to-end encryption', () {
+    // The host has no vodozemac build; on devices the chat never runs
+    // without it. Here the gateway must say so, not pretend.
+    test('reports it as unavailable', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+
+      expect(await gateway.keyBackupState(), ChatKeyBackupState.unavailable);
+    });
+
+    test('refuses set-up, unlock and reset before asking the server', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+      final int before = server.requests.length;
+
+      await expectLater(
+        gateway.setUpKeyBackup(),
+        failure(MatrixFailureKind.encryptionUnavailable),
+      );
+      await expectLater(
+        gateway.unlockKeyBackup('EsTd emoD'),
+        failure(MatrixFailureKind.encryptionUnavailable),
+      );
+      await expectLater(
+        gateway.resetKeyBackup(password: FakeHomeserver.demoPassword),
+        failure(MatrixFailureKind.encryptionUnavailable),
+      );
+      expect(
+        server.requests
+            .skip(before)
+            .where((FakeHomeserverRequest r) => r.path != '/v3/sync'),
+        isEmpty,
       );
     });
   });

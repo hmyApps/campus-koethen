@@ -14,6 +14,7 @@ import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../application/chat_providers.dart';
+import '../domain/chat_key_backup.dart';
 import '../domain/chat_models.dart';
 import '../domain/matrix_failure.dart';
 import '../domain/matrix_homeserver.dart';
@@ -284,9 +285,16 @@ class _ChatRoomList extends ConsumerWidget {
       ),
       data: (List<ChatRoomSummary> all) {
         if (all.isEmpty) {
-          return EmptyView(
-            icon: AppIcons.chat_bubble_outline,
-            message: l10n.chatRoomsEmpty,
+          return Column(
+            children: <Widget>[
+              const _KeyBackupHint(),
+              Expanded(
+                child: EmptyView(
+                  icon: AppIcons.chat_bubble_outline,
+                  message: l10n.chatRoomsEmpty,
+                ),
+              ),
+            ],
           );
         }
         final List<ChatRoomSummary> invites = all
@@ -298,6 +306,7 @@ class _ChatRoomList extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
           children: <Widget>[
+            const _KeyBackupHint(),
             if (invites.isNotEmpty) ...<Widget>[
               SectionHeader(label: l10n.chatInvitesHeader),
               for (final ChatRoomSummary room in invites)
@@ -312,6 +321,43 @@ class _ChatRoomList extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Says once, above the conversations, when encrypted history is at risk
+/// (no key backup) or not yet readable here (backup locked).
+class _KeyBackupHint extends ConsumerWidget {
+  const _KeyBackupHint();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    final ChatKeyBackupState? state = ref
+        .watch(chatKeyBackupControllerProvider)
+        .value;
+    final String? message = switch (state) {
+      ChatKeyBackupState.notSetUp => l10n.chatKeyBackupBannerSetUp,
+      ChatKeyBackupState.locked => l10n.chatKeyBackupBannerLocked,
+      _ => null,
+    };
+    if (message == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        0,
+      ),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(AppIcons.lock_outline),
+          title: Text(message),
+          trailing: const Icon(AppIcons.chevron_right),
+          onTap: () => context.push(AppRoutes.chatKeyBackup),
+        ),
+      ),
     );
   }
 }
@@ -471,6 +517,14 @@ class _ChatAccountButton extends ConsumerWidget {
           child: Text(l10n.chatSignedInAs(account.userId)),
         ),
         const PopupMenuDivider(),
+        PopupMenuItem<void>(
+          onTap: () => context.push(AppRoutes.chatKeyBackup),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(AppIcons.lock_outline),
+            title: Text(l10n.chatKeyBackupTitle),
+          ),
+        ),
         PopupMenuItem<void>(
           onTap: () => _logout(context, ref),
           child: ListTile(
