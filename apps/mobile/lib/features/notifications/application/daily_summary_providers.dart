@@ -229,7 +229,8 @@ Iterable<CalendarEntry> _eventEntries(
   ];
 }
 
-/// The cached Moodle deadlines, and only while an account is connected.
+/// The cached Moodle deadlines, and only while an account is connected and
+/// the list is confirmed by Moodle's last answer (not a kept stale one).
 ///
 /// Read from the cache the overview already holds — this never triggers a
 /// Moodle call of its own, and no credential is touched here.
@@ -241,7 +242,7 @@ Iterable<CalendarEntry> _moodleEntries(Ref ref) {
       .watch(moodleControllerProvider)
       .value;
   if (overview == null) return const <CalendarEntry>[];
-  return moodleDeadlinesToCalendarEntries(overview.deadlines);
+  return moodleDeadlinesToCalendarEntries(overview.reminderDeadlines);
 }
 
 /// What the preferred canteen offers, per day, reduced to what a notification

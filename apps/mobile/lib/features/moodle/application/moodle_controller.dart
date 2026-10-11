@@ -19,13 +19,24 @@ class MoodleOverviewState {
   const MoodleOverviewState({
     this.courses = const <MoodleCourse>[],
     this.deadlines = const <MoodleDeadline>[],
+    this.deadlinesConfirmed = true,
     this.lastSuccessfulSync,
     this.isSyncing = false,
     this.error,
   });
 
   final List<MoodleCourse> courses;
+
+  /// Everything the calendar shows, including a kept, unconfirmed list.
   final List<MoodleDeadline> deadlines;
+
+  /// See `MoodleSyncMarks.deadlinesConfirmed`.
+  final bool deadlinesConfirmed;
+
+  /// The deadlines a notification may be derived from (N4 reminders, the N2
+  /// count): none while the list is a kept, unconfirmed one.
+  List<MoodleDeadline> get reminderDeadlines =>
+      deadlinesConfirmed ? deadlines : const <MoodleDeadline>[];
   final DateTime? lastSuccessfulSync;
   final bool isSyncing;
   final MoodleFailure? error;
@@ -35,6 +46,7 @@ class MoodleOverviewState {
   MoodleOverviewState copyWith({
     List<MoodleCourse>? courses,
     List<MoodleDeadline>? deadlines,
+    bool? deadlinesConfirmed,
     DateTime? lastSuccessfulSync,
     bool? isSyncing,
     MoodleFailure? error,
@@ -42,6 +54,7 @@ class MoodleOverviewState {
   }) => MoodleOverviewState(
     courses: courses ?? this.courses,
     deadlines: deadlines ?? this.deadlines,
+    deadlinesConfirmed: deadlinesConfirmed ?? this.deadlinesConfirmed,
     lastSuccessfulSync: lastSuccessfulSync ?? this.lastSuccessfulSync,
     isSyncing: isSyncing ?? this.isSyncing,
     error: clearError ? null : (error ?? this.error),
@@ -85,6 +98,7 @@ class MoodleController extends AsyncNotifier<MoodleOverviewState> {
     return MoodleOverviewState(
       courses: courses,
       deadlines: deadlines,
+      deadlinesConfirmed: marks.deadlinesConfirmed,
       lastSuccessfulSync: marks.lastSuccess,
     );
   }
@@ -143,6 +157,7 @@ class MoodleController extends AsyncNotifier<MoodleOverviewState> {
         MoodleOverviewState(
           courses: overview.courses,
           deadlines: overview.deadlines,
+          deadlinesConfirmed: overview.deadlinesConfirmed,
           lastSuccessfulSync: now,
           isSyncing: false,
         ),

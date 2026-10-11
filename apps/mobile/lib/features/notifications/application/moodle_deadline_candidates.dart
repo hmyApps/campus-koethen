@@ -69,7 +69,7 @@ final Provider<List<NotificationRequest>> moodleDeadlineCandidatesProvider =
         notificationSettingsProvider,
       );
       final List<MoodleDeadline> deadlines =
-          ref.watch(moodleControllerProvider).value?.deadlines ??
+          ref.watch(moodleControllerProvider).value?.reminderDeadlines ??
           const <MoodleDeadline>[];
       return moodleDeadlineRequests(
         deadlines: deadlines,

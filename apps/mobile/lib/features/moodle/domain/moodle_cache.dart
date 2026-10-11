@@ -16,16 +16,30 @@ import 'moodle_deadline.dart';
 /// only when a fully validated response actually replaced the cache.
 @immutable
 class MoodleSyncMarks {
-  const MoodleSyncMarks({this.lastAttempt, this.lastSuccess});
+  const MoodleSyncMarks({
+    this.lastAttempt,
+    this.lastSuccess,
+    this.deadlinesConfirmed = true,
+  });
 
   final DateTime? lastAttempt;
   final DateTime? lastSuccess;
 
-  MoodleSyncMarks copyWith({DateTime? lastAttempt, DateTime? lastSuccess}) =>
-      MoodleSyncMarks(
-        lastAttempt: lastAttempt ?? this.lastAttempt,
-        lastSuccess: lastSuccess ?? this.lastSuccess,
-      );
+  /// Whether the cached deadlines are what Moodle reported in the last
+  /// successful sync. False when Moodle answered with an empty list and the
+  /// previous list was kept instead (AGENTS.md § 4): it is still shown, but
+  /// no reminder or daily-summary count may be derived from it.
+  final bool deadlinesConfirmed;
+
+  MoodleSyncMarks copyWith({
+    DateTime? lastAttempt,
+    DateTime? lastSuccess,
+    bool? deadlinesConfirmed,
+  }) => MoodleSyncMarks(
+    lastAttempt: lastAttempt ?? this.lastAttempt,
+    lastSuccess: lastSuccess ?? this.lastSuccess,
+    deadlinesConfirmed: deadlinesConfirmed ?? this.deadlinesConfirmed,
+  );
 }
 
 /// Port: the encrypted, at-rest Moodle cache.

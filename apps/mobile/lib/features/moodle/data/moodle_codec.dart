@@ -263,6 +263,7 @@ MoodleAnnouncement _announcementFromJson(Map<String, dynamic> m) =>
 String encodeMarks(MoodleSyncMarks marks) => jsonEncode(<String, dynamic>{
   'lastAttempt': _ms(marks.lastAttempt),
   'lastSuccess': _ms(marks.lastSuccess),
+  'deadlinesConfirmed': marks.deadlinesConfirmed,
 });
 
 MoodleSyncMarks decodeMarks(String raw) {
@@ -270,5 +271,7 @@ MoodleSyncMarks decodeMarks(String raw) {
   return MoodleSyncMarks(
     lastAttempt: _date(m['lastAttempt']),
     lastSuccess: _date(m['lastSuccess']),
+    // Marks written before the flag existed describe a confirmed list.
+    deadlinesConfirmed: m['deadlinesConfirmed'] != false,
   );
 }
