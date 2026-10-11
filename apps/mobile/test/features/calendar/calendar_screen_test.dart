@@ -525,6 +525,30 @@ void main() {
       expect(find.byTooltip('Quellen'), findsOneWidget);
     });
 
+    testWidgets('marks the sources action while a course is hidden', (
+      WidgetTester tester,
+    ) async {
+      IconButton sourcesButton() => tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(AppIcons.tune),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await pumpCalendar(tester);
+      expect(sourcesButton().isSelected, isFalse);
+
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore(
+        <String, Object>{
+          PreferenceKeys.preferredTimetableGroup: 'demo-group',
+          PreferenceKeys.timetableHiddenCourses('demo-group'): <String>[
+            'Mathematik 2',
+          ],
+        },
+      );
+      await pumpCalendar(tester, store: store);
+      expect(sourcesButton().isSelected, isTrue);
+    });
+
     testWidgets('leads into the timetable sheet', (WidgetTester tester) async {
       await pumpCalendar(tester);
       await openSources(tester);

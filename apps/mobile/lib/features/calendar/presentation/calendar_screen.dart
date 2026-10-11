@@ -99,7 +99,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final bool everythingVisible =
         kMergeableCalendarSources.every(data.enabledSources.contains) &&
         lessonInfoFilter.disabledValues.isEmpty &&
-        !lessonInfoFilter.hideWithoutInfo;
+        !lessonInfoFilter.hideWithoutInfo &&
+        lessonInfoFilter.hiddenCourses.isEmpty;
 
     return ScreenScaffold(
       eyebrow: ModuleCategory.study.label(l10n),
