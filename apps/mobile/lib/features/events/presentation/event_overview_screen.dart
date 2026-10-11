@@ -61,10 +61,16 @@ class _EventOverviewScreenState extends ConsumerState<EventOverviewScreen>
     ref.invalidate(eventPostsOverviewProvider);
     ref.invalidate(eventCalendarsOverviewProvider);
     ref.read(eventOverviewClockProvider.notifier).recomputeNow();
-    await Future.wait(<Future<void>>[
-      ref.read(eventPostsOverviewProvider.future),
-      ref.read(eventCalendarsOverviewProvider.future),
-    ]);
+    try {
+      await Future.wait(<Future<void>>[
+        ref.read(eventPostsOverviewProvider.future),
+        ref.read(eventCalendarsOverviewProvider.future),
+      ]);
+    } on Object {
+      // The providers carry the failure and the screen shows it per source.
+      // Rethrown, it escaped the refresh button and the pull-to-refresh as an
+      // unhandled asynchronous error.
+    }
   }
 
   @override

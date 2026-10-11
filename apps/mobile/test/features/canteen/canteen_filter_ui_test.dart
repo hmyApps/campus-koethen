@@ -1,6 +1,9 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
+import 'package:campus_koethen/core/cache/content_cache.dart';
 import 'package:campus_koethen/core/locale/locale_mode.dart';
 import 'package:campus_koethen/core/network/api_client.dart';
 import 'package:campus_koethen/core/network/network_providers.dart';
@@ -22,6 +25,7 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../support/fake_http_adapter.dart';
 import '../../support/pump_app.dart';
+import '../../support/throwing_content_cache.dart';
 
 String _today() {
   return _dayFromToday(0);
@@ -73,8 +77,15 @@ ApiClient _api(
   List<Map<String, dynamic>> meals, {
   Map<int, List<Map<String, dynamic>>> additionalDays =
       const <int, List<Map<String, dynamic>>>{},
+  bool Function()? offline,
 }) => fakeApiClient(
   FakeHttpAdapter((RequestOptions options) {
+    if (offline?.call() ?? false) {
+      throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.connectionError,
+      );
+    }
     if (options.path.contains('/canteens/')) {
       return FakeHttpResponse(
         envelope(
@@ -170,6 +181,51 @@ void main() {
     expect(find.text('Gemüsepfanne'), findsOneWidget);
     expect(find.text('Schnitzel'), findsOneWidget);
   });
+
+  testWidgets(
+    'a pull to refresh that fails offline raises no unhandled error',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      bool offline = false;
+      int offlineRequests = 0;
+      await pumpScreen(
+        tester,
+        const CanteenScreen(),
+        // Nothing to fall back on: the refresh itself has to fail.
+        contentCache: SafeContentCache(ThrowingContentCache()),
+        overrides: <Override>[
+          apiClientProvider.overrideWithValue(
+            _api(
+              <Map<String, dynamic>>[_meal('1', 'Gemüsepfanne')],
+              offline: () {
+                if (offline) offlineRequests++;
+                return offline;
+              },
+            ),
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Gemüsepfanne'), findsOneWidget);
+
+      offline = true;
+      // The same call a pull gesture ends in.
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(offlineRequests, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('swiping the menu changes the day in both directions', (
     WidgetTester tester,

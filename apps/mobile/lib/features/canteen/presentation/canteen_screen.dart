@@ -110,10 +110,15 @@ class _CanteenScreenState extends ConsumerState<CanteenScreen>
     final String? slug = ref.read(selectedCanteenSlugProvider);
     ref.invalidate(canteensProvider);
     if (slug != null) ref.invalidate(canteenMenuProvider(slug));
-    await Future.wait<Object?>(<Future<Object?>>[
-      ref.read(canteensProvider.future),
-      if (slug != null) ref.read(canteenMenuProvider(slug).future),
-    ]);
+    try {
+      await Future.wait<Object?>(<Future<Object?>>[
+        ref.read(canteensProvider.future),
+        if (slug != null) ref.read(canteenMenuProvider(slug).future),
+      ]);
+    } on Object {
+      // The providers carry the failure and the screen shows it. Rethrown, it
+      // escaped the pull-to-refresh as an unhandled asynchronous error.
+    }
   }
 
   @override
