@@ -16,6 +16,7 @@ import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../university_account/application/university_service_connector.dart';
+import '../../university_account/presentation/university_account_setup_sheet.dart';
 import '../application/mail_account_controller.dart';
 import '../application/mail_folders.dart';
 import '../application/mail_inbox_controller.dart';
@@ -65,8 +66,15 @@ class MailInboxScreen extends ConsumerWidget {
             .read(universityServiceConnectorProvider)
             .disconnect(DirectService.mail);
       } catch (error) {
+        // The connector can also refuse with its own failure (for example
+        // while the university account is being deleted), which the mail
+        // messages alone would only render as a generic text.
         messenger.showSnackBar(
-          SnackBar(content: Text(mailFailureMessage(l10n, error))),
+          SnackBar(
+            content: Text(
+              universityAccountErrorMessage(l10n, DirectService.mail, error),
+            ),
+          ),
         );
       }
     }
