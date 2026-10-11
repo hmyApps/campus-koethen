@@ -35,6 +35,10 @@ class EncryptedMatrixDatabase {
     '-shm',
   ];
 
+  /// Whether a database key exists, i.e. whether a session may be stored.
+  /// Creates nothing.
+  Future<bool> hasKey() async => await _keyStore.read() != null;
+
   /// Opens the database, creating it (and its key) on first use.
   Future<Database> open() async {
     final String path = await _path();

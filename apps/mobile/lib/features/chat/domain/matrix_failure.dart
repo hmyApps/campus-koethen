@@ -26,6 +26,9 @@ enum MatrixFailureKind {
   /// End-to-end encryption is not available on this device.
   encryptionUnavailable,
   notConnected,
+
+  /// The room is not (or no longer) among this account's rooms.
+  roomUnavailable,
   sendFailed,
   unknown,
 }
