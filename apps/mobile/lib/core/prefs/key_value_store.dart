@@ -20,7 +20,8 @@ abstract interface class KeyValueStore {
 
   Future<void> setInt(String key, int value);
 
-  Future<void> remove(String key);
+  /// Removes [key]. Returns false when the removal could not be persisted.
+  Future<bool> remove(String key);
 }
 
 /// [KeyValueStore] backed by `shared_preferences`.
@@ -91,11 +92,13 @@ class SharedPreferencesStore implements KeyValueStore {
   }
 
   @override
-  Future<void> remove(String key) async {
+  Future<bool> remove(String key) async {
     try {
-      await _prefs.remove(key);
+      return await _prefs.remove(key);
     } catch (_) {
-      // See setString.
+      // Still never thrown (see setString), but reported: a reset has to know
+      // whether it actually took hold (SET-6).
+      return false;
     }
   }
 }
@@ -142,7 +145,8 @@ class InMemoryKeyValueStore implements KeyValueStore {
   }
 
   @override
-  Future<void> remove(String key) async {
+  Future<bool> remove(String key) async {
     _values.remove(key);
+    return true;
   }
 }
