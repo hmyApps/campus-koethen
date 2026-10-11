@@ -169,9 +169,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # The public-calendar catalogue sync reads the CMS (AGENTS.md §2.4).
+      cms:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://campus_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/campus_app_local?schema=public
+      STRAPI_BASE_URL: ${STRAPI_BASE_URL:-http://cms:1337}
+      STRAPI_API_TOKEN: ${STRAPI_API_TOKEN:-}
       WORKER_TIME_ZONE: ${WORKER_TIME_ZONE:-UTC}
       USER_TEST_DATA_ENABLED: ${USER_TEST_DATA_ENABLED:-false}
       PUBLIC_CALENDAR_ENABLED: ${PUBLIC_CALENDAR_ENABLED:-false}

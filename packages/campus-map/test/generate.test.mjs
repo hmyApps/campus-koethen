@@ -4,7 +4,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildOutputs, generatedFileDrift } from '../src/generate.mjs';
+import {
+  buildOutputs,
+  generatedAssetLayoutProblems,
+  generatedFileDrift,
+} from '../src/generate.mjs';
 import { findRooms, findUnsafe, parseSvgDocument, walkElements } from '../src/svg-reader.mjs';
 import { loadCanonical } from '../src/validate.mjs';
 
@@ -376,4 +380,59 @@ test('drift check reports a tampered generated asset', () => {
     readFile: (path) => (path.endsWith('.svg') ? '<svg/>' : undefined),
   });
   assert.ok(drift.length > 0);
+});
+
+// --- asset layout -------------------------------------------------------------
+
+const PUBSPEC_MAP_ASSETS = `
+flutter:
+  assets:
+    - assets/fonts/AlbertSans-OFL.txt
+    - assets/maps/map_catalog.json
+    - assets/maps/ratke-gebaeude/
+    - assets/maps/koethen-01/
+    - assets/maps/koethen-02/
+    - assets/maps/koethen-03/
+`;
+
+function generatedPaths() {
+  return [...outputs().files.keys()];
+}
+
+test('asset layout check passes for the committed assets and pubspec.yaml', () => {
+  const problems = generatedAssetLayoutProblems();
+  assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+test('asset layout check reports an orphaned SVG that no floor generates', () => {
+  const problems = generatedAssetLayoutProblems({
+    listFiles: () => [...generatedPaths(), 'apps/mobile/assets/maps/koethen-01/old-floor.svg'],
+    readPubspec: () => PUBSPEC_MAP_ASSETS,
+  });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0], /koethen-01\/old-floor\.svg/);
+});
+
+test('asset layout check reports a building folder missing from pubspec.yaml', () => {
+  const problems = generatedAssetLayoutProblems({
+    listFiles: generatedPaths,
+    readPubspec: () => PUBSPEC_MAP_ASSETS.replace('    - assets/maps/koethen-02/\n', ''),
+  });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0], /assets\/maps\/koethen-02\//);
+  assert.match(problems[0], /pubspec\.yaml/);
+});
+
+test('asset layout check reports a missing catalogue entry and a stale pubspec entry', () => {
+  const problems = generatedAssetLayoutProblems({
+    listFiles: generatedPaths,
+    readPubspec: () =>
+      PUBSPEC_MAP_ASSETS.replace(
+        '    - assets/maps/map_catalog.json\n',
+        '    - assets/maps/old-building/\n',
+      ),
+  });
+  assert.equal(problems.length, 2, problems.join('\n'));
+  assert.ok(problems.some((p) => p.includes('assets/maps/map_catalog.json')));
+  assert.ok(problems.some((p) => p.includes('assets/maps/old-building/')));
 });

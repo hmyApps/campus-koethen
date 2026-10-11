@@ -121,7 +121,8 @@ export async function upsertLocalised(
   slug: string,
   shared: Record<string, unknown>,
   localised: { de: Record<string, unknown>; en: Record<string, unknown> },
-): Promise<'created' | 'updated'> {
+  options: { updateExisting?: boolean } = {},
+): Promise<'created' | 'updated' | 'unchanged'> {
   const documents = strapi.documents(uid);
 
   const existing = await documents.findMany({
@@ -147,6 +148,10 @@ export async function upsertLocalised(
     return 'created';
   }
 
+  if (options.updateExisting === false) {
+    return 'unchanged';
+  }
+
   const documentId = (current as { documentId: string }).documentId;
 
   await documents.update({
@@ -164,9 +169,23 @@ export async function upsertLocalised(
   return 'updated';
 }
 
+/**
+ * Creates the essential tags when they are missing. Runs on every boot,
+ * including production, and therefore never touches an existing tag: its
+ * name, `isActive` flag and draft/publish state belong to the editorial team.
+ * Only the opt-in demo seed resets existing tags to their seed values.
+ */
 export async function ensureTags(strapi: Core.Strapi): Promise<void> {
+  await upsertEssentialTags(strapi, { updateExisting: false });
+}
+
+async function upsertEssentialTags(
+  strapi: Core.Strapi,
+  options: { updateExisting: boolean },
+): Promise<void> {
   let created = 0;
   let updated = 0;
+  let unchanged = 0;
 
   for (const tag of ESSENTIAL_TAGS) {
     const result = await upsertLocalised(
@@ -180,12 +199,15 @@ export async function ensureTags(strapi: Core.Strapi): Promise<void> {
         de: { name: tag.name.de },
         en: { name: tag.name.en },
       },
+      options,
     );
-    result === 'created' ? (created += 1) : (updated += 1);
+    if (result === 'created') created += 1;
+    else if (result === 'updated') updated += 1;
+    else unchanged += 1;
   }
 
   strapi.log.info(
-    `[tags] essential tags ready: ${created} created, ${updated} updated (de + en, idempotent)`,
+    `[tags] essential tags ready: ${created} created, ${updated} updated, ${unchanged} left unchanged (de + en, idempotent)`,
   );
 }
 
@@ -193,7 +215,7 @@ export async function seedDemoContent({ strapi }: SeedContext): Promise<void> {
   let created = 0;
   let updated = 0;
 
-  await ensureTags(strapi);
+  await upsertEssentialTags(strapi, { updateExisting: true });
 
   for (const channel of CHANNELS) {
     const result = await upsertLocalised(

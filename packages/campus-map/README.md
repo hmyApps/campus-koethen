@@ -41,8 +41,8 @@ Erzeugt wird nach `apps/mobile/assets/maps/`: `map_catalog.json` und das bereini
 ```bash
 pnpm --filter @campus/map validate   # Katalog gegen das SVG prüfen
 pnpm --filter @campus/map generate   # App-Assets neu schreiben
-pnpm --filter @campus/map check      # prüfen und Drift melden (CI-Gate)
-pnpm --filter @campus/map test       # 59 Tests
+pnpm --filter @campus/map check      # prüfen und Drift, verwaiste Dateien sowie fehlende pubspec-Einträge melden (CI-Gate)
+pnpm --filter @campus/map test       # 62 Tests
 ```
 
 ## Warum dependency-frei

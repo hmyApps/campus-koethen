@@ -23,7 +23,13 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../apps/backend/src/generated/prisma/client';
-import { DatasetProfile, PROFILES, ProfileName, expectedRowCounts } from './dataset-profiles';
+import {
+  DatasetProfile,
+  PROFILES,
+  ProfileName,
+  expectedRowCounts,
+  profileNameFromArgs,
+} from './dataset-profiles';
 import { requirePerfDatabaseUrl } from './perf-database-url';
 
 /** Fixed anchor so dates — and therefore query plans — repeat exactly. */
@@ -430,8 +436,8 @@ async function main(): Promise<void> {
   const databaseUrl = requirePerfDatabaseUrl();
 
   const args = process.argv.slice(2);
-  const profileArg = (args[args.indexOf('--profile') + 1] ?? 'realistic') as ProfileName;
-  const profile = PROFILES[profileArg];
+  const profileArg = profileNameFromArgs(args);
+  const profile = PROFILES[profileArg as ProfileName] as DatasetProfile | undefined;
   if (!profile) {
     throw new Error(`Unknown profile "${profileArg}". Use realistic or stress.`);
   }

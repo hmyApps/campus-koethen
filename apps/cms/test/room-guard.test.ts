@@ -73,9 +73,9 @@ test('the catalogue sync may write every managed field', async () => {
   assert.equal(data.catalogActive, false);
 });
 
-test('editors cannot create or delete rooms', async () => {
+test('editors cannot create, clone (admin "Duplicate") or delete rooms', async () => {
   const { guard } = guardWith();
-  for (const action of ['create', 'delete'] as const) {
+  for (const action of ['create', 'clone', 'delete'] as const) {
     await assert.rejects(
       () => guard(context(action, { roomKey: 'x' }), async () => 'done'),
       /catalogue/i,

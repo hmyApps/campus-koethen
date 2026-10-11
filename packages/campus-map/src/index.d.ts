@@ -107,6 +107,13 @@ export declare function generatedFileDrift(options?: {
   readFile?: (relativePath: string) => string | undefined;
 }): string[];
 
+export declare function generatedAssetLayoutProblems(options?: {
+  repoRoot?: string;
+  packageRoot?: string;
+  listFiles?: () => string[];
+  readPubspec?: () => string;
+}): string[];
+
 export declare class SvgParseError extends Error {}
 export declare function parseSvgDocument(text: string): unknown;
 export declare function findUnsafe(root: unknown): string[];

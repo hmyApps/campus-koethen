@@ -21,4 +21,25 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'campus_cms_dev')\ge
 
 SELECT 'CREATE DATABASE campus_app_dev OWNER campus_app'
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'campus_app_dev')\gexec
+
+-- Nobody may connect by default; each role reaches only its own database
+-- (AGENTS.md §2.3).
+REVOKE CONNECT ON DATABASE campus_cms_dev FROM PUBLIC;
+REVOKE CONNECT ON DATABASE campus_app_dev FROM PUBLIC;
+GRANT CONNECT ON DATABASE campus_cms_dev TO campus_cms;
+GRANT CONNECT ON DATABASE campus_app_dev TO campus_app;
 SQL
+
+# Lock the public schema inside each database down to its owner.
+for pair in campus_cms_dev:campus_cms campus_app_dev:campus_app; do
+  db=${pair%%:*}
+  owner=${pair#*:}
+  psql \
+    --set=ON_ERROR_STOP=1 \
+    --username "$POSTGRES_USER" \
+    --dbname "$db" \
+    --set=owner="$owner" <<'SQL'
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO :"owner";
+SQL
+done

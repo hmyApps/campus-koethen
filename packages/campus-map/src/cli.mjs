@@ -7,13 +7,20 @@
  *
  *   validate   check the canonical catalogue against the canonical SVG files
  *   generate   (re)write the committed Flutter assets
- *   check      validate AND fail when the committed assets have drifted
+ *   check      validate AND fail when the committed assets have drifted, when
+ *              an orphaned file sits in the asset folder, or when pubspec.yaml
+ *              does not bundle every generated building folder
  *
  * `check` is what CI runs: it never writes, so a pull request that edits the
  * canonical sources without regenerating fails instead of shipping a mismatch.
  */
 
-import { buildFromCanonical, generatedFileDrift, writeGenerated } from './generate.mjs';
+import {
+  buildFromCanonical,
+  generatedAssetLayoutProblems,
+  generatedFileDrift,
+  writeGenerated,
+} from './generate.mjs';
 import { loadCanonical } from './validate.mjs';
 
 function fail(headline, details = []) {
@@ -58,6 +65,16 @@ function runCheck() {
   }
   if (drift.length > 0) {
     fail('Generated map assets do not match the canonical sources', drift);
+  }
+  let layout;
+  try {
+    layout = generatedAssetLayoutProblems();
+  } catch (error) {
+    fail('Could not check the asset layout', [error.message]);
+    return;
+  }
+  if (layout.length > 0) {
+    fail('Map asset folder or pubspec.yaml does not match the generated assets', layout);
   }
   // Touch the build once so an unreadable canonical source is caught here too.
   buildFromCanonical();
