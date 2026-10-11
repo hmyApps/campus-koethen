@@ -223,7 +223,16 @@ class GradeAccountController extends AsyncNotifier<GradeAccountState> {
       await _cache.clear();
       await _wipeLinkedPersonalData();
       await _store.write(credentials);
-      await _portalStore.write(portal);
+      try {
+        await _portalStore.write(portal);
+      } catch (_) {
+        // Without a stored choice the next start would silently move these
+        // credentials to HISinOne, although setup reported a failure. Roll
+        // the just-written credentials back (the store's clear is verified)
+        // so a failed setup leaves no account behind.
+        await _store.clear();
+        rethrow;
+      }
       final DateTime now = _clock.now();
       await _cache.writeReport(report);
       await _cache.writeLastSuccessfulSync(now);
