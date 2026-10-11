@@ -1302,8 +1302,6 @@
   "@gradeSetupPasswordRequired": {},
   "gradeSetupSubmit": "Anmelden und Noten laden",
   "@gradeSetupSubmit": {},
-  "gradeSetupPortalLink": "Im Prüfungsportal öffnen",
-  "@gradeSetupPortalLink": {},
   "gradesLastUpdated": "Zuletzt aktualisiert: {when}",
   "@gradesLastUpdated": {
     "placeholders": {
@@ -1324,8 +1322,6 @@
   "@gradesUpdateFailed": {},
   "gradesRetry": "Erneut versuchen",
   "@gradesRetry": {},
-  "gradesReenter": "Zugangsdaten ändern",
-  "@gradesReenter": {},
   "gradesDeleteAction": "Noten-Verbindung und lokale Noten löschen",
   "@gradesDeleteAction": {},
   "gradesSwitchPortalAction": "Prüfungsportal wechseln",
@@ -1460,7 +1456,6 @@
   },
   "studentServicePaymentHintUnrecognised": "Status konnte nicht ermittelt werden.",
   "studentServiceGenerateCertificate": "PDF erstellen",
-  "studentServiceCertificateReady": "Bescheinigung wurde erstellt.",
   "studentServiceErrorInvalidCredentials": "Die Noten-Verbindung wurde vom Portal abgelehnt. Bitte verbinde Noten erneut.",
   "studentServiceErrorTls": "Die Verbindung wurde aus Sicherheitsgründen abgelehnt.",
   "studentServiceErrorPortalUnavailable": "Das Portal ist derzeit nicht erreichbar.",
