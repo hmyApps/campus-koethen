@@ -19,6 +19,7 @@ import '../../calendar/presentation/calendar_source_sheets.dart';
 import '../../calendar/presentation/public_calendar_list.dart';
 import '../../campusmap/application/campus_map_providers.dart';
 import '../../campusmap/domain/map_catalog.dart';
+import '../../campusmap/presentation/default_building_picker.dart';
 import '../../canteen/application/canteen_providers.dart';
 import '../../canteen/data/canteen_models.dart';
 import '../../news/presentation/channel_picker_sheet.dart';
@@ -336,25 +337,15 @@ class _DefaultBuildingStep extends ConsumerWidget {
         onRetry: () => ref.invalidate(mapCatalogProvider),
       );
     }
-    final String locale = Localizations.localeOf(context).languageCode;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _StepLabel(l10n.settingsDefaultBuilding),
-        RadioGroup<String>(
-          groupValue: chosen,
+        DefaultBuildingOptions(
+          buildings: map.buildings,
+          chosen: chosen,
           onChanged: (String? key) =>
               ref.read(settingsProvider.notifier).setDefaultBuilding(key),
-          child: Column(
-            children: <Widget>[
-              for (final MapBuilding building in map.buildings)
-                RadioListTile<String>.adaptive(
-                  value: building.buildingKey,
-                  title: Text(building.name.resolve(locale)),
-                ),
-            ],
-          ),
         ),
       ],
     );

@@ -22,6 +22,7 @@ import '../../canteen/application/canteen_providers.dart';
 import '../../requests/application/requests_local_data_wiper.dart';
 import '../../canteen/data/canteen_models.dart';
 import '../../canteen/presentation/canteen_picker_sheet.dart';
+import '../../campusmap/presentation/default_building_picker.dart';
 import '../../news/application/channel_subscriptions.dart';
 import '../../mail/application/mail_providers.dart';
 import '../../mail/domain/mail_cache_store.dart';
@@ -117,6 +118,7 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(AppIcons.chevron_right),
             onTap: () => showCanteenPickerSheet(context),
           ),
+          const DefaultBuildingTile(),
           ListTile(
             leading: const Icon(AppIcons.school_outlined),
             title: Text(l10n.settingsTimetableGroup),
