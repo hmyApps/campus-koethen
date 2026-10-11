@@ -14,9 +14,7 @@ import '../features/mail/application/mail_sync_controller.dart';
 import '../features/moodle/application/moodle_account_controller.dart';
 import '../features/moodle/application/moodle_controller.dart';
 import '../features/moodle/domain/moodle_account.dart';
-import '../features/news/application/news_channel_feed_controller.dart';
-import '../features/news/application/news_feed_controller.dart';
-import '../features/news/application/news_providers.dart';
+import '../features/news/application/news_auto_refresh.dart';
 import '../features/timetable/application/timetable_providers.dart';
 import '../features/timetable/application/timetable_week.dart';
 
@@ -109,13 +107,9 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
     }
   }
 
-  Future<void> _refreshNews() async {
-    ref.invalidate(newsChannelFeedControllerProvider);
-    ref.invalidate(newsChannelsProvider);
-    ref.invalidate(newsTagsProvider);
-    ref.invalidate(newsFeedControllerProvider);
-    await ref.read(newsFeedControllerProvider.future);
-  }
+  // Leaves feeds scrolled past page one alone, see NewsAutoRefresh.
+  Future<void> _refreshNews() =>
+      ref.read(newsAutoRefreshProvider.notifier).run();
 
   Future<void> _refreshCalendars() async {
     ref.invalidate(publicCalendarsCatalogProvider);

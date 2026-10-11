@@ -9,6 +9,7 @@ import 'package:campus_koethen/core/network/network_providers.dart';
 import 'package:campus_koethen/core/prefs/key_value_store.dart';
 import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/features/news/application/channel_subscriptions.dart';
+import 'package:campus_koethen/features/news/application/news_auto_refresh.dart';
 import 'package:campus_koethen/features/news/application/news_feed_controller.dart';
 import 'package:campus_koethen/features/news/application/tag_filter.dart';
 import 'package:campus_koethen/features/news/data/news_models.dart';
@@ -240,6 +241,43 @@ void main() {
         .value!;
     expect(_slugs(state), <String>['a']);
     expect(state.page, 1);
+  });
+
+  group('foreground auto refresh', () {
+    test('reloads a feed that is still on its first page', () async {
+      final _Feed feed = _Feed(<int, List<String>?>{
+        1: <String>['a', 'b'],
+        2: <String>['c', 'd'],
+      });
+      final ProviderContainer container = _container(feed);
+      await container.read(newsFeedControllerProvider.future);
+
+      await container.read(newsAutoRefreshProvider.notifier).run();
+
+      expect(feed.requestedPages, <int>[1, 1]);
+    });
+
+    test('leaves a feed alone that was scrolled past page one', () async {
+      // The five-minute and resume refresh used to invalidate the feed, so a
+      // reader deep in it was thrown back to the top.
+      final _Feed feed = _Feed(<int, List<String>?>{
+        1: <String>['a', 'b'],
+        2: <String>['c', 'd'],
+      });
+      final ProviderContainer container = _container(feed);
+      await container.read(newsFeedControllerProvider.future);
+      await container.read(newsFeedControllerProvider.notifier).loadMore();
+
+      await container.read(newsAutoRefreshProvider.notifier).run();
+      await container.read(newsFeedControllerProvider.future);
+
+      final NewsFeedState state = container
+          .read(newsFeedControllerProvider)
+          .value!;
+      expect(state.page, 2);
+      expect(_slugs(state), <String>['a', 'b', 'c', 'd']);
+      expect(feed.requestedPages, <int>[1, 2]);
+    });
   });
 
   test('changing the channel selection starts over at page one', () async {
