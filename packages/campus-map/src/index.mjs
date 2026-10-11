@@ -8,6 +8,7 @@ export {
   buildMobileCatalog,
   buildMobileSvg,
   buildOutputs,
+  generatedAssetLayoutProblems,
   generatedFileDrift,
   writeGenerated,
 } from './generate.mjs';

@@ -25,8 +25,8 @@
  * invalid catalogue, so a failed run can never leave half-written files behind.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { findRooms, findUnsafe, walkElements } from './svg-reader.mjs';
 import { PACKAGE_ROOT, loadCanonical, validate } from './validate.mjs';
@@ -35,6 +35,7 @@ import { PACKAGE_ROOT, loadCanonical, validate } from './validate.mjs';
 export const REPO_ROOT = join(PACKAGE_ROOT, '..', '..');
 
 const MOBILE_ASSET_DIR = 'apps/mobile/assets/maps';
+const MOBILE_PUBSPEC = 'apps/mobile/pubspec.yaml';
 const FLUTTER_ASSET_PREFIX = 'assets/maps';
 
 const DROPPED_ELEMENTS = new Set(['title', 'desc']);
@@ -378,6 +379,96 @@ export function generatedFileDrift({
     }
   }
   return drift;
+}
+
+/** Every file below the generated asset directory, as repo-relative POSIX paths. */
+function listAssetFiles(repoRoot) {
+  const found = [];
+  function walk(dir) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else found.push(relative(repoRoot, path).split(sep).join('/'));
+    }
+  }
+  walk(join(repoRoot, MOBILE_ASSET_DIR));
+  return found;
+}
+
+/** The `assets/maps/...` entries declared in the Flutter pubspec. */
+function pubspecMapAssets(pubspec) {
+  const entries = new Set();
+  for (const line of pubspec.split(/\r?\n/)) {
+    const match = /^\s*-\s*['"]?(assets\/maps\/[^'"\s#]*)/.exec(line);
+    if (match) entries.add(match[1]);
+  }
+  return entries;
+}
+
+/** The pubspec entry that bundles one generated file: its folder, or the file itself at the top level. */
+function requiredPubspecEntry(generatedPath) {
+  const assetPath = `${FLUTTER_ASSET_PREFIX}${generatedPath.slice(MOBILE_ASSET_DIR.length)}`;
+  const folder = assetPath.slice(0, assetPath.lastIndexOf('/') + 1);
+  return folder === `${FLUTTER_ASSET_PREFIX}/` ? assetPath : folder;
+}
+
+/**
+ * Checks what the content drift check cannot see: files in the generated asset
+ * directory that no floor generates any more (orphans), and generated files
+ * Flutter would not bundle because `pubspec.yaml` does not declare them.
+ * Flutter does not recurse into asset subdirectories, so every building folder
+ * needs its own `assets/maps/<building>/` entry. A declared map entry that
+ * covers nothing generated is reported as stale. Empty means consistent.
+ */
+export function generatedAssetLayoutProblems({
+  repoRoot = REPO_ROOT,
+  packageRoot = PACKAGE_ROOT,
+  listFiles,
+  readPubspec,
+} = {}) {
+  const { files } = buildFromCanonical(packageRoot);
+  const expected = new Set(files.keys());
+  const problems = [];
+
+  const present = listFiles ? listFiles() : listAssetFiles(repoRoot);
+  for (const path of [...present].sort()) {
+    if (!expected.has(path)) {
+      problems.push(
+        `${path}: unexpected — no floor generates it; delete it ('generate' never removes files)`,
+      );
+    }
+  }
+
+  const pubspec = readPubspec
+    ? readPubspec()
+    : readFileSync(join(repoRoot, MOBILE_PUBSPEC), 'utf8');
+  const declared = pubspecMapAssets(pubspec);
+  const required = new Set([...expected].map(requiredPubspecEntry));
+  const topLevelFolder = `${FLUTTER_ASSET_PREFIX}/`;
+
+  for (const entry of [...required].sort()) {
+    const coveredByTopLevel = !entry.endsWith('/') && declared.has(topLevelFolder);
+    if (!declared.has(entry) && !coveredByTopLevel) {
+      problems.push(
+        `${MOBILE_PUBSPEC}: missing asset entry '${entry}' — Flutter would not bundle it`,
+      );
+    }
+  }
+  for (const entry of [...declared].sort()) {
+    const coversTopLevelFile =
+      entry === topLevelFolder && [...required].some((path) => !path.endsWith('/'));
+    if (!required.has(entry) && !coversTopLevelFile) {
+      problems.push(`${MOBILE_PUBSPEC}: stale asset entry '${entry}' — nothing is generated there`);
+    }
+  }
+
+  return problems;
 }
 
 export { validate };
