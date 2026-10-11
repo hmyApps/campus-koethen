@@ -580,20 +580,7 @@ class _EntryRow extends ConsumerWidget {
     final DateTime start = entry.start.toLocal();
     final DateTime? end = entry.end?.toLocal();
 
-    // A deadline has no duration, so it is never "now" — it is ahead of you or
-    // it is behind you. Treating its start as its end says exactly that.
-    final DateTime finish = end ?? start;
-    final DateTime? currentTime = now;
-    final TimeRailEmphasis emphasis;
-    if (currentTime == null) {
-      emphasis = TimeRailEmphasis.normal;
-    } else if (!start.isAfter(currentTime) && finish.isAfter(currentTime)) {
-      emphasis = TimeRailEmphasis.now;
-    } else if (!finish.isAfter(currentTime)) {
-      emphasis = TimeRailEmphasis.past;
-    } else {
-      emphasis = TimeRailEmphasis.normal;
-    }
+    final TimeRailEmphasis emphasis = calendarEntryEmphasis(entry, now);
 
     // Source is always conveyed with a text label (and an icon), never by
     // colour alone; the public-calendar colour is an extra decorative accent.
