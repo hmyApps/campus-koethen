@@ -221,6 +221,19 @@ void main() {
       }
     });
 
+    testWidgets('a temporarily unavailable module is not offered', (
+      WidgetTester tester,
+    ) async {
+      await pumpThemed(
+        tester,
+        const NavigationSettingsScreen(),
+        surface: const Size(390, 3000),
+      );
+
+      expect(find.text('Stundenplan'), findsOneWidget);
+      expect(find.text('HSA-GPT'), findsNothing);
+    });
+
     testWidgets('removing one and adding another is persisted', (
       WidgetTester tester,
     ) async {

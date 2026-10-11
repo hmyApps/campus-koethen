@@ -10,6 +10,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/panel.dart';
 import '../../../l10n/l10n.dart';
+import '../../hsa_ki/application/hsa_ki_providers.dart';
 import '../../hsa_ki/presentation/hsa_ki_connect_flow.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
@@ -458,11 +459,15 @@ class _OnboardingUniversityServicesStepState
           ),
         ],
         const SizedBox(height: AppSpacing.md),
-        _HsaKiConsentEntry(
-          connected: alreadyConnected.contains(DirectService.hsaKi),
-          error: _errors[DirectService.hsaKi],
-          onConnect: _busy || !canUseIdentity ? null : _connectHsaKi,
-        ),
+        // While HSA-GPT is switched off, offering it would only mint an
+        // unusable HAWKI token.
+        if (!ref.watch(hsaKiTemporarilyUnavailableProvider) ||
+            alreadyConnected.contains(DirectService.hsaKi))
+          _HsaKiConsentEntry(
+            connected: alreadyConnected.contains(DirectService.hsaKi),
+            error: _errors[DirectService.hsaKi],
+            onConnect: _busy || !canUseIdentity ? null : _connectHsaKi,
+          ),
         Text(
           l10n.onboardingUniversitySeparateSessions,
           style: Theme.of(

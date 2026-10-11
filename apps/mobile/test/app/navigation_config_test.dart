@@ -107,6 +107,19 @@ void main() {
       expect(config.isValid, isTrue);
     });
 
+    test('a temporarily unavailable module is refused as a tab', () {
+      // HSA-GPT is greyed out in More; a tab must not bypass that.
+      final NavigationConfig config = NavigationConfig.fromStorage(<String>[
+        'hsaKi',
+        'news',
+        'calendar',
+        'canteen',
+      ]);
+      expect(config.tabs, isNot(contains(AppModule.hsaKi)));
+      expect(config.tabs, hasLength(NavigationConfig.tabCount));
+      expect(config.isValid, isTrue);
+    });
+
     test('an empty list still yields a usable bar', () {
       expect(
         NavigationConfig.fromStorage(const <String>[]),
