@@ -140,6 +140,39 @@ void main() {
     expect(container.read(chatSessionControllerProvider).hasError, isTrue);
   });
 
+  test('a session the server ended is wiped and explained', () async {
+    gateway.stored = FakeMatrixGateway.demoAccount;
+    final ProviderContainer container = containerFor();
+    final ProviderSubscription<AsyncValue<MatrixAccount?>> session = container
+        .listen(chatSessionControllerProvider, (_, _) {});
+    addTearDown(session.close);
+    await container.read(chatSessionControllerProvider.future);
+
+    gateway.stored = null;
+    gateway.emitChange();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(gateway.logouts, 1);
+    expect(
+      session.read().error,
+      const MatrixFailure(MatrixFailureKind.sessionEnded),
+    );
+  });
+
+  test('its own logout is not mistaken for an ended session', () async {
+    gateway.stored = FakeMatrixGateway.demoAccount;
+    final ProviderContainer container = containerFor();
+    await container.read(chatSessionControllerProvider.future);
+
+    await container.read(chatSessionControllerProvider.notifier).logout();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(gateway.logouts, 1);
+    expect(container.read(chatSessionControllerProvider).value, isNull);
+    expect(container.read(chatSessionControllerProvider).hasError, isFalse);
+  });
+
   test('the room list follows the gateway', () async {
     gateway.stored = FakeMatrixGateway.demoAccount;
     final ProviderContainer container = containerFor();

@@ -30,6 +30,19 @@ enum MatrixFailureKind {
   /// The room is not (or no longer) among this account's rooms.
   roomUnavailable,
   sendFailed,
+
+  /// What was entered as a person is not a Matrix user ID.
+  invalidUserId,
+
+  /// The server refused the action (outside of login).
+  notAllowed,
+
+  /// The server does not know the person or room asked for.
+  notFound,
+
+  /// The server ended the session, e.g. signed out from another device.
+  /// Local data has been wiped; a new login starts fresh.
+  sessionEnded,
   unknown,
 }
 

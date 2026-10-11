@@ -17,6 +17,10 @@ abstract interface class MatrixGateway {
     required String password,
   });
 
+  /// The signed-in account right now, or `null` — also after the server
+  /// ended the session on its own.
+  MatrixAccount? get account;
+
   /// Signs this device out at the homeserver (best effort) and then deletes
   /// the local database and its key, verified, even without a server.
   Future<void> logout();
@@ -33,6 +37,18 @@ abstract interface class MatrixGateway {
   Future<ChatRoomTimeline> openTimeline(String roomId);
 
   Future<void> sendText(String roomId, String text);
+
+  /// Opens the direct chat with [userId] (a Matrix ID or a bare name on the
+  /// own server), creating it end-to-end encrypted if there is none yet.
+  /// Returns the room ID.
+  Future<String> startDirectChat(String userId);
+
+  /// Creates a private, end-to-end encrypted group and invites [invite].
+  /// Returns the room ID.
+  Future<String> createGroupChat({
+    required String name,
+    required List<String> invite,
+  });
 
   Future<void> acceptInvite(String roomId);
 

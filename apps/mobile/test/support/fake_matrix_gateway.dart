@@ -98,6 +98,35 @@ class FakeMatrixGateway implements MatrixGateway {
     sent.add((roomId, text));
   }
 
+  final List<String> directChats = <String>[];
+  final List<(String, List<String>)> groups = <(String, List<String>)>[];
+  MatrixFailure? createFailure;
+
+  /// The room ID new conversations get.
+  String createdRoomId = '!demo-new:matrix.example.test';
+
+  @override
+  MatrixAccount? get account => stored;
+
+  @override
+  Future<String> startDirectChat(String userId) async {
+    final MatrixFailure? failure = createFailure;
+    if (failure != null) throw failure;
+    directChats.add(userId);
+    return createdRoomId;
+  }
+
+  @override
+  Future<String> createGroupChat({
+    required String name,
+    required List<String> invite,
+  }) async {
+    final MatrixFailure? failure = createFailure;
+    if (failure != null) throw failure;
+    groups.add((name, invite));
+    return createdRoomId;
+  }
+
   @override
   Future<void> acceptInvite(String roomId) async => accepted.add(roomId);
 

@@ -50,6 +50,17 @@ class FakeHomeserver extends http.BaseClient {
   /// The rooms delivered with the first sync.
   Map<String, Object?> Function()? firstSyncRooms;
 
+  /// Every further sync answers that the access token is no longer valid,
+  /// as when the session was signed out from another device.
+  bool revokeToken = false;
+
+  /// Overrides the answer to `POST /createRoom`: status and Matrix error code.
+  (int, String)? createRoomError;
+
+  /// Rooms created here, delivered as joined with the next sync.
+  final Map<String, Map<String, Object?>> _pendingJoins =
+      <String, Map<String, Object?>>{};
+
   var _eventCounter = 0;
 
   Iterable<FakeHomeserverRequest> called(String method, String path) => requests
@@ -89,6 +100,13 @@ class FakeHomeserver extends http.BaseClient {
       return _json(200, <String, Object?>{'filter_id': 'demo-filter'});
     }
     if (method == 'GET' && path == '/v3/sync') {
+      if (revokeToken) {
+        return _json(401, <String, Object?>{
+          'errcode': 'M_UNKNOWN_TOKEN',
+          'error': 'demo',
+          'soft_logout': false,
+        });
+      }
       if (r.url.queryParameters['since'] == null) {
         return _json(200, <String, Object?>{
           'next_batch': 'demo-batch-1',
@@ -96,7 +114,18 @@ class FakeHomeserver extends http.BaseClient {
         });
       }
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      return _json(200, <String, Object?>{'next_batch': 'demo-batch-n'});
+      final Map<String, Object?> joins = Map<String, Object?>.of(_pendingJoins);
+      _pendingJoins.clear();
+      return _json(200, <String, Object?>{
+        'next_batch': 'demo-batch-n',
+        if (joins.isNotEmpty) 'rooms': <String, Object?>{'join': joins},
+      });
+    }
+    if (method == 'POST' && path == '/v3/createRoom') {
+      return _createRoom(r.body);
+    }
+    if (method == 'PUT' && path.contains('/account_data/')) {
+      return _json(200, <String, Object?>{});
     }
     if (method == 'PUT' && path.contains('/send/')) {
       return _json(200, <String, Object?>{
@@ -121,6 +150,41 @@ class FakeHomeserver extends http.BaseClient {
       'errcode': 'M_UNRECOGNIZED',
       'error': 'demo',
     });
+  }
+
+  http.StreamedResponse _createRoom(String body) {
+    final (int, String)? error = createRoomError;
+    if (error != null) {
+      return _json(error.$1, <String, Object?>{
+        'errcode': error.$2,
+        'error': 'demo',
+      });
+    }
+    final Map<String, Object?> request =
+        jsonDecode(body) as Map<String, Object?>;
+    final String roomId = '!demo-new-${_eventCounter++}:matrix.example.test';
+    final List<Object?> initialState =
+        (request['initial_state'] as List<Object?>?) ?? <Object?>[];
+    _pendingJoins[roomId] = <String, Object?>{
+      'state': <String, Object?>{
+        'events': <Object?>[
+          _state('m.room.create', '', <String, Object?>{'creator': userId}),
+          _state('m.room.member', userId, <String, Object?>{
+            'membership': 'join',
+          }),
+          if (request['name'] case final String name)
+            _state('m.room.name', '', <String, Object?>{'name': name}),
+          for (final Object? event in initialState)
+            if (event case {
+              'type': final String type,
+              'content': final Map<String, Object?> content,
+            })
+              _state(type, '', content),
+        ],
+      },
+      'timeline': <String, Object?>{'events': <Object?>[], 'limited': false},
+    };
+    return _json(200, <String, Object?>{'room_id': roomId});
   }
 
   http.StreamedResponse _loginFlows() => _json(200, <String, Object?>{

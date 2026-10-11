@@ -9,6 +9,7 @@ import '../data/encrypted_matrix_database.dart';
 import '../data/sdk_matrix_gateway.dart';
 import '../data/secure_matrix_database_key_store.dart';
 import '../domain/chat_models.dart';
+import '../domain/matrix_failure.dart';
 import '../domain/matrix_gateway.dart';
 import '../domain/matrix_homeserver.dart';
 
@@ -30,9 +31,41 @@ final Provider<MatrixGateway> matrixGatewayProvider = Provider<MatrixGateway>((
 /// The Matrix session: `null` while signed out.
 class ChatSessionController extends AsyncNotifier<MatrixAccount?> {
   @override
-  Future<MatrixAccount?> build() => ref.read(matrixGatewayProvider).restore();
+  Future<MatrixAccount?> build() {
+    final MatrixGateway gateway = ref.read(matrixGatewayProvider);
+    final StreamSubscription<void> changes = gateway.changes.listen(
+      (_) => _noticeEndedSession(gateway),
+    );
+    ref.onDispose(changes.cancel);
+    return gateway.restore();
+  }
 
   bool _loggingIn = false;
+  bool _endingSession = false;
+
+  /// The server can end the session on its own (signed out from another
+  /// device, token revoked). The SDK then forgets it; this wipes what is
+  /// left on the device and says what happened.
+  void _noticeEndedSession(MatrixGateway gateway) {
+    if (_endingSession || _loggingIn || state.isLoading) return;
+    if (chatAccountOf(state) == null || gateway.account != null) return;
+    unawaited(_endSession(gateway));
+  }
+
+  Future<void> _endSession(MatrixGateway gateway) async {
+    _endingSession = true;
+    try {
+      await gateway.logout();
+      state = AsyncError<MatrixAccount?>(
+        const MatrixFailure(MatrixFailureKind.sessionEnded),
+        StackTrace.current,
+      );
+    } catch (error, stackTrace) {
+      state = AsyncError<MatrixAccount?>(error, stackTrace);
+    } finally {
+      _endingSession = false;
+    }
+  }
 
   /// A failed login ends up as the state's error. The state is deliberately
   /// not set to loading meanwhile, so the login form (and what was typed)
@@ -68,6 +101,12 @@ class ChatSessionController extends AsyncNotifier<MatrixAccount?> {
     }
   }
 }
+
+/// The signed-in account a session state stands for. An error never counts
+/// as signed in: Riverpod keeps the previous value on an `AsyncError`, and an
+/// ended session or a failed wipe must not keep showing the old account.
+MatrixAccount? chatAccountOf(AsyncValue<MatrixAccount?> session) =>
+    session.hasError ? null : session.value;
 
 final AsyncNotifierProvider<ChatSessionController, MatrixAccount?>
 chatSessionControllerProvider =

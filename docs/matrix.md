@@ -48,11 +48,14 @@ lokal.
   kein Hochschulzugang. Sobald die Anmeldung über die Hochschulkonten läuft, wird der Chat ein
   eigener `DirectService` mit kanonischem Wipe.
 - Lesebestätigungen werden nur privat gesendet (`m.read.private`).
+- Beendet der Server die Sitzung selbst (Abmeldung von einem anderen Gerät, widerrufenes Token),
+  löscht die App Datenbank und Schlüssel auf dem Gerät ebenso verifiziert wie bei `−` und erklärt
+  das beim nächsten Login. Ein Fehlerzustand gilt nie als angemeldet.
 
 ## 4. Ende-zu-Ende-Verschlüsselung
 
 - Olm/Megolm über **vodozemac** (`flutter_vodozemac`), vom SDK automatisch genutzt.
-- Neue Direktchats werden verschlüsselt angelegt, sobald das Anlegen umgesetzt ist. Nicht
+- Neue Direkt- und Gruppenchats werden immer verschlüsselt und privat angelegt. Nicht
   entschlüsselbare Nachrichten werden ehrlich als solche angezeigt, nie als leer.
 - Lässt sich vodozemac auf dem Gerät nicht laden, bleibt der Chat aus (`encryptionUnavailable`) statt
   unverschlüsselt zu laufen.
@@ -78,7 +81,8 @@ lokal.
 | Sync nur im Vordergrund (`AppSyncHost`)                                       | fertig |
 | Modul mit Sprechblasen-Icon, Raumliste, Einladungen, Verlauf, Textnachrichten | fertig |
 | Datenschutzhinweis (nur in Builds mit Chat)                                   | fertig |
-| Neue Direkt- und Gruppenchats anlegen                                         | offen  |
+| Neue Direkt- und Gruppenchats anlegen (verschlüsselt, privat)                 | fertig |
+| Vom Server beendete Sitzung erkennen, lokal löschen, erklären                 | fertig |
 | Schlüssel-Backup / Wiederherstellungsschlüssel                                | offen  |
 | Geräteverifizierung (SAS-Emoji)                                               | offen  |
 | Geräteprüfung ohne Konto (vodozemac, Verschlüsselung, Login-Ablehnung)        | fertig |

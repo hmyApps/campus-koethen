@@ -202,6 +202,63 @@ void main() {
       expect(find.text(l10n.chatLoginAction), findsOneWidget);
     });
 
+    testWidgets('a failed wipe shows the error, never the old rooms', (
+      WidgetTester tester,
+    ) async {
+      gateway.stored = FakeMatrixGateway.demoAccount;
+      gateway.roomList = <ChatRoomSummary>[
+        const ChatRoomSummary(
+          id: '!demo:matrix.example.test',
+          title: 'Demo-Gruppe',
+          isDirect: false,
+          isEncrypted: true,
+          isInvite: false,
+          unreadCount: 0,
+        ),
+      ];
+      gateway.logoutFailure = const MatrixFailure(
+        MatrixFailureKind.secureStorageUnavailable,
+      );
+      await pumpChat(tester, homeserver: server);
+      expect(find.text('Demo-Gruppe'), findsOneWidget);
+
+      await tester.tap(find.byTooltip(l10n.chatAccountMenu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.chatLogout));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.chatLogoutConfirmAction));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Demo-Gruppe'), findsNothing);
+      expect(find.text(l10n.chatErrorSecureStorage), findsOneWidget);
+    });
+
+    testWidgets('a session the server ended returns to the login with the '
+        'reason, never the old rooms', (WidgetTester tester) async {
+      gateway.stored = FakeMatrixGateway.demoAccount;
+      gateway.roomList = <ChatRoomSummary>[
+        const ChatRoomSummary(
+          id: '!demo:matrix.example.test',
+          title: 'Demo-Gruppe',
+          isDirect: false,
+          isEncrypted: true,
+          isInvite: false,
+          unreadCount: 0,
+        ),
+      ];
+      await pumpChat(tester, homeserver: server);
+      expect(find.text('Demo-Gruppe'), findsOneWidget);
+
+      gateway.stored = null;
+      gateway.emitChange();
+      await tester.pumpAndSettle();
+
+      expect(gateway.logouts, 1);
+      expect(find.text('Demo-Gruppe'), findsNothing);
+      expect(find.text(l10n.chatErrorSessionEnded), findsOneWidget);
+      expect(find.byType(TextField), findsNWidgets(2));
+    });
+
     testWidgets('an unreadable local database offers deleting it', (
       WidgetTester tester,
     ) async {

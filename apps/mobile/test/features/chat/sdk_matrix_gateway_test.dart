@@ -329,6 +329,113 @@ void main() {
     });
   });
 
+  group('new conversations', () {
+    Map<String, Object?> createRequest() =>
+        jsonDecode(server.called('POST', '/v3/createRoom').single.body)
+            as Map<String, Object?>;
+
+    bool asksForEncryption(Map<String, Object?> request) =>
+        ((request['initial_state'] as List<Object?>?) ?? <Object?>[]).any(
+          (Object? e) =>
+              e is Map &&
+              e['type'] == 'm.room.encryption' &&
+              (e['content'] as Map)['algorithm'] == 'm.megolm.v1.aes-sha2',
+        );
+
+    test(
+      'starts an encrypted direct chat and waits until it is there',
+      () async {
+        final SdkMatrixGateway gateway = gatewayFor();
+        await signIn(gateway);
+
+        final String roomId = await gateway.startDirectChat(
+          FakeHomeserver.peerId,
+        );
+
+        final Map<String, Object?> request = createRequest();
+        expect(request['is_direct'], isTrue);
+        expect(request['invite'], <String>[FakeHomeserver.peerId]);
+        expect(asksForEncryption(request), isTrue);
+        expect(
+          gateway.rooms.map((ChatRoomSummary r) => r.id),
+          contains(roomId),
+        );
+      },
+    );
+
+    test('creates an encrypted, private group', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+
+      final String roomId = await gateway.createGroupChat(
+        name: 'Demo-Lerngruppe',
+        invite: <String>[FakeHomeserver.peerId],
+      );
+
+      final Map<String, Object?> request = createRequest();
+      expect(request['name'], 'Demo-Lerngruppe');
+      expect(request['invite'], <String>[FakeHomeserver.peerId]);
+      expect(request['preset'], 'private_chat');
+      expect(asksForEncryption(request), isTrue);
+      expect(
+        gateway.rooms.singleWhere((ChatRoomSummary r) => r.id == roomId).title,
+        'Demo-Lerngruppe',
+      );
+    });
+
+    test('refuses an invalid Matrix ID before asking the server', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+
+      await expectLater(
+        gateway.startDirectChat('demo peer'),
+        failure(MatrixFailureKind.invalidUserId),
+      );
+      await expectLater(
+        gateway.createGroupChat(name: 'x', invite: <String>['@:x']),
+        failure(MatrixFailureKind.invalidUserId),
+      );
+      expect(server.called('POST', '/v3/createRoom'), isEmpty);
+    });
+
+    test('a refusal is "not allowed", not a wrong password', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+      server.createRoomError = (403, 'M_FORBIDDEN');
+
+      await expectLater(
+        gateway.startDirectChat(FakeHomeserver.peerId),
+        failure(MatrixFailureKind.notAllowed),
+      );
+    });
+
+    test('an unknown person is reported as such', () async {
+      final SdkMatrixGateway gateway = gatewayFor();
+      await signIn(gateway);
+      server.createRoomError = (404, 'M_NOT_FOUND');
+
+      await expectLater(
+        gateway.startDirectChat(FakeHomeserver.peerId),
+        failure(MatrixFailureKind.notFound),
+      );
+    });
+  });
+
+  test('a session the server ended is reported as signed out', () async {
+    final SdkMatrixGateway gateway = gatewayFor();
+    await signIn(gateway);
+    expect(gateway.account?.userId, FakeHomeserver.userId);
+
+    final Future<void> changed = gateway.changes.firstWhere(
+      (_) => gateway.account == null,
+    );
+    server.revokeToken = true;
+    await changed.timeout(const Duration(seconds: 10));
+
+    expect(gateway.account, isNull);
+    expect(gateway.rooms, isEmpty);
+  });
+
   test('stops syncing while in the background', () async {
     final SdkMatrixGateway gateway = gatewayFor();
     await signIn(gateway);

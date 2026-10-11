@@ -16,6 +16,7 @@ import '../domain/chat_models.dart';
 import '../domain/matrix_failure.dart';
 import '../domain/matrix_gateway.dart';
 import '../domain/matrix_homeserver.dart';
+import '../domain/matrix_user_id.dart';
 import 'encrypted_matrix_database.dart';
 import 'matrix_origin_http_client.dart';
 
@@ -113,7 +114,7 @@ class SdkMatrixGateway implements MatrixGateway {
   Future<MatrixAccount> login({
     required String username,
     required String password,
-  }) => _guard(() async {
+  }) => _guard(login: true, () async {
     final MatrixHomeserver homeserver =
         _homeserver ??
         (throw const MatrixFailure(MatrixFailureKind.notConfigured));
@@ -216,6 +217,71 @@ class SdkMatrixGateway implements MatrixGateway {
       throw const MatrixFailure(MatrixFailureKind.sendFailed);
     }
   });
+
+  @override
+  MatrixAccount? get account {
+    final Client? client = _client;
+    return client != null && client.isLogged() ? _account(client) : null;
+  }
+
+  @override
+  Future<String> startDirectChat(String userId) => _guard(() async {
+    final Client client = _requireClient();
+    final String peer = _requireUserId(client, userId);
+    final String roomId = await client.startDirectChat(
+      peer,
+      enableEncryption: true,
+      waitForSync: false,
+    );
+    await _untilJoined(client, roomId);
+    return roomId;
+  });
+
+  @override
+  Future<String> createGroupChat({
+    required String name,
+    required List<String> invite,
+  }) => _guard(() async {
+    final Client client = _requireClient();
+    final List<String> invitees = <String>{
+      for (final String userId in invite) _requireUserId(client, userId),
+    }.toList(growable: false);
+    final String trimmed = name.trim();
+    final String roomId = await client.createGroupChat(
+      groupName: trimmed.isEmpty ? null : trimmed,
+      invite: invitees,
+      enableEncryption: true,
+      preset: CreateRoomPreset.privateChat,
+      waitForSync: false,
+    );
+    await _untilJoined(client, roomId);
+    return roomId;
+  });
+
+  String _requireUserId(Client client, String input) {
+    final String? userId = parseMatrixUserId(
+      input,
+      ownServerName:
+          matrixServerNameOf(client.userID ?? '') ?? _homeserver?.host ?? '',
+    );
+    if (userId == null) {
+      throw const MatrixFailure(MatrixFailureKind.invalidUserId);
+    }
+    return userId;
+  }
+
+  /// A new room only exists locally once a sync delivered it. Waits for that
+  /// (bounded); a slow server still gets the room with a later sync.
+  static Future<void> _untilJoined(Client client, String roomId) async {
+    if (client.getRoomById(roomId)?.membership == Membership.join) return;
+    try {
+      await client
+          .waitForRoomInSync(roomId, join: true)
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      // Created all the same; it shows up with a later sync.
+    }
+  }
 
   @override
   Future<void> acceptInvite(String roomId) =>
@@ -380,27 +446,42 @@ class SdkMatrixGateway implements MatrixGateway {
     logs.onLog = (_) => logs.outputEvents.clear();
   }
 
-  static Future<T> _guard<T>(Future<T> Function() operation) async {
+  static Future<T> _guard<T>(
+    Future<T> Function() operation, {
+    bool login = false,
+  }) async {
     try {
       return await operation();
     } on MatrixFailure {
       rethrow;
     } catch (error) {
-      throw classifyMatrixError(error);
+      throw classifyMatrixError(error, login: login);
     }
   }
 }
 
 /// Maps whatever the SDK or the network threw to a classified failure
 /// without carrying any of its text along.
-MatrixFailure classifyMatrixError(Object error) {
+///
+/// A refusal means a wrong password only while signing in ([login]); for
+/// everything after that it means the action is not allowed.
+MatrixFailure classifyMatrixError(Object error, {bool login = false}) {
   if (error is MatrixFailure) return error;
   if (error is MatrixException) {
     return switch (error.error) {
       MatrixError.M_FORBIDDEN ||
-      MatrixError.M_USER_DEACTIVATED ||
-      MatrixError.M_UNKNOWN_TOKEN => const MatrixFailure(
-        MatrixFailureKind.invalidCredentials,
+      MatrixError.M_USER_DEACTIVATED => MatrixFailure(
+        login
+            ? MatrixFailureKind.invalidCredentials
+            : MatrixFailureKind.notAllowed,
+      ),
+      MatrixError.M_UNKNOWN_TOKEN => MatrixFailure(
+        login
+            ? MatrixFailureKind.invalidCredentials
+            : MatrixFailureKind.notConnected,
+      ),
+      MatrixError.M_NOT_FOUND => const MatrixFailure(
+        MatrixFailureKind.notFound,
       ),
       MatrixError.M_LIMIT_EXCEEDED => const MatrixFailure(
         MatrixFailureKind.rateLimited,

@@ -26,6 +26,10 @@ String chatFailureMessage(AppLocalizations l10n, Object error) {
     MatrixFailureKind.notConnected => l10n.chatErrorNotConnected,
     MatrixFailureKind.roomUnavailable => l10n.chatRoomUnavailable,
     MatrixFailureKind.sendFailed => l10n.chatErrorSendFailed,
+    MatrixFailureKind.invalidUserId => l10n.chatErrorInvalidUserId,
+    MatrixFailureKind.notAllowed => l10n.chatErrorNotAllowed,
+    MatrixFailureKind.notFound => l10n.chatErrorNotFound,
+    MatrixFailureKind.sessionEnded => l10n.chatErrorSessionEnded,
     MatrixFailureKind.unknown => l10n.chatErrorUnknown,
   };
 }

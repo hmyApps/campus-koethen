@@ -18,6 +18,7 @@ import '../domain/chat_models.dart';
 import '../domain/matrix_failure.dart';
 import '../domain/matrix_homeserver.dart';
 import 'chat_messages.dart';
+import 'chat_new_conversation_sheet.dart';
 
 /// The chat module: a gate like the other direct services. Not configured in
 /// this build, signed out (login), or signed in (rooms).
@@ -31,7 +32,7 @@ class ChatScreen extends ConsumerWidget {
     final AsyncValue<MatrixAccount?> session = homeserver == null
         ? const AsyncData<MatrixAccount?>(null)
         : ref.watch(chatSessionControllerProvider);
-    final MatrixAccount? account = session.value;
+    final MatrixAccount? account = chatAccountOf(session);
 
     final Widget body;
     if (homeserver == null) {
@@ -53,8 +54,21 @@ class ChatScreen extends ConsumerWidget {
       actions: account == null
           ? null
           : <Widget>[_ChatAccountButton(account: account)],
+      floatingActionButton: account == null || session.isLoading
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _newConversation(context),
+              icon: const Icon(AppIcons.add),
+              label: Text(l10n.chatNewChat),
+            ),
       body: body,
     );
+  }
+
+  Future<void> _newConversation(BuildContext context) async {
+    final String? roomId = await showNewConversationSheet(context);
+    if (roomId == null || !context.mounted) return;
+    await context.push(AppRoutes.chatRoom, extra: roomId);
   }
 }
 
