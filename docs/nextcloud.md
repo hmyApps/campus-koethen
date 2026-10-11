@@ -51,7 +51,8 @@ Server-Origin ausschließlich im gerätegebundenen Keychain/Keystore gespeichert
 Riverpod-State enthält nur `loginName` und Nutzer-ID, nie App-Passwort oder Poll-Token.
 Scheitert die Nutzer-ID-Abfrage, die sichere Speicherung oder trifft ein Abbruch erst nach der
 Ausstellung ein, versucht die App das gerade ausgestellte App-Passwort kompensierend zu widerrufen
-und entfernt jeden teilweise geschriebenen lokalen Wert.
+und entfernt jeden teilweise geschriebenen lokalen Wert. Ein Abbruch, solange der Login-Flow
+noch gestartet wird, öffnet den Browser-Login danach nicht mehr.
 
 ## 3. WebDAV-Vertrag
 
