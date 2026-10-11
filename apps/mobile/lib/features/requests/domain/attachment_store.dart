@@ -25,6 +25,8 @@ abstract interface class AttachmentStore {
 
   /// Returns the decrypted bytes, or `null` when the entry is gone — a draft
   /// can outlive its attachments if storage was cleared.
+  ///
+  /// Throws [AttachmentStoreUnavailable] when the store itself cannot be read.
   Future<Uint8List?> read(RequestAttachment attachment);
 
   /// Removes one entry. Never touches the user's original file.
@@ -63,9 +65,24 @@ abstract interface class StreamingAttachmentStore {
     Stream<List<int>> bytes,
   );
 
+  /// `null` when the entry is gone; throws [AttachmentStoreUnavailable] when
+  /// the store itself cannot be read.
   Future<StoredAttachmentStream?> openRead(RequestAttachment attachment);
 }
 
 class AttachmentLimitExceeded implements Exception {
   const AttachmentLimitExceeded();
+}
+
+/// The store itself could not be read — a locked keystore, a box that would
+/// not open.
+///
+/// Not "the file is gone": reading that as absent blamed a form field for a
+/// storage fault and invited the person to pick the student card again.
+/// Carries nothing that was stored.
+class AttachmentStoreUnavailable implements Exception {
+  const AttachmentStoreUnavailable();
+
+  @override
+  String toString() => 'AttachmentStoreUnavailable';
 }

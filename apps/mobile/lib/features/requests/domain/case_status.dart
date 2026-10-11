@@ -26,7 +26,10 @@ class StatusDocument {
   final String kind;
 
   final String label;
-  final String filename;
+
+  /// The server's file name, or `null` when it sent none — the presentation
+  /// layer then names it from the string table (AGENTS.md §6).
+  final String? filename;
   final String mimeType;
 
   /// Token-protected link. Carries the same secret as the status link and is
@@ -50,7 +53,7 @@ class StatusDocument {
           : (filename is String ? filename : kind),
       filename: filename is String && filename.trim().isNotEmpty
           ? filename
-          : 'dokument',
+          : null,
       mimeType: mimeType is String && mimeType.trim().isNotEmpty
           ? mimeType
           : 'application/octet-stream',

@@ -435,8 +435,16 @@ class _DraftTile extends ConsumerWidget {
         ],
       ),
     );
-    if (yes ?? false) {
+    if (!(yes ?? false) || !context.mounted) return;
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
       await ref.read(requestsProvider.notifier).delete(draft.id);
+    } catch (_) {
+      // Storage refused: the draft is still there, and the reader is told so
+      // rather than left with a tap that seemingly did nothing.
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.requestsStoreWriteFailed)),
+      );
     }
   }
 }

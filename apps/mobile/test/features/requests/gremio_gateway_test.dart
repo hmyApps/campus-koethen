@@ -7,7 +7,9 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:campus_koethen/features/requests/data/feedback_areas_repository.dart';
 import 'package:campus_koethen/features/requests/data/gremio_request_gateway.dart';
+import 'package:campus_koethen/features/requests/data/locations_repository.dart';
 import 'package:campus_koethen/features/requests/domain/application_files.dart';
 import 'package:campus_koethen/features/requests/domain/request_drafts.dart';
 import 'package:campus_koethen/features/requests/domain/request_gateway.dart';
@@ -209,6 +211,52 @@ void main() {
         expect(adapter.requests, hasLength(1));
       },
     );
+  });
+
+  group('nothing was sent', () {
+    test(
+      'a cancel before the request went out is not an unclear outcome',
+      () async {
+        final (gateway, adapter, store) = await _build((_) => _created);
+        final FinanceApplicationDraft draft = await _application(store);
+        // Tapped while the attachments were still being opened: the token was
+        // cancelled before the gateway could bind it to the transport.
+        final SubmissionCancelToken cancel = SubmissionCancelToken()..cancel();
+
+        final SubmissionResult result = await gateway.submitApplication(
+          draft,
+          cancel: cancel,
+        );
+
+        expect(
+          result,
+          isA<SubmissionNotSent>().having(
+            (SubmissionNotSent r) => r.reason,
+            'reason',
+            SubmissionNotSentReason.cancelled,
+          ),
+        );
+        expect(adapter.requests, isEmpty);
+      },
+    );
+
+    test('an unreadable attachment store is not a field error', () async {
+      final (gateway, adapter, store) = await _build((_) => _created);
+      final FinanceApplicationDraft draft = await _application(store);
+      store.failReads = true;
+
+      final SubmissionResult result = await gateway.submitApplication(draft);
+
+      expect(
+        result,
+        isA<SubmissionNotSent>().having(
+          (SubmissionNotSent r) => r.reason,
+          'reason',
+          SubmissionNotSentReason.attachmentsUnavailable,
+        ),
+      );
+      expect(adapter.requests, isEmpty);
+    });
   });
 
   group('submitting feedback', () {
@@ -487,6 +535,39 @@ void main() {
         await gateway.submitFeedback(_feedback()),
         isA<SubmissionNotConnected>(),
       );
+    });
+  });
+
+  group('the pickers', () {
+    test('never fetch over a plain-http base address', () async {
+      // HTTPS is mandatory for this whole feature (AGENTS.md §2). Checking
+      // only for an empty address let an http:// value read in the clear.
+      final FakeGremioAdapter adapter = FakeGremioAdapter(
+        (_) => const FakeGremioResponse(<String, dynamic>{
+          'locations': <Object>[],
+          'areas': <Object>[],
+        }),
+      );
+      final Dio dio = fakeGremioDio(adapter);
+
+      expect(
+        await LocationsRepository(
+          dio: dio,
+          baseUrl: 'http://gremio.example',
+        ).fetch(),
+        isEmpty,
+      );
+      expect(
+        await FeedbackAreasRepository(
+          dio: dio,
+          baseUrl: 'http://gremio.example',
+        ).fetch(),
+        isEmpty,
+      );
+      expect(adapter.requests, isEmpty);
+
+      await LocationsRepository(dio: dio, baseUrl: kFakeBaseUrl).fetch();
+      expect(adapter.requests, hasLength(1), reason: 'HTTPS still works');
     });
   });
 

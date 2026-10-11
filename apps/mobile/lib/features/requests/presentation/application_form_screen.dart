@@ -68,6 +68,11 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
   /// case, so the banner has to offer one.
   bool _keyExpired = false;
 
+  /// Set when the replay of a frozen draft was refused outright (400, 404,
+  /// 413, 415). The message asks for a correction the frozen form cannot
+  /// take, so the banner offers the same deliberate release.
+  bool _offerRelease = false;
+
   @override
   void initState() {
     super.initState();
@@ -136,11 +141,18 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
     if (draft == null) return;
     if (!await confirmResubmitAsNew(context) || !mounted) return;
 
-    await ref.read(requestsProvider.notifier).unfreeze(draft.id);
+    final String failed = context.l10n.requestsStoreWriteFailed;
+    try {
+      await ref.read(requestsProvider.notifier).unfreeze(draft.id);
+    } catch (_) {
+      _showMessage(failed);
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _banner = null;
       _keyExpired = false;
+      _offerRelease = false;
     });
     _adoptStoredDraft();
   }
@@ -184,8 +196,15 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       return false;
     }
     final FinanceApplicationDraft next = change(current);
+    final String failed = context.l10n.requestsStoreWriteFailed;
     setState(() => _draft = next);
-    await ref.read(requestsProvider.notifier).save(next, now: DateTime.now());
+    try {
+      await ref.read(requestsProvider.notifier).save(next, now: DateTime.now());
+    } catch (_) {
+      // The form keeps the input; the next successful save writes the whole
+      // draft. Silence here looked like the change had been kept.
+      _showMessage(failed);
+    }
     return true;
   }
 
@@ -297,13 +316,19 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
         // the message alone meant an endpoint that returned issues for fields
         // this form does not know, with an empty message, produced a submit
         // that appeared to do nothing at all.
-        if (_banner != null || _generalIssues.isNotEmpty) ...<Widget>[
+        if (_keyExpired ||
+            _banner != null ||
+            _generalIssues.isNotEmpty) ...<Widget>[
           StatusBanner(
             tone: StatusTone.warning,
             icon: AppIcons.error_outline,
-            title: _banner ?? l10n.requestsIssuesTitle,
-            message: _generalIssues.join('\n'),
-            action: _keyExpired
+            title: _keyExpired
+                ? l10n.requestsKeyExpiredTitle
+                : _banner ?? l10n.requestsIssuesTitle,
+            message: _keyExpired
+                ? l10n.requestsKeyExpiredBody
+                : _generalIssues.join('\n'),
+            action: _keyExpired || _offerRelease
                 ? TextButton(
                     onPressed: _resubmitAsNew,
                     child: Text(l10n.requestsKeyExpiredSendAnyway),
@@ -498,6 +523,7 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       _generalIssues = <String>[];
       _banner = null;
       _keyExpired = false;
+      _offerRelease = false;
     });
 
     if (!RequestValidation.validate(draft).isValid) return;
@@ -572,14 +598,17 @@ class _ApplicationFormScreenState extends ConsumerState<ApplicationFormScreen> {
       case SubmitDraftStoreFailed():
         setState(() => _banner = l10n.requestsSubmitDraftStoreFailed);
       case SubmitKeyExpired():
-        setState(() {
-          _banner = l10n.requestsKeyExpiredBody;
-          _keyExpired = true;
-        });
+        setState(() => _keyExpired = true);
       case SubmitPayloadChanged():
         setState(() => _banner = l10n.requestsPayloadChanged);
+      case SubmitDiscarded():
+        // The local requests data was wiped meanwhile; this draft is gone.
+        Navigator.of(context).maybePop();
       case SubmitGatewaySaid(:final SubmissionResult result):
         _applyGatewayResult(l10n, result);
+        if (draft.isFrozen && RequestLabels.isDefinitiveRefusal(result)) {
+          setState(() => _offerRelease = true);
+        }
     }
   }
 

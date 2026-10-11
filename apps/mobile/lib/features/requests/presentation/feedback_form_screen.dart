@@ -53,6 +53,11 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
   /// older than 30 days; the banner then offers a deliberate new case (E-05).
   bool _keyExpired = false;
 
+  /// Set when the replay of a frozen draft was refused outright (400, 404,
+  /// 413, 415): the banner offers the same deliberate release, since the
+  /// frozen form cannot take the correction the message asks for.
+  bool _offerRelease = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,13 +107,25 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
     if (draft == null) return;
     if (!await confirmResubmitAsNew(context) || !mounted) return;
 
-    await ref.read(requestsProvider.notifier).unfreeze(draft.id);
+    final String failed = context.l10n.requestsStoreWriteFailed;
+    try {
+      await ref.read(requestsProvider.notifier).unfreeze(draft.id);
+    } catch (_) {
+      _showMessage(failed);
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _banner = null;
       _keyExpired = false;
+      _offerRelease = false;
     });
     _adoptStoredDraft();
+  }
+
+  void _showMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   void _adoptStoredDraft() {
@@ -148,16 +165,19 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
     // What is on the wire must not change under it.
     if (_isBusy(current)) return;
     if (current.isFrozen) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.requestsFrozenEditBlocked)),
-        );
-      }
+      _showMessage(context.l10n.requestsFrozenEditBlocked);
       return;
     }
     final FeedbackDraft next = change(current);
+    final String failed = context.l10n.requestsStoreWriteFailed;
     setState(() => _draft = next);
-    await ref.read(requestsProvider.notifier).save(next, now: DateTime.now());
+    try {
+      await ref.read(requestsProvider.notifier).save(next, now: DateTime.now());
+    } catch (_) {
+      // The form keeps the input; the next successful save writes the whole
+      // draft. Silence here looked like the change had been kept.
+      _showMessage(failed);
+    }
   }
 
   @override
@@ -252,13 +272,19 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
         // Either a message or issues is enough to show the banner: gated on
         // the message alone, issues about fields this form does not know
         // vanished silently.
-        if (_banner != null || _generalIssues.isNotEmpty) ...<Widget>[
+        if (_keyExpired ||
+            _banner != null ||
+            _generalIssues.isNotEmpty) ...<Widget>[
           StatusBanner(
             tone: StatusTone.warning,
             icon: AppIcons.error_outline,
-            title: _banner ?? l10n.requestsIssuesTitle,
-            message: _generalIssues.join('\n'),
-            action: _keyExpired
+            title: _keyExpired
+                ? l10n.requestsKeyExpiredTitle
+                : _banner ?? l10n.requestsIssuesTitle,
+            message: _keyExpired
+                ? l10n.requestsKeyExpiredBody
+                : _generalIssues.join('\n'),
+            action: _keyExpired || _offerRelease
                 ? TextButton(
                     onPressed: _resubmitAsNew,
                     child: Text(l10n.requestsKeyExpiredSendAnyway),
@@ -359,6 +385,7 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
       _generalIssues = <String>[];
       _banner = null;
       _keyExpired = false;
+      _offerRelease = false;
     });
 
     if (!RequestValidation.validate(draft).isValid) return;
@@ -394,13 +421,16 @@ class _FeedbackFormScreenState extends ConsumerState<FeedbackFormScreen> {
       case SubmitDraftStoreFailed():
         setState(() => _banner = l10n.requestsSubmitDraftStoreFailed);
       case SubmitKeyExpired():
-        setState(() {
-          _banner = l10n.requestsKeyExpiredBody;
-          _keyExpired = true;
-        });
+        setState(() => _keyExpired = true);
       case SubmitPayloadChanged():
         setState(() => _banner = l10n.requestsPayloadChanged);
+      case SubmitDiscarded():
+        // The local requests data was wiped meanwhile; this draft is gone.
+        Navigator.of(context).maybePop();
       case SubmitGatewaySaid(:final SubmissionResult result):
+        if (draft.isFrozen && RequestLabels.isDefinitiveRefusal(result)) {
+          setState(() => _offerRelease = true);
+        }
         if (result is SubmissionRejected) {
           setState(() {
             // Localised throughout: raw endpoint text never reaches the UI.

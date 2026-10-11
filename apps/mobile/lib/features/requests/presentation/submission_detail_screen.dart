@@ -113,9 +113,14 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
     // Awaited, not read: on the first frame the stored cases are still being
     // loaded, and reading the empty state would silently skip the refresh the
     // screen exists for.
-    final List<SubmittedCase> cases = await ref.read(
-      submissionsProvider.future,
-    );
+    final List<SubmittedCase> cases;
+    try {
+      cases = await ref.read(submissionsProvider.future);
+    } catch (_) {
+      // Unreadable: the screen shows the error and its retry. Thrown on from
+      // here, every poll and pull-to-refresh ended in an unhandled error.
+      return;
+    }
     if (!mounted) return;
     final SubmittedCase? item = cases
         .where((SubmittedCase c) => c.id == widget.submissionId)
@@ -134,8 +139,32 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
-    final List<SubmittedCase> cases =
-        ref.watch(submissionsProvider).value ?? const <SubmittedCase>[];
+    // Not flattened with `.value ?? []`: "still loading" and "could not be
+    // read" are not "this case does not exist" — the stored link is the only
+    // way back to it, and saying it is gone invites a second submission.
+    final AsyncValue<List<SubmittedCase>> caseState = ref.watch(
+      submissionsProvider,
+    );
+    if (!caseState.hasValue) {
+      return ScreenScaffold(
+        title: l10n.requestsTitle,
+        body: caseState.hasError
+            ? EmptyView(
+                icon: AppIcons.error_outline,
+                message: l10n.requestsLoadFailedTitle,
+                action: FilledButton.icon(
+                  onPressed: () {
+                    ref.invalidate(submissionsProvider);
+                    _refresh();
+                  },
+                  icon: const Icon(AppIcons.refresh),
+                  label: Text(l10n.requestsStatusRetry),
+                ),
+              )
+            : const LoadingView(),
+      );
+    }
+    final List<SubmittedCase> cases = caseState.requireValue;
     final SubmittedCase? item = cases
         .where((SubmittedCase c) => c.id == widget.submissionId)
         .firstOrNull;
@@ -322,7 +351,8 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
               loading: _loadingDocumentUrl == document.downloadUrl,
               onOpen: () => _openDocument(
                 url: document.downloadUrl,
-                filename: document.filename,
+                filename:
+                    document.filename ?? l10n.requestsDocumentFallbackFilename,
                 mimeType: document.mimeType,
               ),
             ),
@@ -447,7 +477,13 @@ class _SubmissionDetailScreenState extends ConsumerState<SubmissionDetailScreen>
       ),
     );
     if (!(yes ?? false)) return;
-    await ref.read(submissionsProvider.notifier).remove(item.id);
+    try {
+      await ref.read(submissionsProvider.notifier).remove(item.id);
+    } catch (_) {
+      // Still stored, so the screen stays on the case and says why.
+      _message(l10n.requestsStoreWriteFailed);
+      return;
+    }
     ref.read(caseStatusProvider.notifier).forget(item.id);
     if (mounted) Navigator.of(context).pop();
   }

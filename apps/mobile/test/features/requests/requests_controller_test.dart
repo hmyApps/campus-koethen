@@ -17,6 +17,7 @@ import 'package:campus_koethen/features/requests/data/attachment_picker.dart';
 import 'package:campus_koethen/features/requests/data/encrypted_request_store.dart';
 import 'package:campus_koethen/features/requests/domain/application_files.dart';
 import 'package:campus_koethen/features/requests/domain/case_status.dart';
+import 'package:campus_koethen/features/requests/domain/idempotency_key.dart';
 import 'package:campus_koethen/features/requests/domain/request_drafts.dart';
 import 'package:campus_koethen/features/requests/domain/request_gateway.dart';
 import 'package:campus_koethen/features/requests/domain/status_gateway.dart';
@@ -321,6 +322,118 @@ void main() {
           .unfreeze(store.drafts.single.id);
 
       expect(store.drafts.single.isFrozen, isFalse);
+    });
+
+    test('a deliberate new case gets a fresh key', () async {
+      // Released as a NEW case, the draft may be edited. Under the old key the
+      // server — if it still knows that key — answers a changed payload with a
+      // 409 that has nothing to do with what the person decided.
+      final (container, store, gateway) = await setUpFrozen();
+      final String oldKey = store.drafts.single.idempotencyKey;
+
+      await container
+          .read(requestsProvider.notifier)
+          .unfreeze(store.drafts.single.id);
+
+      final String newKey = store.drafts.single.idempotencyKey;
+      expect(newKey, isNot(oldKey));
+      expect(IdempotencyKey.isValid(newKey), isTrue);
+
+      gateway.result = _accepted;
+      await container
+          .read(requestsProvider.notifier)
+          .submit(store.drafts.single, now: _now);
+      expect(gateway.keysUsed.last, newKey);
+    });
+
+    test('a clear refusal of the replay leaves the draft frozen', () async {
+      // The refusal is shown with a way out (the form offers the release);
+      // the controller itself never thaws on its own.
+      final (container, store, gateway) = await setUpFrozen();
+      gateway.result = const SubmissionTargetGone();
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(store.drafts.single, now: _now);
+
+      expect(outcome, isA<SubmitGatewaySaid>());
+      expect(store.drafts.single.isFrozen, isTrue);
+    });
+  });
+
+  group('an attempt that never left the device', () {
+    test('does not freeze the draft', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: ScriptedRequestGateway(
+          const SubmissionNotSent(SubmissionNotSentReason.cancelled),
+        ),
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+
+      final SubmitOutcome outcome = await container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+
+      expect(outcome, isA<SubmitGatewaySaid>());
+      expect(store.drafts.single.isFrozen, isFalse);
+    });
+  });
+
+  group('wiping while a submission runs', () {
+    test('cancels the upload and writes nothing back', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final FakeAttachmentStore attachments = FakeAttachmentStore();
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(
+        const SubmissionOutcomeUnknown('cancelled'),
+      )..gate = Completer<void>();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: attachments,
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+      await container.read(submissionsProvider.future);
+      final SubmissionCancelToken cancel = SubmissionCancelToken();
+
+      final Future<SubmitOutcome> running = container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now, cancel: cancel);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(await container.read(requestsLocalDataWiperProvider).wipe(), true);
+      expect(cancel.isCancelled, isTrue);
+      gateway.gate!.complete();
+
+      expect(await running, isA<SubmitDiscarded>());
+      expect(store.drafts, isEmpty, reason: 'no frozen draft comes back');
+      expect(store.cases, isEmpty);
+    });
+
+    test('an accepted answer arriving after the wipe is dropped', () async {
+      final FlakyRequestStore store = FlakyRequestStore();
+      final ScriptedRequestGateway gateway = ScriptedRequestGateway(_accepted)
+        ..gate = Completer<void>();
+      final ProviderContainer container = _container(
+        store: store,
+        gateway: gateway,
+        attachments: FakeAttachmentStore(),
+      );
+      final FeedbackDraft draft = await _feedbackDraft(container);
+      await container.read(submissionsProvider.future);
+
+      final Future<SubmitOutcome> running = container
+          .read(requestsProvider.notifier)
+          .submit(draft, now: _now);
+      await Future<void>.delayed(Duration.zero);
+      await container.read(requestsLocalDataWiperProvider).wipe();
+      gateway.gate!.complete();
+
+      expect(await running, isA<SubmitDiscarded>());
+      expect(store.cases, isEmpty, reason: 'no status link is written back');
+      expect(store.drafts, isEmpty);
     });
   });
 

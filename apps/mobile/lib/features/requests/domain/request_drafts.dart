@@ -298,6 +298,23 @@ class FinanceApplicationDraft extends RequestDraft {
     files: files ?? this.files,
   );
 
+  /// This draft released from its pending attempt, under a **new** key.
+  ///
+  /// Only for the person's explicit decision to send it as a new case: the
+  /// old key belongs to an attempt that may already have become a case, and
+  /// an edited payload under it would only earn a 409.
+  FinanceApplicationDraft asNewCase({required String idempotencyKey}) =>
+      FinanceApplicationDraft(
+        id: id,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        idempotencyKey: idempotencyKey,
+        locationId: locationId,
+        title: title,
+        applicant: applicant,
+        files: files,
+      );
+
   /// Replaces or clears one slot.
   FinanceApplicationDraft withFile(
     ApplicationFileSlot slot,
@@ -434,6 +451,17 @@ class FeedbackDraft extends RequestDraft {
     areaId: clearArea ? null : (areaId ?? this.areaId),
     submitterName: submitterName ?? this.submitterName,
     feedback: feedback ?? this.feedback,
+  );
+
+  /// See [FinanceApplicationDraft.asNewCase].
+  FeedbackDraft asNewCase({required String idempotencyKey}) => FeedbackDraft(
+    id: id,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    idempotencyKey: idempotencyKey,
+    areaId: areaId,
+    submitterName: submitterName,
+    feedback: feedback,
   );
 
   @override

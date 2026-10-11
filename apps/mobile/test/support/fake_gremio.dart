@@ -138,6 +138,9 @@ class FakeAttachmentStore implements AttachmentStore, StreamingAttachmentStore {
   int _next = 0;
   int wholeFileReads = 0;
 
+  /// Reads that fail like a box that cannot be opened (locked keystore).
+  bool failReads = false;
+
   @override
   Future<RequestAttachment?> put(String fileName, Uint8List bytes) async {
     final String id = 'fake-${_next++}';
@@ -152,6 +155,7 @@ class FakeAttachmentStore implements AttachmentStore, StreamingAttachmentStore {
   @override
   Future<Uint8List?> read(RequestAttachment attachment) async {
     wholeFileReads++;
+    if (failReads) throw const AttachmentStoreUnavailable();
     return entries[attachment.path];
   }
 
@@ -174,6 +178,7 @@ class FakeAttachmentStore implements AttachmentStore, StreamingAttachmentStore {
 
   @override
   Future<StoredAttachmentStream?> openRead(RequestAttachment attachment) async {
+    if (failReads) throw const AttachmentStoreUnavailable();
     final Uint8List? bytes = entries[attachment.path];
     if (bytes == null) return null;
     return StoredAttachmentStream(
@@ -275,6 +280,9 @@ class ScriptedRequestGateway implements RequestGateway {
   final List<String> keysUsed = <String>[];
   final List<String> fingerprints = <String>[];
 
+  /// The cancel token of the latest attempt, if the caller passed one.
+  SubmissionCancelToken? lastCancel;
+
   Future<SubmissionResult> _answer(RequestDraft draft) async {
     keysUsed.add(draft.idempotencyKey);
     fingerprints.add(draft.payloadFingerprint);
@@ -293,6 +301,7 @@ class ScriptedRequestGateway implements RequestGateway {
   }) {
     // Reported so a test can assert the form actually shows progress.
     onProgress?.call(1, 1);
+    lastCancel = cancel;
     return _answer(draft);
   }
 
@@ -303,6 +312,7 @@ class ScriptedRequestGateway implements RequestGateway {
     SubmissionCancelToken? cancel,
   }) {
     onProgress?.call(1, 1);
+    lastCancel = cancel;
     return _answer(draft);
   }
 }

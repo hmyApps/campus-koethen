@@ -89,12 +89,21 @@ class GremioRequestGateway implements RequestGateway {
         );
       }
 
-      final StoredAttachmentStream? source = switch (_attachments) {
-        final StreamingAttachmentStore streaming => await streaming.openRead(
-          file,
-        ),
-        _ => await _wholeFileSource(file),
-      };
+      final StoredAttachmentStream? source;
+      try {
+        source = switch (_attachments) {
+          final StreamingAttachmentStore streaming => await streaming.openRead(
+            file,
+          ),
+          _ => await _wholeFileSource(file),
+        };
+      } on AttachmentStoreUnavailable {
+        // The store, not the file: nothing to correct in the form, and
+        // nothing has been sent.
+        return const SubmissionNotSent(
+          SubmissionNotSentReason.attachmentsUnavailable,
+        );
+      }
       if (source == null ||
           (declaredSize != null && source.length != declaredSize) ||
           !ApplicationFileLimits.acceptsFile(source.length)) {
@@ -189,9 +198,11 @@ class GremioRequestGateway implements RequestGateway {
     final CancelToken? token = cancel == null ? null : CancelToken();
     if (cancel != null && token != null) {
       cancel.bind(() => token.cancel('cancelled by the user'));
-      // A token cancelled before the request went out must not still send.
+      // A token cancelled before the request went out must not still send —
+      // and since nothing went out, there is no case that could exist and
+      // nothing to freeze.
       if (cancel.isCancelled) {
-        return const SubmissionOutcomeUnknown('cancelled');
+        return const SubmissionNotSent(SubmissionNotSentReason.cancelled);
       }
     }
     try {

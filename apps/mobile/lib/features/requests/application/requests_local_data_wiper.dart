@@ -25,9 +25,14 @@ class RequestsLocalDataWiper {
   final Ref _ref;
 
   /// Returns true only when both stores confirmed they are gone.
+  ///
+  /// A submission still running is cancelled first and its result marked
+  /// stale: an upload that ended after the wipe used to write its status link
+  /// or its frozen draft straight back into the store just emptied.
   Future<bool> wipe() async {
     final RequestStore store = _ref.read(requestStoreProvider);
     final AttachmentStore attachments = _ref.read(attachmentStoreProvider);
+    _ref.read(requestsInFlightProvider.notifier).abandonAll();
 
     bool complete = true;
     try {

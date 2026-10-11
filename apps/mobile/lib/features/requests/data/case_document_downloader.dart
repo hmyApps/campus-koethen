@@ -142,9 +142,14 @@ class CaseDocumentDownloader {
   }
 
   /// Convenience for a document listed in a status response.
-  Future<DocumentResult> fetchDocument(StatusDocument document) => fetch(
+  ///
+  /// [fallbackFilename] is the localized name used when the server sent none.
+  Future<DocumentResult> fetchDocument(
+    StatusDocument document, {
+    required String fallbackFilename,
+  }) => fetch(
     url: document.downloadUrl,
-    filename: document.filename,
+    filename: document.filename ?? fallbackFilename,
     mimeType: document.mimeType,
   );
 }

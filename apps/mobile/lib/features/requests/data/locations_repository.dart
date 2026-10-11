@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 
 import '../domain/application_location.dart';
+import '../domain/gremio_origin.dart';
 import 'requests_api_config.dart';
 
 /// The places an application can be addressed to.
@@ -28,7 +29,11 @@ class LocationsRepository {
   /// here on purpose: both mean the user cannot pick one, and the UI says so
   /// once. Throwing on transport failure is left to the caller's `AsyncValue`.
   Future<List<ApplicationLocation>> fetch() async {
-    if (_baseUrl.isEmpty) return const <ApplicationLocation>[];
+    // HTTPS or nothing (AGENTS.md §2): an `http://` value is "not
+    // connected", exactly like an empty one — never a plaintext request.
+    if (GremioOrigin.parse(_baseUrl) == null) {
+      return const <ApplicationLocation>[];
+    }
 
     final Response<dynamic> response = await _dio.get<dynamic>(
       '$_baseUrl${RequestsApiConfig.locationsPath}',
