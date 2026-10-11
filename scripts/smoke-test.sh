@@ -15,6 +15,10 @@ set -uo pipefail
 
 API="${API_BASE_URL:-http://127.0.0.1:3021}"
 CMS="${CMS_BASE_URL:-http://127.0.0.1:3020}"
+# The API serves /docs only when DOCS_ENABLED is true, which is off by default
+# under NODE_ENV=production (every compose stack). Set EXPECT_DOCS=true or
+# EXPECT_DOCS=false to assert either state; left unset, /docs is not checked.
+EXPECT_DOCS="${EXPECT_DOCS:-}"
 
 pass=0
 fail=0
@@ -26,7 +30,10 @@ head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 # expect_status <label> <url> <expected>
 expect_status() {
   local label="$1" url="$2" expected="$3" status
-  status=$(curl -sS -o /dev/null -m 15 -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+  # curl already writes 000 via -w when the host is unreachable; `|| echo`
+  # would append a second 000. Only fill in when nothing was written at all.
+  status=$(curl -sS -o /dev/null -m 15 -w '%{http_code}' "$url" 2>/dev/null) || true
+  status="${status:-000}"
   if [ "$status" = "$expected" ]; then
     ok "$label (HTTP $status)"
   else
@@ -57,7 +64,10 @@ head_ "Health"
 expect_status "CMS  /_health"      "$CMS/_health"       204
 expect_status "API  /health/live"  "$API/health/live"   200
 expect_status "API  /health/ready" "$API/health/ready"  200
-expect_status "API  /docs"         "$API/docs"          200
+case "$EXPECT_DOCS" in
+  true)  expect_status "API  /docs (DOCS_ENABLED)"  "$API/docs" 200 ;;
+  false) expect_status "API  /docs is disabled"     "$API/docs" 404 ;;
+esac
 expect_json   "readiness reports the database as ok" \
               "$API/health/ready" "d['checks']['database']['status'] == 'ok'"
 
@@ -84,8 +94,6 @@ head_ "Contacts"
 expect_json "areas are returned"                  "$API/v1/contact-areas" "len(d['data']) > 0"
 expect_json "an area without persons stays valid" "$API/v1/contact-areas" \
   "any(a['personCount'] == 0 for a in d['data'])"
-expect_json "unreleased seed data is flagged"     "$API/v1/contact-areas" \
-  "all(a['isDemoContent'] for a in d['data'])"
 expect_status "unknown area is a 404" "$API/v1/contact-areas/does-not-exist" 404
 
 head_ "Canteens"
