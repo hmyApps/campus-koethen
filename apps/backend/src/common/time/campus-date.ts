@@ -57,17 +57,18 @@ const campusClockFormatter = new Intl.DateTimeFormat('en-CA', {
 
 /** How far Europe/Berlin's wall clock is ahead of UTC at `instant`, in ms. */
 function campusOffsetMs(instant: number): number {
-  const parts: Record<string, number> = {};
+  const parts = new Map<string, number>();
   for (const part of campusClockFormatter.formatToParts(new Date(instant))) {
-    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+    if (part.type !== 'literal') parts.set(part.type, Number(part.value));
   }
+  const read = (type: string): number => parts.get(type) ?? 0;
   const wall = Date.UTC(
-    parts['year']!,
-    parts['month']! - 1,
-    parts['day']!,
-    parts['hour']!,
-    parts['minute']!,
-    parts['second']!,
+    read('year'),
+    read('month') - 1,
+    read('day'),
+    read('hour'),
+    read('minute'),
+    read('second'),
   );
   return wall - Math.floor(instant / 1000) * 1000;
 }
