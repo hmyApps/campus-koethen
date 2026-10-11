@@ -60,4 +60,22 @@ void main() {
     expect(widget, isNot(contains('URLSession')));
     expect(widget, isNot(contains('Network')));
   });
+
+  test('iOS widget shows the localized app name, never a transliteration', () {
+    final String widget = _source(
+      'ios/CampusCalendarWidget/CampusCalendarWidget.swift',
+    );
+    expect(widget, contains('.configurationDisplayName("widget.name")'));
+    expect(widget, isNot(contains('"Campus Koethen"')));
+    for (final String language in <String>['de', 'en']) {
+      final String strings = _source(
+        'ios/CampusCalendarWidget/$language.lproj/Localizable.strings',
+      );
+      expect(
+        strings,
+        contains(r'"widget.name" = "Campus K\U00F6then";'),
+        reason: '$language must name the app "Campus Köthen"',
+      );
+    }
+  });
 }

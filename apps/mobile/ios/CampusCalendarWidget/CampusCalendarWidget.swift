@@ -229,7 +229,7 @@ private struct CampusCalendarWidget: Widget {
         StaticConfiguration(kind: kind, provider: CalendarProvider()) { entry in
             CalendarWidgetView(entry: entry)
         }
-        .configurationDisplayName("Campus Koethen")
+        .configurationDisplayName("widget.name")
         .description("widget.description")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
