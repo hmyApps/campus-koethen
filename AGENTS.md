@@ -129,7 +129,8 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    - der **HSA-GPT-Chat** (HAWKI, der KI-Dienst der Hochschule Anhalt) → direkt und **nur** zu
      `https://ki.hs-anhalt.de`. Anmeldung erfolgt mit denselben, bereits hinterlegten
      Hochschulzugangsdaten über HAWKIs Web-Login (`GET /login`, `POST /req/login`, danach
-     `/logout`); das Passwort wird dabei einmalig verwendet, um über HAWKIs eigene
+     `/logout`; zwischen Login und Logout zusätzlich `GET /profile` ausschließlich als Quelle des
+     nach dem Login erneuerten CSRF-Tokens); das Passwort wird dabei einmalig verwendet, um über HAWKIs eigene
      Profilfunktion (`POST /req/profile/create-token`) ein persönliches, jederzeit über
      `POST /req/profile/revoke-token` widerrufbares Sanctum-API-Token zu erzeugen. Gespeichert wird
      ausschließlich dieses Token, **niemals** das Passwort. Jede weitere Aktion — Modell-Liste

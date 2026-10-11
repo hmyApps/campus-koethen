@@ -180,3 +180,48 @@ Bereich: `features/{grades,student_service,nextcloud}`, `docs/grades.md`, `docs/
 | niedrig | `apps/mobile/lib/features/nextcloud/application/nextcloud_account_controller.dart:56-61`                      | Ein Abbruch während `startLogin()` wird nicht geprüft, der Browser-Login öffnet sich trotzdem.                                                                                                                                                                                                            | Vor `open()` die Abbruchanfrage bzw. Generation prüfen.                                                                                 |
 | niedrig | `docs/grades.md:159, 447, 501, 522`; `apps/mobile/lib/features/grades/data/secure_grade_portal_store.dart:24` | Die Doku nennt `hisQisLegacy` als Fallback (der Code wechselt auf HISinOne) und die nicht vorhandene Funktion `allowsDocumentDownload`.                                                                                                                                                                   | An den Code angleichen (`examReportDownloadRoute`).                                                                                     |
 | niedrig | `apps/mobile/lib/l10n/app_de.arb:1305, 1327, 1463` (+ en)                                                     | `gradeSetupPortalLink`, `gradesReenter` und `studentServiceCertificateReady` sind ungenutzt.                                                                                                                                                                                                              | Entfernen oder anbinden.                                                                                                                |
+
+## Status nach den Fix-Sprints (2026-10-11)
+
+Alle 86 Funde sind behoben. Jeder Bereich wurde auf einem eigenen Branch bearbeitet und in
+`claude/confident-meitner-m82y60` zusammengeführt.
+
+| Branch                                       | Bereich                              | Funde |
+| -------------------------------------------- | ------------------------------------ | ----- |
+| `claude/fix-calendar-timetable`              | Kalender, Stundenplan, Todos         | 13/13 |
+| `claude/fix-backend`                         | Backend und OpenAPI                  | 9/9   |
+| `claude/fix-mail-hsaki-account`              | Mail, HSA-GPT, Hochschulzugang       | 11/11 |
+| `claude/fix-core-features`                   | App-Kern, l10n, kleinere Features    | 10/10 |
+| `claude/fix-cms-infra`                       | CMS, Infrastruktur, CI, Skripte      | 13/13 |
+| `claude/fix-requests-wallet`                 | Anträge, Dokumenten-Wallet, Kontakte | 13/13 |
+| `claude/fix-notifications-moodle`            | Benachrichtigungen und Moodle        | 7/7   |
+| `claude/fix-grades-studentservice-nextcloud` | Noten, Studienservice, Nextcloud     | 10/10 |
+
+Die Zahlen folgen der Gliederung der Tabellen oben. Den Fund zu HSA-GPT in den
+Navigationseinstellungen (App-Kern) hat der Mail/HSA-GPT-Branch behoben. Ausgenommen war nur die
+Bereinigung der ungenutzten ARB-Schlüssel; sie wurde lediglich soweit erledigt, wie einzelne
+Fixes die betroffenen Schlüssel berührten.
+
+Entscheidungen der Projektleitung:
+
+- **„Ausgewählte in Google Kalender öffnen“** bleibt wiederhergestellt.
+- **HAWKI `GET /profile`** ist als Quelle des CSRF-Tokens nach dem Login erlaubt und in
+  `AGENTS.md` §2 aufgenommen. `/logout` wird nach Token-Erzeugung und Widerruf aufgerufen.
+
+Gates auf dem zusammengeführten Stand:
+
+- `pnpm format:check`, `lint` und `typecheck`: grün.
+- `pnpm --filter @campus/map check` sowie die Builds von Backend und CMS: grün.
+- Backend-Tests: 60/60 Suiten, 854 Tests. Die Integrationssuiten liefen gegen eine isolierte
+  temporäre PostgreSQL-Datenbank, die danach entfernt wurde.
+- CMS- und Map-Tests: grün.
+- Flutter `gen-l10n`, `dart format`, `analyze --fatal-infos --fatal-warnings`: grün.
+- `flutter test`: 3206 Tests bestanden.
+
+Nicht lokal prüfbar und daher vor dem Release in CI bzw. auf dem Server zu bestätigen:
+
+- Image-Builds über `images.yml`, Dockerfiles mit root-owned Code, `prisma migrate deploy` als
+  Nutzer `node`.
+- `REVOKE CONNECT` und Schema-Rechte im PROD-`db-init` gegen eine echte Datenbank.
+- Strapi-Admin-Login hinter dem TLS-Proxy mit `PUBLIC_URL`.
+- Zählweise des Antragsservers für Titel-Längen; die App zählt jetzt Grapheme.

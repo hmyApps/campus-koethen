@@ -39,7 +39,7 @@ class HawkiGateway implements HsaKiGateway {
       loggedIn = true;
       final Map<String, dynamic> created = await session.postJsonWithFreshCsrf(
         _profile.createTokenUri,
-        csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
+        csrfSourcePage: _profile.profilePageUri,
         body: <String, dynamic>{'name': _tokenName},
       );
       final Object? token = created['token'];
@@ -84,7 +84,7 @@ class HawkiGateway implements HsaKiGateway {
       loggedIn = true;
       await session.postJsonWithFreshCsrf(
         _profile.revokeTokenUri,
-        csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
+        csrfSourcePage: _profile.profilePageUri,
         body: <String, dynamic>{'tokenId': tokenId},
       );
     } on HsaKiFailure {

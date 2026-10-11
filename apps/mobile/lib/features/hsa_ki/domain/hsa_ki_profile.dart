@@ -17,6 +17,9 @@ class HsaKiProfile {
 
   Uri get loginPageUri => server.resolve('/login');
   Uri get loginUri => server.resolve('/req/login');
+  // Only read after login, as the source of the CSRF token Laravel
+  // regenerates on sign-in (allowed by AGENTS.md §2).
+  Uri get profilePageUri => server.resolve('/profile');
   Uri get createTokenUri => server.resolve('/req/profile/create-token');
   Uri get revokeTokenUri => server.resolve('/req/profile/revoke-token');
   Uri get logoutUri => server.resolve('/logout');
