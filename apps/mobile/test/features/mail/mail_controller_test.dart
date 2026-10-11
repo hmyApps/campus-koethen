@@ -1767,6 +1767,77 @@ void main() {
     });
   });
 
+  group('after the server rejected the password', () {
+    const MailFailure rejection = MailFailure(
+      MailFailureKind.invalidCredentials,
+    );
+
+    test('opening a cached mail does not log in to mark it seen', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('3')]);
+      await cache.saveMessage(_dtl('3'));
+      final gateway = FakeMailGateway();
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+
+      await container.read(
+        mailMessageProvider((mailboxPath: kInboxPath, id: '3')).future,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(gateway.markedSeen, isEmpty);
+      final List<MailMessageHeader> after = await container.read(
+        mailInboxControllerProvider.future,
+      );
+      expect(after.single.isSeen, isTrue, reason: 'still marked locally');
+    });
+
+    test('the folder list does not log in', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway(
+        folders: const <MailFolder>[MailFolder.inbox()],
+      );
+      final container = _container(gateway: gateway, store: store);
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+
+      await expectLater(
+        container.read(mailFoldersProvider.future),
+        throwsA(rejection),
+      );
+      expect(gateway.fetchMailboxesCalls, 0);
+    });
+
+    test('a non-INBOX folder is not fetched in the background', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway();
+      final container = _container(gateway: gateway, store: store);
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+
+      await expectLater(
+        container.read(mailInboxControllerProvider.future),
+        throwsA(rejection),
+      );
+      expect(gateway.fetchedMailboxes, isEmpty);
+    });
+  });
+
   group('send', () {
     const OutgoingMessage message = OutgoingMessage(
       to: <String>['x@y.de'],

@@ -163,7 +163,11 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
       return _visibleInboxHeaders(ref);
     }
 
-    // Other folders: online, uncached.
+    // Other folders: online, uncached. This build also reruns on unrelated
+    // account changes, so it never logs in again with a password the server
+    // already refused; [refresh] is the explicit retry.
+    final MailFailure? rejected = ref.watch(mailCredentialsRejectionProvider);
+    if (rejected != null) throw rejected;
     final credentials = await ref
         .read(mailAccountControllerProvider.notifier)
         .requireCredentials();
@@ -454,6 +458,8 @@ Future<void> _markSeenLocally(Ref ref, MailMessageRef message) async {
 /// here must not affect the (already successful) local open — a later header
 /// sync reconciles with the confirmed server state.
 Future<void> _markSeen(Ref ref, MailMessageRef message) async {
+  // Never a background login with a password the server already refused.
+  if (ref.read(mailCredentialsRejectionProvider) != null) return;
   try {
     final credentials = await ref
         .read(mailAccountControllerProvider.notifier)

@@ -3,9 +3,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/mail_failure.dart';
 import '../domain/mail_folder.dart';
 import 'mail_account_controller.dart';
 import 'mail_providers.dart';
+import 'mail_sync_controller.dart';
 
 /// The mailbox currently being browsed. Defaults to the inbox and is switched
 /// by the folder picker. The message list watches this and re-fetches on change.
@@ -33,6 +35,10 @@ final FutureProvider<List<MailFolder>> mailFoldersProvider =
       if (account == null || !account.isSignedIn) {
         return const <MailFolder>[];
       }
+      // No login with a password the server already refused; watched, so a
+      // successful manual refresh makes the list loadable again.
+      final MailFailure? rejected = ref.watch(mailCredentialsRejectionProvider);
+      if (rejected != null) throw rejected;
       final credentials = await ref
           .read(mailAccountControllerProvider.notifier)
           .requireCredentials();
