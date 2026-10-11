@@ -220,7 +220,7 @@ class _TimetableGroupPickerListState
                 groups.length + (state.hasMore || state.loadMoreFailed ? 1 : 0),
             itemBuilder: (BuildContext context, int index) {
               if (index == groups.length) {
-                return _TimetableGroupLoadMoreFooter(
+                return TimetableGroupLoadMoreFooter(
                   page: state.page,
                   hasMore: state.hasMore,
                   isLoadingMore: state.isLoadingMore,
@@ -257,8 +257,11 @@ class _TimetableGroupPickerListState
   }
 }
 
-class _TimetableGroupLoadMoreFooter extends StatefulWidget {
-  const _TimetableGroupLoadMoreFooter({
+/// Footer of a paged group search: loads the next page once it is built and
+/// offers a retry when that failed. Shared with the additional groups sheet.
+class TimetableGroupLoadMoreFooter extends StatefulWidget {
+  const TimetableGroupLoadMoreFooter({
+    super.key,
     required this.page,
     required this.hasMore,
     required this.isLoadingMore,
@@ -273,12 +276,12 @@ class _TimetableGroupLoadMoreFooter extends StatefulWidget {
   final VoidCallback onLoadMore;
 
   @override
-  State<_TimetableGroupLoadMoreFooter> createState() =>
+  State<TimetableGroupLoadMoreFooter> createState() =>
       _TimetableGroupLoadMoreFooterState();
 }
 
 class _TimetableGroupLoadMoreFooterState
-    extends State<_TimetableGroupLoadMoreFooter> {
+    extends State<TimetableGroupLoadMoreFooter> {
   int? _requestedAfterPage;
 
   @override
@@ -288,7 +291,7 @@ class _TimetableGroupLoadMoreFooterState
   }
 
   @override
-  void didUpdateWidget(covariant _TimetableGroupLoadMoreFooter oldWidget) {
+  void didUpdateWidget(covariant TimetableGroupLoadMoreFooter oldWidget) {
     super.didUpdateWidget(oldWidget);
     _maybeLoad();
   }

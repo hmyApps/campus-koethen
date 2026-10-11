@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +15,7 @@ import '../../../l10n/l10n.dart';
 import '../application/semester_assistant.dart';
 import '../application/timetable_providers.dart';
 import '../data/timetable_models.dart';
+import 'timetable_group_picker_sheet.dart';
 
 Future<void> showAdditionalTimetableGroupsSheet(BuildContext context) =>
     showModalBottomSheet<void>(
@@ -62,19 +65,33 @@ class _AdditionalGroupsSheet extends ConsumerStatefulWidget {
 class _AdditionalGroupsSheetState
     extends ConsumerState<_AdditionalGroupsSheet> {
   final TextEditingController _search = TextEditingController();
+  Timer? _searchDebounce;
+  String _query = '';
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  // Same server-side, paged search as the primary group picker: the catalogue
+  // is larger than one page, so filtering only the first page locally would
+  // leave every later group unreachable.
+  void _scheduleSearch(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() => _query = value.trim());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final AppSettings settings = ref.watch(settingsProvider);
-    final AsyncValue<Loaded<List<TimetableGroup>>> groups = ref.watch(
-      timetableGroupsProvider,
+    final AsyncValue<TimetableGroupSearchState> groups = ref.watch(
+      timetableGroupSearchProvider(_query),
     );
     return Column(
       children: <Widget>[
@@ -100,7 +117,7 @@ class _AdditionalGroupsSheetState
           ),
           child: TextField(
             controller: _search,
-            onChanged: (_) => setState(() {}),
+            onChanged: _scheduleSearch,
             decoration: InputDecoration(
               labelText: l10n.timetableGroupSearchLabel,
               hintText: l10n.timetableGroupSearchHint,
@@ -110,16 +127,16 @@ class _AdditionalGroupsSheetState
         ),
         Expanded(
           child: groups.when(
+            skipLoadingOnReload: true,
             loading: () => const LoadingView(),
             error: (error, _) => ErrorView(
               failure: error,
-              onRetry: () => ref.invalidate(timetableGroupsProvider),
+              onRetry: () =>
+                  ref.invalidate(timetableGroupSearchProvider(_query)),
             ),
-            data: (loaded) {
-              final String query = _search.text.trim().toLowerCase();
-              final List<TimetableGroup> matches = loaded.value
-                  .where((group) => group.matchesNeedle(query))
-                  .toList(growable: false);
+            data: (TimetableGroupSearchState search) {
+              final List<TimetableGroup> matches = search.groups;
+              final bool showFooter = search.hasMore || search.loadMoreFailed;
               if (matches.isEmpty) {
                 return EmptyView(
                   icon: AppIcons.search_off_outlined,
@@ -147,8 +164,19 @@ class _AdditionalGroupsSheetState
                   SettingsController.maxAdditionalTimetableGroups;
               return ListView.builder(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                itemCount: matches.length,
+                itemCount: matches.length + (showFooter ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == matches.length) {
+                    return TimetableGroupLoadMoreFooter(
+                      page: search.page,
+                      hasMore: search.hasMore,
+                      isLoadingMore: search.isLoadingMore,
+                      loadMoreFailed: search.loadMoreFailed,
+                      onLoadMore: () => ref
+                          .read(timetableGroupSearchProvider(_query).notifier)
+                          .loadMore(),
+                    );
+                  }
                   final TimetableGroup group = matches[index];
                   final bool primary = group.id == settings.timetableGroupId;
                   final bool fullGroup = selected.contains(group.id);

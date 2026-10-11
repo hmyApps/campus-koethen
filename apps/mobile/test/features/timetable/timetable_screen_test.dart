@@ -39,11 +39,20 @@ class _FakeTimetableChangeController extends TimetableChangeController {
   @override
   Future<List<TimetableChange>> build() async => changes;
 
+  final List<String> acknowledged = <String>[];
+
   @override
   Future<void> observe({
     required TimetableChangeScope scope,
     required Timetable timetable,
   }) async {}
+
+  @override
+  Future<void> acknowledgeGroup(String groupId) async {
+    acknowledged.add(groupId);
+    changes.removeWhere((TimetableChange change) => change.groupId == groupId);
+    state = AsyncData<List<TimetableChange>>(List<TimetableChange>.of(changes));
+  }
 }
 
 InMemoryKeyValueStore storeWithGroup() =>
@@ -533,6 +542,50 @@ void main() {
       expect(find.textContaining('Technische Mechanik:'), findsOneWidget);
     });
 
+    testWidgets('change hints of an additional group are shown and '
+        'acknowledged', (WidgetTester tester) async {
+      const String extraGroup = '33333333-3333-4333-8333-333333333333';
+      final InMemoryKeyValueStore store = storeWithGroup();
+      await store.setStringList(
+        PreferenceKeys.additionalTimetableGroups,
+        <String>[extraGroup],
+      );
+      final _FakeTimetableChangeController controller =
+          _FakeTimetableChangeController(<TimetableChange>[
+            TimetableChange(
+              entryId: 'extra',
+              title: 'Physik',
+              kind: TimetableChangeKind.room,
+              detectedAt: DateTime.utc(2026, 10, 7),
+              oldStart: monday,
+              newStart: monday,
+              oldRooms: const <String>['A1'],
+              newRooms: const <String>['B2'],
+              groupId: extraGroup,
+              rangeKey: monday.toIso8601String(),
+            ),
+          ]);
+
+      await pumpTimetable(
+        tester,
+        store: store,
+        overrides: <Override>[
+          timetableChangeControllerProvider.overrideWith(() => controller),
+        ],
+      );
+
+      expect(find.text('1 ungelesene Änderung'), findsOneWidget);
+
+      await tester.tap(find.text('Änderungen ansehen'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Physik:'), findsOneWidget);
+
+      await tester.tap(find.text('Als gelesen markieren'));
+      await tester.pumpAndSettle();
+      expect(controller.acknowledged, contains(extraGroup));
+      expect(find.text('1 ungelesene Änderung'), findsNothing);
+    });
+
     testWidgets(
       'hiding a course from its card removes it from the agenda and offers '
       'undo',
@@ -651,6 +704,40 @@ void main() {
 
       expect(find.text('Stundenplan wird vorbereitet'), findsOneWidget);
       expect(find.text('Etwas ist schiefgelaufen'), findsNothing);
+    });
+
+    testWidgets('refresh refetches the week and resolves a pending plan', (
+      WidgetTester tester,
+    ) async {
+      String dataState = 'pending';
+      final FakeHttpAdapter adapter = FakeHttpAdapter(
+        _withTimetableScaffolding((RequestOptions options) {
+          return FakeHttpResponse(
+            envelope(
+              timetableWeekFixture(monday),
+              meta: timetableMeta(dataState: dataState),
+            ),
+          );
+        }),
+      );
+      await pumpTimetable(tester, adapter: adapter);
+      expect(find.text('Stundenplan wird vorbereitet'), findsOneWidget);
+      int entryRequests() => adapter.requests
+          .where((RequestOptions o) => o.path.endsWith('/timetable/entries'))
+          .length;
+      final int before = entryRequests();
+
+      dataState = 'ready';
+      await tester.tap(find.byTooltip('Aktualisieren'));
+      await tester.pumpAndSettle();
+
+      expect(entryRequests(), greaterThan(before));
+      expect(find.text('Stundenplan wird vorbereitet'), findsNothing);
+      expect(find.text('Mathematik 2'), findsOneWidget);
+
+      // Leaves no poll timer behind.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
     });
 
     testWidgets('explains a disabled feature without looking broken', (

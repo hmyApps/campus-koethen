@@ -3,6 +3,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../../../core/widgets/time_rail.dart';
 import '../domain/calendar_entry.dart';
 
 /// A lazily rendered row in the continuous calendar list.
@@ -46,7 +47,9 @@ List<CalendarListRow> buildCalendarListRows({
   final Map<DateTime, List<CalendarEntry>> byDay =
       <DateTime, List<CalendarEntry>>{};
   for (final CalendarEntry entry in entries) {
-    final DateTime key = entry.day;
+    // An entry still running from an earlier day belongs to today: the list
+    // starts today, and a heading for a past day would read as history.
+    final DateTime key = entry.day.isBefore(today) ? today : entry.day;
     byDay
         .putIfAbsent(key, () {
           orderedDays.add(key);
@@ -63,7 +66,9 @@ List<CalendarListRow> buildCalendarListRows({
     final bool isToday = day == today;
     bool nowPlaced = !isToday;
     for (final CalendarEntry entry in byDay[day]!) {
-      if (!nowPlaced && entry.start.toLocal().isAfter(now)) {
+      // All-day entries span the whole day and carry a date-only start, so
+      // their instant says nothing about where "now" falls.
+      if (!nowPlaced && !entry.allDay && entry.start.toLocal().isAfter(now)) {
         rows.add(NowRuleCalendarListRow(now));
         nowPlaced = true;
       }
@@ -72,4 +77,18 @@ List<CalendarListRow> buildCalendarListRows({
     if (!nowPlaced) rows.add(NowRuleCalendarListRow(now));
   }
   return List<CalendarListRow>.unmodifiable(rows);
+}
+
+/// How strongly an entry on today's rail is emphasised at [now].
+///
+/// `null` for [now] means the day being read is not today. All-day entries
+/// cover the whole day and are therefore never dimmed as past; a deadline has
+/// no duration, so its start doubles as its end.
+TimeRailEmphasis calendarEntryEmphasis(CalendarEntry entry, DateTime? now) {
+  if (now == null || entry.allDay) return TimeRailEmphasis.normal;
+  final DateTime start = entry.start.toLocal();
+  final DateTime finish = entry.end?.toLocal() ?? start;
+  if (!start.isAfter(now) && finish.isAfter(now)) return TimeRailEmphasis.now;
+  if (!finish.isAfter(now)) return TimeRailEmphasis.past;
+  return TimeRailEmphasis.normal;
 }

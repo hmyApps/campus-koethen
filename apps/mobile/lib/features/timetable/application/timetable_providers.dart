@@ -438,7 +438,8 @@ final timetableWeekProvider =
 
 typedef TimetableForegroundRefresh = Future<void> Function();
 
-/// Refreshes only availability, the selected group and its current week.
+/// Refreshes availability, the selected groups and everything derived from
+/// their entries: the visible weeks and the calendar list/widget ranges.
 ///
 /// In particular, a cold start with no selection never downloads the picker
 /// catalogue. The catalogue belongs to the picker and onboarding only.
@@ -447,20 +448,26 @@ final Provider<TimetableForegroundRefresh> timetableForegroundRefreshProvider =
       return () async {
         ref.invalidate(timetableStatusProvider);
         ref.invalidate(selectedTimetableGroupProvider);
+        ref.invalidate(timetablePeriodsProvider);
+        ref.invalidate(timetableModulesProvider);
         ref.invalidate(timetableWeekProvider);
+        ref.invalidate(aggregatedTimetableWeekProvider);
+        // The calendar list and the home widget read ranges, not weeks; without
+        // this a cancellation only reached them after a restart.
+        ref.invalidate(timetableRangeProvider);
         await ref.read(timetableStatusProvider.future);
 
-        String? groupId = ref.read(selectedTimetableGroupIdProvider);
-        if (groupId == null) return;
+        if (ref.read(selectedTimetableGroupIdProvider) == null) return;
+        // May migrate a legacy alias; the ids are read afterwards.
         await ref.read(selectedTimetableGroupProvider.future);
-        final String? migratedGroupId = ref.read(
-          selectedTimetableGroupIdProvider,
+        final List<String> groupIds = ref.read(
+          selectedTimetableGroupIdsProvider,
         );
-        if (migratedGroupId == null) return;
+        if (groupIds.isEmpty) return;
         await ref.read(
-          timetableWeekProvider(
-            TimetableWeekRequest(
-              groupId: migratedGroupId,
+          aggregatedTimetableWeekProvider(
+            AggregatedTimetableWeekRequest(
+              groupIds: groupIds,
               weekStart: TimetableWeek.startOf(DateTime.now()),
             ),
           ).future,

@@ -74,11 +74,22 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
     ref.invalidate(selectedTimetableGroupProvider);
     final List<String> groupIds = ref.read(selectedTimetableGroupIdsProvider);
     if (groupIds.isEmpty) return;
+    final DateTime weekStart = ref.read(selectedTimetableDayProvider);
+    // The aggregate only combines the per-group week entries; invalidating it
+    // alone would re-read their cached values without a new network request,
+    // so a pending plan could never resolve.
+    for (final String groupId in groupIds) {
+      ref.invalidate(
+        timetableWeekProvider(
+          TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
+        ),
+      );
+    }
     ref.invalidate(
       aggregatedTimetableWeekProvider(
         AggregatedTimetableWeekRequest(
           groupIds: groupIds,
-          weekStart: ref.read(selectedTimetableDayProvider),
+          weekStart: weekStart,
         ),
       ),
     );
@@ -153,11 +164,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
           const LoadingView(),
         AsyncError<Loaded<Timetable>>(:final Object error)
             when loaded == null =>
-          ErrorView(
-            failure: error,
-            onRetry: () =>
-                ref.invalidate(aggregatedTimetableWeekProvider(request)),
-          ),
+          ErrorView(failure: error, onRetry: _refresh),
         // TIME-2: a refresh that fails over a plan already on screen was
         // completely silent — pull-to-refresh in flight mode simply put the
         // old week back. The banner keeps the data and says it is not fresh.
@@ -234,12 +241,18 @@ class _TimetableContent extends ConsumerWidget {
       loaded.meta.dataState,
     );
     final DateTime? lastSync = loaded.meta.lastSuccessfulSyncAt;
+    // Hints are recorded per group; every subscribed group contributes to
+    // this plan, so all of them are shown and acknowledged together.
+    final Set<String> groupIds = <String>{
+      timetable.group.id,
+      ...ref.watch(selectedTimetableGroupIdsProvider),
+    };
     final List<TimetableChange> changes =
         (ref.watch(timetableChangeControllerProvider).value ??
                 const <TimetableChange>[])
             .where(
               (TimetableChange change) =>
-                  change.groupId == timetable.group.id &&
+                  groupIds.contains(change.groupId) &&
                   lessonInfoFilter.acceptsCourse(change.title),
             )
             .toList(growable: false);
@@ -305,7 +318,10 @@ class _TimetableContent extends ConsumerWidget {
                   context: context,
                   isScrollControlled: true,
                   builder: (BuildContext _) => _TimetableChangesSheet(
-                    groupId: timetable.group.id,
+                    groupIds: <String>{
+                      for (final TimetableChange change in changes)
+                        change.groupId,
+                    },
                     changes: changes,
                   ),
                 ),
@@ -416,9 +432,9 @@ class _TimetableContent extends ConsumerWidget {
 }
 
 class _TimetableChangesSheet extends ConsumerWidget {
-  const _TimetableChangesSheet({required this.groupId, required this.changes});
+  const _TimetableChangesSheet({required this.groupIds, required this.changes});
 
-  final String groupId;
+  final Set<String> groupIds;
   final List<TimetableChange> changes;
 
   @override
@@ -490,9 +506,12 @@ class _TimetableChangesSheet extends ConsumerWidget {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: () async {
-                    await ref
-                        .read(timetableChangeControllerProvider.notifier)
-                        .acknowledgeGroup(groupId);
+                    final TimetableChangeController controller = ref.read(
+                      timetableChangeControllerProvider.notifier,
+                    );
+                    for (final String groupId in groupIds) {
+                      await controller.acknowledgeGroup(groupId);
+                    }
                     if (context.mounted) Navigator.of(context).pop();
                   },
                   child: Text(l10n.timetableChangesAcknowledge),

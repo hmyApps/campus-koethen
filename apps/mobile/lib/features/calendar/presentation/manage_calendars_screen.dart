@@ -42,6 +42,7 @@ class ManageCalendarsScreen extends StatelessWidget {
             ),
           ),
           const Expanded(child: PublicCalendarList()),
+          const SafeArea(top: false, child: PublicCalendarGoogleFooter()),
         ],
       ),
     );

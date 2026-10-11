@@ -1,3 +1,4 @@
+"widget.name" = "Campus K\U00F6then";
 "widget.title" = "Kalender";
 "widget.description" = "Zeigt die naechsten Termine aus deinem lokalen Campus-Kalender.";
 "widget.disabled" = "In der App unter Einstellungen aktivieren.";
