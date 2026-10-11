@@ -1,6 +1,6 @@
 # Campus-Chat (Matrix)
 
-Stand: 11. Oktober 2026 · Status: in Umsetzung (Phase 1)
+Stand: 11. Oktober 2026 · Status: in Umsetzung (Phase 1, Branch `feat/matrix`)
 
 Das Modul „Chat“ bindet einen Matrix-Homeserver **direkt vom Gerät** an. Es ist die siebte
 Ausnahme in `AGENTS.md` §2 und folgt denselben Grundsätzen wie Mail, Moodle und Nextcloud: kein
@@ -20,7 +20,11 @@ lokal.
 ## 2. Netzwerkgrenze
 
 - Die Homeserver-Adresse kommt **ausschließlich** aus `--dart-define=MATRIX_HOMESERVER_URL=…`. Ohne
-  Wert (oder ohne HTTPS) ist der Chat nicht konfiguriert und zeigt das an, statt zu raten.
+  gültigen HTTPS-Wert ist das Modul nicht Teil des Builds: Es fehlt in „Mehr“, in den
+  Navigationseinstellungen und in der Leiste; die Route selbst meldet „nicht eingerichtet“.
+- Eine gespeicherte Sitzung eines anderen Homeservers (etwa nach einem Build-Wechsel vom Test- auf den
+  Produktivserver) wird beim Start lokal verworfen, ohne diesen Server zu kontaktieren.
+- Raum-IDs gelangen nie in eine Route: Ein Raum wird mit seiner ID als `extra` geöffnet.
 - Ein eigener HTTP-Client lässt nur Anfragen an genau diese Origin (Schema, Host, Port) zu und
   verfolgt keine Redirects. `.well-known`-Discovery und eine vom Nutzer eingegebene Serveradresse
   gibt es nicht.
@@ -36,16 +40,25 @@ lokal.
 - Das Matrix-SDK speichert Sitzungstoken, Geräte- und Raumschlüssel sowie Nachrichten in seiner
   SQLite-Datenbank. Diese Datenbank wird mit **SQLite3MultipleCiphers** verschlüsselt geöffnet; der
   zufällige 256-Bit-Schlüssel liegt ausschließlich im Keychain/Keystore.
-- `−` (Abmelden): Abmeldung des Geräts beim Homeserver (best effort), danach lokal verifiziertes
-  Löschen von Datenbank und Schlüssel, auch wenn der Server nicht erreichbar ist.
+- `−` (Abmelden, im Kontomenü des Chats): Abmeldung des Geräts beim Homeserver (best effort), danach
+  lokal verifiziertes Löschen von Datenbank und Schlüssel, auch wenn der Server nicht erreichbar ist.
+  Eine nicht mehr lesbare Datenbank (fehlender oder falscher Schlüssel) wird nie still ersetzt; der
+  Chat bietet dann ausdrücklich „Chat-Daten auf diesem Gerät löschen“ an.
+- „Hochschulzugang vollständig löschen“ umfasst den Chat in Phase 1 **nicht**: Das Matrix-Testkonto ist
+  kein Hochschulzugang. Sobald die Anmeldung über die Hochschulkonten läuft, wird der Chat ein
+  eigener `DirectService` mit kanonischem Wipe.
+- Lesebestätigungen werden nur privat gesendet (`m.read.private`).
 
 ## 4. Ende-zu-Ende-Verschlüsselung
 
 - Olm/Megolm über **vodozemac** (`flutter_vodozemac`), vom SDK automatisch genutzt.
-- Neue Direktchats werden verschlüsselt angelegt. Nicht entschlüsselbare Nachrichten werden
-  ehrlich als solche angezeigt, nie als leer.
+- Neue Direktchats werden verschlüsselt angelegt, sobald das Anlegen umgesetzt ist. Nicht
+  entschlüsselbare Nachrichten werden ehrlich als solche angezeigt, nie als leer.
+- Lässt sich vodozemac auf dem Gerät nicht laden, bleibt der Chat aus (`encryptionUnavailable`) statt
+  unverschlüsselt zu laufen.
 - Phase 1 enthält außerdem die Einrichtung bzw. Wiederherstellung des Schlüssel-Backups
   (Wiederherstellungsschlüssel) und die Verifizierung eines neuen Geräts mit einem bestehenden.
+  Bis dahin sind Nachrichten aus der Zeit vor der Anmeldung auf diesem Gerät nicht lesbar.
 
 ## 5. Phasen
 
@@ -56,17 +69,46 @@ lokal.
 | 3     | Anhänge und Bilder, Lesebestätigungen, Tipp-Anzeige (eigene Ergänzung der Regel in `AGENTS.md`)                                                          |
 | 4     | Meetings (MatrixRTC/Element Call), sobald die Hochschule die Server-Infrastruktur bereitstellt                                                           |
 
+### Stand von Phase 1
+
+| Baustein                                                                      | Stand  |
+| ----------------------------------------------------------------------------- | ------ |
+| Origin-Grenze, verschlüsselte Datenbank, Schlüssel im Keystore                | fertig |
+| Login, Wiederherstellen, Abmelden mit verifiziertem Wipe                      | fertig |
+| Sync nur im Vordergrund (`AppSyncHost`)                                       | fertig |
+| Modul mit Sprechblasen-Icon, Raumliste, Einladungen, Verlauf, Textnachrichten | fertig |
+| Datenschutzhinweis (nur in Builds mit Chat)                                   | fertig |
+| Neue Direkt- und Gruppenchats anlegen                                         | offen  |
+| Schlüssel-Backup / Wiederherstellungsschlüssel                                | offen  |
+| Geräteverifizierung (SAS-Emoji)                                               | offen  |
+| Test gegen einen echten Server (Wegwerf-Synapse, Testkonto)                   | offen  |
+
 ## 6. Bauen und Testen
 
+- Build mit Chat, z. B. gegen den Testserver (zusätzlich zu den übrigen `--dart-define`-Werten):
+  `flutter build apk --debug --dart-define=MATRIX_HOMESERVER_URL=https://matrix.erikspace.eu`.
 - `flutter_vodozemac` kompiliert vodozemac beim Build aus Rust. Lokal und in der CI wird dafür
   eine Rust-Toolchain mit den Android-Zielen benötigt.
 - `package:sqlite3` lädt die SQLite3MultipleCiphers-Bibliothek beim Build aus den GitHub-Releases
   des Pakets (mit Prüfsummen) — der Build braucht dafür Netz.
-- Unit-Tests laufen gegen Fakes und die `FakeMatrixApi` des SDKs; automatisierte Tests gegen einen
-  echten Server nutzen einen Wegwerf-Synapse in Docker, nie Zugangsdaten zu einem echten Konto.
+- Host-Tests laufen gegen einen Demo-Homeserver (`test/support/fake_homeserver.dart`) und echtes
+  SQLite3MultipleCiphers, ohne vodozemac (der Host hat keine Rust-Bibliothek); E2EE selbst wird auf
+  dem Gerät geprüft. Automatisierte Tests gegen einen echten Server nutzen einen Wegwerf-Synapse in
+  Docker, nie Zugangsdaten zu einem echten Konto.
 
-## 7. Offene Punkte
+## 7. Logging
+
+Die App protokolliert aus dem Chat nichts. Das SDK-Logging ist auf seine höchste Stufe begrenzt und
+sammelt nichts im Speicher. Verbleibend: Einige SDK-Aufgaben laufen in der Root-Zone und können auf
+dieser höchsten Stufe noch ausgeben; im Ausnahmefall eines doppelten `m.room.encryption`-Events
+enthält diese Ausgabe das Event (Raum- und Nutzer-ID, kein Nachrichteninhalt, keine Schlüssel). Das
+lässt sich ohne Änderung am SDK nicht unterdrücken und ist vor einem Produktivbetrieb zu klären.
+
+## 8. Offene Punkte
 
 - Produktiver Homeserver der Hochschule: Domain, Betreiber, Login-Verfahren.
 - Meetings: MatrixRTC benötigt serverseitig zusätzlich eine LiveKit-Infrastruktur.
-- Datenschutzhinweise in den rechtlichen Seiten vor der Veröffentlichung ergänzen.
+- Datenschutzhinweis: In der App vorhanden (nur in Builds mit Chat). Die veröffentlichten Fassungen
+  unter `docs/legal/` werden vor einer Veröffentlichung eines Builds mit Chat ergänzt.
+- Presence: Der Sync meldet den Server-Standard (online, solange die App synchronisiert); eine
+  Einstellung dafür fehlt noch.

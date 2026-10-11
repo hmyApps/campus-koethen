@@ -41,6 +41,7 @@ Inhalte erhalten (siehe [`../AGENTS.md`](../AGENTS.md) §2).
 | `moodle.hs-anhalt.de`        | Moodle-Webservice, nur lesend                 | Flutter     | aktiv                                                                                         |
 | `cloud.hs-anhalt.de`         | Nextcloud Login Flow v2 / OCS / WebDAV        | Flutter     | Lesen, Upload, Löschen und nur lesbare öffentliche Links umgesetzt; reale Geräteabnahme offen |
 | `REQUESTS_BASE_URL`          | Gremiensystem, Finanzanträge (POST)           | Flutter     | aktiv                                                                                         |
+| `MATRIX_HOMESERVER_URL`      | Matrix-Homeserver, Campus-Chat (E2EE)         | Flutter     | Testbetrieb (`feat/matrix`); nur in Builds mit gesetzter Adresse                              |
 
 Mail, Prüfungsportale, Moodle und Nextcloud sind nutzerauthentifiziert. Der Antragsdienst ist es
 **nicht** — ausschlaggebend ist der
