@@ -224,6 +224,30 @@ void main() {
         expect(await repo.cachedCourseDetail(1), isNotNull);
       },
     );
+
+    test('a draft saved after the due date is not flagged late', () async {
+      // "Late" describes a submission. A draft is not one, and the overdue
+      // chip already says what is wrong with it.
+      cache.courses = <MoodleCourse>[
+        const MoodleCourse(id: 1, fullName: 'Beispielkurs Informatik'),
+      ];
+      final DateTime due = DateTime.fromMillisecondsSinceEpoch(
+        1704672000 * 1000,
+      );
+      api.assignments = <MoodleAssignment>[
+        MoodleAssignment(id: 51, courseId: 1, name: 'Entwurf', dueDate: due),
+      ];
+      api.statuses = <int, MoodleSubmissionStatus>{
+        51: MoodleSubmissionStatus(
+          state: MoodleSubmissionState.draft,
+          submittedAt: due.add(const Duration(days: 1)),
+        ),
+      };
+
+      final MoodleCourseDetail detail = await repo.refreshCourseDetail(1);
+
+      expect(detail.assignments.single.status!.isLate, isFalse);
+    });
   });
 
   group('request concurrency', () {

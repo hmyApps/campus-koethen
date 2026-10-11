@@ -427,8 +427,13 @@ class MoodleRepositoryImpl implements MoodleRepository {
   ) {
     final DateTime? due = assignment.dueDate;
     final DateTime? submitted = status.submittedAt;
+    // Only a real submission can be late. A draft's `timemodified` is just
+    // the last edit, and the overdue chip already covers a missing hand-in.
     final bool late =
-        due != null && submitted != null && submitted.isAfter(due);
+        status.state == MoodleSubmissionState.submitted &&
+        due != null &&
+        submitted != null &&
+        submitted.isAfter(due);
     return late ? status.copyWith(isLate: true) : status;
   }
 }
