@@ -418,12 +418,19 @@ List<CalendarDateWindow> splitCalendarWindow(
 
 /// The list has no future cut-off: Moodle and saved entries can be arbitrarily
 /// far ahead, while backend sources supply their own advertised horizons.
+///
+/// An entry stays while any of its days is still ahead: a multi-day event
+/// that began before [from], or a timed entry running past midnight, is
+/// still current and must not vanish from the list or the widget.
 List<CalendarEntry> calendarEntriesFrom(
   Iterable<CalendarEntry> entries,
   DateTime from,
-) => entries
-    .where((CalendarEntry entry) => !entry.day.isBefore(calendarDayKey(from)))
-    .toList(growable: false);
+) {
+  final DateTime fromDay = calendarDayKey(from);
+  return entries
+      .where((CalendarEntry entry) => !entry.lastDay.isBefore(fromDay))
+      .toList(growable: false);
+}
 
 /// The aggregated calendar for the month around [anchor].
 ///

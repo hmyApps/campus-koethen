@@ -338,6 +338,40 @@ void main() {
     );
   });
 
+  test('the list keeps running multi-day and overnight entries', () {
+    final DateTime from = DateTime(2026, 8, 27, 18);
+    final List<CalendarEntry> entries = <CalendarEntry>[
+      CalendarEntry(
+        id: 'running-week',
+        source: CalendarSource.publicCalendar,
+        title: 'running-week',
+        start: DateTime(2026, 8, 24),
+        end: DateTime(2026, 8, 29),
+        allDay: true,
+      ),
+      CalendarEntry(
+        id: 'overnight',
+        source: CalendarSource.publicCalendar,
+        title: 'overnight',
+        start: DateTime(2026, 8, 26, 22),
+        end: DateTime(2026, 8, 27, 2),
+      ),
+      CalendarEntry(
+        id: 'ended-yesterday',
+        source: CalendarSource.publicCalendar,
+        title: 'ended-yesterday',
+        start: DateTime(2026, 8, 25),
+        end: DateTime(2026, 8, 27),
+        allDay: true,
+      ),
+    ];
+
+    expect(
+      calendarEntriesFrom(entries, from).map((CalendarEntry entry) => entry.id),
+      <String>['running-week', 'overnight'],
+    );
+  });
+
   test('a cached backend horizon keeps rolling forward with today', () {
     final CalendarDateWindow window = calendarListWindow(
       DateTime(2026, 9, 25),
