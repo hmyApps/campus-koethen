@@ -78,7 +78,9 @@ class HisInOneGradesGateway implements GradesGateway, ExamReportGateway {
         case HisInOneOverviewKind.unrecognised:
           throw const GradeFailure(GradeFailureKind.portalStructureChanged);
         case HisInOneOverviewKind.empty:
-          return const GradeReport(<GradeEntry>[]);
+          // No results yet, but the print buttons (e.g. "Übersicht
+          // fehlender Leistungen") live on this same page and stay useful.
+          return await _emptyWithExamReports(overview.html);
         case HisInOneOverviewKind.rendered:
           // No expand-all control in this portal build — parse as rendered.
           // The "Bescheinigungen" print buttons, if any, live on this SAME
@@ -102,7 +104,7 @@ class HisInOneGradesGateway implements GradesGateway, ExamReportGateway {
       final HisInOneOverview afterExpand =
           await HisInOneHtmlParser.readOverview(expanded.html);
       if (afterExpand.kind == HisInOneOverviewKind.empty) {
-        return const GradeReport(<GradeEntry>[]);
+        return await _emptyWithExamReports(expanded.html);
       }
       return await _withExamReports(expanded.html);
     } on GradeFailure {
@@ -125,6 +127,11 @@ class HisInOneGradesGateway implements GradesGateway, ExamReportGateway {
         await HisInOneHtmlParser.findExamReports(html);
     return GradeReport(report.entries, examReports: offers);
   }
+
+  Future<GradeReport> _emptyWithExamReports(String html) async => GradeReport(
+    const <GradeEntry>[],
+    examReports: await HisInOneHtmlParser.findExamReports(html),
+  );
 
   @override
   Future<ExamReportDownloadResult> downloadExamReport(
