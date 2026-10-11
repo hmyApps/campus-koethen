@@ -1,4 +1,4 @@
-import { addCalendarDays, campusToday } from './campus-date';
+import { addCalendarDays, campusDayEnd, campusDayStart, campusToday } from './campus-date';
 
 describe('campusToday', () => {
   it.each([
@@ -25,5 +25,27 @@ describe('addCalendarDays', () => {
     expect(addCalendarDays('2026-09-24', 28)).toBe('2026-10-22');
     expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
     expect(addCalendarDays('2026-07-20', 0)).toBe('2026-07-20');
+  });
+});
+
+describe('campusDayStart / campusDayEnd', () => {
+  it.each([
+    ['a summer day (CEST)', '2026-07-21', '2026-07-20T22:00:00.000Z', '2026-07-21T21:59:59.999Z'],
+    ['a winter day (CET)', '2026-01-15', '2026-01-14T23:00:00.000Z', '2026-01-15T22:59:59.999Z'],
+    [
+      'the day the clocks go forward (23 hours)',
+      '2026-03-29',
+      '2026-03-28T23:00:00.000Z',
+      '2026-03-29T21:59:59.999Z',
+    ],
+    [
+      'the day the clocks go back (25 hours)',
+      '2026-10-25',
+      '2026-10-24T22:00:00.000Z',
+      '2026-10-25T22:59:59.999Z',
+    ],
+  ])('bounds %s in Berlin time', (_label, day, start, end) => {
+    expect(campusDayStart(day).toISOString()).toBe(start);
+    expect(campusDayEnd(day).toISOString()).toBe(end);
   });
 });

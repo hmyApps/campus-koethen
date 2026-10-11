@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TtlCache } from '../../common/cache/ttl-cache';
 import { ApiError } from '../../common/errors/api-error';
 import { LocaleResolution } from '../../common/locale/locale';
+import { campusDayEnd, campusDayStart } from '../../common/time/campus-date';
 import { StrapiClient, StrapiListResponse, StrapiRequestError } from '../strapi/strapi.client';
 import { mapChannel, mapPostDetail, mapPostListItem, mapTag } from './posts.mapper';
 import { ChannelDto, PostDetailDto, PostListItemDto, TagDto } from './posts.types';
@@ -487,8 +488,9 @@ export class PostsService {
       };
     }
 
-    const fromDate = `${query.from}T00:00:00.000Z`;
-    const toDate = `${query.to}T23:59:59.999Z`;
+    // `from` and `to` are Europe/Berlin days, not UTC days.
+    const fromDate = campusDayStart(query.from).toISOString();
+    const toDate = campusDayEnd(query.to).toISOString();
 
     const filters: Record<string, unknown> = {
       tag: { slug: { $eq: 'event' }, isActive: { $eq: true } },

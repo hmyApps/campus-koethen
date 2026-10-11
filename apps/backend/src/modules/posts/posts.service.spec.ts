@@ -373,8 +373,9 @@ describe('PostsService', () => {
       expect(result.data).toHaveLength(1);
       const queryStr = JSON.stringify(calls[0]!.query);
       expect(queryStr).toContain('eventStart');
-      expect(queryStr).toContain('2026-09-30T23:59:59.999Z');
-      expect(queryStr).toContain('2026-09-01T00:00:00.000Z');
+      // `from` and `to` are Berlin days (CEST, UTC+2).
+      expect(queryStr).toContain('2026-09-30T21:59:59.999Z');
+      expect(queryStr).toContain('2026-08-31T22:00:00.000Z');
     });
 
     it('sorts events by eventStart asc, slug asc', async () => {

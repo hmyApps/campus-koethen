@@ -43,3 +43,48 @@ export function campusToday(now: Date = new Date()): string {
 export function addCalendarDays(isoDay: string, days: number): string {
   return new Date(Date.parse(`${isoDay}T00:00:00.000Z`) + days * DAY_MS).toISOString().slice(0, 10);
 }
+
+const campusClockFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: CAMPUS_TIME_ZONE,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/** How far Europe/Berlin's wall clock is ahead of UTC at `instant`, in ms. */
+function campusOffsetMs(instant: number): number {
+  const parts: Record<string, number> = {};
+  for (const part of campusClockFormatter.formatToParts(new Date(instant))) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  const wall = Date.UTC(
+    parts['year']!,
+    parts['month']! - 1,
+    parts['day']!,
+    parts['hour']!,
+    parts['minute']!,
+    parts['second']!,
+  );
+  return wall - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The instant a `YYYY-MM-DD` campus day begins: local midnight in
+ * Europe/Berlin. Berlin changes its clocks at 02:00/03:00, never at midnight,
+ * so midnight always exists exactly once; the second lookup settles the offset
+ * on the night of a change.
+ */
+export function campusDayStart(isoDay: string): Date {
+  const wall = Date.parse(`${isoDay}T00:00:00.000Z`);
+  const guess = wall - campusOffsetMs(wall);
+  return new Date(wall - campusOffsetMs(guess));
+}
+
+/** The last millisecond of a `YYYY-MM-DD` campus day in Europe/Berlin. */
+export function campusDayEnd(isoDay: string): Date {
+  return new Date(campusDayStart(addCalendarDays(isoDay, 1)).getTime() - 1);
+}

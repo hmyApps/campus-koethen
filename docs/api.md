@@ -301,16 +301,19 @@ Sortierung: `publishedAt` DESC, dann `slug` ASC (deterministisch).
 
 Reiner Event-Feed für Beiträge mit dem Tag `event`.
 
-| Parameter  | Typ           | Standard           | Regeln                                                                        |
-| ---------- | ------------- | ------------------ | ----------------------------------------------------------------------------- |
-| `from`     | `YYYY-MM-DD`  | heute              | optional; „heute“ ist der Kalendertag in `Europe/Berlin`                      |
-| `to`       | `YYYY-MM-DD`  | `from` + Lookahead | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) |
-| `channels` | CSV von Slugs | _fehlt_            | max. 25 Werte, je max. 100 Zeichen                                            |
-| `page`     | Integer >= 1  | `1`                |                                                                               |
-| `pageSize` | Integer 1–50  | `20`               | Werte > 50 ⇒ `400`                                                            |
-| `locale`   | `de` \| `en`  | `de`               |                                                                               |
+| Parameter  | Typ           | Standard                | Regeln                                                                        |
+| ---------- | ------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `from`     | `YYYY-MM-DD`  | heute                   | optional; „heute“ ist der Kalendertag in `Europe/Berlin`                      |
+| `to`       | `YYYY-MM-DD`  | `from` + Maximalbereich | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) |
+| `channels` | CSV von Slugs | _fehlt_                 | max. 25 Werte, je max. 100 Zeichen                                            |
+| `page`     | Integer >= 1  | `1`                     |                                                                               |
+| `pageSize` | Integer 1–50  | `20`                    | Werte > 50 ⇒ `400`                                                            |
+| `locale`   | `de` \| `en`  | `de`                    |                                                                               |
 
 Das Abfrageintervall ist als **Überlappung** definiert: `eventStart <= to AND (eventEnd ?? eventStart) >= from`.
+`from` und `to` sind Kalendertage in `Europe/Berlin`: Das Intervall reicht von 00:00 Uhr Berliner
+Zeit am `from`-Tag bis zum Ende des `to`-Tags in Berliner Zeit. Fehlt `to`, gilt `from` plus
+Server-Maximalbereich.
 Wie im Feed nur zeitlich gültige Beiträge (`validFrom` <= jetzt <= `validUntil`).
 Sortierung: `eventStart` ASC, dann `slug` ASC (deterministisch).
 
@@ -935,6 +938,9 @@ Tagen; ihre Reichweite ist damit nicht auf eine feste Tageszahl im Client begren
 ### `GET /v1/calendars/events`
 
 Aggregierte Termine über **mehrere** ausgewählte Kalender. Das Abfrageintervall ist als **Überlappung** definiert: `startsAt <= to AND endsAt >= from`.
+`from` und `to` sind Kalendertage in `Europe/Berlin`: Das Intervall reicht von 00:00 Uhr Berliner
+Zeit am `from`-Tag bis zum Ende des `to`-Tags in Berliner Zeit. Fehlt `to`, gilt `from` plus
+Server-Maximalbereich. `meta.from` und `meta.to` geben genau diese Kalendertage zurück.
 
 | Parameter  | Typ          | Regeln                                                                                      |
 | ---------- | ------------ | ------------------------------------------------------------------------------------------- |
