@@ -1429,6 +1429,47 @@ void main() {
       expect(state.mailboxPath, 'Sent');
     });
 
+    test('switching the folder drops results that belong to the old one, so '
+        'no INBOX id is opened in another folder', () async {
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[header('1')]);
+      await cache.saveMessage(detail(id: '1'));
+      final container = await seeded(FakeMailGateway(), cache);
+      await container
+          .read(mailSearchControllerProvider.notifier)
+          .run('Semesterinfo');
+      expect(container.read(mailSearchControllerProvider).local, isNotEmpty);
+
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+
+      final MailSearchState state = container.read(
+        mailSearchControllerProvider,
+      );
+      expect(state.hasResults, isFalse);
+      expect(state.hasSearched, isFalse);
+    });
+
+    test('a local search still running when the folder switches cannot write '
+        'its hits into the new folder\'s state', () async {
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[header('1')]);
+      await cache.saveMessage(detail(id: '1'));
+      final container = await seeded(FakeMailGateway(), cache);
+      container.listen(mailSearchControllerProvider, (_, _) {});
+
+      final Future<void> pending = container
+          .read(mailSearchControllerProvider.notifier)
+          .run('Semesterinfo');
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+      await pending;
+
+      expect(container.read(mailSearchControllerProvider).local, isEmpty);
+    });
+
     test('removing the account leaves no results behind', () async {
       final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);

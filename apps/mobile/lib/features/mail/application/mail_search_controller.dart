@@ -130,6 +130,11 @@ class MailSearchController extends Notifier<MailSearchState> {
     // generation: results, query and any server error of the previous account
     // are dropped with it.
     ref.watch(mailSessionGenerationProvider);
+    // Results are ids of one folder, and the message screen opens them in the
+    // currently selected one. A folder switch therefore drops them, and
+    // [_stillShowing] keeps a search still in flight from writing its hits
+    // into the new folder's state.
+    ref.watch(selectedMailboxProvider);
     return const MailSearchState();
   }
 
@@ -157,7 +162,7 @@ class MailSearchController extends Notifier<MailSearchState> {
 
     final MailCacheStore cache = ref.read(mailCacheStoreProvider);
     final List<MailMessageHeader> hits = await cache.searchHeaders(q);
-    if (token != _run) return;
+    if (token != _run || !_stillShowing(folder.path)) return;
     state = state.copyWith(isSearchingLocally: false, local: hits);
   }
 
@@ -184,7 +189,7 @@ class MailSearchController extends Notifier<MailSearchState> {
             query: current.query,
             limit: kInboxLimit,
           );
-      if (token != _run) return;
+      if (token != _run || !_stillShowing(current.mailboxPath)) return;
       final Set<String> known = state.local
           .map((MailMessageHeader h) => h.id)
           .toSet();
@@ -196,7 +201,7 @@ class MailSearchController extends Notifier<MailSearchState> {
         clearServerError: true,
       );
     } catch (error) {
-      if (token != _run) return;
+      if (token != _run || !_stillShowing(current.mailboxPath)) return;
       // The local hits stay exactly as they are — offline or a broken server
       // must not empty a list the device could answer on its own.
       state = state.copyWith(
@@ -205,6 +210,11 @@ class MailSearchController extends Notifier<MailSearchState> {
       );
     }
   }
+
+  /// Whether an answer for [mailboxPath] may still be written: the provider
+  /// is alive and that folder is still the selected one.
+  bool _stillShowing(String mailboxPath) =>
+      ref.mounted && ref.read(selectedMailboxProvider).path == mailboxPath;
 
   void clear() {
     _run++;
