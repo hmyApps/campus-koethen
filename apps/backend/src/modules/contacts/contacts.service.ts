@@ -4,7 +4,7 @@ import { blocksToPlainText, sanitizeBlocks } from '../../common/content/content-
 import { ApiError } from '../../common/errors/api-error';
 import { publicMediaUrl } from '../media/media.path';
 import { LocaleResolution } from '../../common/locale/locale';
-import { StrapiClient, StrapiListResponse, StrapiRequestError } from '../strapi/strapi.client';
+import { parseStrapiList, StrapiClient, StrapiRequestError } from '../strapi/strapi.client';
 import {
   ContactAreaDetailDto,
   ContactAreaListItemDto,
@@ -287,8 +287,7 @@ export class ContactsService {
 
   private async fetch(query: Record<string, unknown>): Promise<Raw[]> {
     try {
-      const response = await this.strapi.get<StrapiListResponse<Raw>>('/api/contact-areas', query);
-      return Array.isArray(response?.data) ? response.data : [];
+      return parseStrapiList(await this.strapi.get<unknown>('/api/contact-areas', query)).data;
     } catch (error) {
       if (error instanceof StrapiRequestError) {
         throw new ApiError(error.kind === 'timeout' ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_UNAVAILABLE');

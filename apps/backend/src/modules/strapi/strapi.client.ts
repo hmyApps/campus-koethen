@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { z } from 'zod';
 import { BodyTooLargeError, readBoundedText } from '../../common/http/bounded-body';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
@@ -41,6 +42,41 @@ export interface StrapiListResponse<T> {
   meta?: {
     pagination?: { page: number; pageSize: number; pageCount: number; total: number };
   };
+}
+
+/**
+ * The envelope of a Strapi list answer. Entries stay open records: each
+ * module validates its own fields when it maps them.
+ */
+const strapiListSchema = z.object({
+  data: z.array(z.record(z.string(), z.unknown())),
+  meta: z
+    .object({
+      pagination: z
+        .object({
+          page: z.number(),
+          pageSize: z.number(),
+          pageCount: z.number(),
+          total: z.number(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+/**
+ * Validates a Strapi list answer before anything reads it (AGENTS.md §4).
+ *
+ * A 200 without a `data` list is not an empty result: read as one, it would be
+ * cached and served as "no posts" or "no rooms". It is reported as a
+ * `malformed` answer instead, which every caller maps to UPSTREAM_UNAVAILABLE.
+ */
+export function parseStrapiList(body: unknown): StrapiListResponse<Record<string, unknown>> {
+  const parsed = strapiListSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new StrapiRequestError('malformed', 'Strapi returned an unexpected list envelope');
+  }
+  return parsed.data;
 }
 
 /**

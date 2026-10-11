@@ -123,6 +123,23 @@ describe('ContactsService', () => {
       expect(result.translationFallback).toBe(true);
     });
 
+    it('treats a 200 answer without a data list as an upstream failure', async () => {
+      let attempt = 0;
+      const client = makeClient(() => {
+        attempt += 1;
+        return attempt === 1 ? {} : { data: [area('ssc')] };
+      });
+      const service = new ContactsService(client);
+
+      await expect(service.listAreas(de)).rejects.toMatchObject({
+        code: 'UPSTREAM_UNAVAILABLE',
+      });
+      // Nothing was cached as an empty directory.
+      await expect(service.listAreas(de)).resolves.toMatchObject({
+        data: [expect.objectContaining({ slug: 'ssc' })],
+      });
+    });
+
     it('maps an upstream timeout to a 504', async () => {
       const client = {
         get: jest.fn(async () => {

@@ -224,6 +224,48 @@ describe('PostsService', () => {
     });
   });
 
+  describe('Strapi envelope', () => {
+    const query = {
+      channels: [],
+      channelsParamPresent: false,
+      tags: [],
+      tagsParamPresent: false,
+      page: 1,
+      pageSize: 20,
+    };
+
+    it.each([
+      ['without data', {}],
+      ['with data that is not a list', { data: { slug: 'x' } }],
+      ['that is not an object', 'oops'],
+    ])('treats a 200 answer %s as an upstream failure, not as an empty feed', async (_l, body) => {
+      let attempt = 0;
+      const client = {
+        get: jest.fn(async () => {
+          attempt += 1;
+          return attempt === 1 ? body : { data: [post('a')] };
+        }),
+      } as unknown as StrapiClient;
+      const service = new PostsService(client);
+
+      await expect(service.getPosts(de, query)).rejects.toMatchObject({
+        code: 'UPSTREAM_UNAVAILABLE',
+      });
+      // Nothing was cached: the next request asks again and gets the feed.
+      await expect(service.getPosts(de, query)).resolves.toMatchObject({
+        data: [expect.objectContaining({ slug: 'a' })],
+      });
+    });
+
+    it('applies the same check to the tag list', async () => {
+      const client = { get: jest.fn(async () => ({})) } as unknown as StrapiClient;
+
+      await expect(new PostsService(client).getTags(de)).rejects.toMatchObject({
+        code: 'UPSTREAM_UNAVAILABLE',
+      });
+    });
+  });
+
   describe('getPosts', () => {
     it('returns empty list when channelsParamPresent is true but channels is empty', async () => {
       const { client, calls } = makeClient(() => ({ data: [] }));

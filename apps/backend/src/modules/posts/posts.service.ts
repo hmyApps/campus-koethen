@@ -6,7 +6,12 @@ import { TtlCache } from '../../common/cache/ttl-cache';
 import { ApiError } from '../../common/errors/api-error';
 import { LocaleResolution } from '../../common/locale/locale';
 import { campusDayEnd, campusDayStart } from '../../common/time/campus-date';
-import { StrapiClient, StrapiListResponse, StrapiRequestError } from '../strapi/strapi.client';
+import {
+  parseStrapiList,
+  StrapiClient,
+  StrapiListResponse,
+  StrapiRequestError,
+} from '../strapi/strapi.client';
 import { mapChannel, mapPostDetail, mapPostListItem, mapTag } from './posts.mapper';
 import { ChannelDto, PostDetailDto, PostListItemDto, TagDto } from './posts.types';
 import { asString } from '../../common/util/coerce';
@@ -142,8 +147,7 @@ export class PostsService {
 
   private async fetch(path: string, query: Record<string, unknown>): Promise<Raw[]> {
     try {
-      const response = await this.strapi.get<StrapiListResponse<Raw>>(path, query);
-      return Array.isArray(response?.data) ? response.data : [];
+      return parseStrapiList(await this.strapi.get<unknown>(path, query)).data;
     } catch (error) {
       throw PostsService.toApiError(error);
     }
@@ -154,8 +158,7 @@ export class PostsService {
     query: Record<string, unknown>,
   ): Promise<StrapiListResponse<Raw>> {
     try {
-      const response = await this.strapi.get<StrapiListResponse<Raw>>(path, query);
-      return { data: Array.isArray(response?.data) ? response.data : [], meta: response?.meta };
+      return parseStrapiList(await this.strapi.get<unknown>(path, query));
     } catch (error) {
       throw PostsService.toApiError(error);
     }

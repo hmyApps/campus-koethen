@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { TtlCache } from '../../common/cache/ttl-cache';
 import { ApiError } from '../../common/errors/api-error';
 import { Locale, LocaleResolution } from '../../common/locale/locale';
-import { StrapiClient, StrapiListResponse, StrapiRequestError } from '../strapi/strapi.client';
+import { parseStrapiList, StrapiClient, StrapiRequestError } from '../strapi/strapi.client';
 import { catalogRoom, CatalogRoom } from './room-catalog';
 import { RoomDto, RoomReferenceDto } from './rooms.types';
 
@@ -91,13 +91,15 @@ export class RoomsService {
       const rows: Raw[] = [];
 
       for (let page = 1; ; page += 1) {
-        const response = await this.strapi.get<StrapiListResponse<Raw>>(ROOMS_PATH, {
-          ...query,
-          pagination: { page, pageSize: 100 },
-        });
-        if (Array.isArray(response?.data)) rows.push(...response.data);
+        const response = parseStrapiList(
+          await this.strapi.get<unknown>(ROOMS_PATH, {
+            ...query,
+            pagination: { page, pageSize: 100 },
+          }),
+        );
+        rows.push(...response.data);
 
-        const pageCount = response?.meta?.pagination?.pageCount;
+        const pageCount = response.meta?.pagination?.pageCount;
         if (typeof pageCount !== 'number' || !Number.isInteger(pageCount) || page >= pageCount) {
           break;
         }

@@ -185,6 +185,23 @@ describe('RoomsService', () => {
       }
     });
 
+    it('treats a 200 answer without a data list as an upstream failure', async () => {
+      let attempt = 0;
+      const client = makeClient(() => {
+        attempt += 1;
+        return attempt === 1 ? { meta: {} } : { data: [room(firstFloorRoom)] };
+      });
+      const service = new RoomsService(client);
+
+      await expect(service.listRooms(de, {})).rejects.toMatchObject({
+        code: 'UPSTREAM_UNAVAILABLE',
+      });
+      // Nothing was cached as an empty catalogue.
+      await expect(service.listRooms(de, {})).resolves.toMatchObject({
+        data: [expect.objectContaining({ roomKey: firstFloorRoom })],
+      });
+    });
+
     it('maps an upstream timeout to UPSTREAM_TIMEOUT', async () => {
       const client = {
         get: jest.fn(async () => {
