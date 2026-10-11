@@ -18,7 +18,6 @@ import 'package:campus_koethen/features/events/data/saved_events_store.dart';
 import 'package:campus_koethen/features/moodle/application/moodle_providers.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_account.dart';
 import 'package:campus_koethen/features/moodle/domain/moodle_deadline.dart';
-import 'package:campus_koethen/features/notifications/application/daily_summary_providers.dart';
 import 'package:campus_koethen/features/notifications/application/moodle_deadline_candidates.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/data/device_time_zone.dart';
