@@ -71,6 +71,35 @@ void main() {
     },
   );
 
+  // Audit 2026-10-10: a cancel while the login flow is still being started
+  // must not open the browser login afterwards.
+  test('cancel during startLogin never opens the browser login', () async {
+    final _MemoryStore store = _MemoryStore();
+    final _Gateway gateway = _Gateway(blockStart: true);
+    final ProviderContainer container = _container(store, gateway);
+    addTearDown(container.dispose);
+    await container.read(nextcloudAccountControllerProvider.future);
+
+    final Future<void> connection = container
+        .read(nextcloudAccountControllerProvider.notifier)
+        .connect();
+    await gateway.startLoginEntered.future;
+    container
+        .read(nextcloudAccountControllerProvider.notifier)
+        .cancelPendingLogin();
+    gateway.releaseStart.complete();
+    await connection;
+
+    expect(gateway.launched, isFalse);
+    expect(gateway.completeLoginEntered.isCompleted, isFalse);
+    expect(store.value, isNull);
+    final AsyncValue<NextcloudAccount?> state = container.read(
+      nextcloudAccountControllerProvider,
+    );
+    expect(state.hasError, isFalse);
+    expect(state.value, isNull);
+  });
+
   test(
     'failed secure persistence revokes the newly issued credential',
     () async {
@@ -214,16 +243,20 @@ class _Launcher implements NextcloudLoginLauncher {
 
 class _Gateway implements NextcloudGateway {
   _Gateway({
+    this.blockStart = false,
     this.blockLogin = false,
     this.blockDownload = false,
     this.blockDelete = false,
     this.revokeFails = false,
   });
 
+  final bool blockStart;
   final bool blockLogin;
   final bool blockDownload;
   final bool blockDelete;
   final bool revokeFails;
+  final Completer<void> startLoginEntered = Completer<void>();
+  final Completer<void> releaseStart = Completer<void>();
   final Completer<void> completeLoginEntered = Completer<void>();
   final Completer<void> releaseLogin = Completer<void>();
   final Completer<void> downloadEntered = Completer<void>();
@@ -234,11 +267,15 @@ class _Gateway implements NextcloudGateway {
   var revokeCalls = 0;
 
   @override
-  Future<NextcloudLoginStart> startLogin() async => NextcloudLoginStart(
-    loginUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/flow/test'),
-    pollUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/poll'),
-    pollToken: 'token',
-  );
+  Future<NextcloudLoginStart> startLogin() async {
+    if (!startLoginEntered.isCompleted) startLoginEntered.complete();
+    if (blockStart) await releaseStart.future;
+    return NextcloudLoginStart(
+      loginUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/flow/test'),
+      pollUri: Uri.parse('https://cloud.hs-anhalt.de/login/v2/poll'),
+      pollToken: 'token',
+    );
+  }
 
   @override
   Future<NextcloudCredential> completeLogin(
