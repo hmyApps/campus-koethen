@@ -183,24 +183,24 @@ Bereich: `features/{grades,student_service,nextcloud}`, `docs/grades.md`, `docs/
 
 ## Status nach den Fix-Sprints (2026-10-11)
 
-Alle 86 Funde sind behoben. Jeder Bereich wurde auf einem eigenen Branch bearbeitet und in
+85 von 86 Funden sind behoben; offen ist nur die globale Bereinigung ungenutzter ARB-Schlüssel. Jeder Bereich wurde auf einem eigenen Branch bearbeitet und in
 `claude/confident-meitner-m82y60` zusammengeführt.
 
 | Branch                                       | Bereich                              | Funde |
 | -------------------------------------------- | ------------------------------------ | ----- |
 | `claude/fix-calendar-timetable`              | Kalender, Stundenplan, Todos         | 13/13 |
 | `claude/fix-backend`                         | Backend und OpenAPI                  | 9/9   |
-| `claude/fix-mail-hsaki-account`              | Mail, HSA-GPT, Hochschulzugang       | 11/11 |
-| `claude/fix-core-features`                   | App-Kern, l10n, kleinere Features    | 10/10 |
+| `claude/fix-mail-hsaki-account`              | Mail, HSA-GPT, Hochschulzugang       | 12/12 |
+| `claude/fix-core-features`                   | App-Kern, l10n, kleinere Features    | 8/10  |
 | `claude/fix-cms-infra`                       | CMS, Infrastruktur, CI, Skripte      | 13/13 |
 | `claude/fix-requests-wallet`                 | Anträge, Dokumenten-Wallet, Kontakte | 13/13 |
 | `claude/fix-notifications-moodle`            | Benachrichtigungen und Moodle        | 7/7   |
 | `claude/fix-grades-studentservice-nextcloud` | Noten, Studienservice, Nextcloud     | 10/10 |
 
-Die Zahlen folgen der Gliederung der Tabellen oben. Den Fund zu HSA-GPT in den
-Navigationseinstellungen (App-Kern) hat der Mail/HSA-GPT-Branch behoben. Ausgenommen war nur die
-Bereinigung der ungenutzten ARB-Schlüssel; sie wurde lediglich soweit erledigt, wie einzelne
-Fixes die betroffenen Schlüssel berührten.
+Die Zahlen folgen der Gliederung der Tabellen oben. Beim Mail/HSA-GPT-Branch ist der
+Fund zu HSA-GPT in den Navigationseinstellungen (aus App-Kern) mitgezählt. Von App-Kern offen ist
+nur die Bereinigung der ungenutzten ARB-Schlüssel; einzelne Fixes haben nur die Schlüssel
+entfernt oder angebunden, die sie selbst betrafen.
 
 Entscheidungen der Projektleitung:
 
