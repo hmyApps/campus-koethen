@@ -16,8 +16,9 @@ import 'hawki_session.dart';
 /// The token-mint step (`connect`) is the one place this feature ever
 /// touches the central university password; everything afterwards —
 /// listing models, sending a message — uses only the minted bearer token.
-/// `connect`/`revoke` each open their own short-lived [HawkiSession] and
-/// close it in `finally`, matching every other direct integration in this
+/// `connect`/`revoke` each open their own short-lived [HawkiSession], end
+/// the HAWKI web session with a best-effort `/logout` and close it in
+/// `finally`, matching every other direct integration in this
 /// app: no shared session, no lingering cookie jar.
 class HawkiGateway implements HsaKiGateway {
   HawkiGateway([this._adapter]);
@@ -32,8 +33,10 @@ class HawkiGateway implements HsaKiGateway {
     required String password,
   }) async {
     final HawkiSession session = HawkiSession(adapter: _adapter);
+    bool loggedIn = false;
     try {
       await session.login(username: username, password: password);
+      loggedIn = true;
       final Map<String, dynamic> created = await session.postJsonWithFreshCsrf(
         _profile.createTokenUri,
         csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
@@ -56,6 +59,7 @@ class HawkiGateway implements HsaKiGateway {
     } catch (_) {
       throw const HsaKiFailure(HsaKiFailureKind.unknown);
     } finally {
+      if (loggedIn) await session.logout();
       session.close();
     }
   }
@@ -74,8 +78,10 @@ class HawkiGateway implements HsaKiGateway {
       throw const HsaKiFailure(HsaKiFailureKind.portalStructureChanged);
     }
     final HawkiSession session = HawkiSession(adapter: _adapter);
+    bool loggedIn = false;
     try {
       await session.login(username: credential.username, password: password);
+      loggedIn = true;
       await session.postJsonWithFreshCsrf(
         _profile.revokeTokenUri,
         csrfSourcePage: HsaKiProfile.server.resolve('/profile'),
@@ -86,6 +92,7 @@ class HawkiGateway implements HsaKiGateway {
     } on DioException catch (e) {
       throw HawkiSession.mapDioException(e);
     } finally {
+      if (loggedIn) await session.logout();
       session.close();
     }
   }

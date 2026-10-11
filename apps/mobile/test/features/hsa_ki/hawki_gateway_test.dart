@@ -93,6 +93,60 @@ void main() {
       },
     );
 
+    test('ends the HAWKI web session with GET /logout after minting the '
+        'token (AGENTS.md §2)', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        if (o.uri.path == '/logout') {
+          return const FakeHtmlResponse('', statusCode: 302);
+        }
+        return _connectScript(o);
+      });
+
+      await HawkiGateway(adapter).connect(username: 'x', password: 'y');
+
+      final RequestOptions last = adapter.requests.last;
+      expect(last.uri.path, '/logout');
+      expect(last.method, 'GET');
+      expect(last.uri.host, 'ki.hs-anhalt.de');
+    });
+
+    test('a failing /logout never masks the freshly minted token', () async {
+      final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
+        if (o.uri.path == '/logout') {
+          throw DioException(
+            requestOptions: o,
+            type: DioExceptionType.connectionError,
+          );
+        }
+        return _connectScript(o);
+      });
+
+      final HsaKiCredential credential = await HawkiGateway(
+        adapter,
+      ).connect(username: 'x', password: 'y');
+
+      expect(credential.token, 'plain-text-token');
+      expect(adapter.urls.any((String u) => u.endsWith('/logout')), isTrue);
+    });
+
+    test(
+      'still logs out when minting fails after a successful login',
+      () async {
+        final FakeHtmlAdapter adapter = FakeHtmlAdapter(
+          (RequestOptions o) => _connectScript(
+            o,
+            createTokenResponse: <String, dynamic>{'success': true},
+          ),
+        );
+
+        await expectLater(
+          HawkiGateway(adapter).connect(username: 'x', password: 'y'),
+          throwsA(isA<HsaKiFailure>()),
+        );
+        expect(adapter.requests.last.uri.path, '/logout');
+      },
+    );
+
     test('rejects invalid credentials without minting a token', () async {
       final FakeHtmlAdapter adapter = FakeHtmlAdapter((RequestOptions o) {
         if (o.uri.path == '/login' && o.method == 'GET') {
@@ -230,6 +284,8 @@ void main() {
         (RequestOptions o) => o.uri.path == '/req/profile/revoke-token',
       );
       expect(revoke.data, <String, dynamic>{'tokenId': 7});
+      expect(adapter.requests.last.uri.path, '/logout');
+      expect(adapter.requests.last.method, 'GET');
     });
 
     test(
