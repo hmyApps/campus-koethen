@@ -334,6 +334,68 @@ void main() {
     },
   );
 
+  test('an account change validated with mail never sends the previous '
+      'account\'s display name as the new From name', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _RecordingAdapter> adapters =
+        <DirectService, _RecordingAdapter>{
+          for (final DirectService service in DirectService.values)
+            service: _RecordingAdapter(),
+        };
+    final ProviderContainer container = _container(
+      store,
+      adapters,
+      snapshot: const UniversityServiceConnectionSnapshot(
+        connected: <DirectService>{DirectService.mail},
+        mailDisplayName: 'Max Mustermensch',
+      ),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(universityServiceConnectorProvider)
+        .replaceIdentityAndReconnect(DirectService.mail, _replacementIdentity);
+
+    expect(adapters[DirectService.mail]!.connectedWith, _replacementIdentity);
+    expect(adapters[DirectService.mail]!.connectedWithDisplayName, isNull);
+  });
+
+  test('a password change of the same account keeps the mail display name '
+      'when mail validates it', () async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _RecordingAdapter> adapters =
+        <DirectService, _RecordingAdapter>{
+          for (final DirectService service in DirectService.values)
+            service: _RecordingAdapter(),
+        };
+    final ProviderContainer container = _container(
+      store,
+      adapters,
+      snapshot: const UniversityServiceConnectionSnapshot(
+        connected: <DirectService>{DirectService.mail},
+        mailDisplayName: 'Max Mustermensch',
+      ),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(universityServiceConnectorProvider)
+        .replaceIdentityAndReconnect(
+          DirectService.mail,
+          UniversityIdentity(
+            identifier: _identity.identifier,
+            password: 'another-demo-password',
+          ),
+        );
+
+    expect(
+      adapters[DirectService.mail]!.connectedWithDisplayName,
+      'Max Mustermensch',
+    );
+  });
+
   test(
     'revalidating the unchanged identity never wipes other services',
     () async {

@@ -356,8 +356,14 @@ class UniversityServiceConnector {
         final UniversityServiceAdapter validationAdapter = _ref.read(
           universityServiceAdapterProvider(validationService),
         );
+        // The stored display name belongs to the previous account; a
+        // different account must never send mail under it.
+        final bool sameAccount =
+            replacement == previous.normalized ||
+            _isSameAccount(previous, replacement);
         final String? validationDisplayName =
-            displayName ?? snapshot.displayNameFor(validationService);
+            displayName ??
+            (sameAccount ? snapshot.displayNameFor(validationService) : null);
 
         // Re-entering the same secret is a service validation, not an account
         // switch. Do not disturb unrelated connections or their caches.
