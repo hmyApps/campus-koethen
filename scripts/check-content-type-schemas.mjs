@@ -54,7 +54,7 @@ for (const file of schemaFiles(API_ROOT)) {
   }
 
   const slug = data?.attributes?.slug;
-  if (slug === undefined) continue;
+  if (slug === undefined || slug === null) continue;
 
   if (slug?.pluginOptions?.i18n?.localized !== false) {
     failures.push(`${file}: slug must set i18n.localized = false`);
@@ -64,5 +64,7 @@ for (const file of schemaFiles(API_ROOT)) {
   }
 }
 
-for (const line of failures) console.error(line);
+// In GitHub Actions each failure becomes an inline error annotation.
+const prefix = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
+for (const line of failures) console.error(`${prefix}${line}`);
 process.exit(failures.length > 0 ? 1 : 0);

@@ -171,24 +171,7 @@ jobs:
       - name: Content-type schemas are valid JSON and keep slugs non-localised
         # A slug that becomes localised would let the stable identifier diverge
         # per locale and silently break the app's channel subscriptions.
-        run: |
-          python3 - <<'PY'
-          import json, pathlib, sys
-          failures = []
-          for schema in pathlib.Path('apps/cms/src/api').glob('*/content-types/*/schema.json'):
-              data = json.loads(schema.read_text())
-              slug = data.get('attributes', {}).get('slug')
-              if slug is None:
-                  continue
-              localized = slug.get('pluginOptions', {}).get('i18n', {}).get('localized')
-              if localized is not False:
-                  failures.append(f'{schema}: slug must set i18n.localized = false')
-              if not slug.get('unique'):
-                  failures.append(f'{schema}: slug must be unique')
-          for line in failures:
-              print(f'::error::{line}')
-          sys.exit(1 if failures else 0)
-          PY
+        run: node scripts/check-content-type-schemas.mjs
 
   flutter:
     name: Flutter — format, analyze, test
