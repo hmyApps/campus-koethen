@@ -151,6 +151,22 @@ class HawkiSession {
     return json;
   }
 
+  /// Best-effort `GET /logout` that ends the HAWKI web session opened by
+  /// [login] (AGENTS.md §2: `GET /login`, `POST /req/login`, then
+  /// `/logout`). The redirect it answers with is deliberately not followed,
+  /// and every failure is swallowed: the logout must never mask the outcome
+  /// of the token mint or revoke it follows.
+  Future<void> logout() async {
+    try {
+      await _dio.getUri<dynamic>(
+        _validated(_profile.logoutUri),
+        options: Options(responseType: ResponseType.plain),
+      );
+    } catch (_) {
+      // Best effort only; the in-memory cookie jar is discarded on close().
+    }
+  }
+
   /// A JSON POST to an already-authenticated `/req/*` route, with a CSRF
   /// token read fresh from [csrfSourcePage] — never reused across requests,
   /// since Laravel rotates the session's token at points such as login.

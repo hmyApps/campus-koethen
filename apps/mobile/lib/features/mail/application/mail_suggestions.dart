@@ -20,10 +20,12 @@ final FutureProvider<List<MailAddressEntry>> mailKnownAddressesProvider =
 /// Set after Exchange rejected the stored credentials (HTTP 401/403) for the
 /// first time in the current mail session.
 ///
-/// Every directory lookup is a Basic-auth login against the central university
-/// account. Once the password is known to be rejected, further lookups — one
-/// per typed recipient — would only add failed logins and risk a lockout. A new
-/// sign-in advances the session generation and lifts the lock.
+/// Every directory lookup and every Exchange calendar window is a Basic-auth
+/// login against the central university account, so both EWS uses share this
+/// lock. Once the password is known to be rejected, further requests — one per
+/// typed recipient or calendar rebuild — would only add failed logins and risk
+/// a lockout. A new sign-in advances the session generation and lifts the
+/// lock.
 class MailDirectoryAuthLock extends Notifier<bool> {
   @override
   bool build() {

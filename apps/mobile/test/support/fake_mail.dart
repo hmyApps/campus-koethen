@@ -151,8 +151,11 @@ class FakeMailGateway implements MailGateway {
     if (verifyError != null) throw verifyError!;
   }
 
+  int fetchMailboxesCalls = 0;
+
   @override
   Future<List<MailFolder>> fetchMailboxes(MailCredentials credentials) async {
+    fetchMailboxesCalls++;
     return folders;
   }
 

@@ -431,7 +431,8 @@ class MailLiveSyncStatus {
 /// Reconnects back off exponentially ([mailLiveRetryDelay]). A rejected
 /// password stops the live connection for the rest of the mail session — a
 /// later [start] (for example on resume) does not try it again; only a new
-/// sign-in, which advances the session generation, does.
+/// sign-in, which advances the session generation, or a successful
+/// user-initiated refresh that lifts the rejection, does.
 class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   StreamSubscription<MailLiveSignal>? _subscription;
   Timer? _retry;
@@ -446,6 +447,10 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
   /// account is published only after its credentials are stored, so the
   /// reconnect waits for that instead of racing the replacement.
   bool _reconnectForNewSession = false;
+
+  /// The mail session in which the live connection stopped on a password
+  /// rejection, so lifting exactly that rejection can resume it.
+  int? _rejectedInSession;
 
   @override
   MailLiveSyncStatus build() {
@@ -470,6 +475,25 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
       _reconnectForNewSession = false;
       if (_wanted && next.value.isSignedIn) unawaited(start());
     });
+    ref.listen<MailFailure?>(mailCredentialsRejectionProvider, (
+      MailFailure? previous,
+      MailFailure? next,
+    ) {
+      // A user-initiated refresh that succeeded lifted the rejection of this
+      // same session: the live connection that stopped on it resumes now
+      // instead of waiting for the next app resume. A new session is handled
+      // by the generation listener above.
+      if (previous == null || next != null) return;
+      if (_rejectedInSession != ref.read(mailSessionGenerationProvider)) {
+        return;
+      }
+      _rejectedInSession = null;
+      if (_wanted &&
+          _subscription == null &&
+          state.connection == MailLiveConnection.authRequired) {
+        unawaited(start());
+      }
+    });
     ref.onDispose(() {
       _generation++;
       _retry?.cancel();
@@ -484,6 +508,7 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
     if (_subscription != null) return;
     final MailFailure? rejected = ref.read(mailCredentialsRejectionProvider);
     if (rejected != null) {
+      _rejectedInSession = ref.read(mailSessionGenerationProvider);
       state = MailLiveSyncStatus(
         connection: MailLiveConnection.authRequired,
         error: rejected,
@@ -564,6 +589,7 @@ class MailLiveSyncController extends Notifier<MailLiveSyncStatus> {
       // session; a TLS failure sent no credentials, so an explicit later
       // start (resume) may try again — but never on a timer.
       if (error.kind == MailFailureKind.invalidCredentials) {
+        _rejectedInSession = ref.read(mailSessionGenerationProvider);
         ref.read(mailCredentialsRejectionProvider.notifier).reject(error);
       }
       state = MailLiveSyncStatus(

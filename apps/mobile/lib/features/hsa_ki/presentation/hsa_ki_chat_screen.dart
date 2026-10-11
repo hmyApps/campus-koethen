@@ -183,24 +183,28 @@ class _HsaKiChatContentState extends ConsumerState<_HsaKiChatContent> {
             ),
             child: Align(
               alignment: AlignmentDirectional.centerStart,
-              child: DropdownButton<String>(
-                value: state.selectedModelId,
-                underline: const SizedBox.shrink(),
-                items: state.models
-                    .map(
-                      (HsaKiModel model) => DropdownMenuItem<String>(
-                        value: model.modelId,
-                        child: Text(model.label),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (String? modelId) {
-                  if (modelId != null) {
-                    ref
-                        .read(hsaKiChatControllerProvider.notifier)
-                        .selectModel(modelId);
-                  }
-                },
+              child: Semantics(
+                // Screen readers otherwise announce only the model name.
+                label: l10n.hsaKiModelLabel,
+                child: DropdownButton<String>(
+                  value: state.selectedModelId,
+                  underline: const SizedBox.shrink(),
+                  items: state.models
+                      .map(
+                        (HsaKiModel model) => DropdownMenuItem<String>(
+                          value: model.modelId,
+                          child: Text(model.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (String? modelId) {
+                    if (modelId != null) {
+                      ref
+                          .read(hsaKiChatControllerProvider.notifier)
+                          .selectModel(modelId);
+                    }
+                  },
+                ),
               ),
             ),
           ),

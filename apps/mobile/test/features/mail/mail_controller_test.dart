@@ -189,6 +189,27 @@ void main() {
       },
     );
 
+    test('a password change with another spelling of the same address keeps '
+        'the offline cache', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
+      final container = _container(
+        gateway: FakeMailGateway(),
+        store: store,
+        cache: cache,
+      );
+      final controller = container.read(mailAccountControllerProvider.notifier);
+      await container.read(mailAccountControllerProvider.future);
+
+      await controller.signIn(
+        email: _creds.emailAddress.toUpperCase(),
+        password: 'new-pw',
+      );
+
+      expect(await cache.readHeaders(), hasLength(1));
+    });
+
     test(
       'a failed account-switch wipe never leaves the old mailbox shown as connected',
       () async {
@@ -1429,6 +1450,47 @@ void main() {
       expect(state.mailboxPath, 'Sent');
     });
 
+    test('switching the folder drops results that belong to the old one, so '
+        'no INBOX id is opened in another folder', () async {
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[header('1')]);
+      await cache.saveMessage(detail(id: '1'));
+      final container = await seeded(FakeMailGateway(), cache);
+      await container
+          .read(mailSearchControllerProvider.notifier)
+          .run('Semesterinfo');
+      expect(container.read(mailSearchControllerProvider).local, isNotEmpty);
+
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+
+      final MailSearchState state = container.read(
+        mailSearchControllerProvider,
+      );
+      expect(state.hasResults, isFalse);
+      expect(state.hasSearched, isFalse);
+    });
+
+    test('a local search still running when the folder switches cannot write '
+        'its hits into the new folder\'s state', () async {
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[header('1')]);
+      await cache.saveMessage(detail(id: '1'));
+      final container = await seeded(FakeMailGateway(), cache);
+      container.listen(mailSearchControllerProvider, (_, _) {});
+
+      final Future<void> pending = container
+          .read(mailSearchControllerProvider.notifier)
+          .run('Semesterinfo');
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+      await pending;
+
+      expect(container.read(mailSearchControllerProvider).local, isEmpty);
+    });
+
     test('removing the account leaves no results behind', () async {
       final cache = MemoryMailCache(now: _testClock);
       await cache.saveHeaders(<MailMessageHeader>[header('1')]);
@@ -1723,6 +1785,77 @@ void main() {
       );
       await container.read(mailAccountControllerProvider.future);
       expect(await container.read(mailFoldersProvider.future), isEmpty);
+    });
+  });
+
+  group('after the server rejected the password', () {
+    const MailFailure rejection = MailFailure(
+      MailFailureKind.invalidCredentials,
+    );
+
+    test('opening a cached mail does not log in to mark it seen', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('3')]);
+      await cache.saveMessage(_dtl('3'));
+      final gateway = FakeMailGateway();
+      final container = _container(
+        gateway: gateway,
+        store: store,
+        cache: cache,
+      );
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+
+      await container.read(
+        mailMessageProvider((mailboxPath: kInboxPath, id: '3')).future,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(gateway.markedSeen, isEmpty);
+      final List<MailMessageHeader> after = await container.read(
+        mailInboxControllerProvider.future,
+      );
+      expect(after.single.isSeen, isTrue, reason: 'still marked locally');
+    });
+
+    test('the folder list does not log in', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway(
+        folders: const <MailFolder>[MailFolder.inbox()],
+      );
+      final container = _container(gateway: gateway, store: store);
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+
+      await expectLater(
+        container.read(mailFoldersProvider.future),
+        throwsA(rejection),
+      );
+      expect(gateway.fetchMailboxesCalls, 0);
+    });
+
+    test('a non-INBOX folder is not fetched in the background', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final gateway = FakeMailGateway();
+      final container = _container(gateway: gateway, store: store);
+      await container.read(mailAccountControllerProvider.future);
+      container
+          .read(mailCredentialsRejectionProvider.notifier)
+          .reject(rejection);
+      container
+          .read(selectedMailboxProvider.notifier)
+          .select(const MailFolder(path: 'Sent', name: 'Sent'));
+
+      await expectLater(
+        container.read(mailInboxControllerProvider.future),
+        throwsA(rejection),
+      );
+      expect(gateway.fetchedMailboxes, isEmpty);
     });
   });
 

@@ -121,7 +121,9 @@ void main() {
     expect(find.text('Hochschulzugang'), findsOneWidget);
     expect(find.textContaining('student@hs-anhalt.de'), findsOneWidget);
     expect(find.text('Verbunden'), findsOneWidget);
-    expect(find.text('Nicht verbunden'), findsNWidgets(4));
+    // HSA-GPT is temporarily unavailable and therefore not offered.
+    expect(find.text('Nicht verbunden'), findsNWidgets(3));
+    expect(find.byTooltip('HSA-GPT verbinden'), findsNothing);
     expect(find.byTooltip('Studentische E-Mail trennen'), findsOneWidget);
     expect(find.byTooltip('Moodle verbinden'), findsOneWidget);
 
@@ -129,6 +131,30 @@ void main() {
     await tester.pump();
     expect(adapters[DirectService.mail]!.disconnects, 1);
     expect(store.value, _identity);
+  });
+
+  testWidgets('a temporarily unavailable HSA-GPT keeps only its minus while '
+      'an old connection still exists', (WidgetTester tester) async {
+    final _MemoryIdentityStore store = _MemoryIdentityStore()
+      ..value = _identity;
+    final Map<DirectService, _Adapter> adapters = <DirectService, _Adapter>{
+      for (final DirectService service in DirectService.values)
+        service: _Adapter(),
+    };
+    await _pump(
+      tester,
+      store: store,
+      adapters: adapters,
+      connected: const <DirectService>[DirectService.hsaKi],
+    );
+    await tester.pump();
+
+    final Finder minus = find.ancestor(
+      of: find.byTooltip('HSA-GPT trennen'),
+      matching: find.byType(IconButton),
+    );
+    expect(minus, findsOneWidget);
+    expect(tester.widget<IconButton>(minus).onPressed, isNotNull);
   });
 
   testWidgets('first plus validates and stores only after explicit consent', (

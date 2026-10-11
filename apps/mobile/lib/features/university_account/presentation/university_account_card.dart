@@ -10,6 +10,7 @@ import '../../../l10n/l10n.dart';
 import '../../settings/application/sign_out_everywhere_controller.dart';
 import '../../settings/domain/direct_service.dart';
 import '../../settings/presentation/sign_out_everywhere_tile.dart';
+import '../../hsa_ki/application/hsa_ki_providers.dart';
 import '../../hsa_ki/presentation/hsa_ki_connect_flow.dart';
 import '../../nextcloud/application/nextcloud_account_controller.dart';
 import '../../nextcloud/domain/nextcloud_account.dart';
@@ -175,6 +176,11 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
     final AsyncValue<NextcloudAccount?> nextcloudAccount = ref.watch(
       nextcloudAccountControllerProvider,
     );
+    // While HSA-GPT is switched off, `+` would only mint an unusable token;
+    // an existing connection still shows its row so `−` stays reachable.
+    final bool hsaKiUnavailable = ref.watch(
+      hsaKiTemporarilyUnavailableProvider,
+    );
 
     return Card(
       margin: const EdgeInsets.symmetric(
@@ -258,40 +264,43 @@ class _UniversityAccountCardState extends ConsumerState<UniversityAccountCard> {
               ),
             const SizedBox(height: AppSpacing.sm),
             for (final DirectService service in DirectService.values)
-              _UniversityServiceRow(
-                service: service,
-                connected: connected.contains(service),
-                busy:
-                    _busy.contains(service) ||
-                    (service == DirectService.nextcloud &&
-                        nextcloudAccount.isLoading),
-                notice: _awaitingConsent.contains(service)
-                    ? l10n.universityAccountConnectAfterAccountChange
-                    : null,
-                error:
-                    _errors[service] ??
-                    (service == DirectService.nextcloud &&
-                            nextcloudAccount.hasError
-                        ? universityAccountErrorMessage(
-                            l10n,
-                            service,
-                            nextcloudAccount.error!,
-                          )
-                        : null),
-                onPressed: accountUnavailable
-                    ? (service == DirectService.nextcloud
-                          ? () => _toggle(
+              if (service != DirectService.hsaKi ||
+                  !hsaKiUnavailable ||
+                  connected.contains(service))
+                _UniversityServiceRow(
+                  service: service,
+                  connected: connected.contains(service),
+                  busy:
+                      _busy.contains(service) ||
+                      (service == DirectService.nextcloud &&
+                          nextcloudAccount.isLoading),
+                  notice: _awaitingConsent.contains(service)
+                      ? l10n.universityAccountConnectAfterAccountChange
+                      : null,
+                  error:
+                      _errors[service] ??
+                      (service == DirectService.nextcloud &&
+                              nextcloudAccount.hasError
+                          ? universityAccountErrorMessage(
+                              l10n,
                               service,
-                              connected: connected.contains(service),
-                              hasIdentity: hasIdentity,
+                              nextcloudAccount.error!,
                             )
-                          : null)
-                    : () => _toggle(
-                        service,
-                        connected: connected.contains(service),
-                        hasIdentity: hasIdentity,
-                      ),
-              ),
+                          : null),
+                  onPressed: accountUnavailable
+                      ? (service == DirectService.nextcloud
+                            ? () => _toggle(
+                                service,
+                                connected: connected.contains(service),
+                                hasIdentity: hasIdentity,
+                              )
+                            : null)
+                      : () => _toggle(
+                          service,
+                          connected: connected.contains(service),
+                          hasIdentity: hasIdentity,
+                        ),
+                ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
               child: Align(

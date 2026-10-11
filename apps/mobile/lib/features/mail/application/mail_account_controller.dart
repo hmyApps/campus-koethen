@@ -96,7 +96,9 @@ class MailAccountController extends AsyncNotifier<MailAccountState> {
     try {
       final coordinator = ref.read(mailLocalDataCoordinatorProvider);
       final MailCredentials? previous = await coordinator.readCredentials();
-      if (previous?.emailAddress != address) {
+      // Case-insensitive, like the university account connector: another
+      // spelling of the same address is a password change, not a new account.
+      if (previous?.emailAddress.toLowerCase() != address.toLowerCase()) {
         // Record the wipe and invalidate every in-memory holder before the new
         // account can become visible. This also clears artifacts left by an
         // interrupted/legacy account even when no credential is present.

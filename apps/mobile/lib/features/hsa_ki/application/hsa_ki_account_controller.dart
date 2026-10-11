@@ -105,18 +105,18 @@ class HsaKiAccountController extends AsyncNotifier<HsaKiAccount?> {
       // cannot currently produce a coherent credential.
     }
     if (credential != null) {
-      final UniversityIdentity? identity = await ref
-          .read(universityIdentityStoreProvider)
-          .read();
-      if (identity != null) {
-        try {
+      try {
+        final UniversityIdentity? identity = await ref
+            .read(universityIdentityStoreProvider)
+            .read();
+        if (identity != null) {
           await ref
               .read(hsaKiGatewayProvider)
               .revoke(credential, password: identity.password);
-        } catch (_) {
-          // A server outage or an already-expired token must not keep a
-          // bearer credential on the device.
         }
+      } catch (_) {
+        // An unreadable identity store, a server outage or an already-expired
+        // token must not keep a bearer credential on the device.
       }
     }
     Object? localFailure;

@@ -148,6 +148,9 @@ class _NavigationSettingsScreenState
 
   /// The pinnable modules of one category that are not on the bar yet.
   ///
+  /// A temporarily unavailable module (greyed out in More) is not offered
+  /// either: as a tab it would open its screen directly and bypass the lock.
+  ///
   /// Non-pinnable modules never appear here: settings and the about page are
   /// not places to spend time in, and offering them would only produce a bar
   /// slot nobody wants.
@@ -158,7 +161,10 @@ class _NavigationSettingsScreenState
     bool full,
   ) {
     final List<AppModule> modules = AppModule.inCategory(category)
-        .where((AppModule m) => m.pinnable && !chosen.contains(m))
+        .where(
+          (AppModule m) =>
+              m.pinnable && !m.isTemporarilyUnavailable && !chosen.contains(m),
+        )
         .toList(growable: false);
     if (modules.isEmpty) return const <Widget>[];
     return <Widget>[

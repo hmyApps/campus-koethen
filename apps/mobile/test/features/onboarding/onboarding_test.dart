@@ -15,6 +15,7 @@ import 'package:campus_koethen/core/prefs/settings_controller.dart';
 import 'package:campus_koethen/core/theme/app_theme.dart';
 import 'package:campus_koethen/features/campusmap/application/campus_map_providers.dart';
 import 'package:campus_koethen/features/campusmap/domain/map_catalog.dart';
+import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_providers.dart';
 import 'package:campus_koethen/features/hsa_ki/presentation/hsa_ki_onboarding_screen.dart';
 import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
 import 'package:campus_koethen/features/notifications/application/notification_settings_controller.dart';
@@ -472,6 +473,10 @@ void main() {
         serviceAdapters: <DirectService, UniversityServiceAdapter>{
           DirectService.hsaKi: hsaKi,
         },
+        // The consent flow itself, as it behaves once HSA-GPT is available.
+        additionalOverrides: <Override>[
+          hsaKiTemporarilyUnavailableProvider.overrideWithValue(false),
+        ],
       );
 
       for (int i = 0; i < 5; i++) {
@@ -523,6 +528,25 @@ void main() {
       );
       expect(hsaKi.connectedWith, expected);
       expect(identityStore.value, expected);
+    },
+  );
+
+  testWidgets(
+    'a temporarily unavailable HSA-GPT is not offered in the wizard, so no '
+    'useless HAWKI token is minted',
+    (WidgetTester tester) async {
+      await pumpApp(tester);
+
+      for (int i = 0; i < 5; i++) {
+        await tester.tap(find.text('Weiter'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(TextButton, 'Überspringen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Dienste verknüpfen'), findsOneWidget);
+
+      expect(find.text('HSA-GPT verbinden'), findsNothing);
+      expect(find.text('HSA-GPT'), findsNothing);
     },
   );
 

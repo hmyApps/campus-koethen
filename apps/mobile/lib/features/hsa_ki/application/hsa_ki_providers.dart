@@ -3,6 +3,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_modules.dart';
 import '../data/hawki_gateway.dart';
 import '../data/secure_hsa_ki_credential_store.dart';
 import '../domain/hsa_ki_account.dart';
@@ -13,6 +14,15 @@ final Provider<HsaKiCredentialStore> hsaKiCredentialStoreProvider =
 
 final Provider<HsaKiGateway> hsaKiGatewayProvider = Provider<HsaKiGateway>(
   (Ref ref) => HawkiGateway(),
+);
+
+/// Whether HSA-GPT is currently switched off app-wide
+/// ([AppModule.isTemporarilyUnavailable]). While it is, no screen may offer
+/// `+` for it, so no unusable HAWKI token is ever minted; an existing
+/// connection keeps its `−`. A provider only so widget tests can exercise the
+/// consent flow as it behaves once the service is available again.
+final Provider<bool> hsaKiTemporarilyUnavailableProvider = Provider<bool>(
+  (Ref ref) => AppModule.hsaKi.isTemporarilyUnavailable,
 );
 
 /// Advances whenever the connection is created or torn down, so an operation

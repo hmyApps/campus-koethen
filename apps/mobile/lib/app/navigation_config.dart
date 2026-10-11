@@ -36,15 +36,17 @@ class NavigationConfig {
 
   /// Builds a valid configuration from any wish list.
   ///
-  /// Modules that may not be pinned are dropped, duplicates collapsed, the list
+  /// Modules that may not be pinned or are temporarily unavailable are dropped, duplicates collapsed, the list
   /// truncated to [tabCount] and any remaining gap filled from the defaults and
   /// then the rest of the catalogue — so the result is always exactly four
-  /// distinct, pinnable modules.
+  /// distinct, pinnable and currently available modules.
   factory NavigationConfig.of(Iterable<AppModule> wanted) {
     final List<AppModule> chosen = <AppModule>[];
     void take(AppModule module) {
       if (chosen.length >= tabCount) return;
       if (!module.pinnable) return;
+      // Greyed out in More; a tab must not become a way around that.
+      if (module.isTemporarilyUnavailable) return;
       if (chosen.contains(module)) return;
       chosen.add(module);
     }
@@ -79,7 +81,7 @@ class NavigationConfig {
   bool get isValid =>
       tabs.length == tabCount &&
       tabs.toSet().length == tabCount &&
-      tabs.every((AppModule m) => m.pinnable);
+      tabs.every((AppModule m) => m.pinnable && !m.isTemporarilyUnavailable);
 
   bool contains(AppModule module) => tabs.contains(module);
 
