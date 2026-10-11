@@ -109,7 +109,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         _ExportCalendarAction(shareService: widget.exportShareService),
         IconButton(
           tooltip: l10n.calendarSourcesLabel,
-          onPressed: () => showCalendarSourcesSheet(context),
+          onPressed: () => showCalendarSourcesSheet(context, ref),
           isSelected: !everythingVisible,
           icon: const Icon(AppIcons.tune),
         ),
@@ -259,7 +259,11 @@ class _ExportCalendarActionState extends ConsumerState<_ExportCalendarAction> {
 ///
 /// One source failing never removes the others — the banner says which one is
 /// missing and the rest of the calendar keeps its data.
-List<Widget> _calendarHeader(BuildContext context, CalendarData data) {
+List<Widget> _calendarHeader(
+  BuildContext context,
+  WidgetRef ref,
+  CalendarData data,
+) {
   final AppLocalizations l10n = context.l10n;
   final AppMetrics metrics = context.metrics;
   Widget banner(
@@ -290,7 +294,7 @@ List<Widget> _calendarHeader(BuildContext context, CalendarData data) {
         tone: StatusTone.info,
         icon: AppIcons.visibility_off_outlined,
         action: OutlinedButton(
-          onPressed: () => showCalendarSourcesSheet(context),
+          onPressed: () => showCalendarSourcesSheet(context, ref),
           child: Text(l10n.calendarSourcesLabel),
         ),
       ),
@@ -325,7 +329,7 @@ List<Widget> _calendarHeader(BuildContext context, CalendarData data) {
         tone: StatusTone.info,
         icon: AppIcons.link_off,
         action: OutlinedButton(
-          onPressed: () => showCalendarSourcesSheet(context),
+          onPressed: () => showCalendarSourcesSheet(context, ref),
           child: Text(l10n.calendarSourcesLabel),
         ),
       ),
@@ -474,7 +478,7 @@ class _DayAgendaView extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
               children: <Widget>[
-                ..._calendarHeader(context, data),
+                ..._calendarHeader(context, ref, data),
                 SectionHeader(
                   label: AppDateFormats.weekdayDate(focused, locale),
                 ),
@@ -789,7 +793,7 @@ class _WeekView extends ConsumerWidget {
 
     return Column(
       children: <Widget>[
-        ..._calendarHeader(context, data),
+        ..._calendarHeader(context, ref, data),
         Padding(
           padding: EdgeInsets.fromLTRB(
             metrics.screenPadding,
@@ -937,7 +941,7 @@ class _ListView extends ConsumerWidget {
     if (data.entries.isEmpty) {
       return ListView(
         children: <Widget>[
-          ..._calendarHeader(context, data),
+          ..._calendarHeader(context, ref, data),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: data.isLoading
@@ -951,7 +955,7 @@ class _ListView extends ConsumerWidget {
     final DateTime now = DateTime.now();
     final DateTime today = TimetableWeek.dayOf(now);
     final List<CalendarListRow> rows = _listRows(
-      header: _calendarHeader(context, data),
+      header: _calendarHeader(context, ref, data),
       entries: data.entries,
       today: today,
       now: now,

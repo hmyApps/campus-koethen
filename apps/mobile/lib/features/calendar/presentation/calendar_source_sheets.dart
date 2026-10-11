@@ -33,17 +33,26 @@ import 'calendar_color_picker.dart';
 /// actually needs. Which calendars you are looking at is a question answered
 /// once; which day you are looking at is the one asked all day, and only the
 /// second one deserves standing room on the screen.
-Future<void> showCalendarSourcesSheet(BuildContext context) {
+///
+/// [context] and [ref] belong to the caller (a screen) and outlive every sheet
+/// opened from here. Follow-up sheets are opened from them, because a sheet's
+/// own context is gone once it has been replaced — and with it any follow-up
+/// that runs after the next sheet closes, such as the notification opt-in.
+Future<void> showCalendarSourcesSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (BuildContext context) => const _SourcesSheet(),
+    builder: (BuildContext _) =>
+        _SourcesSheet(hostContext: context, hostRef: ref),
   );
 }
 
 class _SourcesSheet extends ConsumerWidget {
-  const _SourcesSheet();
+  const _SourcesSheet({required this.hostContext, required this.hostRef});
+
+  final BuildContext hostContext;
+  final WidgetRef hostRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,7 +109,7 @@ class _SourcesSheet extends ConsumerWidget {
             onTap: () {
               // Replaces this sheet rather than stacking on it.
               Navigator.of(context).pop();
-              showCalendarSourceSheet(context, source);
+              showCalendarSourceSheet(hostContext, hostRef, source);
             },
           ),
         const Divider(),
@@ -125,14 +134,18 @@ class _SourcesSheet extends ConsumerWidget {
 /// control.
 Future<void> showCalendarSourceSheet(
   BuildContext context,
+  WidgetRef ref,
   CalendarSource source,
 ) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (BuildContext context) => switch (source) {
-      CalendarSource.timetable => const _TimetableSourceSheet(),
+    builder: (BuildContext _) => switch (source) {
+      CalendarSource.timetable => _TimetableSourceSheet(
+        hostContext: context,
+        hostRef: ref,
+      ),
       CalendarSource.moodle => const _MoodleSourceSheet(),
       CalendarSource.publicCalendar => const _EventsSourceSheet(),
       CalendarSource.exchangeCalendar ||
@@ -312,7 +325,13 @@ class CanteenFavouriteMealsSwitch extends ConsumerWidget {
 }
 
 class _TimetableSourceSheet extends ConsumerWidget {
-  const _TimetableSourceSheet();
+  const _TimetableSourceSheet({
+    required this.hostContext,
+    required this.hostRef,
+  });
+
+  final BuildContext hostContext;
+  final WidgetRef hostRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -344,9 +363,11 @@ class _TimetableSourceSheet extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: OutlinedButton.icon(
             onPressed: () {
-              // The picker replaces this sheet instead of stacking on it.
+              // The picker replaces this sheet instead of stacking on it. It
+              // runs on the host so the first-course notification opt-in
+              // (entry point C) can still be offered once it closes.
               Navigator.of(context).pop();
-              showTimetableGroupPickerSheet(context, ref);
+              showTimetableGroupPickerSheet(hostContext, hostRef);
             },
             icon: const Icon(AppIcons.search),
             label: Text(l10n.timetableGroupPickerTitle),

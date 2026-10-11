@@ -100,7 +100,7 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.calendarSourcesLabel),
             subtitle: Text(l10n.calendarSourcesSettingsSubtitle),
             trailing: const Icon(AppIcons.chevron_right),
-            onTap: () => showCalendarSourcesSheet(context),
+            onTap: () => showCalendarSourcesSheet(context, ref),
           ),
           SectionHeader(label: l10n.settingsSectionContent),
           ListTile(

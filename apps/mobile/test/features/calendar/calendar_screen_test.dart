@@ -23,7 +23,11 @@ import 'package:campus_koethen/features/calendar/presentation/week_grid_view.dar
 import 'package:campus_koethen/core/widgets/screen_scaffold.dart';
 import 'package:campus_koethen/core/widgets/time_rail.dart';
 import 'package:campus_koethen/features/calendar/presentation/week_strip.dart';
+import 'package:campus_koethen/features/notifications/application/notification_providers.dart';
+import 'package:campus_koethen/features/notifications/domain/notification_permission.dart';
+import 'package:campus_koethen/features/timetable/application/timetable_providers.dart';
 import 'package:campus_koethen/features/timetable/application/timetable_week.dart';
+import 'package:campus_koethen/features/timetable/data/timetable_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +36,8 @@ import 'package:flutter_test/flutter_test.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../support/fake_http_adapter.dart';
+import '../../support/fake_notification_gateway.dart';
+import '../../support/fake_timetable.dart';
 import '../../support/pump_app.dart';
 
 ApiClient _emptyApi() => fakeApiClient(
@@ -462,6 +468,55 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Stunden nach Information filtern'), findsOneWidget);
+    });
+
+    testWidgets('choosing a first course from the sources offers the '
+        'notification opt-in', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await pumpScreen(
+        tester,
+        const CalendarScreen(),
+        keyValueStore: InMemoryKeyValueStore(),
+        overrides: <Override>[
+          apiClientProvider.overrideWithValue(_emptyApi()),
+          notificationGatewayProvider.overrideWithValue(
+            FakeNotificationGateway(
+              permission: NotificationPermissionStatus.notDetermined,
+            ),
+          ),
+          timetableGroupSearchProvider('').overrideWith(
+            () => FixedTimetableGroupSearchController(
+              fixedTimetableGroupSearch(const <TimetableGroup>[
+                TimetableGroup(id: 'demo-group', shortName: 'DEMO1'),
+              ]),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      await openSources(tester);
+      await tester.tap(find.text('Stundenplan'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OutlinedButton),
+          matching: find.text('Kurs wählen'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DEMO1'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Lokale Benachrichtigungen aktivieren?'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('lists all three sources and spells out their state', (
