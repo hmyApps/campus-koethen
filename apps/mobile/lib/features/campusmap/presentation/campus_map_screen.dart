@@ -250,11 +250,16 @@ class _MapSurface extends ConsumerWidget {
             top: covered.top,
           ),
 
-        if (mapUsable && selectedRoom == null && query.isEmpty)
+        if (mapUsable && selectedRoom == null && query.isEmpty) ...<Widget>[
+          _InfoButton(
+            bottom: safe.bottom + AppSpacing.lg,
+            building: map?.building(buildingKey),
+          ),
           _ResetButton(
             bottom: safe.bottom + AppSpacing.lg,
             onPressed: () => mapKey.currentState?.resetView(),
           ),
+        ],
 
         if (selectedRoom != null)
           _RoomDetailSheet(
@@ -995,6 +1000,64 @@ class FocusRing extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// Opens what the plan is and where it comes from.
+///
+/// A dialog rather than a badge on the plan: the schematic notice and the
+/// source belong to every plan, and an overlay would cover rooms.
+class _InfoButton extends StatelessWidget {
+  const _InfoButton({required this.bottom, required this.building});
+
+  final double bottom;
+  final MapBuilding? building;
+
+  @override
+  Widget build(BuildContext context) {
+    return PositionedDirectional(
+      start: AppSpacing.lg,
+      bottom: bottom,
+      child: FloatingActionButton.small(
+        heroTag: 'campus-map-info',
+        tooltip: context.l10n.campusMapInfoTooltip,
+        onPressed: () => _showPlanInfo(context, building),
+        child: const Icon(AppIcons.info_outline),
+      ),
+    );
+  }
+}
+
+Future<void> _showPlanInfo(BuildContext context, MapBuilding? building) {
+  final String locale = Localizations.localeOf(context).languageCode;
+  final String? source = building?.resolvedSourceAttribution(locale);
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      final AppLocalizations l10n = dialogContext.l10n;
+      return AlertDialog(
+        title: Text(l10n.campusMapInfoTooltip),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(l10n.campusMapSchematicNotice),
+            if (source != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Text(l10n.campusMapSourceAttribution(source)),
+            ],
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              MaterialLocalizations.of(dialogContext).closeButtonLabel,
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _ResetButton extends StatelessWidget {

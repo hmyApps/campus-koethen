@@ -359,6 +359,31 @@ void main() {
     expect(find.text('Schematischer Plan'), findsNothing);
   });
 
+  testWidgets('the info dialog names the plan source and its schematic kind', (
+    WidgetTester tester,
+  ) async {
+    await pumpMap(tester);
+
+    await tester.tap(find.byTooltip('Über diesen Plan'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('nicht maßstabsgetreu'), findsOneWidget);
+    expect(find.text('Plangrundlage: Hochschule Anhalt'), findsOneWidget);
+  });
+
+  testWidgets('the info dialog speaks English in English', (
+    WidgetTester tester,
+  ) async {
+    await pumpMap(tester, locale: AppLocales.english);
+
+    await tester.tap(find.byTooltip('About this plan'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('not to scale'), findsOneWidget);
+    expect(find.text('Plan source: Hochschule Anhalt'), findsOneWidget);
+  });
+
   testWidgets('searching 216 selects and marks 216', (
     WidgetTester tester,
   ) async {

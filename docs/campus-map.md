@@ -434,7 +434,9 @@ Für jedes weitere Gebäude ist vor der Aufnahme erneut zu bestätigen:
 6. **Pflege** — wer meldet Umbauten, und wie schnell?
 
 Der schematische Charakter jedes Plans ist in der App sichtbar und in DE/EN formuliert. Eine
-Quellenangabe wird pro Gebäude im Katalog geführt und im Informationsdialog angezeigt.
+Quellenangabe wird pro Gebäude im Katalog geführt und im Informationsdialog angezeigt („Über
+diesen Plan“, Schaltfläche unten links auf der Karte; ARB `campusMapSchematicNotice` und
+`campusMapSourceAttribution`).
 
 ## 9. Einen weiteren Raum, eine Etage oder ein Gebäude ergänzen
 
