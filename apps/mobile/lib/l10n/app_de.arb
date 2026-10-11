@@ -872,6 +872,16 @@
   "@privacyNextcloudTitle": {},
   "privacyNextcloudBody": "Wenn du Nextcloud verbindest, startet die App den offiziellen Login Flow v2 von cloud.hs-anhalt.de im Systembrowser. Dein Hochschulpasswort wird nur dort eingegeben und gelangt nicht an Campus Köthen. Nextcloud stellt der App ein widerrufbares App-Passwort aus; dieses sowie Loginname und Nutzer-ID liegen ausschließlich im gerätegebundenen sicheren Schlüsselspeicher. Die App liest Ordner und Dateien direkt und verschlüsselt per WebDAV unter deiner eigenen Nutzerwurzel. Nach deiner bewussten Aktion kann sie eine lokale Datei hochladen, ohne eine gleichnamige Datei still zu überschreiben, oder eine Datei beziehungsweise einen Ordner nach Bestätigung dauerhaft löschen; das Löschen eines Ordners umfasst auch dessen Inhalt. Nach einer gesonderten Warnung kann die App einen öffentlichen, nur lesbaren Link erzeugen. Jede Person mit diesem Link kann die ausgewählte Ressource ohne Anmeldung lesen. Der Link bleibt serverseitig aktiv, bis du ihn in Nextcloud widerrufst; die App speichert oder protokolliert ihn nicht, sondern übergibt ihn unmittelbar an das Teilen-Menü des Betriebssystems. Verzeichnislisten, Dateimetadaten, geladene Dateien und Freigabelinks bleiben nur vorübergehend im Arbeitsspeicher. Von dir markierte Favoriten bestehen nur aus kontogebundenen Dateipfaden und werden verschlüsselt im sicheren Schlüsselspeicher abgelegt. Beim Trennen versucht die App, das App-Passwort bei Nextcloud zu widerrufen, und löscht die lokale Berechtigung sowie die Favoriten auch bei einem Serverfehler. Campus-Backend, Strapi und Hostinger erhalten diese Daten nicht. Für die serverseitige Verarbeitung in Nextcloud ist die Hochschule Anhalt verantwortlich.",
   "@privacyNextcloudBody": {},
+  "privacyChatTitle": "Campus-Chat (Matrix)",
+  "@privacyChatTitle": {},
+  "privacyChatBody": "Wenn du dich im Chat anmeldest, verbindet sich die App direkt und verschlüsselt mit dem Matrix-Server {server}. Benutzername und Passwort werden nur für die Anmeldung an diesen Server übertragen; das Passwort wird nicht gespeichert. Der Server stellt der App ein Sitzungstoken aus. Dieses Token, die Geräte- und Raumschlüssel der Ende-zu-Ende-Verschlüsselung sowie die Nachrichten, Raumnamen und Teilnehmerangaben liegen ausschließlich in einer lokalen Datenbank, die mit einem zufälligen Schlüssel aus dem gerätegebundenen sicheren Schlüsselspeicher verschlüsselt ist. Neue Nachrichten werden nur abgerufen, solange die App geöffnet ist; es gibt keine Push-Benachrichtigungen über Dritte. Lesebestätigungen sendet die App nur privat. Beim Abmelden meldet die App das Gerät beim Server ab und löscht Datenbank und Schlüssel auf dem Gerät, auch wenn der Server nicht erreichbar ist. Campus-Backend, Strapi und Hostinger erhalten keine dieser Daten. Für die serverseitige Verarbeitung ist der Betreiber des Matrix-Servers verantwortlich; im derzeitigen Testbetrieb ist das nicht die Hochschule Anhalt.",
+  "@privacyChatBody": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
   "privacyCalendarHomeWidgetTitle": "Kalender-Widget",
   "@privacyCalendarHomeWidgetTitle": {},
   "privacyCalendarHomeWidgetBody": "Das optionale Homescreen-Widget erhält ausschließlich den bereits auf deinem Gerät zusammengeführten Kalenderstand. Es ruft selbst keine Daten aus dem Internet ab. Standardmäßig schreibt die App nur Zeiten und neutrale Terminbezeichnungen in den vom Betriebssystem bereitgestellten Widget-Speicher; Titel und Orte werden erst nach deiner ausdrücklichen Aktivierung aufgenommen und können dann auf einem sichtbaren oder gesperrten Gerät erscheinen. Android speichert diese Daten im privaten App-Speicher, iOS im gemeinsamen App-Group-Container von App und Widget. Beim Deaktivieren überschreibt die App den Widget-Inhalt mit einem leeren, redigierten Stand. Das Betriebssystem bestimmt Aktualisierungszeitpunkt, Homescreen-Darstellung und mögliche Gerätesicherungen.",
@@ -3300,6 +3310,145 @@
   "@hsaKiErrorConsentRequired": {},
   "hsaKiErrorUnknown": "HSA-GPT konnte nicht erreicht werden. Versuche es erneut.",
   "@hsaKiErrorUnknown": {},
+  "chatTitle": "Chat",
+  "@chatTitle": {},
+  "chatSubtitle": "Matrix-Chat, Ende-zu-Ende-verschlüsselt",
+  "@chatSubtitle": {},
+  "chatNotConfigured": "Der Chat ist in dieser App-Version nicht eingerichtet.",
+  "@chatNotConfigured": {},
+  "chatLoginIntro": "Melde dich mit deinem Matrix-Konto an. Die App verbindet sich direkt vom Gerät mit {server}, ohne Umweg über Campus Köthen. Dein Passwort wird nur für die Anmeldung verwendet und nicht gespeichert.",
+  "@chatLoginIntro": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "chatLoginPrivacy": "Nachrichten werden Ende-zu-Ende-verschlüsselt und auf diesem Gerät nur verschlüsselt gespeichert. Neue Nachrichten werden nur geladen, solange die App geöffnet ist.",
+  "@chatLoginPrivacy": {},
+  "chatLoginTestNotice": "Testbetrieb: Der Chat läuft noch nicht auf Servern der Hochschule.",
+  "@chatLoginTestNotice": {},
+  "chatUsernameLabel": "Matrix-Benutzername",
+  "@chatUsernameLabel": {},
+  "chatPasswordLabel": "Passwort",
+  "@chatPasswordLabel": {},
+  "chatLoginAction": "Anmelden",
+  "@chatLoginAction": {},
+  "chatLoginMissingFields": "Bitte Benutzername und Passwort eingeben.",
+  "@chatLoginMissingFields": {},
+  "chatRoomsEmpty": "Noch keine Unterhaltungen. Neue Chats und Einladungen erscheinen hier.",
+  "@chatRoomsEmpty": {},
+  "chatInvitesHeader": "Einladungen",
+  "@chatInvitesHeader": {},
+  "chatRoomsHeader": "Unterhaltungen",
+  "@chatRoomsHeader": {},
+  "chatUntitledRoom": "Unbenannte Unterhaltung",
+  "@chatUntitledRoom": {},
+  "chatInviteAccept": "Annehmen",
+  "@chatInviteAccept": {},
+  "chatInviteDecline": "Ablehnen",
+  "@chatInviteDecline": {},
+  "chatUnreadCount": "{count, plural, =1{1 ungelesene Nachricht} other{{count} ungelesene Nachrichten}}",
+  "@chatUnreadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatEncrypted": "Ende-zu-Ende-verschlüsselt",
+  "@chatEncrypted": {},
+  "chatNotEncrypted": "Nicht verschlüsselt",
+  "@chatNotEncrypted": {},
+  "chatOwnSender": "Du",
+  "@chatOwnSender": {},
+  "chatMessageUndecryptable": "Diese Nachricht kann auf diesem Gerät nicht entschlüsselt werden.",
+  "@chatMessageUndecryptable": {},
+  "chatMessageRedacted": "Nachricht gelöscht",
+  "@chatMessageRedacted": {},
+  "chatMessageUnsupported": "Dieser Nachrichtentyp wird noch nicht unterstützt.",
+  "@chatMessageUnsupported": {},
+  "chatMessageSending": "Wird gesendet …",
+  "@chatMessageSending": {},
+  "chatMessageFailed": "Nicht gesendet",
+  "@chatMessageFailed": {},
+  "chatTimelineEmpty": "Noch keine Nachrichten.",
+  "@chatTimelineEmpty": {},
+  "chatLoadOlder": "Ältere Nachrichten laden",
+  "@chatLoadOlder": {},
+  "chatComposerHint": "Nachricht schreiben",
+  "@chatComposerHint": {},
+  "chatSend": "Senden",
+  "@chatSend": {},
+  "chatRoomUnavailable": "Diese Unterhaltung ist nicht mehr verfügbar.",
+  "@chatRoomUnavailable": {},
+  "chatAccountMenu": "Chat-Konto",
+  "@chatAccountMenu": {},
+  "chatSignedInAs": "Angemeldet als {userId}",
+  "@chatSignedInAs": {
+    "placeholders": {
+      "userId": {
+        "type": "String"
+      }
+    }
+  },
+  "chatLogout": "Abmelden und Chat-Daten löschen",
+  "@chatLogout": {},
+  "chatLogoutConfirmTitle": "Vom Chat abmelden?",
+  "@chatLogoutConfirmTitle": {},
+  "chatLogoutConfirmMessage": "Dieses Gerät wird beim Server abgemeldet. Danach werden alle Nachrichten und Schlüssel des Chats auf diesem Gerät gelöscht – auch wenn der Server nicht erreichbar ist. Ohne Schlüssel-Backup lassen sich verschlüsselte Nachrichten danach nicht mehr lesen.",
+  "@chatLogoutConfirmMessage": {},
+  "chatLogoutConfirmAction": "Abmelden",
+  "@chatLogoutConfirmAction": {},
+  "chatLogoutFailed": "Die Chat-Daten konnten nicht vollständig gelöscht werden. Versuche es erneut.",
+  "@chatLogoutFailed": {},
+  "chatResetLocalData": "Chat-Daten auf diesem Gerät löschen",
+  "@chatResetLocalData": {},
+  "chatErrorUnsupportedServer": "Dieser Chat-Server bietet keine Anmeldung an, die die App unterstützt.",
+  "@chatErrorUnsupportedServer": {},
+  "chatErrorInvalidCredentials": "Benutzername oder Passwort ist falsch.",
+  "@chatErrorInvalidCredentials": {},
+  "chatErrorNetwork": "Keine Verbindung zum Chat-Server. Prüfe deine Internetverbindung.",
+  "@chatErrorNetwork": {},
+  "chatErrorTimeout": "Der Chat-Server antwortet nicht rechtzeitig. Versuche es erneut.",
+  "@chatErrorTimeout": {},
+  "chatErrorSecurity": "Die sichere Verbindung zum Chat-Server wurde abgelehnt.",
+  "@chatErrorSecurity": {},
+  "chatErrorServiceUnavailable": "Der Chat-Server ist gerade nicht verfügbar.",
+  "@chatErrorServiceUnavailable": {},
+  "chatErrorRateLimited": "Zu viele Versuche. Warte kurz und versuche es dann erneut.",
+  "@chatErrorRateLimited": {},
+  "chatErrorInvalidResponse": "Der Chat-Server hat unerwartet geantwortet.",
+  "@chatErrorInvalidResponse": {},
+  "chatErrorSecureStorage": "Die sichere Speicherung ist nicht verfügbar.",
+  "@chatErrorSecureStorage": {},
+  "chatErrorDatabase": "Die verschlüsselten Chat-Daten auf diesem Gerät können nicht geöffnet werden.",
+  "@chatErrorDatabase": {},
+  "chatErrorEncryption": "Die Ende-zu-Ende-Verschlüsselung ist auf diesem Gerät nicht verfügbar. Der Chat bleibt deshalb aus.",
+  "@chatErrorEncryption": {},
+  "chatErrorNotConnected": "Melde dich zuerst im Chat an.",
+  "@chatErrorNotConnected": {},
+  "chatErrorSendFailed": "Die Nachricht konnte nicht gesendet werden.",
+  "@chatErrorSendFailed": {},
+  "chatErrorUnknown": "Der Chat ist gerade nicht erreichbar. Versuche es erneut.",
+  "@chatErrorUnknown": {},
+  "chatPreviewLine": "{sender}: {text}",
+  "@chatPreviewLine": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "chatShowPassword": "Passwort anzeigen",
+  "@chatShowPassword": {},
+  "chatHidePassword": "Passwort verbergen",
+  "@chatHidePassword": {},
+  "chatCancel": "Abbrechen",
+  "@chatCancel": {},
   "calendarHomeWidgetTitle": "Kalender-Widget",
   "@calendarHomeWidgetTitle": {},
   "calendarHomeWidgetSubtitle": "Nächste Termine auf dem Geräte-Homescreen",

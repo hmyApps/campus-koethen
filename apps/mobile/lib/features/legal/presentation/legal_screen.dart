@@ -8,6 +8,7 @@ import '../../../core/links/linkified_text.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_metrics.dart';
 import '../../../core/widgets/screen_scaffold.dart';
+import '../../chat/domain/matrix_homeserver.dart';
 import '../../../l10n/l10n.dart';
 
 /// Which legal page to show.
@@ -66,6 +67,12 @@ class LegalScreen extends StatelessWidget {
         _LegalSection(l10n.privacyGradesTitle, l10n.privacyGradesBody),
         _LegalSection(l10n.privacyMoodleTitle, l10n.privacyMoodleBody),
         _LegalSection(l10n.privacyNextcloudTitle, l10n.privacyNextcloudBody),
+        // Only in builds that ship the chat, naming the one server it uses.
+        if (MatrixConfig.homeserver case final MatrixHomeserver homeserver)
+          _LegalSection(
+            l10n.privacyChatTitle,
+            l10n.privacyChatBody(homeserver.host),
+          ),
         _LegalSection(l10n.privacyRequestsTitle, l10n.privacyRequestsBody),
         _LegalSection(
           l10n.privacyNotificationsTitle,

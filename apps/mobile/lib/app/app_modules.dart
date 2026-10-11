@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import "package:campus_koethen/core/theme/app_icons.dart";
 
+import '../features/chat/domain/matrix_homeserver.dart';
 import '../l10n/l10n.dart';
 import 'app_routes.dart';
 
@@ -119,6 +120,14 @@ enum AppModule {
     icon: AppIcons.message_2,
     selectedIcon: AppIcons.message_2,
   ),
+  chat(
+    storageValue: 'chat',
+    route: AppRoutes.chat,
+    category: ModuleCategory.study,
+    sortOrder: 11,
+    icon: AppIcons.chat_bubble_outline,
+    selectedIcon: AppIcons.chat_bubble,
+  ),
 
   // --- Campus --------------------------------------------------------------
   news(
@@ -221,6 +230,7 @@ enum AppModule {
     AppModule.documentWallet => l10n.documentWalletTitle,
     AppModule.todos => l10n.todosTitle,
     AppModule.hsaKi => l10n.hsaKiTitle,
+    AppModule.chat => l10n.chatTitle,
     AppModule.news => l10n.navNews,
     AppModule.canteen => l10n.navCanteen,
     AppModule.campusMap => l10n.moduleCampusMapTitle,
@@ -252,6 +262,7 @@ enum AppModule {
     AppModule.nextcloud => l10n.nextcloudSubtitle,
     AppModule.todos => l10n.moreTodosSubtitle,
     AppModule.hsaKi => l10n.hsaKiSubtitle,
+    AppModule.chat => l10n.chatSubtitle,
     AppModule.campusMap => l10n.moreCampusMapSubtitle,
     AppModule.contacts => l10n.moreContactsSubtitle,
     AppModule.requests => l10n.requestsSubtitle,
@@ -268,6 +279,7 @@ enum AppModule {
     AppModule.moodle => true,
     AppModule.nextcloud => true,
     AppModule.hsaKi => true,
+    AppModule.chat => true,
     _ => false,
   };
 
@@ -281,6 +293,12 @@ enum AppModule {
   /// this once their deployment is updated (confirm `/api/hawki/v1/ai-models`
   /// responds before re-enabling).
   bool get isTemporarilyUnavailable => this == AppModule.hsaKi;
+
+  /// Not part of this build at all, so absent from "More", the navigation
+  /// settings and the bar instead of greyed out: the chat exists only in
+  /// builds that name a Matrix homeserver (`MATRIX_HOMESERVER_URL`).
+  bool get isExcludedFromBuild =>
+      this == AppModule.chat && MatrixConfig.homeserver == null;
 
   static AppModule? fromStorage(String? value) {
     for (final AppModule module in AppModule.values) {
@@ -324,9 +342,9 @@ List<MoreCategoryEntry> moreEntriesFor(Iterable<AppModule> pinned) {
   final Set<AppModule> onBar = pinned.toSet();
   final List<MoreCategoryEntry> entries = <MoreCategoryEntry>[];
   for (final ModuleCategory category in ModuleCategory.values) {
-    final List<AppModule> modules = AppModule.inCategory(
-      category,
-    ).where((AppModule m) => !onBar.contains(m)).toList(growable: false);
+    final List<AppModule> modules = AppModule.inCategory(category)
+        .where((AppModule m) => !onBar.contains(m) && !m.isExcludedFromBuild)
+        .toList(growable: false);
     if (modules.isEmpty) continue;
     entries.add(MoreCategoryEntry(category: category, modules: modules));
   }

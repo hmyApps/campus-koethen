@@ -163,7 +163,10 @@ class _NavigationSettingsScreenState
     final List<AppModule> modules = AppModule.inCategory(category)
         .where(
           (AppModule m) =>
-              m.pinnable && !m.isTemporarilyUnavailable && !chosen.contains(m),
+              m.pinnable &&
+              !m.isTemporarilyUnavailable &&
+              !m.isExcludedFromBuild &&
+              !chosen.contains(m),
         )
         .toList(growable: false);
     if (modules.isEmpty) return const <Widget>[];

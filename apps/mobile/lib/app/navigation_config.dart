@@ -47,6 +47,7 @@ class NavigationConfig {
       if (!module.pinnable) return;
       // Greyed out in More; a tab must not become a way around that.
       if (module.isTemporarilyUnavailable) return;
+      if (module.isExcludedFromBuild) return;
       if (chosen.contains(module)) return;
       chosen.add(module);
     }
@@ -81,7 +82,10 @@ class NavigationConfig {
   bool get isValid =>
       tabs.length == tabCount &&
       tabs.toSet().length == tabCount &&
-      tabs.every((AppModule m) => m.pinnable && !m.isTemporarilyUnavailable);
+      tabs.every(
+        (AppModule m) =>
+            m.pinnable && !m.isTemporarilyUnavailable && !m.isExcludedFromBuild,
+      );
 
   bool contains(AppModule module) => tabs.contains(module);
 

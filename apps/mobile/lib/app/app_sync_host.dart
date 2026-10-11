@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/sync/foreground_refresh_scheduler.dart';
+import '../features/chat/application/chat_providers.dart';
 import '../features/calendar/application/public_calendar_providers.dart';
 import '../features/contacts/application/contacts_providers.dart';
 import '../features/mail/application/mail_account_controller.dart';
@@ -81,6 +82,11 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
         scheduler.start();
       }
       unawaited(_mailLiveSync.start());
+      // A stored chat session is opened at start so it syncs while the app
+      // is in front, not only once the chat screen is visited.
+      if (ref.read(matrixHomeserverProvider) != null) {
+        ref.read(chatSessionControllerProvider);
+      }
     });
   }
 
@@ -103,6 +109,12 @@ class _AppSyncHostState extends ConsumerState<AppSyncHost>
       unawaited(_mailLiveSync.start());
     } else {
       unawaited(_mailLiveSync.stop());
+    }
+    // No push gateway: the chat syncs only while the app is in front.
+    if (ref.read(matrixHomeserverProvider) != null) {
+      ref
+          .read(matrixGatewayProvider)
+          .setSyncActive(state == AppLifecycleState.resumed);
     }
   }
 

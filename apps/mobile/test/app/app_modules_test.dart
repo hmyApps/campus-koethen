@@ -59,6 +59,7 @@ void main() {
         AppModule.documentWallet,
         AppModule.todos,
         AppModule.hsaKi,
+        AppModule.chat,
       ]);
       expect(AppModule.inCategory(ModuleCategory.campus), <AppModule>[
         AppModule.news,
@@ -88,7 +89,7 @@ void main() {
       expect(AppModule.settings.pinnable, isFalse);
       expect(AppModule.about.pinnable, isFalse);
       expect(AppModule.pinnableModules, isNot(contains(AppModule.settings)));
-      expect(AppModule.pinnableModules, hasLength(15));
+      expect(AppModule.pinnableModules, hasLength(16));
     });
 
     test('the pinnable modules are the leading values of the enum', () {
@@ -217,8 +218,33 @@ void main() {
           ...config.tabs,
           ...config.moreEntries.expand((MoreCategoryEntry e) => e.modules),
         };
-        expect(reachable, AppModule.values.toSet(), reason: '$config');
+        expect(
+          reachable,
+          AppModule.values
+              .where((AppModule m) => !m.isExcludedFromBuild)
+              .toSet(),
+          reason: '$config',
+        );
       }
+    });
+
+    test('the chat only exists in builds that name a homeserver', () {
+      // The test runner has no MATRIX_HOMESERVER_URL, like every build that
+      // does not ship the chat.
+      expect(AppModule.chat.isExcludedFromBuild, isTrue);
+      expect(
+        AppModule.values.where((AppModule m) => m.isExcludedFromBuild),
+        <AppModule>[AppModule.chat],
+      );
+      final NavigationConfig config = NavigationConfig.of(<AppModule>[
+        AppModule.chat,
+      ]);
+      expect(config.tabs, isNot(contains(AppModule.chat)));
+      expect(config.isValid, isTrue);
+      expect(
+        config.moreEntries.expand((MoreCategoryEntry e) => e.modules),
+        isNot(contains(AppModule.chat)),
+      );
     });
 
     test(
