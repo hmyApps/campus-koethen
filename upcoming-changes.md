@@ -1,11 +1,15 @@
 # Anstehende Backend-Änderungen
 
-Stand: 11. Oktober 2026 · App-Version 2.0.1+11 · Repository `hmyApps/campus-koethen` (`main`)
+Stand: 11. Oktober 2026 · App-Version 2.0.2+12 · Repository `hmyApps/campus-koethen` (`main`)
 
-Die App 2.0.1 ist **ohne** dieses Backend-Update voll nutzbar: Der API-Vertrag ist unverändert
-(OpenAPI ohne Abweichung). Auch die ältere App 2.0.0 läuft mit dem neuen Backend. Das Update ist
-trotzdem zeitnah nötig, weil die folgenden Datenschutz-, Sicherheits- und Datenkorrekturen erst mit
-dem Deployment live sind.
+Die App ist **ohne** dieses Backend-Update voll nutzbar: Der API-Vertrag ist bis auf die neue
+Obergrenze für `page` unverändert, und die App fragt höchstens 10 Seiten ab. Auch die ältere App 2.0.0
+läuft mit dem neuen Backend. Das Update ist trotzdem zeitnah nötig, weil die folgenden Datenschutz-,
+Sicherheits- und Datenkorrekturen erst mit dem Deployment live sind.
+
+Lokal geprüft: Die `compose.yaml` aus `infrastructure/vps/` lief mit frisch gebauten Images aus diesem
+Stand (Datenbank, DB-Init, CMS, Migration, API, Worker). Migration, Health-Checks, `rooms-sync --dry-run`,
+die neuen Datenbankrechte, die Dateirechte in den Images und der Medien-Header waren in Ordnung.
 
 ## 1. Was sich auf Backend, CMS und Edge ändert
 
@@ -20,6 +24,11 @@ dem Deployment live sind.
 | „Heute“                | Standardzeiträume von Mensa, Stundenplan, Beiträgen und Kalendern beginnen am Berliner Kalendertag (bisher zwischen 0 und 2 Uhr am Vortag).                                                                                 |
 | Strapi-Anbindung, Logs | Nur noch vorübergehende Fehler werden wiederholt; in Produktion landen keine Fehlertexte oder Stacktraces mehr im Log.                                                                                                      |
 | Sicherheit             | `proxy-addr` 2.0.8 (kritisch) und `compression` 1.8.2 im Backend, `sharp` 0.35.5 im CMS.                                                                                                                                    |
+| Images                 | Anwendungscode in Backend- und CMS-Image gehört root und ist zur Laufzeit nicht beschreibbar; beschreibbar bleiben nur `public/uploads` und `.tmp` im CMS.                                                                  |
+| Datenbankrechte        | Das DB-Init entzieht `PUBLIC` das Verbindungsrecht: Jede Rolle erreicht nur noch ihre eigene Datenbank. Läuft bei jedem `docker compose up` und ist idempotent.                                                             |
+| CMS                    | Vertraut dem Edge-Proxy, sobald `PUBLIC_URL` gesetzt ist; überschreibt beim Start keine Pflicht-Tags mehr; Räume lassen sich nur noch über den Katalog-Sync anlegen.                                                        |
+| API-Eingaben           | `page` höchstens 10000 (sonst `400`); Strapi-Listen werden per Zod geprüft; ein expliziter Kanal-Filter schließt inaktive Kanäle aus; Event-Zeiträume und das Stundenplan-Fenster richten sich nach dem Berliner Tag.       |
+| Kalender-Feeds         | Neutraler Standard-User-Agent; die Produktionsvorlage setzt `PUBLIC_CALENDAR_USER_AGENT` weiterhin explizit mit Kontaktadresse.                                                                                             |
 
 ## 2. Datenbank
 
@@ -31,7 +40,8 @@ Image braucht die Migrationen. Deshalb: **erst migrieren, dann API und Worker st
 - `20261011120000_add_timetable_sync_run_unconfirmed_groups`: `timetable_sync_runs.groupsUnconfirmed`
   (Standard `0`).
 
-Beide sind gegen PostgreSQL 16 getestet. Es gibt **keine neuen Environment-Variablen**.
+Beide sind gegen PostgreSQL 16 getestet. Es gibt **keine neuen Pflicht-Variablen**. Optional: `IS_PROXIED`
+überschreibt im CMS die Proxy-Erkennung.
 
 ## 3. Woher die Images kommen
 
@@ -55,13 +65,24 @@ die CI des Originalprojekts. Die Änderungen dieses Forks sind dort noch nicht e
   und `CMS_IMAGE_REPOSITORY=<registry>/campus-koethen/cms` setzen. Die Images vorher mit Trivy prüfen,
   so wie es die CI des Originalprojekts tut.
 
+**Bekannter Blocker für das CMS-Image (unabhängig von diesen Änderungen):** Das Basisimage
+`node:24.21.0-slim` enthält `perl-base 5.36.0-7+deb12u3` mit drei kritischen und vier hohen CVEs,
+behoben in `deb12u4`. Der Trivy-Schritt der CI veröffentlicht das CMS-Image deshalb derzeit nicht. Das
+Backend-Image ist sauber. Abhilfe: ein neueres Basisimage, sobald es das Debian-Update enthält, oder in
+der Runtime-Stufe von `apps/cms/Dockerfile` `perl-base` gezielt aktualisieren
+(`apt-get install -y --only-upgrade perl-base`).
+
 ## 4. Kurzanleitung auf dem VPS
 
 Im Verzeichnis mit `compose.yaml` und `.env` (siehe `infrastructure/vps/README.md`):
 
 1. **Backup** beider Datenbanken und der Strapi-Uploads anlegen.
-2. In der `.env` `CAMPUS_IMAGE_TAG=sha-<commit>` setzen (bei Weg B auch die beiden `*_IMAGE_REPOSITORY`).
-3. Aktualisieren:
+2. Die aktuelle `infrastructure/vps/compose.yaml` aus dem Repository ins Serververzeichnis kopieren. Nur
+   so greifen die neuen Datenbankrechte. Vorher prüfen, ob Backup- oder Monitoring-Werkzeuge mit einer
+   **anderen** Rolle als dem Datenbank-Superuser oder der jeweiligen Eigentümerrolle verbinden: Diese
+   bräuchten danach ein eigenes `GRANT CONNECT`.
+3. In der `.env` `CAMPUS_IMAGE_TAG=sha-<commit>` setzen (bei Weg B auch die beiden `*_IMAGE_REPOSITORY`).
+4. Aktualisieren:
 
    ```bash
    docker compose config --quiet
@@ -74,7 +95,7 @@ Im Verzeichnis mit `compose.yaml` und `.env` (siehe `infrastructure/vps/README.m
    docker compose ps --all
    ```
 
-4. **Edge (nginx)**: Die API-VHost-Datei hat `proxy_ignore_headers Cache-Control Expires;` für
+5. **Edge (nginx)**: Die API-VHost-Datei hat `proxy_ignore_headers Cache-Control Expires;` für
    `/v1/media/` erhalten. Aus `infrastructure/vps/edge/`:
 
    ```bash
@@ -93,6 +114,8 @@ curl -fsS $API/health/ready
 curl -sI "$API/v1/media/uploads/gibt-es-nicht.png" | grep -i cache-control   # erwartet: no-store
 curl -fsS $API/v1/timetable/status                                        # dataStale: false nach dem nächsten Lauf
 curl -fsS "$API/v1/calendars?locale=de" | grep -o '"from":"[0-9-]*"'       # heutiger Berliner Tag
+curl -s -o /dev/null -w '%{http_code}\n' "$API/v1/posts?page=10001"        # erwartet: 400
+docker compose logs db-init | tail -n 4                                    # REVOKE/GRANT ohne Fehler
 ```
 
 - Worker-Log: beim ersten Event-Lauf ggf. `Public-calendar retention: removed …`.
@@ -110,7 +133,8 @@ curl -fsS "$API/v1/calendars?locale=de" | grep -o '"from":"[0-9-]*"'       # heu
 
 `CAMPUS_IMAGE_TAG` auf den vorherigen `sha-`-Tag zurücksetzen und `docker compose up -d cms api worker`
 ausführen. Die Migrationen bleiben bestehen; sie sind additiv, der ältere Code ignoriert die neuen
-Spalten. Die nginx-Änderung kann bleiben.
+Spalten. Die nginx-Änderung und die Datenbankrechte können bleiben, ältere Images verbinden ohnehin
+nur mit ihrer eigenen Datenbank.
 
 ## 7. Danach live zu prüfen
 

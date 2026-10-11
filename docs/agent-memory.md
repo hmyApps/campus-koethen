@@ -7,17 +7,18 @@ ausschließlich in `AGENTS.md`; diese Datei ergänzt sie nur um Fortschritt und 
 ## Projekt-Eckdaten
 
 - Monorepo: `apps/backend` (NestJS, Prisma, Node 24), `apps/cms` (Strapi 5), `apps/mobile` (Flutter, Riverpod, go_router, dio, hive_ce), `packages/campus-map`, `packages/openapi`.
-- Aktuelle App-Version: `2.0.1+11` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
+- Aktuelle App-Version: `2.0.2+12` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
 - Smoke-Check je Änderung: Release-Build (Flutter) bzw. die Gates aus `README.md`.
 - In Cloud-Sessions ist Flutter/Dart nicht installiert; Backend-Gates laufen nach `pnpm install --frozen-lockfile`.
 
 ## Verlauf
 
-| Datum      | Arbeit                                                             | Ergebnis                                                                                       |
-| ---------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| 2026-10-07 | Rekursiver Mehragenten-Bughunt (4 Runden, 19 Agenten, nur Analyse) | `docs/bughunt-audit-2026-10-07.md`: 94 validierte Bugs (9 hoch, 40 mittel, 45 niedrig)         |
-| 2026-10-10 | Mehragenten-Bugfix-Lauf (12 Arbeitspakete, je ein Worktree, TDD)   | Branch `fix/bughunt-2026-10-07`: 85 von 94 Funden behoben, 9 offen als Maintainer-Entscheidung |
-| 2026-10-11 | Doku-Drift aufgelöst, Folgefixes und Maintainer-Entscheidungen     | Alle 94 Funde erledigt; Sicherheits-Patches, Folgefixes und G-08 umgesetzt (siehe unten)       |
+| Datum      | Arbeit                                                                                                                         | Ergebnis                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 2026-10-07 | Rekursiver Mehragenten-Bughunt (4 Runden, 19 Agenten, nur Analyse)                                                             | `docs/bughunt-audit-2026-10-07.md`: 94 validierte Bugs (9 hoch, 40 mittel, 45 niedrig)                 |
+| 2026-10-10 | Mehragenten-Bugfix-Lauf (12 Arbeitspakete, je ein Worktree, TDD)                                                               | Branch `fix/bughunt-2026-10-07`: 85 von 94 Funden behoben, 9 offen als Maintainer-Entscheidung         |
+| 2026-10-11 | Doku-Drift aufgelöst, Folgefixes und Maintainer-Entscheidungen                                                                 | Alle 94 Funde erledigt; Sicherheits-Patches, Folgefixes und G-08 umgesetzt (siehe unten)               |
+| 2026-10-11 | Zweiter Bughunt (`bughunt-audit-2026-10-10.md`) und Fix-Sprint aus einer anderen Session, validiert und nach `main` übernommen | 8 Fix-Branches über `claude/confident-meitner-m82y60`; siehe „Validierung 2026-10-11 (zweiter Sprint)“ |
 
 ## Stand nach dem Bugfix-Lauf (2026-10-10)
 
@@ -61,6 +62,24 @@ Gates (sauberer Worktree, Node 24.21.0, Wegwerf-`postgres:16-alpine`): Migration
 Integration 59/59 Suites, 820/820; Lint, Typecheck, Build, OpenAPI ohne Drift; CMS und Karte grün;
 `format:check` und `pnpm audit` grün; Flutter `dart format .`, `analyze`, `test` 3099/3099, Release-API,
 Hardcoded-Text-Grep, Dart-Audit grün; Gitleaks (200 Commits) ohne Fund.
+
+## Validierung 2026-10-11 (zweiter Sprint)
+
+Integrationsstand `5db9dc7` (alle 8 `claude/fix-*`-Branches enthalten), vor dem Merge geprüft:
+
+- CI nachgebildet: Migrationen 14/14, Backend inkl. Integration 60/60 Suites, 854/854; Lint, Typecheck,
+  Build, OpenAPI ohne Drift; CMS, Karte, `format:check`, `pnpm audit`, Schema-Skript grün; Flutter
+  3206/3206 inkl. `format`, `analyze`, Release-API, Text-Grep, Dart-Audit; Gitleaks ohne Fund.
+- Regeländerung `AGENTS.md`: HAWKI `GET /profile` nur zwischen Login und Logout als CSRF-Quelle — Code
+  entspricht dem.
+- Images lokal gebaut und mit Trivy wie `images.yml` gescannt: Backend sauber (die gelöschten
+  `.trivyignore`-Einträge sind wirklich aufgelöst). CMS: `perl-base` aus `node:24.21.0-slim` (3 kritisch,
+  4 hoch, behoben in `deb12u4`) — schon vorher vorhanden, blockiert die CMS-Veröffentlichung in der CI.
+- VPS-`compose.yaml` mit diesen Images gestartet: DB-Init mit `REVOKE CONNECT` ok (Rollen gegenseitig
+  ausgesperrt), Migration aus root-eigenem Image ok, API/Worker/CMS healthy, Code nicht beschreibbar,
+  nur `public/uploads` und `.tmp` beschreibbar, `rooms-sync --dry-run` ohne EACCES, Medien-404 mit `no-store`.
+
+Offen daraus: `perl-base` im CMS-Image aktualisieren (Basisimage oder `--only-upgrade`).
 
 Windows-Hinweis: Flutter-Gates scheitern in sehr langen Pfaden an MAX_PATH (`ios/Flutter/ephemeral`);
 lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat teils CRLF
