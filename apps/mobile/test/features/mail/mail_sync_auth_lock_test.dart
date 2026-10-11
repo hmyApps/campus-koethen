@@ -106,6 +106,32 @@ void main() {
       expect(_syncErrorKind(container), MailFailureKind.invalidCredentials);
     });
 
+    test('a successful manual refresh restarts the live connection that '
+        'stopped on the rejection', () async {
+      final (:container, :gateway) = await _signedIn();
+      await container.read(mailLiveSyncControllerProvider.notifier).start();
+      await pumpEventQueue();
+      expect(gateway.watchInboxCalls, 1);
+
+      gateway.liveSignals.addError(_rejected);
+      await pumpEventQueue();
+      expect(
+        container.read(mailLiveSyncControllerProvider).connection,
+        MailLiveConnection.authRequired,
+      );
+
+      await container
+          .read(mailSyncControllerProvider.notifier)
+          .syncNow(userInitiated: true);
+      await pumpEventQueue();
+
+      expect(gateway.watchInboxCalls, 2);
+      expect(
+        container.read(mailLiveSyncControllerProvider).connection,
+        isNot(MailLiveConnection.authRequired),
+      );
+    });
+
     test('signing in again clears the lock', () async {
       final (:container, :gateway) = await _signedIn();
       final MailSyncController sync = container.read(
