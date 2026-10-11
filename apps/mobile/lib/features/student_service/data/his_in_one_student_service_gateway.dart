@@ -236,10 +236,23 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
         if (configuration case JobConfigurationSubmit(
           request: final TabSwitchRequest configSubmit,
         )) {
-          final HisInOnePage submitted = await session.postForm(
+          // Like the grade print buttons, this full POST may end on the
+          // one-time `state=docdownload` entry, whose next hop leaves the
+          // session host for the separate untrust- host. Stop right there
+          // and hand that entry to [_fetchDocument], which runs it through
+          // the narrow, ordered download route — never the general session
+          // allowlist.
+          final HisInOneFormOutcome outcome = await session.postFormStoppingAt(
             configSubmit.action,
             configSubmit.formData,
+            stopAt: StudentServiceProfile.allowsDocumentDownloadEntry,
           );
+          final Uri? entry = outcome.redirect;
+          if (entry != null) {
+            if (cancelled()) return const CertificateUnavailable('cancelled');
+            return await _fetchDocument(session, entry.toString(), offer.name);
+          }
+          final HisInOnePage submitted = outcome.page!;
           downloadUrl =
               HisInOneStudentServiceParser.extractDownloadUrlFromPartialResponse(
                 submitted.html,
@@ -301,6 +314,9 @@ class HisInOneStudentServiceGateway implements StudentServiceGateway {
       throw _mapSessionFailure(e);
     } on DioException catch (e) {
       throw _mapSessionFailure(HisInOneSession.mapDioException(e));
+    } catch (_) {
+      // Never re-throw a raw error that could carry HTML or secrets.
+      throw const StudentServiceFailure(StudentServiceFailureKind.unknown);
     } finally {
       await session.close(_logoutUrl);
     }

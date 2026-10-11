@@ -13,6 +13,15 @@ class HisInOnePage {
   final String html;
 }
 
+/// What [HisInOneSession.postFormStoppingAt] reached: either a final [page],
+/// or the [redirect] target it deliberately did not follow.
+class HisInOneFormOutcome {
+  const HisInOneFormOutcome.page(HisInOnePage this.page) : redirect = null;
+  const HisInOneFormOutcome.redirect(Uri this.redirect) : page = null;
+  final HisInOnePage? page;
+  final Uri? redirect;
+}
+
 /// Why a [HisInOneSession] request could not be completed.
 ///
 /// Deliberately a small, portal-mechanics-only vocabulary — never the
@@ -173,6 +182,25 @@ class HisInOneSession {
         ),
       );
 
+  /// Posts a form like [postForm], but does NOT follow a redirect whose
+  /// (already [allows]-validated) target matches [stopAt] — that target is
+  /// handed back instead, for the caller to fetch through its own, narrower
+  /// route check (e.g. a one-time document download whose next hop leaves
+  /// the session host). Every other hop is followed exactly as [postForm]
+  /// does.
+  Future<HisInOneFormOutcome> postFormStoppingAt(
+    String url,
+    Map<String, String> formData, {
+    required bool Function(Uri uri) stopAt,
+  }) => _followOutcome(
+    _dio.postUri(
+      _validated(url),
+      data: formData,
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    ),
+    stopAt: stopAt,
+  );
+
   /// Fetches one binary response through this session's in-memory cookie jar.
   ///
   /// Certificate links may use a deliberately separate, narrowly allowlisted
@@ -287,14 +315,24 @@ class HisInOneSession {
 
   /// Follows redirects from an initial response to a 2xx HTML page,
   /// validating every hop's target.
-  Future<HisInOnePage> _follow(Future<Response<dynamic>> initial) async {
+  Future<HisInOnePage> _follow(Future<Response<dynamic>> initial) async =>
+      (await _followOutcome(initial)).page!;
+
+  /// [_follow], optionally stopping before a validated redirect target that
+  /// matches [stopAt].
+  Future<HisInOneFormOutcome> _followOutcome(
+    Future<Response<dynamic>> initial, {
+    bool Function(Uri uri)? stopAt,
+  }) async {
     Response<dynamic> current = await initial;
     for (int hop = 0; hop < _maxHops; hop++) {
       final int code = current.statusCode ?? 0;
       if (code >= 200 && code < 300) {
-        return HisInOnePage(
-          current.requestOptions.uri.toString(),
-          current.data?.toString() ?? '',
+        return HisInOneFormOutcome.page(
+          HisInOnePage(
+            current.requestOptions.uri.toString(),
+            current.data?.toString() ?? '',
+          ),
         );
       }
       if (code >= 300 && code < 400) {
@@ -304,9 +342,14 @@ class HisInOneSession {
             HisInOneSessionFailureKind.structureChanged,
           );
         }
-        current = await _dio.getUri(
-          _validated(location, relativeTo: current.requestOptions.uri),
+        final Uri target = _validated(
+          location,
+          relativeTo: current.requestOptions.uri,
         );
+        if (stopAt != null && stopAt(target)) {
+          return HisInOneFormOutcome.redirect(target);
+        }
+        current = await _dio.getUri(target);
         continue;
       }
       throw const HisInOneSessionFailure(
