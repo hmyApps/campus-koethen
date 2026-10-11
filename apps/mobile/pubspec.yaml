@@ -90,6 +90,18 @@ dependencies:
   # WebCrypto-based frontend, never a "close enough" substitute.
   pointycastle: ^4.0.0
 
+  # Matrix chat, directly from the device to the homeserver (AGENTS.md §2,
+  # docs/matrix.md). The SDK is AGPL-3.0-or-later; vodozemac provides the
+  # end-to-end encryption, and the SDK's database is SQLite opened through
+  # sqflite_common_ffi on an encrypted SQLite3MultipleCiphers build (see the
+  # `hooks` section below).
+  matrix: ^14.0.0
+  flutter_vodozemac: ^0.8.1
+  sqflite_common_ffi: ^2.4.3
+  # The SDK's transport. Wrapped so that only the configured homeserver origin
+  # is ever contacted (lib/features/chat/data/matrix_origin_http_client.dart).
+  http: ^1.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -97,6 +109,13 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   fake_async: ^1.3.3
+
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3MultipleCiphers: the Matrix database (messages and encryption
+      # keys) is only ever stored encrypted, keyed from the secure storage.
+      source: sqlite3mc
 
 flutter:
   uses-material-design: true
