@@ -143,6 +143,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }
@@ -261,6 +262,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }
@@ -537,6 +539,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }

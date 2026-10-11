@@ -112,7 +112,7 @@ export class PostsController {
     required: false,
     description: 'Comma-separated channel slugs. At most 25, each at most 100 characters.',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Max 10000.' })
   @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Max 50.' })
   @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
   @ApiOkResponse({ type: PostListResponseDto })
@@ -188,7 +188,7 @@ export class PostsController {
     required: false,
     description: 'Comma-separated tag slugs. At most 25, each at most 100 characters.',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Max 10000.' })
   @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Max 50.' })
   @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
   @ApiOkResponse({ type: PostListResponseDto })
