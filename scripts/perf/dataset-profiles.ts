@@ -100,6 +100,17 @@ export const PROFILES: Record<ProfileName, DatasetProfile> = {
 };
 
 /** Row counts a profile produces, for the reproducibility record. */
+/**
+ * The profile requested on the command line: the value after `--profile`, or
+ * `realistic` when the flag is absent or has no value. Unknown names are
+ * returned as given so the caller can reject them with a clear message.
+ */
+export function profileNameFromArgs(args: readonly string[]): string {
+  const index = args.indexOf('--profile');
+  if (index < 0) return 'realistic';
+  return args[index + 1] ?? 'realistic';
+}
+
 export function expectedRowCounts(p: DatasetProfile): Record<string, number> {
   const meals = p.canteens * p.canteenDays * p.mealsPerCanteenDay;
   const entries = p.timetableDays * p.timetableEntriesPerDay;
