@@ -103,3 +103,37 @@ test('re-seeding does not touch unrelated channels or contact areas destructivel
   assert.equal(channels.length, 4, 'two channels × two locales, unaffected by tag seeding');
   assert.equal(areas.length, 6, 'three areas × two locales, unaffected by tag seeding');
 });
+
+test('ensureTags never overwrites or republishes an existing, editorially changed tag', async () => {
+  const { strapi, store } = createFakeStrapi();
+
+  await ensureTags(strapi);
+  const tags = store.get('api::tag.tag') ?? [];
+  for (const tag of tags) {
+    tag.name = `edited-${tag.locale}`;
+    tag.isActive = false;
+  }
+  const snapshot = tags.map((t) => ({ ...t }));
+
+  let writes = 0;
+  const originalDocuments = strapi.documents;
+  (strapi as unknown as { documents: unknown }).documents = (uid: string) => {
+    const api = (originalDocuments as unknown as (u: string) => Record<string, unknown>)(uid);
+    return {
+      ...api,
+      create: async (...args: unknown[]) => {
+        writes += 1;
+        return (api.create as (...a: unknown[]) => unknown)(...args);
+      },
+      update: async (...args: unknown[]) => {
+        writes += 1;
+        return (api.update as (...a: unknown[]) => unknown)(...args);
+      },
+    };
+  };
+
+  await ensureTags(strapi);
+
+  assert.equal(writes, 0, 'a boot must not write to tags that already exist');
+  assert.deepEqual(store.get('api::tag.tag'), snapshot);
+});

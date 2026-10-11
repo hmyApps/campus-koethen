@@ -29,7 +29,8 @@ export default {
    * Idempotent steps:
    *  1. Keep room labels readable in existing Content Manager layouts.
    *  2. Ensure the `de` and `en` locales exist, with German as the default.
-   *  3. Ensure essential tags `news` and `event` exist.
+   *  3. Create the essential tags `news` and `event` if they are missing;
+   *     existing tags are never overwritten or republished.
    *  4. Optionally seed neutral demo content, gated behind SEED_DEMO_CONTENT
    *     so a production boot never writes placeholder records.
    *
