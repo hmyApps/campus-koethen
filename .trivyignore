@@ -9,88 +9,10 @@
 # what was checked, why the finding does not apply, and what keeps it from
 # silently becoming real again.
 
-# ---------------------------------------------------------------------------
-# CVE-2026-14257 — brace-expansion: DoS via unbounded expansion length
-# ---------------------------------------------------------------------------
-# Reported against `brace-expansion 1.1.18` in the CMS image.
-#
-# Why it does not apply: the advisory publishes ONE major-spanning range
-# ("<=5.0.7 vulnerable, >=5.0.8 fixed"), so it still matches the BACKPORTED
-# releases on the 1.x and 2.x lines. The fix is demonstrably present in what we
-# ship — 1.1.18 introduces EXPANSION_MAX_LENGTH plus the bounding check
-# `if (length + expansion.length > maxLength) return out`, and its source
-# comment names this very CVE.
-#
-# Why we do not simply upgrade to 5.x: v5 is an ESM-first rewrite whose
-# CommonJS entry exports `{ expand }` instead of the function itself. The
-# consumer here is `minimatch@3`, deep inside Strapi's own tree
-# (@strapi/strapi -> fork-ts-checker-webpack-plugin -> minimatch@3), and it
-# calls the default export directly — verified by requiring the built package,
-# which yields an object, not a callable. Forcing the major would turn a
-# scanner warning into a real runtime failure.
-#
-# What keeps this honest: pnpm-workspace.yaml pins every affected major line to
-# its patched minimum (>=1.1.17, >=2.1.3, >=5.0.8), so a genuinely vulnerable
-# version cannot come back unnoticed. Re-check whenever the advisory range is
-# corrected upstream or Strapi drops minimatch@3.
-# REVIEW BY 2027-02-25 — or sooner if the advisory range is corrected upstream
-# or Strapi drops minimatch@3.
-CVE-2026-14257
-
-# ---------------------------------------------------------------------------
-# CVE-2026-40345 — deepmerge-ts: DoS via recursion limit in deepmerge
-# ---------------------------------------------------------------------------
-# Reported against `deepmerge-ts 7.1.5` in the backend image.
-#
-# Why it does not apply: deepmerge-ts is pulled in transitively by
-# @prisma/config (via prisma and @prisma/client 7.9.0) solely to merge static
-# Prisma configuration options at startup. It does not process untrusted
-# external input, recursive client payload structures, or network requests.
-#
-# Why we do not simply upgrade to 8.x: v8 is a breaking major version. Prisma
-# 7.9.0 explicitly depends on the 7.x line of @prisma/config and deepmerge-ts;
-# forcing a major override risks breaking Prisma client initialization.
-#
-# What keeps this honest: the dependency is only invoked during Prisma config
-# resolution at application startup. Re-check when Prisma updates its
-# dependencies to a fixed release.
-# REVIEW BY 2027-02-25 — or sooner once Prisma moves off the 7.x line of
-# @prisma/config and deepmerge-ts.
-CVE-2026-40345
-
-# ---------------------------------------------------------------------------
-# GHSA-5p4m-2wfm-xmqj / CVE-2026-59870 — js-yaml: quadratic CPU consumption
-# ---------------------------------------------------------------------------
-# Reported against `js-yaml 3.15.0` in the CMS image.
-#
-# Why it does not apply: js-yaml is pulled in transitively by Strapi's internal
-# configuration tooling (via load-yaml-file). It is only invoked during boot to
-# parse static repository configuration files, never to parse untrusted external
-# user payloads or runtime network requests.
-#
-# Why we do not simply upgrade to 4.x: js-yaml v4 contains breaking changes and
-# is required by upstream @strapi dependencies that specify ^3.13.0.
-#
-# What keeps this honest: no user-facing endpoint parses YAML at runtime.
-# REVIEW BY 2027-02-25 — or sooner once upstream @strapi dependencies accept
-# js-yaml 4.x.
-GHSA-5p4m-2wfm-xmqj
-CVE-2026-59870
-
-# ---------------------------------------------------------------------------
-# CVE-2026-67213 — nanoid: infinite loop in random ID generation
-# ---------------------------------------------------------------------------
-# Reported against `nanoid 3.3.16` in the CMS image.
-#
-# Why it does not apply: nanoid is pulled in transitively by postcss inside
-# Strapi's admin panel dependency tree solely for AST node ID generation during
-# admin panel assets compilation. It is not used for security-sensitive token
-# generation, cryptography, or user sessions.
-#
-# Why we do not simply upgrade: postcss pins nanoid ^3.3.x within its release.
-#
-# What keeps this honest: user session tokens and Strapi API tokens are generated
-# using Node crypto and JWT secrets, not postcss's internal nanoid helper.
-# REVIEW BY 2027-02-25 — or sooner once postcss unpins nanoid ^3.3.x.
-CVE-2026-67213
-
+# There are currently NO active exceptions. The former entries for
+# brace-expansion (CVE-2026-14257), deepmerge-ts (CVE-2026-40345), js-yaml
+# (GHSA-5p4m-2wfm-xmqj, CVE-2026-59870) and nanoid (CVE-2026-67213) were removed
+# on 2026-10-11: the overrides in pnpm-workspace.yaml force every affected line
+# to a release at or above the advisories' fixed versions, and pnpm-lock.yaml
+# resolves only those releases. Keeping them would only hide a future
+# regression. Add a new entry only with the same reasoning as described above.
