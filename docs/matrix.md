@@ -81,7 +81,8 @@ lokal.
 | Neue Direkt- und Gruppenchats anlegen                                         | offen  |
 | Schlüssel-Backup / Wiederherstellungsschlüssel                                | offen  |
 | Geräteverifizierung (SAS-Emoji)                                               | offen  |
-| Test gegen einen echten Server (Wegwerf-Synapse, Testkonto)                   | offen  |
+| Geräteprüfung ohne Konto (vodozemac, Verschlüsselung, Login-Ablehnung)        | fertig |
+| Test mit Testkonto gegen einen echten Server (Sync, Senden, E2EE)             | offen  |
 
 ## 6. Bauen und Testen
 
@@ -95,6 +96,12 @@ lokal.
   SQLite3MultipleCiphers, ohne vodozemac (der Host hat keine Rust-Bibliothek); E2EE selbst wird auf
   dem Gerät geprüft. Automatisierte Tests gegen einen echten Server nutzen einen Wegwerf-Synapse in
   Docker, nie Zugangsdaten zu einem echten Konto.
+- Geräteprüfung (manuell, nicht in der CI):
+  `flutter test integration_test/matrix_device_check_test.dart -d <Gerät> --dart-define=MATRIX_HOMESERVER_URL=…`.
+  Sie nutzt ein Temp-Verzeichnis und einen Speicher im Arbeitsspeicher (keine echten Chat-Daten) und
+  kein echtes Konto. Am 11. Oktober 2026 auf dem Android-Emulator (API 36) gegen den Testserver grün:
+  vodozemac lädt, die Datenbank liegt auf dem Gerät verschlüsselt, der Server lehnt einen erfundenen
+  Login ab, und es bleibt nichts zurück; logcat enthält keine SDK-Ausgaben.
 
 ## 7. Logging
 

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter_vodozemac/flutter_vodozemac.dart' as vodozemac;
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import 'package:meta/meta.dart';
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show Database;
@@ -19,7 +20,24 @@ import 'encrypted_matrix_database.dart';
 import 'matrix_origin_http_client.dart';
 
 /// Loads vodozemac (Olm/Megolm) once per process.
-Future<void> initVodozemac() => vodozemac.init();
+///
+/// The native library refuses a second initialisation, so every gateway —
+/// including one a rebuilt provider creates — shares this one. A failed load
+/// is not remembered: the next attempt tries again.
+Future<void> initVodozemac() => loadOncePerProcess(vodozemac.init);
+
+Future<void>? _vodozemacLoad;
+
+/// [initVodozemac] with the loader injectable for tests.
+@visibleForTesting
+Future<void> loadOncePerProcess(Future<void> Function() load) =>
+    _vodozemacLoad ??= load().catchError((Object error, StackTrace stack) {
+      _vodozemacLoad = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+
+@visibleForTesting
+void resetVodozemacLoadForTest() => _vodozemacLoad = null;
 
 /// [MatrixGateway] on the famedly Matrix SDK.
 ///
