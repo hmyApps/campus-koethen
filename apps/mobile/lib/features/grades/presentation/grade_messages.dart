@@ -30,19 +30,28 @@ String gradeFailureMessage(AppLocalizations l10n, Object? error) {
 
 /// The grade shown to the user: a locale-formatted number, "passed (ungraded)"
 /// or "no grade".
+///
+/// The number is the portal's own value, unchanged: every decimal it carries
+/// is kept (2,37 never becomes 2,4), with at least one so whole grades still
+/// read as grades (1,0).
 String gradeText(AppLocalizations l10n, String locale, Grade grade) {
   switch (grade.kind) {
     case GradeKind.graded:
-      return NumberFormat.decimalPatternDigits(
-        locale: locale,
-        decimalDigits: 1,
-      ).format(grade.value);
+      return (NumberFormat.decimalPattern(locale)
+            ..minimumFractionDigits = 1
+            ..maximumFractionDigits = _maxPortalFractionDigits)
+          .format(grade.value);
     case GradeKind.passedUngraded:
       return l10n.gradePassedUngraded;
     case GradeKind.none:
       return l10n.gradeNoGrade;
   }
 }
+
+/// Upper bound for displayed decimals — well above anything a portal grade
+/// carries, so a portal value is never rounded; it only keeps a binary
+/// floating-point tail from ever showing up.
+const int _maxPortalFractionDigits = 6;
 
 /// The status shown to the user; an unknown status keeps its original text.
 String statusLabel(AppLocalizations l10n, GradeEntry entry) =>
