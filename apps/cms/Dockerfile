@@ -68,8 +68,14 @@ RUN pnpm --filter @campus/cms deploy --prod --legacy /opt/deploy
 FROM node:24.21.0-slim AS runtime
 
 # tini gives correct signal handling so Strapi shuts down cleanly.
+#
+# perl-base is part of the Debian base and cannot be removed. The node image
+# shipped 5.36.0-7+deb12u3 with three critical and four high CVEs that Debian
+# fixed in deb12u4, so the blocking Trivy scan refused to publish the image.
+# Upgrading only this package keeps the rest of the base unchanged.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tini \
+ && apt-get install -y --no-install-recommends --only-upgrade perl-base \
  && rm -rf /var/lib/apt/lists/*
 
 # Remove npm, npx and corepack from the RUNTIME image.

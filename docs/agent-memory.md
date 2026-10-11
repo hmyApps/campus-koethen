@@ -79,7 +79,8 @@ Integrationsstand `5db9dc7` (alle 8 `claude/fix-*`-Branches enthalten), vor dem 
   ausgesperrt), Migration aus root-eigenem Image ok, API/Worker/CMS healthy, Code nicht beschreibbar,
   nur `public/uploads` und `.tmp` beschreibbar, `rooms-sync --dry-run` ohne EACCES, Medien-404 mit `no-store`.
 
-Offen daraus: `perl-base` im CMS-Image aktualisieren (Basisimage oder `--only-upgrade`).
+Erledigt daraus: `perl-base` wird in der CMS-Runtime-Stufe per `--only-upgrade` auf `deb12u4`
+gehoben; Trivy auf dem neu gebauten CMS-Image ohne Funde.
 
 Windows-Hinweis: Flutter-Gates scheitern in sehr langen Pfaden an MAX_PATH (`ios/Flutter/ephemeral`);
 lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat teils CRLF

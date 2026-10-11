@@ -65,12 +65,10 @@ die CI des Originalprojekts. Die Änderungen dieses Forks sind dort noch nicht e
   und `CMS_IMAGE_REPOSITORY=<registry>/campus-koethen/cms` setzen. Die Images vorher mit Trivy prüfen,
   so wie es die CI des Originalprojekts tut.
 
-**Bekannter Blocker für das CMS-Image (unabhängig von diesen Änderungen):** Das Basisimage
-`node:24.21.0-slim` enthält `perl-base 5.36.0-7+deb12u3` mit drei kritischen und vier hohen CVEs,
-behoben in `deb12u4`. Der Trivy-Schritt der CI veröffentlicht das CMS-Image deshalb derzeit nicht. Das
-Backend-Image ist sauber. Abhilfe: ein neueres Basisimage, sobald es das Debian-Update enthält, oder in
-der Runtime-Stufe von `apps/cms/Dockerfile` `perl-base` gezielt aktualisieren
-(`apt-get install -y --only-upgrade perl-base`).
+**CMS-Image und Trivy:** Das Basisimage `node:24.21.0-slim` enthält `perl-base 5.36.0-7+deb12u3`
+mit drei kritischen und vier hohen CVEs, die den Trivy-Schritt der CI blockierten. Die Runtime-Stufe
+von `apps/cms/Dockerfile` aktualisiert `perl-base` jetzt gezielt auf `deb12u4`. Lokal gebaut und
+gescannt: Backend- und CMS-Image ohne behebbare HIGH/CRITICAL-Funde.
 
 ## 4. Kurzanleitung auf dem VPS
 
