@@ -97,9 +97,14 @@ export class PublicCalendarSyncService {
     const run = await this.prisma.publicCalendarSyncRun.create({
       data: { kind: 'catalog', status: 'running' },
     });
+    // Which step failed decides the error code: an unreachable CMS and a write
+    // the database refused need different fixes.
+    let failure: 'strapiUnavailable' | 'databaseError' = 'strapiUnavailable';
     try {
       const [de, en] = await Promise.all([this.fetchAll('de'), this.fetchAll('en')]);
-      const { definitions, received, rejected } = validateCatalog(de, en);
+      failure = 'databaseError';
+      const { definitions, received, rejected, rejectedSlugs, rejectedWithoutSlug } =
+        validateCatalog(de, en);
 
       // An empty (or fully-rejected) catalogue is treated as suspect: it keeps
       // the last good read-model instead of deactivating every calendar.
@@ -148,6 +153,22 @@ export class PublicCalendarSyncService {
           ).map((row) => [row.slug, row]),
         );
 
+        // `channelSlug` is unique, and the upserts below run in catalogue
+        // order. A channel that moved — away from a retired calendar, to a
+        // calendar listed before its previous owner, or in a swap — would
+        // collide with the row that still holds it and fail the whole run,
+        // every run. Release every claimed channel first; the upserts then
+        // assign each one to exactly the calendar Strapi names.
+        const claimedChannels = definitions
+          .map((d) => d.channelSlug)
+          .filter((channel): channel is string => channel !== null);
+        if (claimedChannels.length > 0) {
+          await tx.publicCalendar.updateMany({
+            where: { channelSlug: { in: claimedChannels } },
+            data: { channelSlug: null },
+          });
+        }
+
         for (const def of definitions) {
           const before = previous.get(def.slug);
           // A 304 or an unchanged hash would otherwise keep serving what the
@@ -180,15 +201,19 @@ export class PublicCalendarSyncService {
       // Only after a complete, non-empty success may a calendar that Strapi no
       // longer publishes be retired. It is deactivated, never deleted. Rows
       // Strapi never owned (the synthetic user-test calendars) are not its to
-      // retire.
-      const retired = await this.prisma.publicCalendar.updateMany({
-        where: {
-          isActive: true,
-          source: STRAPI_SOURCE,
-          slug: { notIn: definitions.map((d) => d.slug) },
-        },
-        data: { isActive: false },
-      });
+      // retire. An entry that failed validation (a mistyped share link, say)
+      // is still published, so its calendar keeps the last good state; if a
+      // rejected entry does not even name its slug, nothing is retired this run.
+      const retired = rejectedWithoutSlug
+        ? { count: 0 }
+        : await this.prisma.publicCalendar.updateMany({
+            where: {
+              isActive: true,
+              source: STRAPI_SOURCE,
+              slug: { notIn: [...definitions.map((d) => d.slug), ...rejectedSlugs] },
+            },
+            data: { isActive: false },
+          });
 
       await this.finishRun(run.id, {
         status: 'success',
@@ -213,11 +238,11 @@ export class PublicCalendarSyncService {
       const code = error instanceof Error ? error.name : 'unknown';
       await this.finishRun(run.id, {
         status: 'failed',
-        errorCode: 'strapiUnavailable',
+        errorCode: failure,
         errorMessage: this.redact(error),
       });
       this.logger.warn(
-        `Public-calendar catalogue sync failed (${code}); existing definitions kept`,
+        `Public-calendar catalogue sync failed (${failure}, ${code}); existing definitions kept`,
       );
       return {
         status: 'failed',
@@ -226,7 +251,7 @@ export class PublicCalendarSyncService {
         rejected: 0,
         written: 0,
         deactivated: 0,
-        errorCode: code,
+        errorCode: failure,
       };
     }
   }

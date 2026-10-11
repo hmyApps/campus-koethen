@@ -40,6 +40,21 @@ export interface CatalogValidationResult {
   definitions: CalendarDefinition[];
   received: number;
   rejected: number;
+  /**
+   * Slugs of the rejected entries that still named one. A rejected entry is
+   * a publication that failed validation, not a withdrawal: the calendar it
+   * names must not be retired because of it.
+   */
+  rejectedSlugs: string[];
+  /** True if at least one rejected entry did not name a readable slug. */
+  rejectedWithoutSlug: boolean;
+}
+
+/** The slug a rejected raw entry claims, if it names one at all. */
+function claimedSlug(raw: unknown): string | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const slug = (raw as Record<string, unknown>)['slug'];
+  return typeof slug === 'string' && slug.length > 0 ? slug : null;
 }
 
 /**
@@ -60,22 +75,30 @@ export function validateCatalog(
 
   const definitions: CalendarDefinition[] = [];
   let rejected = 0;
+  const rejectedSlugs: string[] = [];
+  let rejectedWithoutSlug = false;
+  const reject = (raw: unknown): void => {
+    rejected += 1;
+    const slug = claimedSlug(raw);
+    if (slug === null) rejectedWithoutSlug = true;
+    else rejectedSlugs.push(slug);
+  };
 
   for (const raw of deEntries) {
     const parsed = strapiEntrySchema.safeParse(raw);
     if (!parsed.success) {
-      rejected += 1;
+      reject(raw);
       continue;
     }
     const entry = parsed.data;
 
     if (!SLUG_PATTERN.test(entry.slug) || !COLOR_PATTERN.test(entry.colorHex)) {
-      rejected += 1;
+      reject(raw);
       continue;
     }
     const extracted = tryExtractCalendarId(entry.googleShareUrl);
     if (!extracted.ok) {
-      rejected += 1;
+      reject(raw);
       continue;
     }
 
@@ -102,5 +125,5 @@ export function validateCatalog(
     });
   }
 
-  return { definitions, received: deEntries.length, rejected };
+  return { definitions, received: deEntries.length, rejected, rejectedSlugs, rejectedWithoutSlug };
 }
