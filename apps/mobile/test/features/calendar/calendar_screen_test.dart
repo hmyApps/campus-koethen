@@ -17,6 +17,7 @@ import 'package:campus_koethen/features/calendar/domain/calendar_entry.dart';
 import 'package:campus_koethen/features/calendar/domain/calendar_entry_details.dart';
 import 'package:campus_koethen/features/calendar/presentation/calendar_entry_sheet.dart';
 import 'package:campus_koethen/features/calendar/presentation/calendar_screen.dart';
+import 'package:campus_koethen/features/calendar/presentation/public_calendar_list.dart';
 import 'package:campus_koethen/features/calendar/presentation/calendar_source_sheets.dart';
 import 'package:campus_koethen/features/calendar/presentation/week_grid_view.dart';
 import 'package:campus_koethen/core/widgets/screen_scaffold.dart';
@@ -612,7 +613,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Öffentliche Kalender'), findsOneWidget);
-      expect(find.text('Ausgewählte in Google Kalender öffnen'), findsNothing);
+      // The combined Google action sits under the list (its behaviour is
+      // covered by the manage-calendars screen test).
+      expect(find.byType(PublicCalendarGoogleFooter), findsOneWidget);
     });
   });
 

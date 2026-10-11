@@ -461,6 +461,7 @@ class _EventsSourceSheet extends ConsumerWidget {
         CalendarSourceVisibilitySwitch(source: CalendarSource.publicCalendar),
         // The same list the manage screen shows, writing the same selection.
         PublicCalendarList(shrinkWrap: true),
+        PublicCalendarGoogleFooter(),
       ],
     );
   }
