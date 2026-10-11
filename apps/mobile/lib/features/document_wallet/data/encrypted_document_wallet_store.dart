@@ -30,7 +30,9 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
   Future<List<WalletDocument>> readAll() async {
     final List<WalletDocument> documents = <WalletDocument>[];
     for (final WalletDocumentKind kind in WalletDocumentKind.values) {
-      final String? raw = await _box.read(_key(kind));
+      // Checked: a box that cannot be opened is a storage failure the screen
+      // reports, not an empty wallet.
+      final String? raw = await _readChecked(_key(kind));
       if (raw == null) continue;
       try {
         final WalletDocument? document = _decode(jsonDecode(raw));
@@ -72,7 +74,18 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
   Future<void> delete(WalletDocumentKind kind) async {
     final String key = _key(kind);
     await _box.delete(key);
-    if (await _box.read(key) != null) {
+    // Confirmed only by a read that can tell "gone" from "unreadable".
+    if (await _readChecked(key) != null) {
+      throw const DocumentWalletFailure(
+        DocumentWalletFailureKind.storageUnavailable,
+      );
+    }
+  }
+
+  Future<String?> _readChecked(String key) async {
+    try {
+      return await _box.readChecked(key);
+    } on EncryptedBoxUnavailable {
       throw const DocumentWalletFailure(
         DocumentWalletFailureKind.storageUnavailable,
       );
