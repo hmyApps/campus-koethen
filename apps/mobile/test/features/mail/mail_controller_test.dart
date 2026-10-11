@@ -189,6 +189,27 @@ void main() {
       },
     );
 
+    test('a password change with another spelling of the same address keeps '
+        'the offline cache', () async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_hdr('1')]);
+      final container = _container(
+        gateway: FakeMailGateway(),
+        store: store,
+        cache: cache,
+      );
+      final controller = container.read(mailAccountControllerProvider.notifier);
+      await container.read(mailAccountControllerProvider.future);
+
+      await controller.signIn(
+        email: _creds.emailAddress.toUpperCase(),
+        password: 'new-pw',
+      );
+
+      expect(await cache.readHeaders(), hasLength(1));
+    });
+
     test(
       'a failed account-switch wipe never leaves the old mailbox shown as connected',
       () async {
