@@ -6,9 +6,12 @@ import 'dart:async';
 import 'package:campus_koethen/features/mail/application/exchange_calendar_providers.dart';
 import 'package:campus_koethen/features/mail/application/mail_account_controller.dart';
 import 'package:campus_koethen/features/mail/application/mail_providers.dart';
+import 'package:campus_koethen/features/mail/application/mail_suggestions.dart';
+import 'package:campus_koethen/features/mail/application/mail_sync_controller.dart';
 import 'package:campus_koethen/features/mail/domain/exchange_calendar_event.dart';
 import 'package:campus_koethen/features/mail/domain/exchange_calendar_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
+import 'package:campus_koethen/features/mail/domain/mail_failure.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +28,9 @@ class _RecordingGateway implements ExchangeCalendarGateway {
       <({DateTime from, DateTime to})>[];
   final Completer<List<ExchangeCalendarEvent>>? pending;
 
-  _RecordingGateway({this.pending});
+  final Object? error;
+
+  _RecordingGateway({this.pending, this.error});
 
   @override
   Future<List<ExchangeCalendarEvent>> fetchEvents(
@@ -34,6 +39,7 @@ class _RecordingGateway implements ExchangeCalendarGateway {
     required DateTime to,
   }) async {
     calls.add((from: from, to: to));
+    if (error != null) throw error!;
     return pending?.future ?? const <ExchangeCalendarEvent>[];
   }
 }
@@ -74,7 +80,7 @@ void main() {
     },
   );
 
-  test('loads long export windows in bounded parallel batches', () async {
+  test('loads long export windows one request at a time', () async {
     final Completer<List<ExchangeCalendarEvent>> pending =
         Completer<List<ExchangeCalendarEvent>>();
     final _RecordingGateway gateway = _RecordingGateway(pending: pending);
@@ -92,12 +98,66 @@ void main() {
 
     expect(
       gateway.calls,
-      hasLength(3),
-      reason: 'three chunks run together, but the fourth waits for the batch',
+      hasLength(1),
+      reason: 'a rejected password must cost at most one failed login',
     );
     pending.complete(const <ExchangeCalendarEvent>[]);
     await read;
     expect(gateway.calls, hasLength(4));
+  });
+
+  test('stops after the first 401 and locks EWS for the session', () async {
+    final _RecordingGateway gateway = _RecordingGateway(
+      error: const ExchangeCalendarFailure(
+        ExchangeCalendarFailureKind.invalidCredentials,
+      ),
+    );
+    final ProviderContainer container = await _container(gateway);
+    final ExchangeCalendarQuery year = ExchangeCalendarQuery(
+      from: DateTime(2026, 1, 1),
+      to: DateTime(2026, 12, 31),
+    );
+
+    await expectLater(
+      container.read(exchangeCalendarEventsProvider(year).future),
+      throwsA(isA<ExchangeCalendarFailure>()),
+    );
+    expect(gateway.calls, hasLength(1));
+    expect(container.read(mailDirectoryAuthLockProvider), isTrue);
+
+    container.invalidate(exchangeCalendarEventsProvider(year));
+    await expectLater(
+      container.read(exchangeCalendarEventsProvider(year).future),
+      throwsA(isA<ExchangeCalendarFailure>()),
+    );
+    expect(gateway.calls, hasLength(1), reason: 'no further failed login');
+  });
+
+  test('never logs in once the mail password was rejected', () async {
+    final _RecordingGateway gateway = _RecordingGateway();
+    final ProviderContainer container = await _container(gateway);
+    container
+        .read(mailCredentialsRejectionProvider.notifier)
+        .reject(const MailFailure(MailFailureKind.invalidCredentials));
+
+    await expectLater(
+      container.read(
+        exchangeCalendarEventsProvider(
+          ExchangeCalendarQuery(
+            from: DateTime(2026, 10, 1),
+            to: DateTime(2026, 10, 31),
+          ),
+        ).future,
+      ),
+      throwsA(
+        isA<ExchangeCalendarFailure>().having(
+          (ExchangeCalendarFailure e) => e.kind,
+          'kind',
+          ExchangeCalendarFailureKind.invalidCredentials,
+        ),
+      ),
+    );
+    expect(gateway.calls, isEmpty);
   });
 
   test('a late EWS result cannot survive mail sign-out', () async {

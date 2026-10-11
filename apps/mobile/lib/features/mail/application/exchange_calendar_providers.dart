@@ -10,6 +10,8 @@ import '../domain/exchange_calendar_gateway.dart';
 import '../domain/mail_credentials.dart';
 import 'mail_account_controller.dart';
 import 'mail_providers.dart';
+import 'mail_suggestions.dart';
+import 'mail_sync_controller.dart';
 
 final Provider<ExchangeCalendarGateway> exchangeCalendarGatewayProvider =
     Provider<ExchangeCalendarGateway>(
@@ -51,8 +53,25 @@ final exchangeCalendarEventsProvider =
         if (!account.isSignedIn || query.to.isBefore(query.from)) {
           return const <ExchangeCalendarEvent>[];
         }
+        // Every EWS call is a Basic-auth login against the central university
+        // account. Once IMAP or EWS rejected the stored password in this mail
+        // session, no further request is sent: failed logins can lock the
+        // account. The IMAP rejection is watched, so a successful manual sync
+        // loads the window again; the EWS lock is only read (this provider
+        // sets it itself) and lifts with a new sign-in, which is watched above.
+        final bool rejected =
+            ref.watch(mailCredentialsRejectionProvider) != null ||
+            ref.read(mailDirectoryAuthLockProvider);
+        if (rejected) {
+          throw const ExchangeCalendarFailure(
+            ExchangeCalendarFailureKind.invalidCredentials,
+          );
+        }
         final MailAccountController controller = ref.read(
           mailAccountControllerProvider.notifier,
+        );
+        final MailDirectoryAuthLock authLock = ref.read(
+          mailDirectoryAuthLockProvider.notifier,
         );
         final int generation = controller.sessionGeneration;
         final MailCredentials credentials = await controller
@@ -63,52 +82,50 @@ final exchangeCalendarEventsProvider =
 
         // Smaller requests avoid EWS's 1000-occurrence page ceiling. A page
         // that is still truncated is rejected by the parser, never accepted as
-        // an apparently complete calendar.
+        // an apparently complete calendar. The windows run one after another
+        // so a rejected password costs exactly one failed login.
         const int maximumDaysPerRequest = 92;
-        const int maximumParallelRequests = 3;
         final Map<String, ExchangeCalendarEvent> byId =
             <String, ExchangeCalendarEvent>{};
         DateTime cursor = query.from;
         while (!cursor.isAfter(query.to)) {
-          final List<({DateTime from, DateTime to})> batch =
-              <({DateTime from, DateTime to})>[];
-          while (batch.length < maximumParallelRequests &&
-              !cursor.isAfter(query.to)) {
-            final DateTime candidate = DateTime(
-              cursor.year,
-              cursor.month,
-              cursor.day + maximumDaysPerRequest - 1,
-            );
-            final DateTime endInclusive = candidate.isAfter(query.to)
-                ? query.to
-                : candidate;
-            final DateTime endExclusive = DateTime(
-              endInclusive.year,
-              endInclusive.month,
-              endInclusive.day + 1,
-            );
-            batch.add((from: cursor, to: endExclusive));
-            cursor = endExclusive;
-          }
-          final List<List<ExchangeCalendarEvent>> chunks = await Future.wait(
-            batch.map(
-              (({DateTime from, DateTime to}) window) => gateway.fetchEvents(
-                credentials,
-                from: window.from,
-                to: window.to,
-              ),
-            ),
+          final DateTime candidate = DateTime(
+            cursor.year,
+            cursor.month,
+            cursor.day + maximumDaysPerRequest - 1,
           );
+          final DateTime endInclusive = candidate.isAfter(query.to)
+              ? query.to
+              : candidate;
+          final DateTime endExclusive = DateTime(
+            endInclusive.year,
+            endInclusive.month,
+            endInclusive.day + 1,
+          );
+          final List<ExchangeCalendarEvent> chunk;
+          try {
+            chunk = await gateway.fetchEvents(
+              credentials,
+              from: cursor,
+              to: endExclusive,
+            );
+          } on ExchangeCalendarFailure catch (failure) {
+            if (failure.kind ==
+                    ExchangeCalendarFailureKind.invalidCredentials &&
+                controller.isSessionCurrent(generation)) {
+              authLock.lock();
+            }
+            rethrow;
+          }
           if (!controller.isSessionCurrent(generation)) {
             throw const ExchangeCalendarFailure(
               ExchangeCalendarFailureKind.invalidCredentials,
             );
           }
-          for (final List<ExchangeCalendarEvent> chunk in chunks) {
-            for (final ExchangeCalendarEvent event in chunk) {
-              byId[event.id] = event;
-            }
+          for (final ExchangeCalendarEvent event in chunk) {
+            byId[event.id] = event;
           }
+          cursor = endExclusive;
         }
         final List<ExchangeCalendarEvent> events = byId.values.toList()
           ..sort((a, b) {
