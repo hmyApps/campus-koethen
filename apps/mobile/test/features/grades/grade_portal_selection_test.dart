@@ -302,6 +302,49 @@ void main() {
       expect(portalStore.lastWritten, GradePortal.hisInOne);
     });
 
+    // Audit 2026-10-10: a failed portal write must not leave the verified
+    // credentials behind, or the next start silently connects the account
+    // to HISinOne although setup reported a failure.
+    test('a failed portal write rolls the stored credentials back', () async {
+      final hisInOne = FakeGradesGateway(
+        report: const GradeReport(<GradeEntry>[]),
+      );
+      final legacy = FakeGradesGateway(report: sampleReport('Legacy-Kurs'));
+      final store = InMemoryGradeCredentialStore();
+      final portalStore = InMemoryGradePortalStore()
+        ..writeError = const GradeFailure(
+          GradeFailureKind.secureStorageUnavailable,
+        );
+      final c = _container(
+        hisInOne: hisInOne,
+        legacy: legacy,
+        store: store,
+        portalStore: portalStore,
+      );
+      await c.read(gradeAccountControllerProvider.future);
+
+      await expectLater(
+        c
+            .read(gradeAccountControllerProvider.notifier)
+            .signIn(username: 'u', password: 'p'),
+        throwsA(const GradeFailure(GradeFailureKind.secureStorageUnavailable)),
+      );
+
+      expect(store.lastWritten, isNull);
+      final ProviderContainer restarted = _container(
+        hisInOne: hisInOne,
+        legacy: legacy,
+        store: store,
+        portalStore: InMemoryGradePortalStore(),
+      );
+      expect(
+        (await restarted.read(
+          gradeAccountControllerProvider.future,
+        )).isSignedIn,
+        isFalse,
+      );
+    });
+
     test('switching portals discards the local cache', () async {
       final hisInOne = FakeGradesGateway(report: sampleReport());
       final legacy = FakeGradesGateway(report: sampleReport());

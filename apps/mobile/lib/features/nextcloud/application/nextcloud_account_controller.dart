@@ -54,6 +54,10 @@ class NextcloudAccountController extends AsyncNotifier<NextcloudAccount?> {
         () async {
           final NextcloudGateway gateway = ref.read(nextcloudGatewayProvider);
           final NextcloudLoginStart start = await gateway.startLogin();
+          // A cancel while the flow was being started must not still open
+          // the browser login. Nothing has been issued yet, so there is
+          // nothing to revoke.
+          if (generation != _generation || cancellation.isCompleted) return;
           final bool opened;
           try {
             opened = await ref

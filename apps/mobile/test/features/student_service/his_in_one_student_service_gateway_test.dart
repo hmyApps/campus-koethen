@@ -680,6 +680,110 @@ void main() {
       },
     );
 
+    // Audit 2026-10-10: the overlay's full "PDF erstellen" POST can end, like
+    // the grade print buttons, on the docdownload entry whose 307 leads to
+    // the separate untrust- host. That chain must run through the narrow,
+    // ordered download route — never the general session allowlist.
+    test('a configuration submit that redirects into the two-hop document '
+        'download returns the verified PDF', () async {
+      const String entry =
+          'https://sscportal.ssc.hs-anhalt.de/qisserver/rds'
+          '?state=docdownload&docId=cfg-doc';
+      final String untrustTarget = docDownloadRedirectTarget(docId: 'cfg-doc');
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) =>
+            FakeHtmlResponse(partialResponseNeedsConfiguration()),
+        onOther: (RequestOptions o) {
+          final String url = o.uri.toString();
+          if (o.method == 'POST' && url.contains('studyService/start.xhtml')) {
+            return const FakeHtmlResponse.redirect(entry);
+          }
+          if (url == entry) {
+            return FakeHtmlResponse.redirect(untrustTarget, statusCode: 307);
+          }
+          if (url == untrustTarget) {
+            return const FakeHtmlResponse(
+              '%PDF-1.7\nfixture',
+              contentType: 'application/pdf',
+            );
+          }
+          return const FakeHtmlResponse('not found', statusCode: 404);
+        },
+      );
+
+      final CertificateDownloadResult result =
+          await HisInOneStudentServiceGateway(
+            adapter,
+            Duration.zero,
+          ).downloadCertificate(_creds, _firstOffer());
+
+      expect(result, isA<CertificateDownloadLoaded>());
+      expect(adapter.urls, contains(untrustTarget));
+      expect(
+        adapter.requests.where(
+          (RequestOptions r) =>
+              r.data is Map &&
+              (r.data as Map)['javax.faces.partial.ajax'] == 'true',
+        ),
+        hasLength(1),
+        reason: 'a finished download needs no poll ticks',
+      );
+    });
+
+    test('a configuration submit redirecting straight to the untrust- host '
+        'is rejected', () async {
+      final String untrustTarget = docDownloadRedirectTarget(docId: 'cfg-doc');
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        onAjax: (int call, Map<String, String> body) =>
+            FakeHtmlResponse(partialResponseNeedsConfiguration()),
+        onOther: (RequestOptions o) {
+          if (o.method == 'POST') {
+            return FakeHtmlResponse.redirect(untrustTarget);
+          }
+          return const FakeHtmlResponse(
+            '%PDF-1.7\nfixture',
+            contentType: 'application/pdf',
+          );
+        },
+      );
+
+      await expectLater(
+        HisInOneStudentServiceGateway(
+          adapter,
+          Duration.zero,
+        ).downloadCertificate(_creds, _firstOffer()),
+        throwsA(
+          const StudentServiceFailure(
+            StudentServiceFailureKind.tlsOrHostRejected,
+          ),
+        ),
+      );
+      expect(adapter.urls, isNot(contains(untrustTarget)));
+    });
+
+    test('an unexpected non-session error during the download is classified '
+        'as unknown', () async {
+      final FakeHtmlAdapter adapter = _jobAdapter(
+        // An unparsable link escapes the parser as a FormatException — no
+        // session or Dio failure, so only the final catch can classify it.
+        onAjax: (int call, Map<String, String> body) => FakeHtmlResponse(
+          partialResponseFinished().replaceAll(
+            '"/qisserver/rds?state=docdownload',
+            '"https://[broken/qisserver/rds?state=docdownload',
+          ),
+        ),
+      );
+
+      await expectLater(
+        HisInOneStudentServiceGateway(
+          adapter,
+          Duration.zero,
+        ).downloadCertificate(_creds, _firstOffer()),
+        throwsA(const StudentServiceFailure(StudentServiceFailureKind.unknown)),
+      );
+      expect(adapter.urls.last, contains('auth.logout'));
+    });
+
     test(
       'an AJAX job rejected by the portal is surfaced as portalUnavailable',
       () async {

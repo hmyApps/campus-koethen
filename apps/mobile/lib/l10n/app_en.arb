@@ -743,7 +743,6 @@
   "gradeSetupUsernameRequired": "Please enter your username.",
   "gradeSetupPasswordRequired": "Please enter your password.",
   "gradeSetupSubmit": "Sign in and load grades",
-  "gradeSetupPortalLink": "Open in the exam portal",
   "gradesLastUpdated": "Last updated: {when}",
   "@gradesLastUpdated": {
     "placeholders": {
@@ -758,7 +757,6 @@
   "gradesEmpty": "No grades found yet.",
   "gradesUpdateFailed": "The update failed. Showing the grades from the last successful sync.",
   "gradesRetry": "Try again",
-  "gradesReenter": "Change credentials",
   "gradesDeleteAction": "Delete grades connection and local grades",
   "gradesSwitchPortalAction": "Switch exam portal",
   "gradesSwitchPortalTitle": "Switch exam portal?",
@@ -832,7 +830,6 @@
   },
   "studentServicePaymentHintUnrecognised": "Status could not be determined.",
   "studentServiceGenerateCertificate": "Generate PDF",
-  "studentServiceCertificateReady": "The certificate has been generated.",
   "studentServiceErrorInvalidCredentials": "The grades connection was rejected by the portal. Please reconnect grades.",
   "studentServiceErrorTls": "The connection was refused for security reasons.",
   "studentServiceErrorPortalUnavailable": "The portal is currently unavailable.",

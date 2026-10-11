@@ -156,8 +156,13 @@ https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=docdownload&docId=…
 
 — danach folgt derselbe zweite Redirect-Sprung wie beim Studienservice-Download, auf die separate
 Origin `untrust-sscportal.ssc.hs-anhalt.de` (siehe unten), über eine eigene, separat benannte
-Prüfung (`HisInOneProfile.allowsDocumentDownload`, kein gemeinsamer Pool mit
-`StudentServiceProfile`). Die Liste der angebotenen Buttons (`ExamReportOffer`, Button-Id +
+Prüfung (`HisInOneProfile.examReportDownloadRoute`, kein gemeinsamer Pool mit
+`StudentServiceProfile.documentDownloadRoute`). Diese Prüfung ist **geordnet** und wird pro
+Download frisch erzeugt: Bis zum Einstieg sind nur der Rücksprung auf die Notenübersicht selbst
+und `state=docdownload` auf dem Portal-Host erlaubt, danach ausschließlich `state=docdownload` auf
+dem `untrust-`-Host — nie umgekehrt und nie zurück. Die Angebote werden auch bei einem leeren
+Abschnitt „Leistungsdaten" gelesen, damit z. B. die „Übersicht fehlender Leistungen" erreichbar
+bleibt. Die Liste der angebotenen Buttons (`ExamReportOffer`, Button-Id +
 Beschriftung) wird bei jedem Notenabruf frisch mitgelesen (`HisInOneHtmlParser.findExamReports`)
 und zusammen mit dem Bericht zwischengespeichert (`GradeReport.examReports`); vor dem Absenden wird
 sie **erneut** von einer frisch geladenen Seite gelesen — ein Button, der dort nicht mehr auftaucht,
@@ -226,6 +231,17 @@ URL missverstanden, obwohl er schlicht bedeutete, dass diese Werte fehlten. `doc
 neu und **nicht im Voraus konstruierbar** — er muss aus der Partial-Response gelesen werden. Der
 Ablauf ist anhand der realen Seitenstruktur und des JSF/MyFaces-Vertrags implementiert und durch
 deterministische Start-/Polling-/ViewState-/PDF-Tests abgesichert.
+
+Manche Aufträge starten nicht direkt: „Studienverlaufsbescheinigung" öffnet zuerst ein
+Konfigurations-Overlay (Semesterauswahl, vorausgewählt). Es wird als DOM gelesen; jede Auswahl wird
+an ihre **eigene** vorausgewählte Option gebunden. Mehrere Start-Buttons, ein anderes
+Einstellungselement als `<select>` oder eine Auswahl ohne genau eine vorausgewählte Option ergeben
+`UnrecognisedJobConfiguration` (klassifizierter Fehler `portalStructureChanged`), nie eine geratene
+Abgabe. Erst der Button „PDF erstellen" des Overlays startet den Auftrag per voller
+Formularabgabe. Endet deren Redirect-Kette auf dem `state=docdownload`-Einstieg des Portal-Hosts,
+folgt die Sitzung diesem Sprung **nicht** mit ihrer allgemeinen Host-Prüfung, sondern übergibt
+ihn an denselben Download-Pfad (`StudentServiceProfile.documentDownloadRoute`) wie einen per AJAX
+gelieferten Link; ein direkter Sprung auf den `untrust-`-Host wird abgelehnt.
 
 ### Konsequenzen für die Umsetzung
 
@@ -316,7 +332,8 @@ Studierende wissen nicht, welches Portal ihr Studiengang nutzt.
   Portalwechsel wird dabei zuerst der lokale Notencache des bisherigen Portals verworfen: Dessen
   Noten erscheinen nie unter HISinOne, und der erste HISinOne-Sync meldet keine fremden Noten als
   „neu“. Scheitert das Verwerfen, bleibt der Fehler sichtbar und der nächste Start versucht es
-  erneut. Vor der ersten Anmeldung zeigt auch der Gateway-Rückfall auf HISinOne. Der Umschalter
+  erneut. Vor der ersten Anmeldung zeigen auch der Gateway-Rückfall und der Link „Notenportal im
+  Browser öffnen" der Einrichtung auf HISinOne. Der Umschalter
   „Prüfungsportal wechseln“ bleibt für Konten, deren Leistungen noch in HIS-QIS liegen. Ein
   Lesefehler des Keychain/Keystore oder ein unbekannter gespeicherter
   Wert ergibt dagegen den klassifizierten Fehler `secureStorageUnavailable` mit „Erneut
@@ -394,6 +411,8 @@ die Baumebenen), statt in der Oberfläche gegen Zeichenketten zu vergleichen.
 - **Credit-Sammelkonto / C-Sammelkonto → „Durchschnitt" / „Average".** Der Wert dieser Zeile
   **ist** der Durchschnitt. Die App übernimmt ihn unverändert und **berechnet keinen eigenen**.
   Angezeigt als eigene Zeile über der Liste, nicht als Prüfung.
+- **Notenwerte** (auch der Durchschnitt) erscheinen mit allen Nachkommastellen des Portals und
+  mindestens einer (`2,37` bleibt `2,37`, `1` wird `1,0`) — nie auf eine Stelle gerundet.
 - **Zulassung zur Abschlussarbeit** (nur HIS-QIS) wird nicht angezeigt.
 - **Alles andere bleibt stehen**, auch unbekannte Zeilentypen/Statuscodes.
 - **HISinOne-spezifisch:** Die Liste zeigt nur die Blattzeilen (echte Prüfungsergebnisse,
@@ -444,7 +463,7 @@ gesichertes Fenster setzt und iOS keinen Capture- oder App-Switcher-Überleger r
 ```
 features/grades/
   domain/         GradePortal, GradePortalProfile (Interface, je EIN Host pro Portal),
-                  LegacyQisProfile, HisInOneProfile (inkl. allowsDocumentDownload),
+                  LegacyQisProfile, HisInOneProfile (inkl. examReportDownloadRoute),
                   GradeCredentials, Grade/GradeEntry/ExamStatus (typsicher, inkl.
                   path/module/extras), GradeReport (inkl. examReports), ExamReportOffer/
                   ExamReportDownloadResult, ExamReportGateway, GradeFailure, Clock,
@@ -498,8 +517,10 @@ flutter test test/features/grades/
   auch mit korrekten Zugangsdaten, scheitern ließ.
 - `grade_portal_selection_test.dart` — Reihenfolge `hisInOne` → `hisQisLegacy`, „Login ok aber
   leer" → zweites Portal, maximal zwei Loginversuche, Persistenz, Wechsel verwirft Cache,
-  Löschen entfernt auch die Portalwahl, Altkonten ohne gespeicherte Portalwahl fallen auf
-  `hisQisLegacy` zurück; `portalStructureChanged`/`portalUnavailable` auf Portal 1 lassen
+  Löschen entfernt auch die Portalwahl, Altkonten ohne gespeicherte Portalwahl wechseln einmalig
+  auf `hisInOne` (der Cache des bisherigen Portals wird zuerst verworfen), ein bereits gewähltes
+  Portal wird nie verschoben; scheitert das Speichern der Portalwahl, werden die eben
+  gespeicherten Zugangsdaten verifiziert zurückgerollt; `portalStructureChanged`/`portalUnavailable` auf Portal 1 lassen
   Portal 2 probieren, beide strukturell defekt → Fehler wird gemeldet und **nichts**
   persistiert, `tlsOrHostRejected` bricht weiterhin sofort ab.
 - `grade_cache_migration_test.dart` — `v1`-Boxinhalte werden nie gelesen; das Öffnen der
@@ -519,9 +540,10 @@ flutter test test/features/grades/
   `examReports` aus derselben Seite; `downloadExamReport` postet, folgt BEIDEN Redirect-Sprüngen
   (Portal-Host → `untrust-sscportal`-Host) und prüft die PDF-Magicbytes; ein Button, der auf
   einer frisch gelesenen Seite nicht mehr auftaucht, wird vor jedem POST abgelehnt.
-- `his_in_one_profile_test.dart` — `allowsDocumentDownload` lässt `state=docdownload` unter
-  `/qisserver/rds` auf BEIDEN gepinnten Hosts zu (Portal-Host, `untrust-sscportal`-Host) und lehnt
-  jeden dritten Host, auch einen Subdomain-Treffer auf den `untrust-`-Host, ab.
+- `his_in_one_profile_test.dart` — `examReportDownloadRoute` lässt genau die reale, geordnete
+  Kette zu (optionaler Rücksprung auf die Notenübersicht, `state=docdownload` auf dem Portal-Host,
+  danach nur `state=docdownload` auf dem `untrust-sscportal`-Host), erreicht den `untrust-`-Host
+  nie vor dem Einstieg und lehnt abweichenden Pfad, Zustand, Host, Port oder User-Info ab.
 - `grade_cache_migration_test.dart` (zusätzlich) — `examReports` übersteht einen Schreib-/
   Lesedurchlauf; ein vor dieser Änderung zwischengespeicherter Bericht (reines Array statt
   Wrapper-Objekt) liefert beim Lesen eine leere `examReports`-Liste statt eines Fehlers.

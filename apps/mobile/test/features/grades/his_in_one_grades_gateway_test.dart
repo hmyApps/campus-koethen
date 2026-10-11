@@ -480,6 +480,36 @@ void _deployedPortalBuildTests() {
     },
   );
 
+  // Audit 2026-10-10: an account without results on this portal still has
+  // the print buttons on the same page — "Übersicht fehlender Leistungen"
+  // must stay reachable.
+  test('an empty Leistungsdaten section still carries the exam-report offers '
+      'from the same page', () async {
+    final String emptyWithReports = hisInOneEmptyOverviewHtml.replaceFirst(
+      '<input type="hidden" name="examsReadonly_SUBMIT"',
+      '<div id="examsReadonly:exaReports:fieldset_exaReports">'
+          '<button id="examsReadonly:exaReports:fieldset_exaReports:'
+          'printReport_2" name="examsReadonly:exaReports:fieldset_exaReports:'
+          'printReport_2" type="submit" value="Leistungsübersicht fehlende '
+          'Leistungen / Overview of missing exam [PDF]" '
+          'class="submit_print_pdf immediate"><span>PDF</span></button>'
+          '</div><input type="hidden" name="examsReadonly_SUBMIT"',
+    );
+    final adapter = FakeHtmlAdapter(
+      (RequestOptions o) => script(emptyWithReports, o),
+    );
+
+    final GradeReport report = await HisInOneGradesGateway(
+      const HisInOneProfile(),
+      adapter,
+    ).fetchGrades(_creds);
+
+    expect(report.isEmpty, isTrue);
+    expect(report.examReports.map((ExamReportOffer o) => o.buttonId), <String>[
+      'examsReadonly:exaReports:fieldset_exaReports:printReport_2',
+    ]);
+  });
+
   test('a tree without an expand-all control is parsed as rendered, without an '
       'expand POST', () async {
     final adapter = FakeHtmlAdapter(

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:campus_koethen/core/documents/document_viewer_screen.dart';
+import 'package:campus_koethen/core/links/safe_link_launcher.dart';
 import 'package:campus_koethen/features/grades/domain/exam_report.dart';
 import 'package:campus_koethen/features/grades/domain/grade.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
@@ -175,6 +176,36 @@ void main() {
       findsOneWidget,
     );
     expect(gateway.fetchCalls, 0);
+  });
+
+  // Audit 2026-10-10: HISinOne is the standard portal, so the browser link
+  // before setup must not send students to the HIS-QIS legacy portal.
+  testWidgets('the setup browser link opens the standard HISinOne portal', (
+    WidgetTester tester,
+  ) async {
+    _tall(tester);
+    final _RecordingLauncher launcher = _RecordingLauncher();
+    await pumpScreen(
+      tester,
+      const GradesScreen(),
+      overrides: <Override>[
+        ..._grades(
+          gateway: FakeGradesGateway(report: sampleReport()),
+          store: InMemoryGradeCredentialStore(),
+          cache: InMemoryGradeCacheStore(),
+        ),
+        linkLauncherProvider.overrideWithValue(launcher),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Notenportal im Browser öffnen'));
+    await tester.tap(find.text('Notenportal im Browser öffnen'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.opened, <String>[
+      'https://sscportal.ssc.hs-anhalt.de/qisserver/rds?state=user&type=0',
+    ]);
   });
 
   testWidgets('setup signs in and reveals the overview', (
@@ -518,4 +549,14 @@ void main() {
     );
     expect(find.text('Pruefung 59'), findsOneWidget);
   });
+}
+
+class _RecordingLauncher implements SafeLinkLauncher {
+  final List<String> opened = <String>[];
+
+  @override
+  Future<LinkLaunchResult> open(String? rawUrl) async {
+    if (rawUrl != null) opened.add(rawUrl);
+    return LinkLaunchResult.opened;
+  }
 }

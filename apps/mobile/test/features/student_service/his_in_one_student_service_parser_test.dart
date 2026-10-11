@@ -306,6 +306,116 @@ void main() {
         }
       },
     );
+
+    // Audit 2026-10-10: select and selected option must belong together,
+    // independent of attribute order; ambiguity is never guessed.
+    const String selectName =
+        'studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_0:setting_focus';
+    const TabSwitchRequest plainBase = TabSwitchRequest(
+      action: '/qisserver/pages/cm/stu/studyService/start.xhtml',
+      formData: <String, String>{},
+    );
+
+    test('reads the overlay regardless of attribute order', () {
+      final String reordered = partialResponseNeedsConfiguration()
+          .replaceAll(
+            '<select id="$selectName" name="$selectName">',
+            '<select name="$selectName" id="$selectName" class="x">',
+          )
+          .replaceAll(
+            '<option value="284" selected="selected"',
+            '<option selected="selected" value="284"',
+          )
+          .replaceAll(
+            '<button id="studyserviceForm:report:reports:reportButtons:'
+                'jobConfigurationButtonsOverlay:navigationBottom:startJob" '
+                'name=',
+            '<button type="submit" id="studyserviceForm:report:reports:'
+                'reportButtons:jobConfigurationButtonsOverlay:'
+                'navigationBottom:startJob" name=',
+          );
+
+      final JobConfiguration configuration =
+          HisInOneStudentServiceParser.readJobConfiguration(
+            reordered,
+            plainBase,
+          );
+
+      expect(configuration, isA<JobConfigurationSubmit>());
+      expect(
+        (configuration as JobConfigurationSubmit).request.formData[selectName],
+        '284',
+      );
+    });
+
+    test('binds each select to its own pre-selected option', () {
+      const String secondName =
+          'studyserviceForm:report:reports:reportButtons:jobConfigurationButtonsOverlay:jobConfiguration:settingsContainer_0:setting_1:setting_focus';
+      final String twoSelects = partialResponseNeedsConfiguration().replaceAll(
+        '</select>',
+        '</select>\n<select id="$secondName" name="$secondName">'
+            '<option value="de">Deutsch</option>'
+            '<option value="en" selected="selected">Englisch</option>'
+            '</select>',
+      );
+
+      final JobConfiguration configuration =
+          HisInOneStudentServiceParser.readJobConfiguration(
+            twoSelects,
+            plainBase,
+          );
+
+      expect(configuration, isA<JobConfigurationSubmit>());
+      final Map<String, String> data =
+          (configuration as JobConfigurationSubmit).request.formData;
+      expect(data[selectName], '284');
+      expect(data[secondName], 'en');
+    });
+
+    test('ambiguous or unbound overlays are unrecognised, never guessed', () {
+      final String full = partialResponseNeedsConfiguration();
+      final Map<String, String> ambiguous = <String, String>{
+        'second select without a selected option': full.replaceAll(
+          '</select>',
+          '</select>\n<select id="other" name="'
+              'studyserviceForm:x:jobConfiguration:settingsContainer_0:'
+              'setting_1:setting_focus"><option value="a">A</option>'
+              '<option value="b">B</option></select>',
+        ),
+        'two selected options in one select': full.replaceAll(
+          '<option value="285"',
+          '<option value="285" selected="selected"',
+        ),
+        'selected option outside the select': full
+            .replaceAll(' selected="selected"', '')
+            .replaceAll(
+              '</select>',
+              '</select><option value="999" selected="selected">x</option>',
+            ),
+        'two start buttons': full.replaceAll(
+          '</div>\n]]>',
+          '<button id="y:navigationBottom:startJob" '
+              'name="y:navigationBottom:startJob" type="submit" '
+              'value="PDF erstellen">PDF</button></div>\n]]>',
+        ),
+        'an unknown setting input': full.replaceAll(
+          '</select>',
+          '</select><input type="text" name="'
+              'studyserviceForm:x:jobConfiguration:settingsContainer_0:'
+              'setting_2:setting_focus" value="">',
+        ),
+      };
+      for (final MapEntry<String, String> variant in ambiguous.entries) {
+        expect(
+          HisInOneStudentServiceParser.readJobConfiguration(
+            variant.value,
+            plainBase,
+          ),
+          isA<UnrecognisedJobConfiguration>(),
+          reason: variant.key,
+        );
+      }
+    });
   });
 
   group('extractDownloadUrlFromPartialResponse', () {
