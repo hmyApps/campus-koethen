@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ENV } from '../../config/app-config.module';
 import { Env } from '../../config/env.schema';
 import { PrismaService } from '../../prisma/prisma.service';
+import { addCalendarDays, campusToday } from '../../common/time/campus-date';
 import {
   resolveTimetableGroupVisibility,
   TimetableGroupEvidence,
@@ -1085,12 +1086,13 @@ export class TimetableSyncService {
     }
   }
 
-  /** The window the scheduled job covers. */
-  windowFor(today = new Date()): { from: string; to: string } {
-    const day = 86_400_000;
-    const from = new Date(today.getTime() - this.env.WEBUNTIS_LOOKBACK_DAYS * day);
-    const to = new Date(today.getTime() + this.env.WEBUNTIS_LOOKAHEAD_DAYS * day);
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  /** The window the scheduled job covers, counted from the Berlin calendar day. */
+  windowFor(now = new Date()): { from: string; to: string } {
+    const today = campusToday(now);
+    return {
+      from: addCalendarDays(today, -this.env.WEBUNTIS_LOOKBACK_DAYS),
+      to: addCalendarDays(today, this.env.WEBUNTIS_LOOKAHEAD_DAYS),
+    };
   }
 
   async lastSuccessfulAt(kind: SyncKind): Promise<Date | null> {
