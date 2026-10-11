@@ -143,6 +143,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }
@@ -158,14 +159,14 @@
             "name": "to",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day (inclusive). Defaults to from plus the maximum range.",
             "schema": {}
           },
           {
             "name": "from",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day. Defaults to today.",
             "schema": {}
           }
         ],
@@ -261,6 +262,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }
@@ -537,6 +539,7 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Max 10000.",
             "schema": {
               "type": "number"
             }
@@ -883,14 +886,14 @@
             "name": "to",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day (inclusive). Defaults to from plus the maximum range.",
             "schema": {}
           },
           {
             "name": "from",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day. Defaults to today.",
             "schema": {}
           },
           {
@@ -987,14 +990,14 @@
             "name": "to",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day (inclusive). Defaults to from plus the maximum range.",
             "schema": {}
           },
           {
             "name": "from",
             "required": false,
             "in": "query",
-            "description": "YYYY-MM-DD",
+            "description": "YYYY-MM-DD, a Europe/Berlin calendar day. Defaults to today.",
             "schema": {}
           }
         ],

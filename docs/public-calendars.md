@@ -116,6 +116,15 @@ nie**; erst ein vollständig erfolgreicher Abruf fügt hinzu/aktualisiert/deakti
   Google-Kalender-ID, werden alle Sync-Felder zurückgesetzt (Status `pending`), und alle Termine
   des alten Feeds werden gelöscht. Ein Feed-Lauf schreibt nur, solange ID und Flags noch dem Stand
   bei Laufbeginn entsprechen.
+- **Kanalzuordnung:** `channelSlug` ist eindeutig. Wechselt ein Kanal den Kalender (auch von einem
+  stillgelegten Kalender oder als Tausch zweier Kalender), gibt der Katalog-Sync in derselben
+  Transaktion zuerst alle im Lauf vergebenen Kanäle frei und weist sie danach genau dem Kalender zu,
+  den Strapi nennt. Schlägt das Schreiben fehl, protokolliert der Lauf `databaseError`, nicht
+  `strapiUnavailable`.
+- **Verworfene Einträge:** Ein Strapi-Eintrag, der die Validierung nicht besteht (z. B. ein
+  vertippter Freigabelink), gilt nicht als zurückgezogen. Sein Kalender behält den letzten gültigen
+  Stand und wird nicht stillgelegt. Nennt ein verworfener Eintrag nicht einmal einen Slug, legt der
+  Lauf gar keinen Kalender still.
 - **Temporärer Fehler** (Timeout/Netz/5xx/429): letzten Stand behalten, Kalender `stale`, weiter
   ausliefern.
 - **Beschädigt/zu groß/Recurrence-Limit:** keine destruktive Übernahme; `stale` (mit Vorstand) bzw.

@@ -43,6 +43,19 @@ describe('PostsController event range', () => {
     );
   });
 
+  it('counts the default end of a range from the given `from`, not from today', async () => {
+    const { controller, getEvents } = harness();
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
+
+    // A start in the past used to get `to = today + max`, a span over the limit.
+    await controller.events(locale, { from: '2026-05-01' });
+
+    expect(getEvents).toHaveBeenCalledWith(
+      locale,
+      expect.objectContaining({ from: '2026-05-01', to: '2027-06-05' }),
+    );
+  });
+
   it('still honours an explicit range', async () => {
     const { controller, getEvents } = harness();
 

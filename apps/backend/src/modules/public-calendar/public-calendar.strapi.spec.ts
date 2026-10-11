@@ -62,6 +62,16 @@ describe('validateCatalog', () => {
     expect(result.received).toBe(3);
     expect(result.rejected).toBe(2);
     expect(result.definitions.map((d) => d.slug)).toEqual(['beispielkalender-a']);
+    // Rejected, not withdrawn: the sync must not retire these calendars.
+    expect(result.rejectedSlugs).toEqual(['boese', 'privat']);
+    expect(result.rejectedWithoutSlug).toBe(false);
+  });
+
+  it('flags a rejected entry that does not name a slug', () => {
+    const result = validateCatalog([deEntry(), { name: 'Ohne Slug' }, null], []);
+    expect(result.rejected).toBe(2);
+    expect(result.rejectedSlugs).toEqual([]);
+    expect(result.rejectedWithoutSlug).toBe(true);
   });
 
   it('rejects a bad slug and a bad colour', () => {

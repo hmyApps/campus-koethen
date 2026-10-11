@@ -42,11 +42,12 @@ describe('PublicCalendarController date range', () => {
     await controller.aggregated(locale, { calendar: 'beispielkalender-a' });
     const late = getAggregatedEvents.mock.calls[1]! as [string[], Date, Date];
 
-    expect(early[1].toISOString()).toBe('2026-03-01T00:00:00.000Z');
-    expect(late[1].toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    // Berlin days: midnight CET is 23:00 UTC, midnight CEST 22:00 UTC.
+    expect(early[1].toISOString()).toBe('2026-02-28T23:00:00.000Z');
+    expect(late[1].toISOString()).toBe('2026-08-31T22:00:00.000Z');
     // The lookahead end moves with it, by exactly the configured window.
-    expect(early[2].toISOString()).toBe('2027-04-05T23:59:59.999Z');
-    expect(late[2].toISOString()).toBe('2027-10-06T23:59:59.999Z');
+    expect(early[2].toISOString()).toBe('2027-04-05T21:59:59.999Z');
+    expect(late[2].toISOString()).toBe('2027-10-06T21:59:59.999Z');
   });
 
   it('advertises the full imported horizon and request size for the app list', async () => {
@@ -75,7 +76,7 @@ describe('PublicCalendarController date range', () => {
     await controller.aggregated(locale, { calendar: 'beispielkalender-a' });
 
     const [, from] = getAggregatedEvents.mock.calls[0]! as [string[], Date, Date];
-    expect(from.toISOString()).toBe('2026-07-21T00:00:00.000Z');
+    expect(from.toISOString()).toBe('2026-07-20T22:00:00.000Z');
   });
 
   it('advertises the Berlin day as the start of the app list horizon', async () => {
@@ -105,8 +106,41 @@ describe('PublicCalendarController date range', () => {
     });
 
     const [, from, to] = getAggregatedEvents.mock.calls[0]! as [string[], Date, Date];
-    expect(from.toISOString()).toBe('2026-05-01T00:00:00.000Z');
-    expect(to.toISOString()).toBe('2026-05-31T23:59:59.999Z');
+    expect(from.toISOString()).toBe('2026-04-30T22:00:00.000Z');
+    expect(to.toISOString()).toBe('2026-05-31T21:59:59.999Z');
+  });
+
+  it('reads `from` and `to` as Berlin days and reports those days back', async () => {
+    const { controller, getAggregatedEvents } = harness();
+
+    const response = await controller.aggregated(locale, {
+      calendar: 'beispielkalender-a',
+      from: '2026-01-15',
+      to: '2026-01-15',
+    });
+
+    const [, from, to] = getAggregatedEvents.mock.calls[0]! as [string[], Date, Date];
+    // A timed event at 23:30 local on the 14th is not part of the 15th, one
+    // at 23:30 local on the 15th is.
+    expect(from.toISOString()).toBe('2026-01-14T23:00:00.000Z');
+    expect(to.toISOString()).toBe('2026-01-15T22:59:59.999Z');
+    expect(response.meta.from).toBe('2026-01-15');
+    expect(response.meta.to).toBe('2026-01-15');
+  });
+
+  it('counts the default end of a range from the given `from`, not from today', async () => {
+    const { controller, getAggregatedEvents } = harness();
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
+
+    // A start in the past used to get `to = today + max`, a span over the limit.
+    const response = await controller.aggregated(locale, {
+      calendar: 'beispielkalender-a',
+      from: '2026-05-01',
+    });
+
+    expect(getAggregatedEvents).toHaveBeenCalledTimes(1);
+    expect(response.meta.from).toBe('2026-05-01');
+    expect(response.meta.to).toBe('2027-06-05');
   });
 
   it('still rejects a malformed date, an inverted range and an over-long range', async () => {

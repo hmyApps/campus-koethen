@@ -647,3 +647,26 @@ describe('TimetableSyncService catalogue write phase', () => {
     expect(tx.timetableGroup.updateMany).not.toHaveBeenCalled();
   });
 });
+
+describe('TimetableSyncService sync window', () => {
+  const service = new TimetableSyncService(
+    {} as PrismaService,
+    {} as WebUntisClient,
+    { WEBUNTIS_LOOKBACK_DAYS: 7, WEBUNTIS_LOOKAHEAD_DAYS: 28 } as Env,
+  );
+
+  it('is anchored on the Berlin day just after local midnight', () => {
+    // 00:30 CEST on 21 July is still 20 July in UTC.
+    expect(service.windowFor(new Date('2026-07-20T22:30:00.000Z'))).toEqual({
+      from: '2026-07-14',
+      to: '2026-08-18',
+    });
+  });
+
+  it('counts whole calendar days across a daylight-saving change', () => {
+    expect(service.windowFor(new Date('2026-10-20T10:00:00.000Z'))).toEqual({
+      from: '2026-10-13',
+      to: '2026-11-17',
+    });
+  });
+});

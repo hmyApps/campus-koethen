@@ -117,6 +117,35 @@ class InMemoryStore {
     return `${prefix}-${this.sequence}`;
   }
 
+  /**
+   * `channelSlug` is `@unique` in the schema. A real database refuses a write
+   * that would give two rows the same channel; so does this stand-in.
+   */
+  private assertUniqueChannels(): void {
+    const seen = new Set<unknown>();
+    for (const row of this.calendars) {
+      const channel = row['channelSlug'];
+      if (channel === null || channel === undefined) continue;
+      if (seen.has(channel)) {
+        throw new Error('in-memory store: unique constraint failed on channelSlug');
+      }
+      seen.add(channel);
+    }
+  }
+
+  /** Applies `write` and rolls it back if it breaks a unique constraint. */
+  private guarded<T>(write: () => T): T {
+    const snapshot = this.calendars.map((row) => ({ ...row }));
+    const result = write();
+    try {
+      this.assertUniqueChannels();
+    } catch (error) {
+      this.calendars = snapshot;
+      throw error;
+    }
+    return result;
+  }
+
   readonly publicCalendar = {
     findUnique: ({ where }: Args) => {
       const row = this.calendars.find((candidate) => matches(candidate, where));
@@ -126,27 +155,30 @@ class InMemoryStore {
       Promise.resolve(
         this.calendars.filter((row) => matches(row, where)).map((row) => pick(row, select)),
       ),
-    upsert: ({ where, create, update }: Args) => {
-      const existing = this.calendars.find((row) => matches(row, where));
-      if (existing) {
-        Object.assign(existing, update);
-        return Promise.resolve({ ...existing });
-      }
-      const row = { ...CALENDAR_DEFAULTS, id: this.nextId('calendar'), ...create };
-      this.calendars.push(row);
-      return Promise.resolve({ ...row });
-    },
-    update: ({ where, data }: Args) => {
-      const row = this.calendars.find((candidate) => matches(candidate, where));
-      if (!row) throw new Error('in-memory store: calendar to update not found');
-      Object.assign(row, data);
-      return Promise.resolve({ ...row });
-    },
-    updateMany: ({ where, data }: Args) => {
-      const rows = this.calendars.filter((row) => matches(row, where));
-      for (const row of rows) Object.assign(row, data);
-      return Promise.resolve({ count: rows.length });
-    },
+    upsert: ({ where, create, update }: Args) =>
+      this.guarded(() => {
+        const existing = this.calendars.find((row) => matches(row, where));
+        if (existing) {
+          Object.assign(existing, update);
+          return Promise.resolve({ ...existing });
+        }
+        const row = { ...CALENDAR_DEFAULTS, id: this.nextId('calendar'), ...create };
+        this.calendars.push(row);
+        return Promise.resolve({ ...row });
+      }),
+    update: ({ where, data }: Args) =>
+      this.guarded(() => {
+        const row = this.calendars.find((candidate) => matches(candidate, where));
+        if (!row) throw new Error('in-memory store: calendar to update not found');
+        Object.assign(row, data);
+        return Promise.resolve({ ...row });
+      }),
+    updateMany: ({ where, data }: Args) =>
+      this.guarded(() => {
+        const rows = this.calendars.filter((row) => matches(row, where));
+        for (const row of rows) Object.assign(row, data);
+        return Promise.resolve({ count: rows.length });
+      }),
   };
 
   readonly publicCalendarEvent = {
@@ -208,8 +240,17 @@ class InMemoryStore {
     },
   };
 
-  $transaction<T>(operation: (tx: InMemoryStore) => Promise<T>): Promise<T> {
-    return operation(this);
+  /** All-or-nothing, like the database: a failed transaction leaves no trace. */
+  async $transaction<T>(operation: (tx: InMemoryStore) => Promise<T>): Promise<T> {
+    const calendars = this.calendars.map((row) => ({ ...row }));
+    const events = this.events.map((row) => ({ ...row }));
+    try {
+      return await operation(this);
+    } catch (error) {
+      this.calendars = calendars;
+      this.events = events;
+      throw error;
+    }
   }
 
   calendar(slug: string): Row {
@@ -655,6 +696,136 @@ describe('PublicCalendarSyncService lifecycle', () => {
       const titles = store.eventsOf(SLUG).map((row) => row['title']);
       expect(titles).toContain('knapp-ein-jahr');
       expect(titles).not.toContain('ein-jahr-und-eine-stunde');
+    });
+  });
+
+  describe('channel assignments (channelSlug is unique)', () => {
+    const channel = (slug: string) => ({ channel: { slug } });
+
+    it('hands a channel from a retired calendar to the calendar that now claims it', async () => {
+      strapi.de = [strapiEntry({ slug: 'alter-kalender', ...channel('stura') })];
+      await sync.syncCatalog();
+      strapi.de = [strapiEntry({ slug: 'neuer-kalender', ...channel('stura') })];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome).toMatchObject({ status: 'success', written: 1, deactivated: 1 });
+      expect(store.calendar('neuer-kalender')['channelSlug']).toBe('stura');
+      expect(store.calendar('alter-kalender')).toMatchObject({
+        isActive: false,
+        channelSlug: null,
+      });
+    });
+
+    it('moves a channel to a calendar listed before its previous owner', async () => {
+      strapi.de = [
+        strapiEntry({ slug: 'kalender-a', sortOrder: 1 }),
+        strapiEntry({ slug: 'kalender-b', sortOrder: 2, ...channel('stura') }),
+      ];
+      await sync.syncCatalog();
+      strapi.de = [
+        strapiEntry({ slug: 'kalender-a', sortOrder: 1, ...channel('stura') }),
+        strapiEntry({ slug: 'kalender-b', sortOrder: 2 }),
+      ];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome.status).toBe('success');
+      expect(store.calendar('kalender-a')['channelSlug']).toBe('stura');
+      expect(store.calendar('kalender-b')['channelSlug']).toBeNull();
+    });
+
+    it('swaps the channels of two calendars in one run', async () => {
+      strapi.de = [
+        strapiEntry({ slug: 'kalender-a', ...channel('kanal-1') }),
+        strapiEntry({ slug: 'kalender-b', ...channel('kanal-2') }),
+      ];
+      await sync.syncCatalog();
+      strapi.de = [
+        strapiEntry({ slug: 'kalender-a', ...channel('kanal-2') }),
+        strapiEntry({ slug: 'kalender-b', ...channel('kanal-1') }),
+      ];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome.status).toBe('success');
+      expect(store.calendar('kalender-a')['channelSlug']).toBe('kanal-2');
+      expect(store.calendar('kalender-b')['channelSlug']).toBe('kanal-1');
+    });
+
+    it('records a failed write as a database error, not as Strapi being unavailable', async () => {
+      strapi.de = [strapiEntry()];
+      const upsert = jest
+        .spyOn(store.publicCalendar, 'upsert')
+        .mockRejectedValue(new Error('write refused'));
+
+      const outcome = await sync.syncCatalog();
+
+      expect(upsert).toHaveBeenCalled();
+      expect(outcome.status).toBe('failed');
+      expect(store.runs[store.runs.length - 1]).toMatchObject({
+        status: 'failed',
+        errorCode: 'databaseError',
+      });
+    });
+
+    it('still records an unreachable Strapi as strapiUnavailable', async () => {
+      jest.spyOn(strapi, 'get').mockRejectedValue(new Error('connection refused'));
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome.status).toBe('failed');
+      expect(store.runs[store.runs.length - 1]).toMatchObject({
+        status: 'failed',
+        errorCode: 'strapiUnavailable',
+      });
+    });
+  });
+
+  describe('entries rejected by validation', () => {
+    it('never retires a calendar whose entry was rejected in this run', async () => {
+      strapi.de = [strapiEntry(), strapiEntry({ slug: 'zweiter-kalender' })];
+      await sync.syncCatalog();
+      // An editor mistypes the share link of the second calendar.
+      strapi.de = [
+        strapiEntry(),
+        strapiEntry({ slug: 'zweiter-kalender', googleShareUrl: 'https://example.invalid/x' }),
+      ];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome).toMatchObject({ status: 'success', rejected: 1, deactivated: 0 });
+      expect(store.calendar('zweiter-kalender')['isActive']).toBe(true);
+    });
+
+    it('retires nothing when a rejected entry does not even name its slug', async () => {
+      strapi.de = [strapiEntry(), strapiEntry({ slug: 'zweiter-kalender' })];
+      await sync.syncCatalog();
+      strapi.de = [strapiEntry(), { name: 'Ohne Slug' }];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome).toMatchObject({ status: 'success', rejected: 1, deactivated: 0 });
+      expect(store.calendar('zweiter-kalender')['isActive']).toBe(true);
+    });
+
+    it('still retires a calendar that is simply no longer published', async () => {
+      strapi.de = [
+        strapiEntry(),
+        strapiEntry({ slug: 'zweiter-kalender' }),
+        strapiEntry({ slug: 'dritter-kalender' }),
+      ];
+      await sync.syncCatalog();
+      strapi.de = [
+        strapiEntry(),
+        strapiEntry({ slug: 'zweiter-kalender', googleShareUrl: 'https://example.invalid/x' }),
+      ];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome).toMatchObject({ status: 'success', rejected: 1, deactivated: 1 });
+      expect(store.calendar('zweiter-kalender')['isActive']).toBe(true);
+      expect(store.calendar('dritter-kalender')['isActive']).toBe(false);
     });
   });
 

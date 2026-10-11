@@ -195,10 +195,12 @@ export const envSchema = z.object({
   PUBLIC_CALENDAR_STALE_AFTER_MINUTES: z.coerce.number().int().min(5).max(43_200).default(720),
   /** Fallback zone for floating (zone-less) event times only. */
   PUBLIC_CALENDAR_FALLBACK_TIME_ZONE: ianaTimeZone.default('Europe/Berlin'),
-  PUBLIC_CALENDAR_USER_AGENT: z
-    .string()
-    .min(1)
-    .default('CampusKoethen/1.2.4 (+https://dev.erikengler.campuskoethen)'),
+  /**
+   * Sent to Google with every feed download. The default names the product
+   * only: a version would go stale with the next release and a contact URL
+   * belongs to the deployment, so operators append their own via the env.
+   */
+  PUBLIC_CALENDAR_USER_AGENT: z.string().min(1).default('CampusKoethen'),
   /** API bounds: max calendars per aggregated/combined request, max date range. */
   PUBLIC_CALENDAR_API_MAX_CALENDARS: z.coerce.number().int().min(1).max(100).default(50),
   PUBLIC_CALENDAR_API_MAX_RANGE_DAYS: z.coerce.number().int().min(1).max(400).default(400),

@@ -6,6 +6,8 @@ import {
   isoDate,
   MAX_FILTER_VALUES,
   MAX_FILTER_VALUE_LENGTH,
+  MAX_PAGE,
+  paginationSchema,
   parseChannels,
   parseIsoDayUtc,
   parseTags,
@@ -239,5 +241,18 @@ describe('date range refinement on a plain object (timetable shape)', () => {
     expect(messages({ groupId: 'nope', from: '2026-08-25', to: '2026-08-26' })).toContain(
       'must be a Campus group id',
     );
+  });
+});
+
+describe('pagination parsing', () => {
+  it('bounds `page` so a huge value is a 400, not a 500 from upstream', () => {
+    expect(MAX_PAGE).toBe(10_000);
+    expect(paginationSchema.safeParse({ page: String(MAX_PAGE) }).success).toBe(true);
+    expect(paginationSchema.safeParse({ page: String(MAX_PAGE + 1) }).success).toBe(false);
+    expect(paginationSchema.safeParse({ page: '1e300' }).success).toBe(false);
+  });
+
+  it('keeps the defaults', () => {
+    expect(paginationSchema.parse({})).toEqual({ page: 1, pageSize: 20 });
   });
 });

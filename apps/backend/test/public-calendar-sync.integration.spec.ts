@@ -158,6 +158,25 @@ describe('PublicCalendarSyncService (integration)', () => {
       expect(cal2?.channelSlug).toBeNull(); // cleared on duplicate
     });
 
+    it('moves a channel to another calendar despite the unique constraint', async () => {
+      strapi.de = [
+        strapiEntry({ slug: 'cal-1', sortOrder: 1 }),
+        strapiEntry({ slug: 'cal-2', sortOrder: 2, channel: { slug: 'stura' } }),
+      ];
+      await sync.syncCatalog();
+      // The channel now belongs to the calendar listed first, and a calendar
+      // that is about to be retired still holds the other one.
+      strapi.de = [strapiEntry({ slug: 'cal-1', sortOrder: 1, channel: { slug: 'stura' } })];
+
+      const outcome = await sync.syncCatalog();
+
+      expect(outcome.status).toBe('success');
+      const cal1 = await prisma.publicCalendar.findUnique({ where: { slug: 'cal-1' } });
+      const cal2 = await prisma.publicCalendar.findUnique({ where: { slug: 'cal-2' } });
+      expect(cal1?.channelSlug).toBe('stura');
+      expect(cal2).toMatchObject({ isActive: false, channelSlug: null });
+    });
+
     it('a Strapi failure keeps the last good definitions', async () => {
       strapi.de = [strapiEntry()];
       await sync.syncCatalog();

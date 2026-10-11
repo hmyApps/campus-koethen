@@ -5,7 +5,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TtlCache } from '../../common/cache/ttl-cache';
 import { ApiError } from '../../common/errors/api-error';
 import { LocaleResolution } from '../../common/locale/locale';
-import { StrapiClient, StrapiListResponse, StrapiRequestError } from '../strapi/strapi.client';
+import { campusDayEnd, campusDayStart } from '../../common/time/campus-date';
+import {
+  parseStrapiList,
+  StrapiClient,
+  StrapiListResponse,
+  StrapiRequestError,
+} from '../strapi/strapi.client';
 import { mapChannel, mapPostDetail, mapPostListItem, mapTag } from './posts.mapper';
 import { ChannelDto, PostDetailDto, PostListItemDto, TagDto } from './posts.types';
 import { asString } from '../../common/util/coerce';
@@ -141,8 +147,7 @@ export class PostsService {
 
   private async fetch(path: string, query: Record<string, unknown>): Promise<Raw[]> {
     try {
-      const response = await this.strapi.get<StrapiListResponse<Raw>>(path, query);
-      return Array.isArray(response?.data) ? response.data : [];
+      return parseStrapiList(await this.strapi.get<unknown>(path, query)).data;
     } catch (error) {
       throw PostsService.toApiError(error);
     }
@@ -153,11 +158,22 @@ export class PostsService {
     query: Record<string, unknown>,
   ): Promise<StrapiListResponse<Raw>> {
     try {
-      const response = await this.strapi.get<StrapiListResponse<Raw>>(path, query);
-      return { data: Array.isArray(response?.data) ? response.data : [], meta: response?.meta };
+      return parseStrapiList(await this.strapi.get<unknown>(path, query));
     } catch (error) {
       throw PostsService.toApiError(error);
     }
+  }
+
+  /**
+   * A post is reachable only through an active channel — the detail route
+   * applies {@link ACTIVE_CHANNEL_FILTER} — so naming a channel explicitly
+   * must not bring back posts of a deactivated one: the feed would link to a
+   * detail that answers 404.
+   */
+  private static channelFilter(channels: string[]): Record<string, unknown> {
+    return channels.length > 0
+      ? { slug: { $in: channels }, ...ACTIVE_CHANNEL_FILTER }
+      : ACTIVE_CHANNEL_FILTER;
   }
 
   private static toApiError(error: unknown): ApiError {
@@ -341,11 +357,7 @@ export class PostsService {
       $and: validityFilter(new Date().toISOString()),
     };
 
-    if (query.channels.length > 0) {
-      filters['channels'] = { slug: { $in: query.channels } };
-    } else {
-      filters['channels'] = ACTIVE_CHANNEL_FILTER;
-    }
+    filters['channels'] = PostsService.channelFilter(query.channels);
 
     if (query.tags.length > 0) {
       filters['tag'] = { slug: { $in: query.tags }, isActive: { $eq: true } };
@@ -479,8 +491,9 @@ export class PostsService {
       };
     }
 
-    const fromDate = `${query.from}T00:00:00.000Z`;
-    const toDate = `${query.to}T23:59:59.999Z`;
+    // `from` and `to` are Europe/Berlin days, not UTC days.
+    const fromDate = campusDayStart(query.from).toISOString();
+    const toDate = campusDayEnd(query.to).toISOString();
 
     const filters: Record<string, unknown> = {
       tag: { slug: { $eq: 'event' }, isActive: { $eq: true } },
@@ -496,11 +509,7 @@ export class PostsService {
       ],
     };
 
-    if (query.channels.length > 0) {
-      filters['channels'] = { slug: { $in: query.channels } };
-    } else {
-      filters['channels'] = ACTIVE_CHANNEL_FILTER;
-    }
+    filters['channels'] = PostsService.channelFilter(query.channels);
 
     const baseQuery = {
       filters,

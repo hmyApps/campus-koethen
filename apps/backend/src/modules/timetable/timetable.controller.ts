@@ -77,7 +77,7 @@ export class TimetableController {
     description: 'Searches short name, long name and department.',
   })
   @ApiQuery({ name: 'department', required: false })
-  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Max 10000.' })
   @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Max 50.' })
   @ApiQuery({ name: 'locale', required: false, enum: ['de', 'en'] })
   @ApiOkResponse({ type: TimetableGroupsResponseDto })

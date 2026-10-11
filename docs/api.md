@@ -228,13 +228,13 @@ in Strapi angelegter Tag erscheint hier — und damit in der App — ohne Codeä
 
 ### `GET /v1/posts`
 
-| Parameter  | Typ           | Standard | Regeln                                                         |
-| ---------- | ------------- | -------- | -------------------------------------------------------------- |
-| `channels` | CSV von Slugs | _fehlt_  | max. 25 Werte, je max. 100 Zeichen ⇒ sonst `400` · siehe unten |
-| `tags`     | CSV von Slugs | _fehlt_  | max. 25 Werte, je max. 100 Zeichen ⇒ sonst `400` · siehe unten |
-| `page`     | Integer >= 1  | `1`      |                                                                |
-| `pageSize` | Integer 1–50  | `20`     | Werte > 50 ⇒ `400`                                             |
-| `locale`   | `de` \| `en`  | `de`     |                                                                |
+| Parameter  | Typ             | Standard | Regeln                                                         |
+| ---------- | --------------- | -------- | -------------------------------------------------------------- |
+| `channels` | CSV von Slugs   | _fehlt_  | max. 25 Werte, je max. 100 Zeichen ⇒ sonst `400` · siehe unten |
+| `tags`     | CSV von Slugs   | _fehlt_  | max. 25 Werte, je max. 100 Zeichen ⇒ sonst `400` · siehe unten |
+| `page`     | Integer 1–10000 | `1`      | Werte > 10000 ⇒ `400`                                          |
+| `pageSize` | Integer 1–50    | `20`     | Werte > 50 ⇒ `400`                                             |
+| `locale`   | `de` \| `en`    | `de`     |                                                                |
 
 **Verhalten von `channels` — vertraglich festgeschrieben:**
 
@@ -242,8 +242,9 @@ in Strapi angelegter Tag erscheint hier — und damit in der App — ohne Codeä
 | ------------------------------ | ------------------------------------- |
 | Parameter **fehlt**            | alle aktiven Kanäle                   |
 | `?channels=` (vorhanden, leer) | **bewusst keine** Kanäle ⇒ `data: []` |
-| `?channels=campus-news`        | nur dieser Kanal                      |
+| `?channels=campus-news`        | nur dieser Kanal, sofern er aktiv ist |
 | unbekannter Slug enthalten     | wird ignoriert, kein Fehler           |
+| inaktiver Slug enthalten       | wird ignoriert, kein Fehler           |
 | mehr als 25 Slugs              | `400 VALIDATION_FAILED`               |
 
 Der Unterschied zwischen „fehlt“ und „leer“ ist wichtig: Deaktiviert der Nutzer **alle** Kanäle,
@@ -300,16 +301,19 @@ Sortierung: `publishedAt` DESC, dann `slug` ASC (deterministisch).
 
 Reiner Event-Feed für Beiträge mit dem Tag `event`.
 
-| Parameter  | Typ           | Standard           | Regeln                                                                        |
-| ---------- | ------------- | ------------------ | ----------------------------------------------------------------------------- |
-| `from`     | `YYYY-MM-DD`  | heute              | optional; „heute“ ist der Kalendertag in `Europe/Berlin`                      |
-| `to`       | `YYYY-MM-DD`  | `from` + Lookahead | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) |
-| `channels` | CSV von Slugs | _fehlt_            | max. 25 Werte, je max. 100 Zeichen                                            |
-| `page`     | Integer >= 1  | `1`                |                                                                               |
-| `pageSize` | Integer 1–50  | `20`               | Werte > 50 ⇒ `400`                                                            |
-| `locale`   | `de` \| `en`  | `de`               |                                                                               |
+| Parameter  | Typ             | Standard                | Regeln                                                                        |
+| ---------- | --------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `from`     | `YYYY-MM-DD`    | heute                   | optional; „heute“ ist der Kalendertag in `Europe/Berlin`                      |
+| `to`       | `YYYY-MM-DD`    | `from` + Maximalbereich | optional, `to >= from`, Spanne max. Server-Maximalbereich (Standard 400 Tage) |
+| `channels` | CSV von Slugs   | _fehlt_                 | max. 25 Werte, je max. 100 Zeichen                                            |
+| `page`     | Integer 1–10000 | `1`                     | Werte > 10000 ⇒ `400`                                                         |
+| `pageSize` | Integer 1–50    | `20`                    | Werte > 50 ⇒ `400`                                                            |
+| `locale`   | `de` \| `en`    | `de`                    |                                                                               |
 
 Das Abfrageintervall ist als **Überlappung** definiert: `eventStart <= to AND (eventEnd ?? eventStart) >= from`.
+`from` und `to` sind Kalendertage in `Europe/Berlin`: Das Intervall reicht von 00:00 Uhr Berliner
+Zeit am `from`-Tag bis zum Ende des `to`-Tags in Berliner Zeit. Fehlt `to`, gilt `from` plus
+Server-Maximalbereich.
 Wie im Feed nur zeitlich gültige Beiträge (`validFrom` <= jetzt <= `validUntil`).
 Sortierung: `eventStart` ASC, dann `slug` ASC (deterministisch).
 
@@ -630,7 +634,7 @@ kann statt wie ein Absturz.
 | ------------ | ------------------------ | ----------------------------------------------------------- |
 | `query`      | String, max. 100 Zeichen | Suche über Kurzname, Langname und Bereich; case-insensitive |
 | `department` | String                   | exakter Bereichsfilter (`shortName`)                        |
-| `page`       | Integer, mindestens 1    | Seite; Standard `1`                                         |
+| `page`       | Integer 1–10000          | Seite; Standard `1`; Werte > 10000 ⇒ `400`                  |
 | `pageSize`   | Integer, 1 bis 50        | Einträge pro Seite; Standard `20`                           |
 | `locale`     | `de` \| `en`             | wie überall                                                 |
 
@@ -934,6 +938,9 @@ Tagen; ihre Reichweite ist damit nicht auf eine feste Tageszahl im Client begren
 ### `GET /v1/calendars/events`
 
 Aggregierte Termine über **mehrere** ausgewählte Kalender. Das Abfrageintervall ist als **Überlappung** definiert: `startsAt <= to AND endsAt >= from`.
+`from` und `to` sind Kalendertage in `Europe/Berlin`: Das Intervall reicht von 00:00 Uhr Berliner
+Zeit am `from`-Tag bis zum Ende des `to`-Tags in Berliner Zeit. Fehlt `to`, gilt `from` plus
+Server-Maximalbereich. `meta.from` und `meta.to` geben genau diese Kalendertage zurück.
 
 | Parameter  | Typ          | Regeln                                                                                      |
 | ---------- | ------------ | ------------------------------------------------------------------------------------------- |

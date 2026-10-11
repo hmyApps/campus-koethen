@@ -26,6 +26,16 @@ describe('validateEnv', () => {
     expect(env.WEBUNTIS_SYNC_ON_BOOT).toBe(true);
   });
 
+  it('sends a neutral public-calendar User-Agent without a made-up contact URL', () => {
+    const agent = validateEnv({ ...BASE }).PUBLIC_CALENDAR_USER_AGENT;
+    expect(agent).toBe('CampusKoethen');
+    expect(agent).not.toMatch(/https?:|\d+\.\d+/);
+    expect(
+      validateEnv({ ...BASE, PUBLIC_CALENDAR_USER_AGENT: 'CampusKoethen (+https://example.org)' })
+        .PUBLIC_CALENDAR_USER_AGENT,
+    ).toBe('CampusKoethen (+https://example.org)');
+  });
+
   it('accepts a 210-day WebUntis horizon for a full semester', () => {
     expect(validateEnv({ ...BASE, WEBUNTIS_LOOKAHEAD_DAYS: '210' }).WEBUNTIS_LOOKAHEAD_DAYS).toBe(
       210,
