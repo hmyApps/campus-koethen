@@ -653,6 +653,40 @@ void main() {
       expect(find.text('Etwas ist schiefgelaufen'), findsNothing);
     });
 
+    testWidgets('refresh refetches the week and resolves a pending plan', (
+      WidgetTester tester,
+    ) async {
+      String dataState = 'pending';
+      final FakeHttpAdapter adapter = FakeHttpAdapter(
+        _withTimetableScaffolding((RequestOptions options) {
+          return FakeHttpResponse(
+            envelope(
+              timetableWeekFixture(monday),
+              meta: timetableMeta(dataState: dataState),
+            ),
+          );
+        }),
+      );
+      await pumpTimetable(tester, adapter: adapter);
+      expect(find.text('Stundenplan wird vorbereitet'), findsOneWidget);
+      int entryRequests() => adapter.requests
+          .where((RequestOptions o) => o.path.endsWith('/timetable/entries'))
+          .length;
+      final int before = entryRequests();
+
+      dataState = 'ready';
+      await tester.tap(find.byTooltip('Aktualisieren'));
+      await tester.pumpAndSettle();
+
+      expect(entryRequests(), greaterThan(before));
+      expect(find.text('Stundenplan wird vorbereitet'), findsNothing);
+      expect(find.text('Mathematik 2'), findsOneWidget);
+
+      // Leaves no poll timer behind.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('explains a disabled feature without looking broken', (
       WidgetTester tester,
     ) async {

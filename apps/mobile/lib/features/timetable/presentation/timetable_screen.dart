@@ -74,11 +74,22 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
     ref.invalidate(selectedTimetableGroupProvider);
     final List<String> groupIds = ref.read(selectedTimetableGroupIdsProvider);
     if (groupIds.isEmpty) return;
+    final DateTime weekStart = ref.read(selectedTimetableDayProvider);
+    // The aggregate only combines the per-group week entries; invalidating it
+    // alone would re-read their cached values without a new network request,
+    // so a pending plan could never resolve.
+    for (final String groupId in groupIds) {
+      ref.invalidate(
+        timetableWeekProvider(
+          TimetableWeekRequest(groupId: groupId, weekStart: weekStart),
+        ),
+      );
+    }
     ref.invalidate(
       aggregatedTimetableWeekProvider(
         AggregatedTimetableWeekRequest(
           groupIds: groupIds,
-          weekStart: ref.read(selectedTimetableDayProvider),
+          weekStart: weekStart,
         ),
       ),
     );
@@ -153,11 +164,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen>
           const LoadingView(),
         AsyncError<Loaded<Timetable>>(:final Object error)
             when loaded == null =>
-          ErrorView(
-            failure: error,
-            onRetry: () =>
-                ref.invalidate(aggregatedTimetableWeekProvider(request)),
-          ),
+          ErrorView(failure: error, onRetry: _refresh),
         // TIME-2: a refresh that fails over a plan already on screen was
         // completely silent — pull-to-refresh in flight mode simply put the
         // old week back. The banner keeps the data and says it is not fresh.
