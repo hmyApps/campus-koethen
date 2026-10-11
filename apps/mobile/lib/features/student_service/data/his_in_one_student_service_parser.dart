@@ -339,10 +339,11 @@ abstract final class HisInOneStudentServiceParser {
   ///    polling for a minute against a job that was never started; the
   ///    caller must fail closed instead of guessing (AGENTS.md §2).
   ///
-  /// Only one configuration field is handled — the semester `<select>` — the
-  /// only one any real job has offered so far; its CURRENTLY selected option
-  /// (confirmed real behaviour: the portal pre-selects the current semester)
-  /// is submitted unchanged rather than inventing a choice.
+  /// Only `<select>` settings are handled — the semester select is the only
+  /// one any real job has offered so far; each select's OWN currently
+  /// selected option (confirmed real behaviour: the portal pre-selects the
+  /// current semester) is submitted unchanged rather than inventing a
+  /// choice. Any other setting control is unrecognised.
   static JobConfiguration readJobConfiguration(
     String partialResponseXml,
     TabSwitchRequest base,
@@ -350,27 +351,59 @@ abstract final class HisInOneStudentServiceParser {
     if (!_configurationOverlayMarkers.any(partialResponseXml.contains)) {
       return const NoJobConfiguration();
     }
-    final RegExpMatch? startJob = _startJobButtonPattern.firstMatch(
-      partialResponseXml,
+    // Parse the overlay's real markup (the partial response's CDATA
+    // payloads) as DOM, so every select is bound to ITS OWN selected option
+    // regardless of attribute order. Anything ambiguous — not exactly one
+    // start button, a setting control that is not a select, or a select
+    // without exactly one pre-selected option — fails closed.
+    final dom.DocumentFragment overlay = html_parser.parseFragment(
+      _cdataPattern
+          .allMatches(partialResponseXml)
+          .map((RegExpMatch m) => m.group(1)!)
+          .join('\n'),
     );
-    final RegExpMatch? select = _configurationSelectPattern.firstMatch(
-      partialResponseXml,
-    );
-    final RegExpMatch? selected = _selectedOptionPattern.firstMatch(
-      partialResponseXml,
-    );
-    if (startJob == null || select == null || selected == null) {
-      return const UnrecognisedJobConfiguration();
+    final List<dom.Element> startButtons = overlay
+        .querySelectorAll('button')
+        .where((dom.Element b) => b.id.endsWith(':navigationBottom:startJob'))
+        .toList();
+    if (startButtons.length != 1) return const UnrecognisedJobConfiguration();
+    final dom.Element startButton = startButtons.single;
+    final String startJobId = startButton.id;
+    final String? startJobValue = startButton.attributes['value'];
+    if (startJobValue == null) return const UnrecognisedJobConfiguration();
+
+    final List<dom.Element> settings = overlay
+        .querySelectorAll('input, select, textarea')
+        .where(
+          (dom.Element e) => (e.attributes['name'] ?? e.id).contains(
+            ':jobConfiguration:settingsContainer',
+          ),
+        )
+        .toList();
+    if (settings.isEmpty) return const UnrecognisedJobConfiguration();
+    final Map<String, String> selections = <String, String>{};
+    for (final dom.Element setting in settings) {
+      final String? name = setting.attributes['name'];
+      if (setting.localName != 'select' || name == null || name.isEmpty) {
+        return const UnrecognisedJobConfiguration();
+      }
+      final List<dom.Element> chosen = setting
+          .querySelectorAll('option')
+          .where((dom.Element o) => o.attributes.containsKey('selected'))
+          .toList();
+      final String? value = chosen.length == 1
+          ? chosen.single.attributes['value']
+          : null;
+      if (value == null || selections.containsKey(name)) {
+        return const UnrecognisedJobConfiguration();
+      }
+      selections[name] = value;
     }
-    final String startJobId = startJob.group(1)!;
-    final String startJobValue = startJob.group(2)!;
-    final String selectName = select.group(1)!;
-    final String selectValue = selected.group(1)!;
 
     final Map<String, String> formData = Map<String, String>.of(base.formData)
       ..addAll(<String, String>{
         'activePageElementId': startJobId,
-        selectName: selectValue,
+        ...selections,
         startJobId: startJobValue,
       });
     return JobConfigurationSubmit(
@@ -388,16 +421,9 @@ abstract final class HisInOneStudentServiceParser {
     ':jobConfiguration:settingsContainer',
   ];
 
-  static final RegExp _startJobButtonPattern = RegExp(
-    r'''<button id="([^"]*:navigationBottom:startJob)"[^>]*value="([^"]*)"''',
-  );
-
-  static final RegExp _configurationSelectPattern = RegExp(
-    r'''<select id="[^"]*" name="([^"]*)"''',
-  );
-
-  static final RegExp _selectedOptionPattern = RegExp(
-    r'''<option value="([^"]*)" selected="selected"''',
+  static final RegExp _cdataPattern = RegExp(
+    r'<!\[CDATA\[(.*?)\]\]>',
+    dotAll: true,
   );
 
   static String _normalized(String value) =>
