@@ -170,6 +170,92 @@ void main() {
     });
   });
 
+  group('an event that ended earlier today', () {
+    test('is hidden from the current list but not before its end', () {
+      final DateTime now = DateTime(2026, 8, 20, 18);
+      final UnifiedEvent morning = timed(
+        ref: 'post:morning',
+        start: DateTime(2026, 8, 20, 8),
+        end: DateTime(2026, 8, 20, 10),
+      );
+      expect(
+        isEventVisibleInOverview(morning, now: DateTime(2026, 8, 20, 9, 59)),
+        isTrue,
+      );
+      expect(isEventVisibleInOverview(morning, now: now), isFalse);
+      expect(
+        visibleEventsInOverview(<UnifiedEvent>[morning], now: now),
+        isEmpty,
+      );
+    });
+
+    test('belongs to the past events instead', () {
+      final DateTime now = DateTime(2026, 8, 20, 18);
+      final UnifiedEvent morning = timed(
+        ref: 'post:morning',
+        start: DateTime(2026, 8, 20, 8),
+        end: DateTime(2026, 8, 20, 10),
+      );
+      final UnifiedEvent evening = timed(
+        ref: 'post:evening',
+        start: DateTime(2026, 8, 20, 19),
+        end: DateTime(2026, 8, 20, 21),
+      );
+      final List<UnifiedEvent> past = pastEventsInOverview(<UnifiedEvent>[
+        morning,
+        evening,
+      ], now: now);
+      expect(past.map((UnifiedEvent e) => e.eventRef), <String>[
+        'post:morning',
+      ]);
+    });
+  });
+
+  group('pastEventsInOverview', () {
+    test('is the exact complement of visibleEventsInOverview', () {
+      final DateTime now = DateTime(2026, 8, 20, 12);
+      final List<UnifiedEvent> events = <UnifiedEvent>[
+        timed(
+          ref: 'post:past',
+          start: DateTime(2026, 8, 19, 9),
+          end: DateTime(2026, 8, 19, 10),
+        ),
+        timed(
+          ref: 'post:running',
+          start: DateTime(2026, 8, 20, 9),
+          end: DateTime(2026, 8, 20, 14),
+        ),
+        timed(ref: 'post:noend-today', start: DateTime(2026, 8, 20, 8)),
+        timed(ref: 'post:noend-yesterday', start: DateTime(2026, 8, 19, 8)),
+        timed(
+          ref: 'post:allday-yesterday',
+          start: DateTime(2026, 8, 19),
+          allDay: true,
+        ),
+        timed(
+          ref: 'post:allday-today',
+          start: DateTime(2026, 8, 20),
+          allDay: true,
+        ),
+      ];
+      final Set<String> past = pastEventsInOverview(
+        events,
+        now: now,
+      ).map((UnifiedEvent e) => e.eventRef).toSet();
+      final Set<String> visible = visibleEventsInOverview(
+        events,
+        now: now,
+      ).map((UnifiedEvent e) => e.eventRef).toSet();
+      expect(past, <String>{
+        'post:past',
+        'post:noend-yesterday',
+        'post:allday-yesterday',
+      });
+      expect(past.intersection(visible), isEmpty);
+      expect(past.length + visible.length, events.length);
+    });
+  });
+
   group('nextVisibilityBoundary', () {
     test(
       'picks the earliest boundary strictly after now, ignoring past ones',

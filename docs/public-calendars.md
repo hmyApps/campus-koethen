@@ -182,6 +182,32 @@ lastSuccessfulSyncAt, dataStale, googleOpenUrl`. `channelSlug` verknüpft einen 
   (HTTPS, Browser-Fallback). Kein automatisches Hinzufügen zum persönlichen Google-Konto; Stundenplan
   und Moodle sind keine Google-Quellen und nicht Teil der kombinierten Ansicht.
 
+- **Eventübersicht:** führt Event-Beiträge (`/v1/posts/events`) und öffentliche Kalendertermine
+  (`/v1/calendars/events`) zusammen (`features/events`). Laufende und anstehende Events kommen aus
+  dem Server-Standardfenster; die Sichtbarkeit regelt `domain/event_visibility.dart`
+  (`eventEnd <= jetzt` blendet aus, auch für ein Event, das heute früher geendet hat).
+  - **„Ältere anzeigen“** (am Listenende und im Empty State) lädt erst auf Nutzeraktion die
+    letzten 180 Tage (`kPastEventsWindowDays`) beider Quellen — stets mit **expliziten** `from`
+    _und_ `to`, weil ein älteres Backend ein fehlendes `to` als `from` plus Maximalbereich
+    auflöst. Der Abschnitt „Vergangene Events“ enthält jedes bereits beendete Event beider
+    Fenster (dedupliziert, das aktuelle Fenster gewinnt), mit Textmarke „Vergangen“, eigenem
+    Lade- und Fehlerzustand je Quelle und demselben Quellenfilter. Ein Fehler hier blendet die
+    aktuellen Events nie aus. Der Schalter wird nicht gespeichert.
+  - **Caching:** wie bei den aktuellen Abfragen — Seite 1 der Event-Beiträge und die
+    Kalendertermine liegen unter dem expliziten Fenster im Inhaltscache und dienen offline als
+    Rückfall; eine fehlgeschlagene Abfrage löscht nie einen Cache-Eintrag.
+  - **Gemerkte Events:** Die Vergangenheitsabfrage gleicht die Verwaist-Markierung **nicht** ab.
+    Abgelaufene Event-Beiträge (`validUntil`) fehlen in `/v1/posts/events`, ohne zurückgezogen zu
+    sein, und der Kalendersync reicht nur `PUBLIC_CALENDAR_LOOKBACK_DAYS` zurück; ein Abgleich
+    würde gemerkte, tatsächlich stattgefundene Events fälschlich als „Nicht mehr verfügbar“
+    markieren. Abgeglichen wird weiterhin nur nach vollständigen Live-Ladevorgängen des aktuellen
+    Fensters.
+  - **Sortierung** (im Sheet „Quellen filtern“, gespeichert unter `events.sort.v1`):
+    „Chronologisch“ (Standard: aktuelle Events nach Beginn aufsteigend, vergangene zuletzt
+    stattgefundene zuerst) oder „Neueste zuerst“ (Event-Beiträge nach `publishedAt` absteigend,
+    Kalendertermine ohne Veröffentlichungsdatum nach Beginn; Gleichstände deterministisch nach
+    Beginn, Ganztägigkeit, Titel und Referenz). Gilt für beide Abschnitte.
+
 ## 9. Strapi-Redaktionshandbuch
 
 1. Strapi öffnen → **Public Calendar → Create an entry**.

@@ -315,6 +315,16 @@ gebaut.
   überschreibt die Auswahl nie; keine Auswahl bedeutet keine öffentlichen Termine, niemals „alle".
 - Ein neuer öffentlicher Kalender erscheint **ohne App- und ohne Backend-Änderung**, sobald er in
   Strapi veröffentlicht und einmal erfolgreich synchronisiert wurde.
+- **Eventübersicht** (eigene Ansicht, getrennt vom Kalender): Event-Beiträge und öffentliche
+  Kalendertermine, dedupliziert und über einen eigenen Quellenfilter eingegrenzt. Ein Event
+  verschwindet minutengenau mit seinem Ende (ohne Ende: um Mitternacht seines Starttags,
+  ganztägig: um Mitternacht nach dem letzten Tag) — auch ein Event, das heute früher geendet hat.
+  „Ältere anzeigen“ lädt bei Bedarf die letzten 180 Tage (`from` **und** `to` immer explizit) und
+  zeigt sie in einem eigenen Abschnitt „Vergangene Events“, jedes Event mit Textmarke „Vergangen“;
+  ein Fehler der Vergangenheitsabfrage blendet die aktuellen Events nie aus. Die Sortierung im
+  Filter ist „Chronologisch“ (Standard; vergangene Events: zuletzt stattgefundene zuerst) oder
+  „Neueste zuerst“ (Event-Beiträge nach `publishedAt`, Kalendertermine nach Beginn) und gilt für
+  beide Abschnitte. Details: [`docs/public-calendars.md`](../public-calendars.md) § 8.
 
 ### 4.5 Persönliche Dienste (direkt vom Gerät)
 

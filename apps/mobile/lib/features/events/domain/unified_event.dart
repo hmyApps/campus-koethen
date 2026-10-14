@@ -38,6 +38,7 @@ class UnifiedEvent {
     this.calendarEventId,
     this.location,
     this.description,
+    this.publishedAt,
   });
 
   final String eventRef;
@@ -75,6 +76,12 @@ class UnifiedEvent {
   final String? location;
   final String? description;
 
+  /// When the event was announced: an event post's `publishedAt`. Calendar
+  /// events carry no publication date, so this is `null` for them (and for
+  /// a post whose payload named none) — the "Neueste zuerst" order then
+  /// falls back to [start].
+  final DateTime? publishedAt;
+
   /// The key filter options are grouped by: the mapped channel when one
   /// exists, otherwise the calendar's own slug for an unmapped calendar.
   /// Never both — see `docs` on `event_source_filter.dart`.
@@ -90,7 +97,8 @@ class UnifiedEvent {
       other.end == end &&
       other.allDay == allDay &&
       other.channelSlug == channelSlug &&
-      other.calendarSlug == calendarSlug;
+      other.calendarSlug == calendarSlug &&
+      other.publishedAt == publishedAt;
 
   @override
   int get hashCode => Object.hash(
@@ -102,6 +110,7 @@ class UnifiedEvent {
     allDay,
     channelSlug,
     calendarSlug,
+    publishedAt,
   );
 
   @override
@@ -125,6 +134,7 @@ UnifiedEvent postToUnifiedEvent(NewsArticle post) {
     sourceLabel: post.primaryChannel.name,
     colorArgb: _parseColorArgb(post.primaryChannel.colorHex),
     postSlug: post.slug,
+    publishedAt: post.publishedAt,
   );
 }
 

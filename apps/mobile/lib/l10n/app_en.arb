@@ -153,10 +153,29 @@
   "eventSourceFilterSelectAll": "Select all",
   "eventSourceFilterDeselectAll": "Deselect all",
   "eventSourceFilterDone": "Done",
+  "eventSortSectionTitle": "Sort order",
+  "eventSortChronological": "Chronological",
+  "eventSortChronologicalHint": "By start – past events: most recently held first",
+  "eventSortNewestFirst": "Newest first",
+  "eventSortNewestFirstHint": "Most recently announced events first",
   "eventPostsUnavailableWarning": "Event posts are currently unavailable.",
   "eventCalendarsUnavailableWarning": "Calendar events are currently unavailable.",
   "eventTruncatedWarningTitle": "Not all events are shown",
   "eventTruncatedWarningMessage": "There are more events than could be loaded.",
+  "eventPastShowAction": "Show older events",
+  "eventPastHideAction": "Hide older events",
+  "eventPastSectionTitle": "Past events",
+  "eventPastEmptyMessage": "No past events in the last {days} days.",
+  "@eventPastEmptyMessage": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "eventPastLoadingLabel": "Loading past events",
+  "eventPastPostsUnavailableWarning": "Past event posts are currently unavailable.",
+  "eventPastCalendarsUnavailableWarning": "Past calendar events are currently unavailable.",
   "eventSavedEmptyTitle": "No saved events",
   "eventSavedEmptyMessage": "Save events on the event page to find them here.",
   "eventSavedPastSectionTitle": "Past events",

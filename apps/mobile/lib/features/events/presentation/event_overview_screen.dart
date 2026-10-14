@@ -18,6 +18,7 @@ import '../../news/data/news_models.dart';
 import '../application/event_providers.dart';
 import '../application/event_source_filter.dart';
 import '../application/saved_events_controller.dart';
+import '../domain/event_past_window.dart';
 import '../domain/saved_event_snapshot.dart';
 import '../domain/saved_events_rules.dart';
 import '../domain/unified_event.dart';
@@ -25,8 +26,9 @@ import 'event_card.dart';
 import 'event_source_filter_sheet.dart';
 
 /// The dedicated event view: an aggregated, deduplicated, source-filtered
-/// list of running/upcoming events, with a "Meine gemerkten Events" toggle
-/// into the saved list — built entirely on [eventOverviewProvider] and
+/// list of running/upcoming events, with an on-demand "Vergangene Events"
+/// section ("Ältere anzeigen") and a "Meine gemerkten Events" toggle into
+/// the saved list — built entirely on [eventOverviewProvider] and
 /// [savedEventsControllerProvider].
 class EventOverviewScreen extends ConsumerStatefulWidget {
   const EventOverviewScreen({super.key});
@@ -58,13 +60,22 @@ class _EventOverviewScreenState extends ConsumerState<EventOverviewScreen>
   }
 
   Future<void> _refresh() async {
+    final bool showPast = ref.read(eventShowPastProvider);
     ref.invalidate(eventPostsOverviewProvider);
     ref.invalidate(eventCalendarsOverviewProvider);
+    if (showPast) {
+      ref.invalidate(eventPastPostsProvider);
+      ref.invalidate(eventPastCalendarsProvider);
+    }
     ref.read(eventOverviewClockProvider.notifier).recomputeNow();
     try {
       await Future.wait(<Future<void>>[
         ref.read(eventPostsOverviewProvider.future),
         ref.read(eventCalendarsOverviewProvider.future),
+        if (showPast) ...<Future<void>>[
+          ref.read(eventPastPostsProvider.future),
+          ref.read(eventPastCalendarsProvider.future),
+        ],
       ]);
     } on Object {
       // The providers carry the failure and the screen shows it per source.
@@ -244,8 +255,11 @@ class _OverviewBody extends ConsumerWidget {
         ),
     ];
 
-    if (data.events.isEmpty) {
-      final Widget empty = selectedKeys.isEmpty && data.sourceOptions.isNotEmpty
+    final bool noSourcesSelected =
+        selectedKeys.isEmpty && data.sourceOptions.isNotEmpty;
+
+    if (data.events.isEmpty && (noSourcesSelected || !data.showPast)) {
+      final Widget empty = noSourcesSelected
           ? EmptyView(
               icon: AppIcons.filter_list_off,
               title: l10n.eventOverviewNoSourcesTitle,
@@ -260,6 +274,7 @@ class _OverviewBody extends ConsumerWidget {
               icon: AppIcons.event_outlined,
               title: l10n.eventOverviewEmptyTitle,
               message: l10n.eventOverviewEmptyMessage,
+              action: const _PastToggleButton(showPast: false),
             );
 
       return RefreshIndicator(
@@ -288,6 +303,36 @@ class _OverviewBody extends ConsumerWidget {
       );
     }
 
+    // Everything above the current events, then the cards, then the past
+    // toggle and — when shown — the past section. The cards stay lazily
+    // built; only the few fixed rows are built up front.
+    final List<Widget> leading = <Widget>[
+      ...notices,
+      if (data.events.isEmpty)
+        EmptyView(
+          icon: AppIcons.event_outlined,
+          title: l10n.eventOverviewEmptyTitle,
+          message: l10n.eventOverviewEmptyMessage,
+        ),
+    ];
+    final List<Widget> pastHeader = <Widget>[
+      _PastToggleButton(showPast: data.showPast),
+      if (data.showPast) ..._pastSectionHeader(context, ref, data),
+    ];
+    final List<UnifiedEvent> past = data.showPast
+        ? data.pastEvents
+        : const <UnifiedEvent>[];
+    final Map<String, NewsArticle> pastArticlesBySlug = data.showPast
+        ? <String, NewsArticle>{
+            for (final NewsArticle article
+                in ref.watch(eventPastPostsProvider).value?.articles ??
+                    const <NewsArticle>[])
+              article.slug: article,
+          }
+        : const <String, NewsArticle>{};
+    final int currentEnd = leading.length + data.events.length;
+    final int pastHeaderEnd = currentEnd + pastHeader.length;
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
@@ -298,21 +343,132 @@ class _OverviewBody extends ConsumerWidget {
           metrics.screenPadding,
           metrics.sectionGap,
         ),
-        itemCount: notices.length + data.events.length,
+        itemCount: pastHeaderEnd + past.length,
         separatorBuilder: (BuildContext context, int index) =>
             SizedBox(height: metrics.cardGap),
         itemBuilder: (BuildContext context, int index) {
-          if (index < notices.length) return notices[index];
-          final UnifiedEvent event = data.events[index - notices.length];
+          if (index < leading.length) return leading[index];
+          if (index < currentEnd) {
+            final UnifiedEvent event = data.events[index - leading.length];
+            final NewsArticle? article = event.postSlug == null
+                ? null
+                : articlesBySlug[event.postSlug];
+            return EventCard(
+              key: ValueKey<String>(event.eventRef),
+              event: event,
+              content: article?.content,
+            );
+          }
+          if (index < pastHeaderEnd) return pastHeader[index - currentEnd];
+          final UnifiedEvent event = past[index - pastHeaderEnd];
+          // The current load wins, as in the merge; a post only the past
+          // window returned brings its own content blocks.
           final NewsArticle? article = event.postSlug == null
               ? null
-              : articlesBySlug[event.postSlug];
+              : articlesBySlug[event.postSlug] ??
+                    pastArticlesBySlug[event.postSlug];
           return EventCard(
-            key: ValueKey<String>(event.eventRef),
+            key: ValueKey<String>('past:${event.eventRef}'),
             event: event,
             content: article?.content,
+            isPast: true,
           );
         },
+      ),
+    );
+  }
+
+  /// Header, per-source loading/error state and empty text of the past
+  /// section. A failing past source only ever adds a banner here — it never
+  /// touches the current events above.
+  List<Widget> _pastSectionHeader(
+    BuildContext context,
+    WidgetRef ref,
+    EventOverviewData data,
+  ) {
+    final AppLocalizations l10n = context.l10n;
+    return <Widget>[
+      Semantics(
+        header: true,
+        child: Text(
+          l10n.eventPastSectionTitle,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+      ),
+      if (data.pastLoading)
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Semantics(
+              liveRegion: true,
+              label: l10n.eventPastLoadingLabel,
+              child: const CircularProgressIndicator(),
+            ),
+          ),
+        ),
+      if (data.hasPastPostsError)
+        StatusBanner(
+          tone: StatusTone.warning,
+          icon: AppIcons.sync_problem,
+          title: l10n.eventPastPostsUnavailableWarning,
+          action: TextButton(
+            onPressed: () => ref.invalidate(eventPastPostsProvider),
+            child: Text(l10n.actionRetry),
+          ),
+        ),
+      if (data.hasPastCalendarError)
+        StatusBanner(
+          tone: StatusTone.warning,
+          icon: AppIcons.sync_problem,
+          title: l10n.eventPastCalendarsUnavailableWarning,
+          action: TextButton(
+            onPressed: () => ref.invalidate(eventPastCalendarsProvider),
+            child: Text(l10n.actionRetry),
+          ),
+        ),
+      if (data.isPastTruncated)
+        StatusBanner(
+          tone: StatusTone.info,
+          title: l10n.eventTruncatedWarningTitle,
+          message: l10n.eventTruncatedWarningMessage,
+        ),
+      if (data.pastEvents.isEmpty &&
+          !data.pastLoading &&
+          !data.hasPastPostsError &&
+          !data.hasPastCalendarError)
+        Text(
+          l10n.eventPastEmptyMessage(kPastEventsWindowDays),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+    ];
+  }
+}
+
+/// "Ältere anzeigen" / "Ältere ausblenden". The first show loads the past
+/// window; hiding it only hides the section.
+class _PastToggleButton extends ConsumerWidget {
+  const _PastToggleButton({required this.showPast});
+
+  final bool showPast;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    return Center(
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(
+            AppSizes.minTouchTarget,
+            AppSizes.minTouchTarget,
+          ),
+        ),
+        onPressed: () => ref.read(eventShowPastProvider.notifier).toggle(),
+        icon: Icon(
+          showPast ? AppIcons.keyboard_arrow_up : AppIcons.keyboard_arrow_down,
+        ),
+        label: Text(
+          showPast ? l10n.eventPastHideAction : l10n.eventPastShowAction,
+        ),
       ),
     );
   }

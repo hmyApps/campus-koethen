@@ -103,6 +103,9 @@ Future<ProviderContainer> _pumpOverview(
   List<SavedEventSnapshot> saved = const <SavedEventSnapshot>[],
   AsyncValue<EventPostsResult>? posts,
   AsyncValue<Loaded<List<PublicCalendarEvent>>>? calendars,
+  List<UnifiedEvent> pastEvents = const <UnifiedEvent>[],
+  AsyncValue<EventPostsResult>? pastPosts,
+  AsyncValue<Loaded<List<PublicCalendarEvent>>>? pastCalendars,
   Set<String> selected = const <String>{'campus-events', 'kultur'},
   List<EventSourceOption> options = _options,
   TextScaler textScaler = TextScaler.noScaling,
@@ -155,6 +158,17 @@ Future<ProviderContainer> _pumpOverview(
         (Ref ref) => resolve(calendarsValue),
       ),
       rawUnifiedEventsProvider.overrideWithValue(events),
+      eventPastPostsProvider.overrideWith(
+        (Ref ref) =>
+            resolve(pastPosts ?? AsyncData<EventPostsResult>(_postsResult())),
+      ),
+      eventPastCalendarsProvider.overrideWith(
+        (Ref ref) => resolve(
+          pastCalendars ??
+              AsyncData<Loaded<List<PublicCalendarEvent>>>(_calendarsResult()),
+        ),
+      ),
+      rawPastUnifiedEventsProvider.overrideWithValue(pastEvents),
     ],
   );
 }
@@ -571,6 +585,171 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(48));
         expect(size.height, greaterThanOrEqualTo(48));
       }
+    });
+  });
+
+  group('past events', () {
+    final UnifiedEvent pastEvent = _event(
+      ref: 'calendar:vergangen',
+      title: 'Vergangenes Sommerfest',
+      start: _now.subtract(const Duration(days: 10)),
+      end: _now
+          .subtract(const Duration(days: 10))
+          .add(const Duration(hours: 2)),
+    );
+    final UnifiedEvent endedThisMorning = _event(
+      ref: 'calendar:heute-frueh',
+      title: 'Frühstück',
+      start: _now.subtract(const Duration(hours: 4)),
+      end: _now.subtract(const Duration(hours: 2)),
+    );
+
+    testWidgets('"Ältere anzeigen" at the end of the list reveals the past '
+        'section and toggles to "Ältere ausblenden"', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(
+        tester,
+        events: <UnifiedEvent>[_event(), endedThisMorning],
+        pastEvents: <UnifiedEvent>[pastEvent],
+      );
+      await tester.pumpAndSettle();
+
+      // Ended this morning: hidden from the current list by default.
+      expect(find.text('Sommerfest'), findsOneWidget);
+      expect(find.text('Frühstück'), findsNothing);
+      expect(find.text('Vergangene Events'), findsNothing);
+
+      await tester.tap(find.text('Ältere anzeigen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Vergangene Events'), findsOneWidget);
+      expect(find.text('Frühstück'), findsOneWidget);
+      expect(find.text('Vergangenes Sommerfest'), findsOneWidget);
+      // Marked in text, not by colour alone.
+      expect(find.text('Vergangen'), findsNWidgets(2));
+      expect(find.text('Ältere ausblenden'), findsOneWidget);
+      // Most recently held first.
+      expect(
+        tester.getTopLeft(find.text('Frühstück')).dy,
+        lessThan(tester.getTopLeft(find.text('Vergangenes Sommerfest')).dy),
+      );
+
+      await tester.tap(find.text('Ältere ausblenden'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Vergangene Events'), findsNothing);
+      expect(find.text('Vergangenes Sommerfest'), findsNothing);
+      expect(find.text('Ältere anzeigen'), findsOneWidget);
+    });
+
+    testWidgets('the toggle has a 48dp touch target', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(tester, events: <UnifiedEvent>[_event()]);
+      await tester.pumpAndSettle();
+
+      final Size size = tester.getSize(
+        find.widgetWithText(OutlinedButton, 'Ältere anzeigen'),
+      );
+      expect(size.height, greaterThanOrEqualTo(48));
+      expect(size.width, greaterThanOrEqualTo(48));
+    });
+
+    testWidgets('the empty state offers "Ältere anzeigen" too', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(tester, pastEvents: <UnifiedEvent>[pastEvent]);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Keine anstehenden Events'), findsOneWidget);
+      await tester.tap(find.text('Ältere anzeigen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Keine anstehenden Events'), findsOneWidget);
+      expect(find.text('Vergangene Events'), findsOneWidget);
+      expect(find.text('Vergangenes Sommerfest'), findsOneWidget);
+      expect(find.text('Ältere ausblenden'), findsOneWidget);
+    });
+
+    testWidgets('an empty past window says so', (WidgetTester tester) async {
+      await _pumpOverview(tester, events: <UnifiedEvent>[_event()]);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ältere anzeigen'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Keine vergangenen Events in den letzten 180 Tagen.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a failing past source warns in the past section and keeps '
+        'the current events', (WidgetTester tester) async {
+      await _pumpOverview(
+        tester,
+        events: <UnifiedEvent>[_event()],
+        pastEvents: <UnifiedEvent>[pastEvent],
+        pastPosts: AsyncError<EventPostsResult>(
+          Exception('offline'),
+          StackTrace.empty,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ältere anzeigen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sommerfest'), findsOneWidget);
+      expect(
+        find.text('Vergangene Event-Beiträge sind derzeit nicht verfügbar.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Event-Beiträge sind derzeit nicht verfügbar.'),
+        findsNothing,
+      );
+      expect(find.text('Vergangenes Sommerfest'), findsOneWidget);
+      expect(find.byType(ErrorView), findsNothing);
+    });
+
+    testWidgets('a pending past load shows a labelled progress indicator', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(
+        tester,
+        events: <UnifiedEvent>[_event()],
+        pastCalendars: const AsyncLoading<Loaded<List<PublicCalendarEvent>>>(),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ältere anzeigen'));
+      await tester.pump();
+
+      expect(
+        find.bySemanticsLabel('Vergangene Events werden geladen'),
+        findsOneWidget,
+      );
+      expect(find.text('Sommerfest'), findsOneWidget);
+    });
+
+    testWidgets('the past section is in English too', (
+      WidgetTester tester,
+    ) async {
+      await _pumpOverview(
+        tester,
+        events: <UnifiedEvent>[_event()],
+        pastEvents: <UnifiedEvent>[pastEvent],
+        locale: const Locale('en'),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show older events'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Past events'), findsOneWidget);
+      expect(find.text('Hide older events'), findsOneWidget);
     });
   });
 }
