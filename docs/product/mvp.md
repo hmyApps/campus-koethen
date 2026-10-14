@@ -222,6 +222,17 @@ gebaut.
 - Sind **alle** Kanäle deaktiviert, zeigt die App einen klaren Empty State und lädt **nicht**
   stillschweigend „alle News“.
 - Inaktive Kanäle verschwinden aus der Auswahl, ohne gespeicherte Präferenzen zu beschädigen.
+- Beendete Event-Beiträge blenden Feed und Kanalseiten standardmäßig aus — nach derselben
+  Sichtbarkeitsregel wie die Event-Übersicht (`event_visibility.dart`), damit beide nie
+  widersprechen. Normale Beiträge werden nie ausgeblendet. Am Ende der geladenen Liste (und im
+  Empty State, wenn alles Geladene beendet ist) blendet „Ältere Events anzeigen (n)“ sie für die
+  laufende Sitzung wieder ein; eingeblendete beendete Events tragen das Textlabel „Beendet“.
+  Neu bewertet wird bei jedem Rebuild, beim App-Resume und per genau einem Timer zum nächsten
+  Ende; das Nachladen weiterer Seiten läuft unverändert weiter.
+- Der Feed-Filter bietet „Sortierung“: „Neueste zuerst“ (Standard, Serverreihenfolge) oder
+  „Chronologisch“ (laufende und kommende Events nach Beginn, danach die übrigen Beiträge in
+  Serverreihenfolge). Sortiert wird clientseitig über die geladenen Seiten; die Wahl wird als
+  kleiner Skalar lokal gespeichert. Kanalseiten bleiben „Neueste zuerst“.
 - Redaktionelle Regel: eigene Beiträge oder eigene Zusammenfassungen **mit Quellenlink**; keine
   Übernahme fremder Volltexte; nur eigene oder freigegebene Bilder.
 

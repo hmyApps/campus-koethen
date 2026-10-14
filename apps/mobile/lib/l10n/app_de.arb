@@ -2692,6 +2692,30 @@
   "@newsLoadMoreFailed": {},
   "newsLoadMoreRetry": "Erneut versuchen",
   "@newsLoadMoreRetry": {},
+  "newsSortSectionTitle": "Sortierung",
+  "@newsSortSectionTitle": {},
+  "newsSortNewest": "Neueste zuerst",
+  "@newsSortNewest": {},
+  "newsSortChronological": "Chronologisch",
+  "@newsSortChronological": {},
+  "newsSortChronologicalHint": "Events nach Beginn, danach die übrigen Beiträge",
+  "@newsSortChronologicalHint": {},
+  "newsShowEndedEvents": "Ältere Events anzeigen ({count})",
+  "@newsShowEndedEvents": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "newsHideEndedEvents": "Ältere Events ausblenden",
+  "@newsHideEndedEvents": {},
+  "newsEventEndedLabel": "Beendet",
+  "@newsEventEndedLabel": {},
+  "newsAllEventsEndedTitle": "Keine aktuellen Beiträge",
+  "@newsAllEventsEndedTitle": {},
+  "newsAllEventsEndedMessage": "Alle bisher geladenen Beiträge sind bereits beendete Events.",
+  "@newsAllEventsEndedMessage": {},
   "newsNoContent": "Für diesen Beitrag liegt kein Text vor.",
   "@newsNoContent": {},
   "newsAgeJustNow": "gerade eben",
