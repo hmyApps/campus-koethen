@@ -77,6 +77,10 @@ abstract final class PreferenceKeys {
   /// not a standing preference, so there is no seen-slugs ledger.
   static const String newsTagFilterSelected = 'news.tags.filter.selected.v1';
 
+  /// The news feed's sort order: `newest` (server order, default) or
+  /// `chronological` (event posts by start, then the rest). A scalar.
+  static const String newsFeedSort = 'news.feed.sort.v1';
+
   // --- Public calendars (Y-of-X selection, non-sensitive) ------------------
 
   /// Schema version of the public-calendar selection store.

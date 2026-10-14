@@ -48,13 +48,10 @@ bool isEndedEventPost(NewsArticle article, {required DateTime now}) {
 DateTime? nextNewsFeedBoundary(
   List<NewsArticle> loaded, {
   required DateTime now,
-}) => nextVisibilityBoundary(
-  <UnifiedEvent>[
-    for (final NewsArticle article in loaded)
-      if (article.isEventPost) postToUnifiedEvent(article),
-  ],
-  now: now,
-);
+}) => nextVisibilityBoundary(<UnifiedEvent>[
+  for (final NewsArticle article in loaded)
+    if (article.isEventPost) postToUnifiedEvent(article),
+], now: now);
 
 /// The loaded articles as the feed renders them.
 @immutable
@@ -95,8 +92,7 @@ NewsFeedArrangement arrangeNewsFeed(
     for (final NewsArticle article in loaded)
       if (isEndedEventPost(article, now: now)) article.slug,
   };
-  bool keep(NewsArticle article) =>
-      showEnded || !ended.contains(article.slug);
+  bool keep(NewsArticle article) => showEnded || !ended.contains(article.slug);
 
   final List<NewsArticle> articles;
   switch (sort) {
