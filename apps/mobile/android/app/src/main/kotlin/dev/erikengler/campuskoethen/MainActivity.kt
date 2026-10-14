@@ -6,6 +6,7 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.TagLostException
 import android.nfc.tech.IsoDep
+import android.os.BadParcelableException
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,6 +15,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     companion object {
@@ -141,11 +143,11 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     }
 
     private fun connectTag(tag: Tag, sessionGeneration: Int) {
-        ioExecutor.execute {
+        runOnIo(onRejected = { completeStartError(sessionGeneration, "cancelled") }) {
             val isoDep = IsoDep.get(tag)
             if (isoDep == null) {
                 completeStartError(sessionGeneration, "unsupported_tag")
-                return@execute
+                return@runOnIo
             }
             try {
                 isoDep.timeout = TRANSCEIVE_TIMEOUT_MS
@@ -153,18 +155,18 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             } catch (_: TagLostException) {
                 closeQuietly(isoDep)
                 completeStartError(sessionGeneration, "tag_lost")
-                return@execute
+                return@runOnIo
             } catch (_: IOException) {
                 closeQuietly(isoDep)
                 completeStartError(sessionGeneration, "tag_lost")
-                return@execute
+                return@runOnIo
             }
 
             val startResult: MethodChannel.Result?
             synchronized(stateLock) {
                 if (generation != sessionGeneration || pendingStartResult == null) {
                     closeQuietly(isoDep)
-                    return@execute
+                    return@runOnIo
                 }
                 activeIsoDep = isoDep
                 startResult = pendingStartResult
@@ -194,7 +196,7 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             sessionGeneration = generation
         }
 
-        ioExecutor.execute {
+        runOnIo(onRejected = { result.error("cancelled", "NFC session cancelled.", null) }) {
             try {
                 val response = isoDep.transceive(command)
                 val stillActive = synchronized(stateLock) {
@@ -271,21 +273,57 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         }
     }
 
+    /**
+     * Runs [block] on the single NFC I/O thread. After onDestroy the executor
+     * is shut down; a late reader-mode callback or Dart call must then end the
+     * session with an error instead of throwing RejectedExecutionException on
+     * the binder or main thread, which would take the whole app down.
+     */
+    private fun runOnIo(onRejected: () -> Unit, block: () -> Unit) {
+        try {
+            ioExecutor.execute(block)
+        } catch (_: RejectedExecutionException) {
+            runOnUiThread { onRejected() }
+        }
+    }
+
     private fun captureExternalTag(intent: Intent?, notifyFlutter: Boolean) {
         if (intent?.action != NfcAdapter.ACTION_TECH_DISCOVERED) return
         val tag = readTag(intent) ?: return
-        if (IsoDep.get(tag) == null) return
+        val isIsoDep = try {
+            IsoDep.get(tag) != null
+        } catch (_: RuntimeException) {
+            false
+        }
+        if (!isIsoDep) return
         synchronized(stateLock) { pendingExternalTag = tag }
         if (notifyFlutter) {
             methodChannel?.invokeMethod("externalTagDiscovered", null)
         }
     }
 
+    /**
+     * Reads the dispatched tag without ever throwing.
+     *
+     * The typed `getParcelableExtra(name, Class)` is used only from API 34 on:
+     * on Android 13 (API 33) it can throw a NullPointerException while
+     * unparcelling (platform bug b/232589966, the reason AndroidX's
+     * IntentCompat also avoids it there). An NFC launch intent arrives in
+     * onCreate/onNewIntent, so any exception here crashed the app before
+     * Flutter could show anything. A malformed or foreign extra is treated
+     * like a missing tag.
+     */
     @Suppress("DEPRECATION")
-    private fun readTag(intent: Intent): Tag? = if (Build.VERSION.SDK_INT >= 33) {
-        intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
-    } else {
-        intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+    private fun readTag(intent: Intent): Tag? = try {
+        if (Build.VERSION.SDK_INT >= 34) {
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+        } else {
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG) as? Tag
+        }
+    } catch (_: BadParcelableException) {
+        null
+    } catch (_: RuntimeException) {
+        null
     }
 
     private fun closeQuietly(isoDep: IsoDep?) {
