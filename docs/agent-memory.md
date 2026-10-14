@@ -7,18 +7,19 @@ ausschließlich in `AGENTS.md`; diese Datei ergänzt sie nur um Fortschritt und 
 ## Projekt-Eckdaten
 
 - Monorepo: `apps/backend` (NestJS, Prisma, Node 24), `apps/cms` (Strapi 5), `apps/mobile` (Flutter, Riverpod, go_router, dio, hive_ce), `packages/campus-map`, `packages/openapi`.
-- Aktuelle App-Version: `2.0.2+12` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
+- Aktuelle App-Version: `2.0.3+13` (`apps/mobile/pubspec.yaml`). Vor jedem Release-Build Versionsnummer erhöhen.
 - Smoke-Check je Änderung: Release-Build (Flutter) bzw. die Gates aus `README.md`.
 - In Cloud-Sessions ist Flutter/Dart nicht installiert; Backend-Gates laufen nach `pnpm install --frozen-lockfile`.
 
 ## Verlauf
 
-| Datum      | Arbeit                                                                                                                         | Ergebnis                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| 2026-10-07 | Rekursiver Mehragenten-Bughunt (4 Runden, 19 Agenten, nur Analyse)                                                             | `docs/bughunt-audit-2026-10-07.md`: 94 validierte Bugs (9 hoch, 40 mittel, 45 niedrig)                 |
-| 2026-10-10 | Mehragenten-Bugfix-Lauf (12 Arbeitspakete, je ein Worktree, TDD)                                                               | Branch `fix/bughunt-2026-10-07`: 85 von 94 Funden behoben, 9 offen als Maintainer-Entscheidung         |
-| 2026-10-11 | Doku-Drift aufgelöst, Folgefixes und Maintainer-Entscheidungen                                                                 | Alle 94 Funde erledigt; Sicherheits-Patches, Folgefixes und G-08 umgesetzt (siehe unten)               |
-| 2026-10-11 | Zweiter Bughunt (`bughunt-audit-2026-10-10.md`) und Fix-Sprint aus einer anderen Session, validiert und nach `main` übernommen | 8 Fix-Branches über `claude/confident-meitner-m82y60`; siehe „Validierung 2026-10-11 (zweiter Sprint)“ |
+| Datum      | Arbeit                                                                                                                                            | Ergebnis                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-07 | Rekursiver Mehragenten-Bughunt (4 Runden, 19 Agenten, nur Analyse)                                                                                | `docs/bughunt-audit-2026-10-07.md`: 94 validierte Bugs (9 hoch, 40 mittel, 45 niedrig)                                |
+| 2026-10-10 | Mehragenten-Bugfix-Lauf (12 Arbeitspakete, je ein Worktree, TDD)                                                                                  | Branch `fix/bughunt-2026-10-07`: 85 von 94 Funden behoben, 9 offen als Maintainer-Entscheidung                        |
+| 2026-10-11 | Doku-Drift aufgelöst, Folgefixes und Maintainer-Entscheidungen                                                                                    | Alle 94 Funde erledigt; Sicherheits-Patches, Folgefixes und G-08 umgesetzt (siehe unten)                              |
+| 2026-10-11 | Zweiter Bughunt (`bughunt-audit-2026-10-10.md`) und Fix-Sprint aus einer anderen Session, validiert und nach `main` übernommen                    | 8 Fix-Branches über `claude/confident-meitner-m82y60`; siehe „Validierung 2026-10-11 (zweiter Sprint)“                |
+| 2026-10-14 | Release 2.0.3 auf Basis von 2.0.2: NFC-Launch-Absturz (Android), beendete Events im Feed und in der Eventübersicht, „ältere anzeigen“, Sortierung | `main` und `feat/matrix` vorher gesichert (`backup/*-2026-10-14`), danach auf 2.0.3 gesetzt; siehe „Stand 2026-10-14“ |
 
 ## Stand nach dem Bugfix-Lauf (2026-10-10)
 
@@ -85,6 +86,22 @@ gehoben; Trivy auf dem neu gebauten CMS-Image ohne Funde.
 Windows-Hinweis: Flutter-Gates scheitern in sehr langen Pfaden an MAX_PATH (`ios/Flutter/ephemeral`);
 lokal Repo-Pfad kurz halten oder per `subst` mappen. Lokale Arbeitskopie hat teils CRLF
 (`core.autocrlf=true`), Index ist LF — `format:check` im Arbeitsverzeichnis kann deshalb fälschlich rot sein.
+
+## Stand 2026-10-14
+
+Ausgangspunkt war Tag `2.0.2` (`a2dd81b`), identisch mit `main`. `feat/matrix` trug 9 Commits darüber
+(Matrix-Chat in Arbeit). Beide wurden vor dem Überschreiben gesichert: `backup/main-2026-10-14`,
+`backup/feat-matrix-2026-10-14`. Überschrieben wurde ohne Force-Push, per Commit, dessen Inhalt dem
+Release-Stand entspricht; die Matrix-Arbeit lässt sich aus dem Backup-Branch zurückholen.
+
+- Android-NFC: Der getypte `getParcelableExtra(name, Class)` wurde schon ab API 33 genutzt und kann dort
+  beim Entpacken werfen (b/232589966); ein NFC-Launch-Intent beendete damit die App. Jetzt erst ab
+  API 34, sonst der alte Aufruf, beides fehlertolerant. NFC-I/O nach `onDestroy` endet mit Fehler statt
+  `RejectedExecutionException`. Nicht auf einem Gerät reproduziert — auf Android 13 gezielt testen.
+- News-Feed und Kanalseiten blenden beendete Event-Beiträge aus (gleiche Regel wie die Eventübersicht),
+  „Ältere Events anzeigen“, Sortierung „Neueste zuerst“/„Chronologisch“ im Filter.
+- Eventübersicht: „Ältere anzeigen“ lädt die letzten 180 Tage (immer `from` und `to`), eigener Abschnitt
+  „Vergangene Events“, Sortierung „Chronologisch“/„Neueste zuerst“ im Quellenfilter.
 
 ## Offene To-dos (Priorität absteigend)
 
