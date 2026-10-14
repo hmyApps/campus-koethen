@@ -222,6 +222,17 @@ gebaut.
 - Sind **alle** Kanäle deaktiviert, zeigt die App einen klaren Empty State und lädt **nicht**
   stillschweigend „alle News“.
 - Inaktive Kanäle verschwinden aus der Auswahl, ohne gespeicherte Präferenzen zu beschädigen.
+- Beendete Event-Beiträge blenden Feed und Kanalseiten standardmäßig aus — nach derselben
+  Sichtbarkeitsregel wie die Event-Übersicht (`event_visibility.dart`), damit beide nie
+  widersprechen. Normale Beiträge werden nie ausgeblendet. Am Ende der geladenen Liste (und im
+  Empty State, wenn alles Geladene beendet ist) blendet „Ältere Events anzeigen (n)“ sie für die
+  laufende Sitzung wieder ein; eingeblendete beendete Events tragen das Textlabel „Beendet“.
+  Neu bewertet wird bei jedem Rebuild, beim App-Resume und per genau einem Timer zum nächsten
+  Ende; das Nachladen weiterer Seiten läuft unverändert weiter.
+- Der Feed-Filter bietet „Sortierung“: „Neueste zuerst“ (Standard, Serverreihenfolge) oder
+  „Chronologisch“ (laufende und kommende Events nach Beginn, danach die übrigen Beiträge in
+  Serverreihenfolge). Sortiert wird clientseitig über die geladenen Seiten; die Wahl wird als
+  kleiner Skalar lokal gespeichert. Kanalseiten bleiben „Neueste zuerst“.
 - Redaktionelle Regel: eigene Beiträge oder eigene Zusammenfassungen **mit Quellenlink**; keine
   Übernahme fremder Volltexte; nur eigene oder freigegebene Bilder.
 
@@ -304,6 +315,16 @@ gebaut.
   überschreibt die Auswahl nie; keine Auswahl bedeutet keine öffentlichen Termine, niemals „alle".
 - Ein neuer öffentlicher Kalender erscheint **ohne App- und ohne Backend-Änderung**, sobald er in
   Strapi veröffentlicht und einmal erfolgreich synchronisiert wurde.
+- **Eventübersicht** (eigene Ansicht, getrennt vom Kalender): Event-Beiträge und öffentliche
+  Kalendertermine, dedupliziert und über einen eigenen Quellenfilter eingegrenzt. Ein Event
+  verschwindet minutengenau mit seinem Ende (ohne Ende: um Mitternacht seines Starttags,
+  ganztägig: um Mitternacht nach dem letzten Tag) — auch ein Event, das heute früher geendet hat.
+  „Ältere anzeigen“ lädt bei Bedarf die letzten 180 Tage (`from` **und** `to` immer explizit) und
+  zeigt sie in einem eigenen Abschnitt „Vergangene Events“, jedes Event mit Textmarke „Vergangen“;
+  ein Fehler der Vergangenheitsabfrage blendet die aktuellen Events nie aus. Die Sortierung im
+  Filter ist „Chronologisch“ (Standard; vergangene Events: zuletzt stattgefundene zuerst) oder
+  „Neueste zuerst“ (Event-Beiträge nach `publishedAt`, Kalendertermine nach Beginn) und gilt für
+  beide Abschnitte. Details: [`docs/public-calendars.md`](../public-calendars.md) § 8.
 
 ### 4.5 Persönliche Dienste (direkt vom Gerät)
 

@@ -35,7 +35,7 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
    **Eng begrenzte, ausdrücklich beschlossene Ausnahme (nur diese):** Persönliche, besonders
    sensible Dienste dürfen aus Datenschutzgründen **direkt** vom Gerät an den jeweiligen
    offiziellen Anbieter angebunden werden, damit weder Campus-Backend noch Strapi Zugangsdaten
-   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau sieben**:
+   oder personenbezogene Inhalte erhalten. Aktuell sind das **genau sechs**:
    - der **Studenten-Mailclient** → direkt zu `mail.hs-anhalt.de` (IMAPS/SMTP; ausschließlich für
      die authentifizierte Empfängersuche EWS `ResolveNames` am festen HTTPS-Endpunkt
      `https://mail.hs-anhalt.de/EWS/Exchange.asmx`, kein Autodiscover und keine beliebigen
@@ -147,27 +147,6 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      benötigte Modell-API betreibt. HSA-GPT bekommt einen eigenen, expliziten Zustimmungsbildschirm
      statt einer Checkbox im allgemeinen Ersteinrichtungs-Assistenten, da die Verbindung direkt vom Gerät
      erfolgt und die Antworten HAWKIs eigene sind, nicht die von Campus Köthen.
-   - der **Campus-Chat (Matrix)** → direkt und **nur** zur exakten Origin eines Matrix-Homeservers.
-     Die Adresse ist **nie** eine Quellcode-Konstante, sondern kommt als `MATRIX_HOMESERVER_URL` aus
-     dem Build-Environment und muss **HTTPS** sein; jede Anfrage an eine andere Origin wird vor dem
-     Senden abgewiesen, Redirects werden nicht verfolgt, `.well-known`-Discovery und eine vom Nutzer
-     gewählte Serveradresse gibt es nicht. Die Anmeldung erfolgt mit Matrix-Benutzername und Passwort
-     (Testbetrieb) beziehungsweise später über die Konten der Hochschule Anhalt; das Passwort wird nur
-     für den Login und für eine vom Server verlangte Bestätigung beim Einrichten oder Zurücksetzen des
-     Schlüssel-Backups verwendet und **nie** gespeichert. Das Schlüssel-Backup legt die Raumschlüssel
-     nur verschlüsselt auf dem Homeserver ab; der Wiederherstellungsschlüssel wird einmal angezeigt und
-     von der App nie gespeichert. Sitzungstoken, Geräte- und Raumschlüssel sowie
-     Nachrichten liegen ausschließlich in der lokalen SDK-Datenbank, die mit SQLite3MultipleCiphers
-     verschlüsselt ist; deren Schlüssel liegt nur im Keychain/Keystore. Ende-zu-Ende-Verschlüsselung
-     (Olm/Megolm über vodozemac) ist von Anfang an Teil des Clients. Kein Push-Gateway: Synchronisation
-     nur, solange die App im Vordergrund ist. Keine Nachrichteninhalte, Raum-, Event- oder Nutzer-IDs,
-     Tokens oder Schlüssel in Logs, Fehlertexten oder Telemetrie. `−` meldet das Gerät beim Homeserver
-     ab (best effort) und löscht Datenbank und Schlüssel lokal verifiziert, auch ohne Server. Anhänge,
-     Medien und Anrufe/Meetings sind noch **nicht** freigegeben und brauchen eine eigene Ergänzung
-     dieser Regel. **Experimentell und standardmäßig aus** darf die Chat-Oberfläche zusätzlich
-     HSA-GPT- und Mail-Unterhaltungen anzeigen; diese laufen weiterhin ausschließlich über ihre eigenen
-     Ausnahmen oben, und zwischen den Diensten fließen keine Inhalte. Details:
-     [`docs/matrix.md`](docs/matrix.md).
 
    Für diese Ausnahmen gilt: **kein** Backend-Proxy, **keine** serverseitige Speicherung, **kein**
    Analytics-/Logging-Umweg. Zugangsdaten nur im Keychain/Keystore, sensible Inhalte nur

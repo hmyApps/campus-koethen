@@ -178,36 +178,3 @@ Hinweispflicht vor Auslegungsspielraum.
   Fremdanbindung, die ADR-0001 ausschließt.
 
 **Ergebnis:** Das Lizenz-Gate für die lokalen Benachrichtigungen ist erfüllt.
-
----
-
-# Abhängigkeits-Lizenzen — Campus-Chat (Matrix)
-
-Stand: 11. Oktober 2026 · exakte Versionen aus [`../../apps/mobile/pubspec.lock`](../../apps/mobile/pubspec.lock)
-
-| Paket                   | Version | Lizenz              | Zweck                                                     |
-| ----------------------- | ------- | ------------------- | --------------------------------------------------------- |
-| `matrix`                | 14.0.0  | `AGPL-3.0-or-later` | Matrix-Client-SDK: Sync, Räume, Olm/Megolm                |
-| `vodozemac`             | 0.8.0   | `AGPL-3.0`          | Dart-Bindings an vodozemac (Ende-zu-Ende-Verschlüsselung) |
-| `flutter_vodozemac`     | 0.8.1   | `AGPL-3.0`          | Baut und bündelt die native vodozemac-Bibliothek aus Rust |
-| `flutter_rust_bridge`   | 2.13.0  | `MIT`               | Dart↔Rust-Brücke (transitiv)                              |
-| `sqflite_common_ffi`    | 2.4.3   | `BSD-2-Clause`      | SQLite-Zugriff für die SDK-Datenbank                      |
-| `sqlite3`               | 3.5.2   | `MIT`               | Bündelt SQLite3MultipleCiphers (`MIT`) per Build-Hook     |
-| `http`                  | 1.6.0   | `BSD-3-Clause`      | Transport, nur zur konfigurierten Homeserver-Origin       |
-| `canonical_json`        | 1.1.3   | `Apache-2.0`        | transitiv (Signaturen)                                    |
-| `markdown`              | 7.3.1   | `BSD-3-Clause`      | transitiv (Nachrichtenformatierung)                       |
-| `html_unescape`         | 2.0.0   | `BSD-3-Clause`      | transitiv                                                 |
-| `random_string`         | 2.3.1   | `BSD-3-Clause`      | transitiv                                                 |
-| `blurhash_dart`         | 1.2.1   | `MIT`               | transitiv                                                 |
-| `slugify`               | 2.0.0   | `MIT`               | transitiv                                                 |
-| `unorm_dart`            | 0.3.3   | `MIT`               | transitiv                                                 |
-| `webrtc_interface`      | 1.5.1   | `MIT`               | transitiv (Schnittstelle für spätere Anrufe, ungenutzt)   |
-| `sdp_transform`         | 0.3.2   | `MIT`               | transitiv (ungenutzt)                                     |
-| `base58check`           | 2.0.0   | `MIT`               | transitiv (Wiederherstellungsschlüssel)                   |
-| `build_cli_annotations` | 2.1.1   | `MIT`               | transitiv                                                 |
-
-**Bewertung:** Lizenztyp je Paket aus der `LICENSE`-Datei der exakt eingebundenen Version gelesen.
-Die AGPL-3.0(-or-later)-Pakete sind mit der AGPL-3.0-only des Projekts vereinbar; sie werden nicht
-einvendort und nicht verändert. Alle übrigen sind permissiv. `dart run tool/audit_dependencies.dart`
-meldet für den Stand keine HIGH/CRITICAL-Advisories. Netzwerkcode führen nur `matrix` und `http`
-aus — ausschließlich über den Origin-geprüften Client (`docs/matrix.md` §2).

@@ -49,6 +49,17 @@ List<UnifiedEvent> visibleEventsInOverview(
     .where((UnifiedEvent e) => isEventVisibleInOverview(e, now: now))
     .toList(growable: false);
 
+/// Filters [events] to the ones that have already ended at [now] — the
+/// exact complement of [visibleEventsInOverview], used by the overview's
+/// "Vergangene Events" section. An event that ended earlier today is past
+/// here even though it still lies inside today's default load window.
+List<UnifiedEvent> pastEventsInOverview(
+  List<UnifiedEvent> events, {
+  required DateTime now,
+}) => events
+    .where((UnifiedEvent e) => !isEventVisibleInOverview(e, now: now))
+    .toList(growable: false);
+
 /// The earliest boundary among [events] that is still strictly after [now],
 /// or `null` when nothing is scheduled to disappear — used to arm exactly one
 /// timer rather than polling.

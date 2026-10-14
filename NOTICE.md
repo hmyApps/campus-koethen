@@ -144,22 +144,6 @@ Der Client für die studentische E-Mail nutzt zusätzlich:
 | `cookie_jar`             | In-Memory-Cookie-Jar für den QIS-Abruf                        | `MIT`          |
 | `meta`                   | Annotationen (`@immutable` u. a.)                             | `BSD-3-Clause` |
 
-Der Campus-Chat (Matrix) nutzt zusätzlich:
-
-| Paket (pub.dev)       | Zweck                                                           | Lizenz                        |
-| --------------------- | --------------------------------------------------------------- | ----------------------------- |
-| `matrix`              | Matrix-Client-SDK (Sync, Räume, Olm/Megolm-Verschlüsselung)     | `AGPL-3.0-or-later`           |
-| `vodozemac`           | Dart-Bindings an die vodozemac-Kryptobibliothek                 | `AGPL-3.0`                    |
-| `flutter_vodozemac`   | Bündelt die native vodozemac-Bibliothek (aus Rust gebaut)       | `AGPL-3.0`                    |
-| `flutter_rust_bridge` | Brücke zwischen Dart und der Rust-Bibliothek (transitiv)        | `MIT`                         |
-| `sqflite_common_ffi`  | SQLite-Zugriff für die SDK-Datenbank                            | `BSD-2-Clause`                |
-| `sqlite3`             | Bündelt SQLite3MultipleCiphers für die verschlüsselte Datenbank | `MIT` (SQLite: Public Domain) |
-| `http`                | Transport, auf die konfigurierte Homeserver-Origin beschränkt   | `BSD-3-Clause`                |
-
-Die AGPL-Pakete sind mit der AGPL-3.0-only dieses Projekts vereinbar; ihr Quellcode ist unverändert
-über pub.dev beziehungsweise <https://github.com/famedly> verfügbar. Die übrigen transitiven Pakete
-stehen unter MIT, BSD oder Apache-2.0.
-
 Die Moodle-Integration nutzt ausschließlich bereits vorhandene Abhängigkeiten (`dio`,
 `flutter_secure_storage`, `hive_ce`, `pdfrx`, `share_plus`, `html`, `url_launcher`) und führt keine
 weiteren ein. Der quellenübergreifende Kalender ebenfalls nicht: Tag-, Wochen- und Listenansicht

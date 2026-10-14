@@ -153,10 +153,29 @@
   "eventSourceFilterSelectAll": "Select all",
   "eventSourceFilterDeselectAll": "Deselect all",
   "eventSourceFilterDone": "Done",
+  "eventSortSectionTitle": "Sort order",
+  "eventSortChronological": "Chronological",
+  "eventSortChronologicalHint": "By start – past events: most recently held first",
+  "eventSortNewestFirst": "Newest first",
+  "eventSortNewestFirstHint": "Most recently announced events first",
   "eventPostsUnavailableWarning": "Event posts are currently unavailable.",
   "eventCalendarsUnavailableWarning": "Calendar events are currently unavailable.",
   "eventTruncatedWarningTitle": "Not all events are shown",
   "eventTruncatedWarningMessage": "There are more events than could be loaded.",
+  "eventPastShowAction": "Show older events",
+  "eventPastHideAction": "Hide older events",
+  "eventPastSectionTitle": "Past events",
+  "eventPastEmptyMessage": "No past events in the last {days} days.",
+  "@eventPastEmptyMessage": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "eventPastLoadingLabel": "Loading past events",
+  "eventPastPostsUnavailableWarning": "Past event posts are currently unavailable.",
+  "eventPastCalendarsUnavailableWarning": "Past calendar events are currently unavailable.",
   "eventSavedEmptyTitle": "No saved events",
   "eventSavedEmptyMessage": "Save events on the event page to find them here.",
   "eventSavedPastSectionTitle": "Past events",
@@ -538,15 +557,6 @@
   "privacyMoodleBody": "When you connect Moodle, the app communicates directly and securely with moodle.hs-anhalt.de. The Moodle sign-in does not store your password in the Moodle account; after your explicit confirmation, the same password may optionally be stored separately in the central university access. The session token issued by Moodle, your Moodle user ID, courses, materials, assignments, announcements and deadlines are stored securely or encrypted on your device. The Campus backend and Hostinger do not receive this data. “Delete Moodle connection and local data” deletes the token, user ID, cache and associated local synchronisation data; an optional central university access is retained. Hochschule Anhalt is responsible for processing on Moodle.",
   "privacyNextcloudTitle": "Nextcloud",
   "privacyNextcloudBody": "When you connect Nextcloud, the app starts the official Login Flow v2 for cloud.hs-anhalt.de in the system browser. Your university password is entered only there and is not received by Campus Köthen. Nextcloud issues the app with a revocable app password; it, the login name and user ID remain exclusively in the device-bound secure keystore. The app reads folders and files directly over encrypted WebDAV below your own user root. After your deliberate action, it can upload a local file without silently overwriting an existing file with the same name, or permanently delete a file or folder after confirmation; deleting a folder also deletes its contents. After a separate warning, the app can create a public, read-only link. Anyone with that link can read the selected resource without signing in. The link remains active on the server until you revoke it in Nextcloud; the app neither stores nor logs it and passes it immediately to the operating system's share sheet. Folder listings, file metadata, downloaded files and share links are held only temporarily in memory. Favourites you mark contain only account-scoped file paths and are encrypted in the secure keystore. When disconnecting, the app attempts to revoke the app password in Nextcloud and removes the local credential and favourites even if the server fails. The Campus backend, Strapi and Hostinger do not receive these data. Hochschule Anhalt is responsible for server-side processing in Nextcloud.",
-  "privacyChatTitle": "Campus chat (Matrix)",
-  "privacyChatBody": "When you sign in to the chat, the app connects directly and encrypted to the Matrix server {server}. Username and password are only sent to this server to sign in; the password is not stored. The server issues a session token to the app. This token, the device and room keys of the end-to-end encryption and the messages, room names and member details are only kept in a local database that is encrypted with a random key from the device-bound secure key store. New messages are only fetched while the app is open; there are no push notifications through third parties. The app only sends private read receipts. If you set up the key backup, the app stores the room keys encrypted on the Matrix server; they can only be decrypted with your recovery key, which the app shows once and does not store. If the server asks to confirm this, your password is only sent for that and not stored. When you sign out, the app signs the device out at the server and deletes the database and key on the device, even if the server cannot be reached. Campus backend, Strapi and Hostinger receive none of this data. The operator of the Matrix server is responsible for processing on the server; during the current test operation that is not Hochschule Anhalt.",
-  "@privacyChatBody": {
-    "placeholders": {
-      "server": {
-        "type": "String"
-      }
-    }
-  },
   "privacyCalendarHomeWidgetTitle": "Calendar widget",
   "privacyCalendarHomeWidgetBody": "The optional home-screen widget receives only the calendar data already merged on your device. It does not fetch data from the internet itself. By default, the app writes only times and neutral event labels to the widget storage provided by the operating system; titles and locations are included only after you explicitly enable them and may then be visible on a visible or locked device. Android stores this data in private app storage; iOS uses the App Group container shared by the app and widget. When you disable the feature, the app overwrites the widget content with an empty, redacted state. The operating system controls update timing, home-screen presentation and possible device backups.",
   "privacyRequestsTitle": "Funding applications and feedback",
@@ -1722,6 +1732,15 @@
   "newsFilterTitle": "Filters",
   "newsLoadMoreFailed": "Could not load more articles.",
   "newsLoadMoreRetry": "Try again",
+  "newsSortSectionTitle": "Sort order",
+  "newsSortNewest": "Newest first",
+  "newsSortChronological": "Chronological",
+  "newsSortChronologicalHint": "Events by start time, then the remaining posts",
+  "newsShowEndedEvents": "Show older events ({count})",
+  "newsHideEndedEvents": "Hide older events",
+  "newsEventEndedLabel": "Ended",
+  "newsAllEventsEndedTitle": "No current posts",
+  "newsAllEventsEndedMessage": "Every post loaded so far is an event that has already ended.",
   "newsNoContent": "This article has no text.",
   "newsAgeJustNow": "just now",
   "newsAgeMinutes": "{count} min ago",
@@ -2214,132 +2233,6 @@
   "hsaKiErrorNotConnected": "Connect HSA-GPT first.",
   "hsaKiErrorConsentRequired": "HSA-GPT is only connected through its own HSA-GPT consent screen.",
   "hsaKiErrorUnknown": "HSA-GPT could not be reached. Try again.",
-  "chatTitle": "Chat",
-  "chatSubtitle": "Matrix chat, end-to-end encrypted",
-  "chatNotConfigured": "Chat is not set up in this version of the app.",
-  "chatLoginIntro": "Sign in with your Matrix account. The app connects directly from this device to {server}, never through Campus Köthen. Your password is only used to sign in and is not stored.",
-  "@chatLoginIntro": {
-    "placeholders": {
-      "server": {
-        "type": "String"
-      }
-    }
-  },
-  "chatLoginPrivacy": "Messages are end-to-end encrypted and only stored encrypted on this device. New messages are only loaded while the app is open.",
-  "chatLoginTestNotice": "Test operation: the chat does not run on university servers yet.",
-  "chatUsernameLabel": "Matrix username",
-  "chatPasswordLabel": "Password",
-  "chatLoginAction": "Sign in",
-  "chatLoginMissingFields": "Enter your username and password.",
-  "chatRoomsEmpty": "No conversations yet. New chats and invitations appear here.",
-  "chatInvitesHeader": "Invitations",
-  "chatRoomsHeader": "Conversations",
-  "chatUntitledRoom": "Untitled conversation",
-  "chatInviteAccept": "Accept",
-  "chatInviteDecline": "Decline",
-  "chatUnreadCount": "{count, plural, =1{1 unread message} other{{count} unread messages}}",
-  "@chatUnreadCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "chatEncrypted": "End-to-end encrypted",
-  "chatNotEncrypted": "Not encrypted",
-  "chatOwnSender": "You",
-  "chatMessageUndecryptable": "This message cannot be decrypted on this device.",
-  "chatMessageRedacted": "Message deleted",
-  "chatMessageUnsupported": "This type of message is not supported yet.",
-  "chatMessageSending": "Sending …",
-  "chatMessageFailed": "Not sent",
-  "chatTimelineEmpty": "No messages yet.",
-  "chatLoadOlder": "Load older messages",
-  "chatComposerHint": "Write a message",
-  "chatSend": "Send",
-  "chatRoomUnavailable": "This conversation is no longer available.",
-  "chatAccountMenu": "Chat account",
-  "chatSignedInAs": "Signed in as {userId}",
-  "@chatSignedInAs": {
-    "placeholders": {
-      "userId": {
-        "type": "String"
-      }
-    }
-  },
-  "chatLogout": "Sign out and delete chat data",
-  "chatLogoutConfirmTitle": "Sign out of chat?",
-  "chatLogoutConfirmMessage": "This device is signed out at the server. Then every chat message and key on this device is deleted, even if the server cannot be reached. Without a key backup, encrypted messages can no longer be read afterwards.",
-  "chatLogoutConfirmAction": "Sign out",
-  "chatLogoutFailed": "The chat data could not be deleted completely. Try again.",
-  "chatResetLocalData": "Delete chat data on this device",
-  "chatErrorUnsupportedServer": "This chat server offers no sign-in this app supports.",
-  "chatErrorInvalidCredentials": "The username or password is wrong.",
-  "chatErrorNetwork": "No connection to the chat server. Check your internet connection.",
-  "chatErrorTimeout": "The chat server did not answer in time. Try again.",
-  "chatErrorSecurity": "The secure connection to the chat server was rejected.",
-  "chatErrorServiceUnavailable": "The chat server is unavailable right now.",
-  "chatErrorRateLimited": "Too many attempts. Wait a moment, then try again.",
-  "chatErrorInvalidResponse": "The chat server answered unexpectedly.",
-  "chatErrorSecureStorage": "Secure storage is not available.",
-  "chatErrorDatabase": "The encrypted chat data on this device cannot be opened.",
-  "chatErrorEncryption": "End-to-end encryption is not available on this device, so the chat stays off.",
-  "chatErrorNotConnected": "Sign in to the chat first.",
-  "chatErrorSendFailed": "The message could not be sent.",
-  "chatErrorUnknown": "The chat cannot be reached right now. Try again.",
-  "chatErrorInvalidRecoveryKey": "This recovery key does not match. Check what you entered.",
-  "chatErrorPasswordRequired": "The chat server wants this step confirmed with your Matrix password.",
-  "chatKeyBackupTitle": "Key backup",
-  "chatKeyBackupUnavailable": "End-to-end encryption is not available on this device.",
-  "chatKeyBackupReady": "The key backup is set up and unlocked on this device. Encrypted messages can be read again after signing out or on new devices.",
-  "chatKeyBackupNotSetUpBody": "Without a key backup, encrypted messages are lost when you sign out or switch devices. Setting it up gives you a recovery key. Keep it safe, for example in a password manager.",
-  "chatKeyBackupSetUpAction": "Set up",
-  "chatKeyBackupLockedBody": "Your account already has a key backup. Enter your recovery key to read older encrypted messages on this device.",
-  "chatRecoveryKeyLabel": "Recovery key",
-  "chatKeyBackupUnlockAction": "Unlock",
-  "chatKeyBackupUnlocked": "Key backup unlocked.",
-  "chatKeyBackupLostKey": "Lost your recovery key?",
-  "chatKeyBackupResetTitle": "Reset the key backup?",
-  "chatKeyBackupResetMessage": "A new key backup with a new recovery key is created. Messages only the old key can open stay unreadable. You will have to confirm your other devices again afterwards.",
-  "chatKeyBackupResetAction": "Reset",
-  "chatKeyBackupPasswordPrompt": "Confirm this step with your Matrix password. It is only used for this and not stored.",
-  "chatKeyBackupConfirmAction": "Confirm",
-  "chatRecoveryKeyShownTitle": "Your recovery key",
-  "chatRecoveryKeyShownBody": "Keep this key safe. The app does not store it and will not show it again. Without it, encrypted messages cannot be read on new devices.",
-  "chatRecoveryKeyCopy": "Copy",
-  "chatRecoveryKeyCopied": "Recovery key copied.",
-  "chatRecoveryKeySavedConfirm": "I have stored the recovery key safely.",
-  "chatRecoveryKeyDone": "Done",
-  "chatKeyBackupBannerSetUp": "Set up the key backup so encrypted messages are not lost.",
-  "chatKeyBackupBannerLocked": "Unlock the key backup to read older encrypted messages.",
-  "chatErrorInvalidUserId": "That is not a valid Matrix ID. Example: @name:server",
-  "chatErrorNotAllowed": "The chat server does not allow this.",
-  "chatErrorNotFound": "This person or conversation was not found on the chat server.",
-  "chatErrorSessionEnded": "Your chat session was ended, for example from another device. The chat data on this device was deleted. Sign in again.",
-  "chatNewChat": "New chat",
-  "chatNewDirect": "Direct message",
-  "chatNewGroup": "Group",
-  "chatPeerLabel": "Matrix ID or username",
-  "chatPeerHint": "@name:server",
-  "chatGroupNameLabel": "Group name",
-  "chatGroupInviteesLabel": "Members (Matrix IDs, separated by commas)",
-  "chatStartAction": "Start chat",
-  "chatCreateGroupAction": "Create group",
-  "chatNewChatEncrypted": "New chats are end-to-end encrypted.",
-  "chatPreviewLine": "{sender}: {text}",
-  "@chatPreviewLine": {
-    "placeholders": {
-      "sender": {
-        "type": "String"
-      },
-      "text": {
-        "type": "String"
-      }
-    }
-  },
-  "chatShowPassword": "Show password",
-  "chatHidePassword": "Hide password",
-  "chatCancel": "Cancel",
   "calendarHomeWidgetTitle": "Calendar widget",
   "calendarHomeWidgetSubtitle": "Upcoming events on the device home screen",
   "calendarHomeWidgetEnable": "Enable home-screen widget",

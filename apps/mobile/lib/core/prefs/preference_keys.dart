@@ -77,6 +77,10 @@ abstract final class PreferenceKeys {
   /// not a standing preference, so there is no seen-slugs ledger.
   static const String newsTagFilterSelected = 'news.tags.filter.selected.v1';
 
+  /// The news feed's sort order: `newest` (server order, default) or
+  /// `chronological` (event posts by start, then the rest). A scalar.
+  static const String newsFeedSort = 'news.feed.sort.v1';
+
   // --- Public calendars (Y-of-X selection, non-sensitive) ------------------
 
   /// Schema version of the public-calendar selection store.
@@ -166,6 +170,10 @@ abstract final class PreferenceKeys {
 
   /// Current schema version of the event source filter store.
   static const int eventSourceStoreCurrentVersion = 1;
+
+  /// The event overview's sort order (`EventSortOrder.storageValue`):
+  /// `chronological` (default when absent or unknown) or `newestFirst`.
+  static const String eventSortOrder = 'events.sort.v1';
 
   /// `1` while the "Meine gemerkten Events" calendar switch is on. Off by
   /// default — it is an optional, opt-in source, not one of the three

@@ -41,6 +41,25 @@ void main() {
             'reader mode must stay active until both APDUs have completed; '
             'disabling it at connect time drops the in-app IsoDep tag',
       );
+      // Launch-intent robustness: an NFC dispatch intent arrives in onCreate
+      // or onNewIntent, where any exception kills the app.
+      expect(
+        activity,
+        contains('Build.VERSION.SDK_INT >= 34'),
+        reason:
+            'the typed getParcelableExtra(name, Class) can throw on API 33 '
+            '(b/232589966); it must only be used from API 34 on',
+      );
+      expect(activity, isNot(contains('SDK_INT >= 33')));
+      expect(activity, contains('catch (_: BadParcelableException)'));
+      expect(
+        activity,
+        isNot(contains('ioExecutor.execute {')),
+        reason:
+            'NFC I/O must go through runOnIo, which survives a shut-down '
+            'executor after onDestroy instead of crashing',
+      );
+      expect(activity, contains('catch (_: RejectedExecutionException)'));
       expect(manifest, isNot(contains('<service')));
       expect(activity, isNot(contains('Log.')));
       expect(activity, isNot(contains('tag.id')));

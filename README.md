@@ -86,8 +86,7 @@ Flutter ─────────┼──► sscportal.ssc.hs-anhalt.de  HISi
                  │       weiter zu untrust-sscportal.ssc.hs-anhalt.de führt
                  ├──► moodle.hs-anhalt.de         Moodle-Webservice (nur lesend)
                  ├──► cloud.hs-anhalt.de          Nextcloud Login Flow / OCS / WebDAV
-                 ├──► REQUESTS_BASE_URL           Anträge und Feedback (HTTPS)
-                 └──► MATRIX_HOMESERVER_URL       Campus-Chat, Matrix mit E2EE (HTTPS, optional)
+                 └──► REQUESTS_BASE_URL           Anträge und Feedback (HTTPS)
 ```
 
 Ein Konto spricht **immer nur eines** der beiden Notenportale — welches, wird einmalig bei der

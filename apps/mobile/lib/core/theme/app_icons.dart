@@ -39,9 +39,6 @@ abstract final class AppIcons {
   static const IconData cast_for_education = TablerIcons.school;
   static const IconData cast_for_education_outlined = TablerIcons.school;
   static const IconData category_outlined = TablerIcons.category;
-  // Chat module: a speech bubble, distinct from HSA-GPT's square one.
-  static const IconData chat_bubble = TablerIcons.message_circle_filled;
-  static const IconData chat_bubble_outline = TablerIcons.message_circle;
   static const IconData check = TablerIcons.check;
   static const IconData check_circle_outline = TablerIcons.circle_check;
   static const IconData checklist = TablerIcons.checklist;
@@ -54,7 +51,6 @@ abstract final class AppIcons {
   static const IconData cloud_off_outlined = TablerIcons.cloud_off;
   static const IconData cloud_outlined = TablerIcons.cloud;
   static const IconData construction_outlined = TablerIcons.tools;
-  static const IconData content_copy_outlined = TablerIcons.copy;
   static const IconData contact_support = TablerIcons.help_circle_filled;
   static const IconData contact_support_outlined = TablerIcons.help_circle;
   static const IconData delete_outline = TablerIcons.trash;
@@ -110,7 +106,6 @@ abstract final class AppIcons {
   static const IconData link_outlined = TablerIcons.link;
   static const IconData local_library_outlined = TablerIcons.library;
   static const IconData lock_outline = TablerIcons.lock;
-  static const IconData lock_open_outline = TablerIcons.lock_open;
   static const IconData logout = TablerIcons.logout;
   static const IconData mail = TablerIcons.mail_filled;
   static const IconData mail_outline = TablerIcons.mail;
