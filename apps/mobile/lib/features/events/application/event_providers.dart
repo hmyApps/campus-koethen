@@ -177,12 +177,14 @@ PastEventsWindow _pastWindow(Ref ref) =>
 /// failed load never deletes a cached entry.
 ///
 /// No saved-list reconciliation happens here, on purpose. The orphan flag
-/// means "the source no longer has this event", and the past window cannot
-/// prove that: public-calendar occurrences older than the backend's
-/// `PUBLIC_CALENDAR_LOOKBACK_DAYS` retention are deleted server-side even
-/// though they were never withdrawn, so reconciling a 180-day window would
-/// flag genuinely held, saved events as "Nicht mehr verfügbar". Only the
-/// current-window loads above reconcile.
+/// means "the source withdrew this event", and for ended events absence from
+/// the past window does not prove that: `/v1/posts/events` only returns posts
+/// that are still within their `validUntil`, so an event post that simply
+/// expired after its date drops out without having been withdrawn — and the
+/// public-calendar side only re-syncs `PUBLIC_CALENDAR_LOOKBACK_DAYS` back.
+/// Reconciling the past window would therefore flag genuinely held, saved
+/// events as "Nicht mehr verfügbar". Only the current-window loads above
+/// reconcile.
 final FutureProvider<EventPostsResult> eventPastPostsProvider =
     FutureProvider<EventPostsResult>((Ref ref) async {
       final String locale = ref.watch(localeCodeProvider);
