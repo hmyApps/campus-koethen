@@ -144,7 +144,16 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
 
     private fun connectTag(tag: Tag, sessionGeneration: Int) {
         runOnIo(onRejected = { completeStartError(sessionGeneration, "cancelled") }) {
-            val isoDep = IsoDep.get(tag)
+            // A Tag handed over by the system goes stale the moment the card
+            // leaves the field; touching it afterwards throws SecurityException
+            // ("Tag ... is out of date") rather than an IOException. On this
+            // worker thread any uncaught exception ends the whole process.
+            val isoDep = try {
+                IsoDep.get(tag)
+            } catch (_: RuntimeException) {
+                completeStartError(sessionGeneration, "tag_lost")
+                return@runOnIo
+            }
             if (isoDep == null) {
                 completeStartError(sessionGeneration, "unsupported_tag")
                 return@runOnIo
@@ -157,6 +166,12 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
                 completeStartError(sessionGeneration, "tag_lost")
                 return@runOnIo
             } catch (_: IOException) {
+                closeQuietly(isoDep)
+                completeStartError(sessionGeneration, "tag_lost")
+                return@runOnIo
+            } catch (_: RuntimeException) {
+                // SecurityException for a stale tag, IllegalStateException
+                // for a tag that is already closed: both mean the card is gone.
                 closeQuietly(isoDep)
                 completeStartError(sessionGeneration, "tag_lost")
                 return@runOnIo
@@ -212,6 +227,10 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             } catch (_: TagLostException) {
                 completeTransceiveError(result, sessionGeneration, "tag_lost")
             } catch (_: IOException) {
+                completeTransceiveError(result, sessionGeneration, "tag_lost")
+            } catch (_: RuntimeException) {
+                // A card pulled away mid-read surfaces as SecurityException or
+                // IllegalStateException here, not only as TagLostException.
                 completeTransceiveError(result, sessionGeneration, "tag_lost")
             }
         }
@@ -331,6 +350,8 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             isoDep?.close()
         } catch (_: IOException) {
             // No raw tag or protocol data is logged.
+        } catch (_: RuntimeException) {
+            // Closing a stale tag can throw SecurityException; nothing to do.
         }
     }
 }
