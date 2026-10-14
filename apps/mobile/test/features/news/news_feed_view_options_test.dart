@@ -20,30 +20,28 @@ ProviderContainer containerWith(KeyValueStore store) {
 
 void main() {
   group('newsFeedSortProvider', () {
-    test('defaults to newest first', () {
+    test('defaults to chronological', () {
       final ProviderContainer c = containerWith(InMemoryKeyValueStore());
-      expect(c.read(newsFeedSortProvider), NewsFeedSort.newest);
+      expect(c.read(newsFeedSortProvider), NewsFeedSort.chronological);
     });
 
     test('persists the choice as a small scalar', () async {
       final InMemoryKeyValueStore store = InMemoryKeyValueStore();
       final ProviderContainer c = containerWith(store);
-      await c
-          .read(newsFeedSortProvider.notifier)
-          .select(NewsFeedSort.chronological);
-      expect(c.read(newsFeedSortProvider), NewsFeedSort.chronological);
-      expect(store.getString(PreferenceKeys.newsFeedSort), 'chronological');
+      await c.read(newsFeedSortProvider.notifier).select(NewsFeedSort.newest);
+      expect(c.read(newsFeedSortProvider), NewsFeedSort.newest);
+      expect(store.getString(PreferenceKeys.newsFeedSort), 'newest');
 
       final ProviderContainer reopened = containerWith(store);
-      expect(reopened.read(newsFeedSortProvider), NewsFeedSort.chronological);
+      expect(reopened.read(newsFeedSortProvider), NewsFeedSort.newest);
     });
 
-    test('an unknown stored value falls back to newest', () async {
+    test('an unknown stored value falls back to chronological', () async {
       final InMemoryKeyValueStore store = InMemoryKeyValueStore();
       await store.setString(PreferenceKeys.newsFeedSort, 'bogus');
       expect(
         containerWith(store).read(newsFeedSortProvider),
-        NewsFeedSort.newest,
+        NewsFeedSort.chronological,
       );
     });
   });

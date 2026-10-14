@@ -106,13 +106,13 @@ class NewsSortSection extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               RadioListTile<NewsFeedSort>.adaptive(
-                value: NewsFeedSort.newest,
-                title: Text(l10n.newsSortNewest),
-              ),
-              RadioListTile<NewsFeedSort>.adaptive(
                 value: NewsFeedSort.chronological,
                 title: Text(l10n.newsSortChronological),
                 subtitle: Text(l10n.newsSortChronologicalHint),
+              ),
+              RadioListTile<NewsFeedSort>.adaptive(
+                value: NewsFeedSort.newest,
+                title: Text(l10n.newsSortNewest),
               ),
             ],
           ),

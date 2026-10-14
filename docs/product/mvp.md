@@ -229,10 +229,10 @@ gebaut.
   laufende Sitzung wieder ein; eingeblendete beendete Events tragen das Textlabel „Beendet“.
   Neu bewertet wird bei jedem Rebuild, beim App-Resume und per genau einem Timer zum nächsten
   Ende; das Nachladen weiterer Seiten läuft unverändert weiter.
-- Der Feed-Filter bietet „Sortierung“: „Neueste zuerst“ (Standard, Serverreihenfolge) oder
-  „Chronologisch“ (laufende und kommende Events nach Beginn, danach die übrigen Beiträge in
-  Serverreihenfolge). Sortiert wird clientseitig über die geladenen Seiten; die Wahl wird als
-  kleiner Skalar lokal gespeichert. Kanalseiten bleiben „Neueste zuerst“.
+- Der Feed-Filter bietet „Sortierung“: „Chronologisch“ (Standard; laufende und kommende Events
+  nach Beginn, danach die übrigen Beiträge in Serverreihenfolge) oder „Neueste zuerst“
+  (Serverreihenfolge). Sortiert wird clientseitig über die geladenen Seiten; die Wahl wird als
+  kleiner Skalar lokal gespeichert und gilt auch für die Kanalseiten.
 - Redaktionelle Regel: eigene Beiträge oder eigene Zusammenfassungen **mit Quellenlink**; keine
   Übernahme fremder Volltexte; nur eigene oder freigegebene Bilder.
 

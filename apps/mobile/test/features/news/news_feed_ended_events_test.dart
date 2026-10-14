@@ -251,8 +251,10 @@ void main() {
       expect(find.text('Beendet'), findsNWidgets(2));
     });
 
-    testWidgets('"Chronologisch" in the filter sheet orders events by start '
-        'and persists the choice', (WidgetTester tester) async {
+    testWidgets('the feed is chronological by default; "Neueste zuerst" in '
+        'the filter sheet restores the server order and persists', (
+      WidgetTester tester,
+    ) async {
       final InMemoryKeyValueStore store = InMemoryKeyValueStore(
         <String, Object>{},
       );
@@ -265,9 +267,9 @@ void main() {
         }),
       );
       expect(_visibleTitlesInOrder(tester), <String>[
-        'Titel plain',
-        'Titel upcoming',
         'Titel running',
+        'Titel upcoming',
+        'Titel plain',
       ]);
 
       await tester.tap(find.byTooltip('Filter'));
@@ -279,26 +281,34 @@ void main() {
         expect(tile.size!.height, greaterThanOrEqualTo(48));
       }
       expect(
+        tester
+            .widget<RadioGroup<NewsFeedSort>>(
+              find.byType(RadioGroup<NewsFeedSort>),
+            )
+            .groupValue,
+        NewsFeedSort.chronological,
+      );
+      expect(
         tester.getSemantics(find.text('Neueste zuerst')),
         isSemantics(
           isInMutuallyExclusiveGroup: true,
-          isChecked: true,
+          isChecked: false,
           hasTapAction: true,
           label: 'Neueste zuerst',
         ),
       );
 
-      await tester.tap(find.text('Chronologisch'));
+      await tester.tap(find.text('Neueste zuerst'));
       await tester.pumpAndSettle();
-      expect(store.getString(PreferenceKeys.newsFeedSort), 'chronological');
-      expect(container.read(newsFeedSortProvider), NewsFeedSort.chronological);
+      expect(store.getString(PreferenceKeys.newsFeedSort), 'newest');
+      expect(container.read(newsFeedSortProvider), NewsFeedSort.newest);
 
       Navigator.of(tester.element(find.text('Sortierung'))).pop();
       await tester.pumpAndSettle();
       expect(_visibleTitlesInOrder(tester), <String>[
-        'Titel running',
-        'Titel upcoming',
         'Titel plain',
+        'Titel upcoming',
+        'Titel running',
       ]);
     });
   });
