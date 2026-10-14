@@ -229,12 +229,12 @@ void main() {
   });
 
   group('NewsFeedSort storage value', () {
-    test('round-trips and falls back to newest', () {
+    test('round-trips and falls back to chronological', () {
       for (final NewsFeedSort sort in NewsFeedSort.values) {
         expect(NewsFeedSort.fromStorage(sort.storageValue), sort);
       }
-      expect(NewsFeedSort.fromStorage(null), NewsFeedSort.newest);
-      expect(NewsFeedSort.fromStorage('garbage'), NewsFeedSort.newest);
+      expect(NewsFeedSort.fromStorage(null), NewsFeedSort.chronological);
+      expect(NewsFeedSort.fromStorage('garbage'), NewsFeedSort.chronological);
     });
   });
 }

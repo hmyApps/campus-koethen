@@ -22,13 +22,14 @@ enum NewsFeedSort {
   /// The stable scalar persisted in `shared_preferences`.
   final String storageValue;
 
-  /// Reads a persisted value; anything unknown falls back to [newest], the
-  /// server order, so a corrupt or future value never reorders the feed.
+  /// Reads a persisted value; nothing stored, or anything unknown, falls back
+  /// to [chronological], the default: the next event the reader can still
+  /// attend belongs at the top, not the most recently published post.
   static NewsFeedSort fromStorage(String? value) {
     for (final NewsFeedSort sort in values) {
       if (sort.storageValue == value) return sort;
     }
-    return newest;
+    return chronological;
   }
 }
 

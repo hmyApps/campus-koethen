@@ -128,9 +128,9 @@ class _ChannelContentState extends ConsumerState<_ChannelContent>
         .refresh();
   }
 
-  /// A channel keeps its own newest-first order — the sort choice lives in
-  /// the main feed's filter sheet, which this screen does not offer — but
-  /// hides ended event posts by the same rule as the feed.
+  /// A channel follows the reader's feed order (chronological unless changed
+  /// in the main feed's filter sheet) and hides ended event posts by the same
+  /// rule as the feed.
   Widget _buildArticles(NewsChannelFeedState state) {
     final DateTime now = feedNow();
     syncEndedEventsTimer(state.articles, now);
@@ -138,7 +138,7 @@ class _ChannelContentState extends ConsumerState<_ChannelContent>
     final NewsFeedArrangement arrangement = arrangeNewsFeed(
       state.articles,
       now: now,
-      sort: NewsFeedSort.newest,
+      sort: ref.watch(newsFeedSortProvider),
       showEnded: ref.watch(newsShowEndedEventsProvider(scope)),
     );
     return _ChannelArticles(
