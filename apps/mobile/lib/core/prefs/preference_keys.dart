@@ -167,6 +167,10 @@ abstract final class PreferenceKeys {
   /// Current schema version of the event source filter store.
   static const int eventSourceStoreCurrentVersion = 1;
 
+  /// The event overview's sort order (`EventSortOrder.storageValue`):
+  /// `chronological` (default when absent or unknown) or `newestFirst`.
+  static const String eventSortOrder = 'events.sort.v1';
+
   /// `1` while the "Meine gemerkten Events" calendar switch is on. Off by
   /// default — it is an optional, opt-in source, not one of the three
   /// classic calendar sources every install starts with.

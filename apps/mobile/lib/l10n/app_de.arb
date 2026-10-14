@@ -243,6 +243,16 @@
   "@eventSourceFilterDeselectAll": {},
   "eventSourceFilterDone": "Fertig",
   "@eventSourceFilterDone": {},
+  "eventSortSectionTitle": "Sortierung",
+  "@eventSortSectionTitle": {},
+  "eventSortChronological": "Chronologisch",
+  "@eventSortChronological": {},
+  "eventSortChronologicalHint": "Nach Beginn – vergangene Events: zuletzt stattgefundene zuerst",
+  "@eventSortChronologicalHint": {},
+  "eventSortNewestFirst": "Neueste zuerst",
+  "@eventSortNewestFirst": {},
+  "eventSortNewestFirstHint": "Zuletzt angekündigte Events zuerst",
+  "@eventSortNewestFirstHint": {},
   "eventPostsUnavailableWarning": "Event-Beiträge sind derzeit nicht verfügbar.",
   "@eventPostsUnavailableWarning": {},
   "eventCalendarsUnavailableWarning": "Kalender-Events sind derzeit nicht verfügbar.",
@@ -251,6 +261,26 @@
   "@eventTruncatedWarningTitle": {},
   "eventTruncatedWarningMessage": "Es gibt mehr Events, als geladen werden konnten.",
   "@eventTruncatedWarningMessage": {},
+  "eventPastShowAction": "Ältere anzeigen",
+  "@eventPastShowAction": {},
+  "eventPastHideAction": "Ältere ausblenden",
+  "@eventPastHideAction": {},
+  "eventPastSectionTitle": "Vergangene Events",
+  "@eventPastSectionTitle": {},
+  "eventPastEmptyMessage": "Keine vergangenen Events in den letzten {days} Tagen.",
+  "@eventPastEmptyMessage": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "eventPastLoadingLabel": "Vergangene Events werden geladen",
+  "@eventPastLoadingLabel": {},
+  "eventPastPostsUnavailableWarning": "Vergangene Event-Beiträge sind derzeit nicht verfügbar.",
+  "@eventPastPostsUnavailableWarning": {},
+  "eventPastCalendarsUnavailableWarning": "Vergangene Kalender-Events sind derzeit nicht verfügbar.",
+  "@eventPastCalendarsUnavailableWarning": {},
   "eventSavedEmptyTitle": "Keine gemerkten Events",
   "@eventSavedEmptyTitle": {},
   "eventSavedEmptyMessage": "Merke Events auf der Eventseite, um sie hier wiederzufinden.",
