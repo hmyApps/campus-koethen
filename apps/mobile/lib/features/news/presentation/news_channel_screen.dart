@@ -13,9 +13,12 @@ import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../application/news_channel_feed_controller.dart';
+import '../application/news_feed_view_options.dart';
 import '../application/news_providers.dart';
 import '../data/news_models.dart';
+import '../domain/news_feed_arrangement.dart';
 import 'article_block.dart';
+import 'news_ended_events.dart';
 import 'news_list_screen.dart'
     show NewsLoadMoreFooter, newsFeedNotices, scrollableState;
 
@@ -117,11 +120,33 @@ class _ChannelContent extends ConsumerStatefulWidget {
   ConsumerState<_ChannelContent> createState() => _ChannelContentState();
 }
 
-class _ChannelContentState extends ConsumerState<_ChannelContent> {
+class _ChannelContentState extends ConsumerState<_ChannelContent>
+    with WidgetsBindingObserver, NewsEndedEventsRefresh<_ChannelContent> {
   Future<void> _refresh() async {
     await ref
         .read(newsChannelFeedControllerProvider(widget.channel.slug).notifier)
         .refresh();
+  }
+
+  /// A channel keeps its own newest-first order — the sort choice lives in
+  /// the main feed's filter sheet, which this screen does not offer — but
+  /// hides ended event posts by the same rule as the feed.
+  Widget _buildArticles(NewsChannelFeedState state) {
+    final DateTime now = feedNow();
+    syncEndedEventsTimer(state.articles, now);
+    final String scope = NewsFeedScopeKey.channel(widget.channel.slug);
+    final NewsFeedArrangement arrangement = arrangeNewsFeed(
+      state.articles,
+      now: now,
+      sort: NewsFeedSort.newest,
+      showEnded: ref.watch(newsShowEndedEventsProvider(scope)),
+    );
+    return _ChannelArticles(
+      channel: widget.channel,
+      state: state,
+      arrangement: arrangement,
+      scope: scope,
+    );
   }
 
   @override
@@ -152,10 +177,7 @@ class _ChannelContentState extends ConsumerState<_ChannelContent> {
                 ),
               ),
             ),
-          _ => _ChannelArticles(
-            channel: widget.channel,
-            state: feed.requireValue,
-          ),
+          _ => _buildArticles(feed.requireValue),
         },
       ),
     );
@@ -193,24 +215,42 @@ class _ChannelHeader extends StatelessWidget {
 /// The channel's own articles: same notices, same footer-triggered pagination
 /// and the same "no articles" wording pattern as the main feed, just scoped.
 class _ChannelArticles extends ConsumerWidget {
-  const _ChannelArticles({required this.channel, required this.state});
+  const _ChannelArticles({
+    required this.channel,
+    required this.state,
+    required this.arrangement,
+    required this.scope,
+  });
 
   final NewsChannel channel;
   final NewsChannelFeedState state;
+  final NewsFeedArrangement arrangement;
+  final String scope;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
     final AppMetrics metrics = context.metrics;
-    final List<NewsArticle> articles = state.articles;
+    final List<NewsArticle> articles = arrangement.articles;
     final List<Widget> notices = newsFeedNotices(
       context,
       fromCache: state.fromCache,
       cachedAt: state.cachedAt,
       translationFallback: state.translationFallback,
     );
+    final bool showFooter = state.hasMore || state.loadMoreFailed;
+    Widget footer() => NewsLoadMoreFooter(
+      page: state.page,
+      hasMore: state.hasMore,
+      isLoadingMore: state.isLoadingMore,
+      loadMoreFailed: state.loadMoreFailed,
+      onLoadMore: () => ref
+          .read(newsChannelFeedControllerProvider(channel.slug).notifier)
+          .loadMore(),
+    );
 
     if (articles.isEmpty) {
+      final bool allEnded = state.articles.isNotEmpty;
       return scrollableState(
         header: Column(
           mainAxisSize: MainAxisSize.min,
@@ -233,19 +273,33 @@ class _ChannelArticles extends ConsumerWidget {
         ),
         // Distinct from "channel not available": this channel exists, it just
         // has nothing published in it right now.
-        child: EmptyView(
-          title: l10n.newsChannelEmptyTitle,
-          message: l10n.newsChannelEmptyMessage,
-        ),
+        child: allEnded
+            ? newsAllEventsEndedView(
+                context,
+                toggle: NewsEndedEventsToggle(
+                  scope: scope,
+                  arrangement: arrangement,
+                ),
+                footer: showFooter ? footer() : null,
+              )
+            : EmptyView(
+                title: l10n.newsChannelEmptyTitle,
+                message: l10n.newsChannelEmptyMessage,
+              ),
       );
     }
 
-    final bool showFooter = state.hasMore || state.loadMoreFailed;
+    final bool showToggle = arrangement.endedCount > 0;
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.only(bottom: metrics.sectionGap),
-      itemCount: 1 + notices.length + articles.length + (showFooter ? 1 : 0),
+      itemCount:
+          1 +
+          notices.length +
+          articles.length +
+          (showToggle ? 1 : 0) +
+          (showFooter ? 1 : 0),
       separatorBuilder: (BuildContext context, int index) {
         if (index == 0) return SizedBox(height: metrics.cardGap);
         return SizedBox(height: metrics.sectionGap);
@@ -261,15 +315,13 @@ class _ChannelArticles extends ConsumerWidget {
         }
         final int articleIndex = afterHeader - notices.length;
         if (articleIndex >= articles.length) {
-          return NewsLoadMoreFooter(
-            page: state.page,
-            hasMore: state.hasMore,
-            isLoadingMore: state.isLoadingMore,
-            loadMoreFailed: state.loadMoreFailed,
-            onLoadMore: () => ref
-                .read(newsChannelFeedControllerProvider(channel.slug).notifier)
-                .loadMore(),
-          );
+          if (showToggle && articleIndex == articles.length) {
+            return NewsEndedEventsToggle(
+              scope: scope,
+              arrangement: arrangement,
+            );
+          }
+          return footer();
         }
 
         final NewsArticle article = articles[articleIndex];
@@ -278,6 +330,7 @@ class _ChannelArticles extends ConsumerWidget {
           child: ArticleBlock(
             key: ValueKey<String>(article.slug),
             article: article,
+            eventEnded: arrangement.isEnded(article),
           ),
         );
       },

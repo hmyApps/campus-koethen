@@ -18,9 +18,12 @@ import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
 import '../application/channel_subscriptions.dart';
 import '../application/news_feed_controller.dart';
+import '../application/news_feed_view_options.dart';
 import '../application/news_providers.dart';
 import '../data/news_models.dart';
+import '../domain/news_feed_arrangement.dart';
 import 'article_block.dart';
+import 'news_ended_events.dart';
 import 'news_filter_sheet.dart';
 
 /// The news feed: a masthead, one filter button and an endless run of articles
@@ -40,10 +43,25 @@ class NewsListScreen extends ConsumerStatefulWidget {
   ConsumerState<NewsListScreen> createState() => _NewsListScreenState();
 }
 
-class _NewsListScreenState extends ConsumerState<NewsListScreen> {
+class _NewsListScreenState extends ConsumerState<NewsListScreen>
+    with WidgetsBindingObserver, NewsEndedEventsRefresh<NewsListScreen> {
   Future<void> _refresh() async {
     ref.invalidate(newsChannelsProvider);
     await ref.read(newsFeedControllerProvider.future);
+  }
+
+  Widget _buildBody(NewsFeedState state) {
+    final DateTime now = feedNow();
+    syncEndedEventsTimer(state.articles, now);
+    final NewsFeedArrangement arrangement = arrangeNewsFeed(
+      state.articles,
+      now: now,
+      sort: ref.watch(newsFeedSortProvider),
+      showEnded: ref.watch(
+        newsShowEndedEventsProvider(NewsFeedScopeKey.mainFeed),
+      ),
+    );
+    return _FeedBody(state: state, arrangement: arrangement);
   }
 
   @override
@@ -73,7 +91,7 @@ class _NewsListScreenState extends ConsumerState<NewsListScreen> {
                 },
               ),
             ),
-            _ => _FeedBody(state: feed.requireValue),
+            _ => _buildBody(feed.requireValue),
           },
         ),
       ),
@@ -196,16 +214,17 @@ List<Widget> newsFeedNotices(
 ];
 
 class _FeedBody extends ConsumerWidget {
-  const _FeedBody({required this.state});
+  const _FeedBody({required this.state, required this.arrangement});
 
   final NewsFeedState state;
+  final NewsFeedArrangement arrangement;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppMetrics metrics = context.metrics;
-    final List<NewsArticle> articles = state.articles;
+    final List<NewsArticle> articles = arrangement.articles;
 
-    if (articles.isEmpty) return _EmptyFeed(state: state);
+    if (state.articles.isEmpty) return _EmptyFeed(state: state);
 
     final List<Widget> notices = newsFeedNotices(
       context,
@@ -214,11 +233,58 @@ class _FeedBody extends ConsumerWidget {
       translationFallback: state.translationFallback,
     );
     final bool showFooter = state.hasMore || state.loadMoreFailed;
+    Widget footer() => NewsLoadMoreFooter(
+      page: state.page,
+      hasMore: state.hasMore,
+      isLoadingMore: state.isLoadingMore,
+      loadMoreFailed: state.loadMoreFailed,
+      onLoadMore: () =>
+          ref.read(newsFeedControllerProvider.notifier).loadMore(),
+    );
+    const String scope = NewsFeedScopeKey.mainFeed;
+
+    // Every loaded post is an ended event: say so, offer to reveal them, and
+    // keep the footer so the next page still loads on its own.
+    if (articles.isEmpty) {
+      return scrollableState(
+        header: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const _FeedMasthead(),
+            if (notices.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.screenPadding,
+                  metrics.cardGap,
+                  metrics.screenPadding,
+                  0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: notices,
+                ),
+              ),
+          ],
+        ),
+        child: newsAllEventsEndedView(
+          context,
+          toggle: NewsEndedEventsToggle(scope: scope, arrangement: arrangement),
+          footer: showFooter ? footer() : null,
+        ),
+      );
+    }
+
+    final bool showToggle = arrangement.endedCount > 0;
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.only(bottom: metrics.sectionGap),
-      itemCount: 1 + notices.length + articles.length + (showFooter ? 1 : 0),
+      itemCount:
+          1 +
+          notices.length +
+          articles.length +
+          (showToggle ? 1 : 0) +
+          (showFooter ? 1 : 0),
       // A plain gap, not a rule: every article already draws its own card
       // border, so a hairline between two of them would just double the edge.
       separatorBuilder: (BuildContext context, int index) =>
@@ -234,14 +300,13 @@ class _FeedBody extends ConsumerWidget {
         }
         final int articleIndex = afterHeader - notices.length;
         if (articleIndex >= articles.length) {
-          return NewsLoadMoreFooter(
-            page: state.page,
-            hasMore: state.hasMore,
-            isLoadingMore: state.isLoadingMore,
-            loadMoreFailed: state.loadMoreFailed,
-            onLoadMore: () =>
-                ref.read(newsFeedControllerProvider.notifier).loadMore(),
-          );
+          if (showToggle && articleIndex == articles.length) {
+            return NewsEndedEventsToggle(
+              scope: scope,
+              arrangement: arrangement,
+            );
+          }
+          return footer();
         }
 
         final NewsArticle article = articles[articleIndex];
@@ -250,6 +315,7 @@ class _FeedBody extends ConsumerWidget {
           child: ArticleBlock(
             key: ValueKey<String>(article.slug),
             article: article,
+            eventEnded: arrangement.isEnded(article),
           ),
         );
       },
