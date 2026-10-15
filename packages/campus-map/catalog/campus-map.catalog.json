@@ -9,6 +9,7 @@
       "nameDe": "Ratke-Gebäude",
       "nameEn": "Ratke Building",
       "planKind": "schematic",
+      "siteKey": "koethen",
       "sortOrder": 10,
       "sourceAttributionDe": "Hochschule Anhalt",
       "sourceAttributionEn": "Hochschule Anhalt"
@@ -19,6 +20,7 @@
       "nameDe": "Rotes Gebäude",
       "nameEn": "Red Building",
       "planKind": "schematic",
+      "siteKey": "koethen",
       "sortOrder": 20,
       "sourceAttributionDe": "Hochschule Anhalt",
       "sourceAttributionEn": "Hochschule Anhalt"
@@ -29,6 +31,7 @@
       "nameDe": "Grünes Gebäude",
       "nameEn": "Green Building",
       "planKind": "schematic",
+      "siteKey": "koethen",
       "sortOrder": 30,
       "sourceAttributionDe": "Hochschule Anhalt",
       "sourceAttributionEn": "Hochschule Anhalt"
@@ -39,6 +42,7 @@
       "nameDe": "Weißes Gebäude",
       "nameEn": "White Building",
       "planKind": "schematic",
+      "siteKey": "koethen",
       "sortOrder": 40,
       "sourceAttributionDe": "Hochschule Anhalt",
       "sourceAttributionEn": "Hochschule Anhalt"

@@ -24,6 +24,8 @@ export interface CatalogBuilding {
   nameDe: string;
   nameEn: string;
   planKind: 'schematic';
+  /** The campus site the building stands on. */
+  siteKey: 'koethen' | 'bernburg' | 'dessau';
   sourceAttributionDe?: string;
   sourceAttributionEn?: string;
   sortOrder: number;

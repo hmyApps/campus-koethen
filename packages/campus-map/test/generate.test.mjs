@@ -84,6 +84,7 @@ test('the mobile catalogue carries the mapping Flutter needs', () => {
   assert.equal(ratke.nameDe, 'Ratke-Gebäude');
   assert.equal(ratke.nameEn, 'Ratke Building');
   assert.equal(ratke.planKind, 'schematic');
+  assert.equal(ratke.siteKey, 'koethen');
   assert.equal(ratke.sourceAttributionDe, 'Hochschule Anhalt');
   assert.equal(ratke.sourceAttributionEn, 'Hochschule Anhalt');
 
@@ -98,6 +99,7 @@ test('the mobile catalogue carries the mapping Flutter needs', () => {
     assert.equal(building.nameDe, nameDe);
     assert.equal(building.nameEn, nameEn);
     assert.equal(building.planKind, 'schematic');
+    assert.equal(building.siteKey, 'koethen', 'every current plan belongs to Köthen');
     assert.equal(building.sourceAttributionDe, 'Hochschule Anhalt');
     assert.equal(building.sourceAttributionEn, 'Hochschule Anhalt');
   }

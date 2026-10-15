@@ -46,6 +46,9 @@ export const ROOM_TYPES = Object.freeze([
  */
 export const PLAN_KINDS = Object.freeze(['schematic']);
 
+/** The campus sites of Hochschule Anhalt this app covers. */
+export const SITE_KEYS = Object.freeze(['koethen', 'bernburg', 'dessau']);
+
 const SUPPORTED_SCHEMA_VERSION = 1;
 const KEY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -122,6 +125,11 @@ function checkKeys(catalog, problems) {
       ) {
         problems.push(`building "${building.buildingKey}" has an invalid ${field}`);
       }
+    }
+    if (!SITE_KEYS.includes(building.siteKey)) {
+      problems.push(
+        `building "${building.buildingKey}" has an unsupported siteKey "${building.siteKey}"`,
+      );
     }
     if (!PLAN_KINDS.includes(building.planKind)) {
       problems.push(

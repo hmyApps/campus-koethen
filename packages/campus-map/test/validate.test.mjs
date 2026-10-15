@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { loadCanonical, validate } from '../src/validate.mjs';
+import { loadCanonical, SITE_KEYS, validate } from '../src/validate.mjs';
 
 /** A tiny self-contained world: one building, one floor, two rooms. */
 function fixture() {
@@ -19,6 +19,7 @@ function fixture() {
         nameDe: 'B',
         nameEn: 'B',
         planKind: 'schematic',
+        siteKey: 'koethen',
         sortOrder: 10,
       },
     ],
@@ -123,6 +124,7 @@ test('rejects a duplicated building number', () => {
     nameDe: 'Zweites Gebäude',
     nameEn: 'Second Building',
     planKind: 'schematic',
+    siteKey: 'koethen',
     sortOrder: 20,
   });
   assert.match(run(f).problems.join('\n'), /duplicate buildingNumber/i);
@@ -260,6 +262,23 @@ test('a building needs a supported planKind', () => {
     problems.some((p) => p.includes('unsupported planKind')),
     'an unknown planKind must be rejected',
   );
+});
+
+test('a building needs a supported site', () => {
+  const { catalog, readSvg } = loadCanonical();
+  for (const bad of [undefined, 'halle', 'Koethen', '']) {
+    const broken = structuredClone(catalog);
+    broken.buildings[0].siteKey = bad;
+    const { problems } = validate(broken, readSvg);
+    assert.ok(
+      problems.some((p) => p.includes('unsupported siteKey')),
+      `siteKey ${JSON.stringify(bad)} must be rejected`,
+    );
+  }
+});
+
+test('Köthen, Bernburg and Dessau are the supported sites', () => {
+  assert.deepEqual([...SITE_KEYS], ['koethen', 'bernburg', 'dessau']);
 });
 
 test('a building source attribution must be complete in both locales', () => {

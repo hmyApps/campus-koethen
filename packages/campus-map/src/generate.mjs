@@ -232,6 +232,7 @@ export function buildMobileCatalog(catalog) {
         nameDe: building.nameDe,
         nameEn: building.nameEn,
         planKind: building.planKind,
+        siteKey: building.siteKey,
         ...(building.sourceAttributionDe
           ? {
               sourceAttributionDe: building.sourceAttributionDe,
