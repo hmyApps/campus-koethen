@@ -144,13 +144,14 @@ Ein Bereich ist **auch ganz ohne Kontaktperson gültig und in der App voll
 nutzbar** — SSC oder Studentenwerk sind Anlaufstellen, keine Einzelpersonen.
 Funktionale Kontakte sind Personen ausdrücklich vorzuziehen.
 
-| Feld                                                                 | Hinweis                                              |
-| -------------------------------------------------------------------- | ---------------------------------------------------- |
-| `name`, `shortDescription`, `description`, `address`, `openingHours` | übersetzbar                                          |
-| `slug`                                                               | stabil                                               |
-| `iconKey`                                                            | Auswahl aus den von der App unterstützten Kategorien |
-| `generalEmail`, `phone`, `website`, `appointmentBookingUrl`          | alle optional und validiert                          |
-| `persons`                                                            | optional, mehrfach                                   |
+| Feld                                                                 | Hinweis                                                                                                    |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`, `shortDescription`, `description`, `address`, `openingHours` | übersetzbar                                                                                                |
+| `slug`                                                               | stabil                                                                                                     |
+| `iconKey`                                                            | Auswahl aus den von der App unterstützten Kategorien                                                       |
+| `site`                                                               | Standort: Köthen, Bernburg oder Dessau. Die App zeigt den eigenen Standort zuerst; ohne Angabe gilt Köthen |
+| `generalEmail`, `phone`, `website`, `appointmentBookingUrl`          | alle optional und validiert                                                                                |
+| `persons`                                                            | optional, mehrfach                                                                                         |
 
 **Leere Felder bleiben leer.** Die App blendet sie aus; sie erfindet nichts und
 zeigt keine leeren Zeilen. Lieber kein Telefon als eine geratene Nummer.

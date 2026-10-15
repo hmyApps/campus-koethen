@@ -34,6 +34,13 @@ export class ContactAreaListItemDto {
   @ApiProperty({ example: 'students-council' }) iconKey!: string;
 
   @ApiProperty({
+    enum: ['koethen', 'bernburg', 'dessau'],
+    example: 'koethen',
+    description: 'Campus site the area belongs to. An area without a stored site is a Köthen one.',
+  })
+  site!: 'koethen' | 'bernburg' | 'dessau';
+
+  @ApiProperty({
     type: String,
     nullable: true,
     example: '/v1/media/uploads/team_5a141d.jpg',
@@ -63,6 +70,13 @@ export class ContactAreaDetailDto {
   @ApiProperty() name!: string;
   @ApiProperty() shortDescription!: string;
   @ApiProperty() iconKey!: string;
+
+  @ApiProperty({
+    enum: ['koethen', 'bernburg', 'dessau'],
+    example: 'koethen',
+    description: 'Campus site the area belongs to. An area without a stored site is a Köthen one.',
+  })
+  site!: 'koethen' | 'bernburg' | 'dessau';
 
   @ApiProperty({ type: String, nullable: true, example: '/v1/media/uploads/team_5a141d.jpg' })
   image!: string | null;
@@ -117,6 +131,13 @@ export class ContactSearchAreaDto {
   @ApiProperty() name!: string;
   @ApiProperty() shortDescription!: string;
   @ApiProperty({ example: 'students-council' }) iconKey!: string;
+
+  @ApiProperty({
+    enum: ['koethen', 'bernburg', 'dessau'],
+    example: 'koethen',
+    description: 'Campus site the area belongs to. An area without a stored site is a Köthen one.',
+  })
+  site!: 'koethen' | 'bernburg' | 'dessau';
 
   @ApiProperty({
     description:

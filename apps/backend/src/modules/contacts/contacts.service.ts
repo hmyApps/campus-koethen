@@ -85,12 +85,23 @@ function mapPerson(raw: unknown, locale: Locale): ContactPersonDto | null {
   };
 }
 
+const CAMPUS_SITES = ['koethen', 'bernburg', 'dessau'] as const;
+type CampusSite = (typeof CAMPUS_SITES)[number];
+
+/** The site of an area; a missing or unknown value means Köthen, where every area began. */
+function siteOf(value: unknown): CampusSite {
+  return typeof value === 'string' && (CAMPUS_SITES as readonly string[]).includes(value)
+    ? (value as CampusSite)
+    : 'koethen';
+}
+
 function mapAreaBase(raw: Raw): Omit<ContactAreaListItemDto, 'personCount'> {
   return {
     slug: asString(raw['slug']),
     name: asString(raw['name']),
     shortDescription: asString(raw['shortDescription']),
     iconKey: asString(raw['iconKey'], 'service'),
+    site: siteOf(raw['site']),
     // Served by this API, like every other editorial image.
     image: isRecord(raw['image']) ? publicMediaUrl(raw['image']['url']) : null,
     sortOrder: typeof raw['sortOrder'] === 'number' ? raw['sortOrder'] : 0,
@@ -219,6 +230,7 @@ function sharedFields(canonical: Raw): Raw {
   return {
     slug: canonical['slug'],
     iconKey: canonical['iconKey'],
+    site: canonical['site'],
     image: canonical['image'],
     sortOrder: canonical['sortOrder'],
     isActive: canonical['isActive'],
@@ -431,6 +443,7 @@ export class ContactsService {
         name: base.name,
         shortDescription: base.shortDescription,
         iconKey: base.iconKey,
+        site: base.site,
         descriptionText: blocksToPlainText(sanitizeBlocks(merged['description']).blocks),
         generalEmail: base.generalEmail,
         phone: base.phone,

@@ -1726,6 +1726,16 @@
             "type": "string",
             "example": "students-council"
           },
+          "site": {
+            "type": "string",
+            "enum": [
+              "koethen",
+              "bernburg",
+              "dessau"
+            ],
+            "example": "koethen",
+            "description": "Campus site the area belongs to. An area without a stored site is a Köthen one."
+          },
           "image": {
             "type": "string",
             "nullable": true,
@@ -1769,6 +1779,7 @@
           "name",
           "shortDescription",
           "iconKey",
+          "site",
           "image",
           "sortOrder",
           "generalEmail",
@@ -1895,6 +1906,16 @@
             "type": "string",
             "example": "students-council"
           },
+          "site": {
+            "type": "string",
+            "enum": [
+              "koethen",
+              "bernburg",
+              "dessau"
+            ],
+            "example": "koethen",
+            "description": "Campus site the area belongs to. An area without a stored site is a Köthen one."
+          },
           "descriptionText": {
             "type": "string",
             "description": "The sanitised long description as PLAIN TEXT. A search matches words, not formatting; links contribute their label, images nothing."
@@ -1942,6 +1963,7 @@
           "name",
           "shortDescription",
           "iconKey",
+          "site",
           "descriptionText",
           "generalEmail",
           "phone",
@@ -2039,6 +2061,16 @@
           "iconKey": {
             "type": "string"
           },
+          "site": {
+            "type": "string",
+            "enum": [
+              "koethen",
+              "bernburg",
+              "dessau"
+            ],
+            "example": "koethen",
+            "description": "Campus site the area belongs to. An area without a stored site is a Köthen one."
+          },
           "image": {
             "type": "string",
             "nullable": true,
@@ -2099,6 +2131,7 @@
           "name",
           "shortDescription",
           "iconKey",
+          "site",
           "image",
           "sortOrder",
           "generalEmail",

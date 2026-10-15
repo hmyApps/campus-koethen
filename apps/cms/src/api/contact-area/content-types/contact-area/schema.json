@@ -100,6 +100,18 @@
         }
       }
     },
+    "site": {
+      "type": "enumeration",
+      "enum": ["koethen", "bernburg", "dessau"],
+      "required": true,
+      "default": "koethen",
+      "description": "Campus site this contact area belongs to. The app lists the reader's own site first. Areas saved before this field existed count as Köthen.",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
     "image": {
       "type": "media",
       "multiple": false,

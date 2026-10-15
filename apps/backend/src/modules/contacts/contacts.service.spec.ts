@@ -153,6 +153,59 @@ describe('ContactsService', () => {
     });
   });
 
+  describe('campus site', () => {
+    it('tells the app which site an area belongs to', async () => {
+      const client = makeClient(() => ({
+        data: [
+          area('a', { site: 'dessau' }),
+          area('b', { site: 'bernburg' }),
+          area('c', { site: 'koethen' }),
+        ],
+      }));
+
+      const result = await new ContactsService(client).listAreas(de);
+
+      expect(result.data.map((a) => [a.slug, a.site])).toEqual([
+        ['a', 'dessau'],
+        ['b', 'bernburg'],
+        ['c', 'koethen'],
+      ]);
+    });
+
+    it('treats an area without (or with an unknown) site as a Köthen one', async () => {
+      const client = makeClient(() => ({
+        data: [area('old'), area('odd', { site: 'halle' }), area('null', { site: null })],
+      }));
+
+      const result = await new ContactsService(client).listAreas(de);
+
+      expect(result.data.map((a) => a.site)).toEqual(['koethen', 'koethen', 'koethen']);
+    });
+
+    it('keeps the site of the German entry when the English one is read', async () => {
+      // `site` is not localised: a translation entry that never had it set
+      // must not move the area to Köthen.
+      const client = makeClient((query) =>
+        query['locale'] === 'en'
+          ? { data: [area('a', { name: 'A-en', site: undefined })] }
+          : { data: [area('a', { site: 'dessau' })] },
+      );
+
+      const result = await new ContactsService(client).listAreas(en);
+
+      expect(result.data[0]!.name).toBe('A-en');
+      expect(result.data[0]!.site).toBe('dessau');
+    });
+
+    it('is part of the detail answer too', async () => {
+      const client = makeClient(() => ({ data: [area('d', { site: 'dessau' })] }));
+
+      const result = await new ContactsService(client).getArea(de, 'd');
+
+      expect(result.data.site).toBe('dessau');
+    });
+  });
+
   describe('field hygiene', () => {
     it('drops unusable contact fields instead of forwarding them', async () => {
       const client = makeClient(() => ({
