@@ -20,3 +20,4 @@ Migration wieder ändern lässt, gehört **nicht** hierher, sondern in
 | ADR                                     | Titel                                                            | Status     |
 | --------------------------------------- | ---------------------------------------------------------------- | ---------- |
 | [0001](0001-push-benachrichtigungen.md) | Benachrichtigungen aus lokal vorhandenen Daten, ohne Push-Server | Angenommen |
+| [0002](0002-hintergrund-abgleich.md)    | Periodischer Hintergrund-Abgleich auf dem Gerät                  | Angenommen |

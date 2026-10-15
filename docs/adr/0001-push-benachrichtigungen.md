@@ -1,5 +1,10 @@
 # ADR-0001 — Benachrichtigungen aus lokal vorhandenen Daten, ohne Push-Server
 
+> **Ergänzung vom 16. Oktober 2026:** Die Aussagen „keine Hintergrundausführung“, „kein WorkManager“
+> und „keine Background Modes“ sind durch [ADR-0002](0002-hintergrund-abgleich.md) ersetzt: Ein
+> periodischer, rein geräteseitiger Abgleich für E-Mail, Moodle und Veranstaltungen ist jetzt
+> beschlossen. Kein Push-Server, keine Gerätekennung und kein Konto bleiben unverändert.
+
 > **Ergänzung vom 7. Oktober 2026:** Die spätere Produktentscheidung zur Mail-Erweiterung ergänzt
 > die drei vorausgeplanten Kategorien um **N4 `mail.new`**. N4 ist ein sofortiger, rein lokaler und
 > inhaltlich neutraler Hinweis, nachdem IMAP IDLE im Vordergrund und ein anschließender Sync eine

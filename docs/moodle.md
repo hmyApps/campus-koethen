@@ -83,7 +83,8 @@ und im Datei-Downloader:
   App-Start und danach stündlich `maybeAutoSync()` auf (`kMoodleAutoSyncInterval = 1 h`), solange
   die App aktiv ist; zusätzlich beim Öffnen der Moodle-Übersicht und des Kalenders. Höchstens
   **ein** automatischer Versuch pro rollender Stunde; im pausierten
-  Zustand läuft weder Timer noch Netzaufruf, es gibt **kein** Hintergrund-Polling. Gleichzeitige
+  Zustand läuft kein Timer. Der periodische Hintergrund-Abgleich (ADR-0002) ruft alle 10 bis 15
+  Minuten auf, die genannte Drosselung gilt unverändert auch für ihn. Gleichzeitige
   Aufrufe werden zu einem Netzaufruf zusammengeführt (Single-Flight). Ein fehlgeschlagener
   Auto-Versuch wird nicht bei jedem Rebuild wiederholt (`lastAttempt` wird vorab gesetzt).
   `lastAttempt` und `lastSuccess` werden getrennt geführt; nur ein **vollständig validierter**

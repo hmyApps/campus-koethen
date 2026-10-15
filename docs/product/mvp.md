@@ -196,13 +196,13 @@ Raumverfügbarkeit („freie Räume") · Abwesenheiten und Hausaufgaben
 „beliebige Funktion aufrufen"-Schnittstelle
 
 **Nextcloud:** Umbenennen, Verschieben, beschreibbare oder passwortgeschützte Freigabelinks, frei
-konfigurierbare Server und Hintergrundsynchronisation
+konfigurierbare Server und Hintergrund-Mutationen
 
 **Kalender:** Google API Key · Google-OAuth · Google-SDK · Anbindung persönlicher Google-Konten ·
 automatisches Hinzufügen von Terminen zum persönlichen Google-Konto
 
 **Technisch:** Analytics/Tracking · Sentry oder externes Crash-Reporting · Redis · SMTP ·
-automatisches Deployment · Hintergrund-Sync bei vollständig geschlossener App · IMAP IDLE ·
+automatisches Deployment · Backend-seitiger Hintergrund-Sync · IMAP IDLE ·
 Backend-Proxy für E-Mail, Noten, Moodle oder Nextcloud
 
 Die Architektur muss diese Erweiterungen ermöglichen, es wird dafür aber **kein ungenutzter Code**
@@ -273,7 +273,7 @@ gebaut.
   erfolgreichen Datenbestand.
 - Die API liefert `lastSuccessfulSyncAt` und `dataStale`; die App zeigt beides verständlich an.
 - Die App aktualisiert bei App-Start und App-Resume sowie zusätzlich **höchstens alle fünf Minuten**
-  im Vordergrund. Im Hintergrund läuft **kein** Timer.
+  im Vordergrund. Zusätzlich läuft ein periodischer geräteseitiger Abgleich (ADR-0002).
 
 ### 4.3 Kontakte
 
@@ -372,7 +372,7 @@ Dienstspezifisch:
 | Moodle    | Benutzername + Passwort → Token  | lazy beim Öffnen, höchstens 1× pro rollenden 24 h, manuell    | Kurse, Materialien, Aufgaben, Ankündigungen, Deadlines — **nur lesend**                                                          |
 | Nextcloud | Login Flow v2 → App-Passwort     | nur beim Öffnen/Navigation und nach bewusster Aktion, manuell | Ordner/Download; Upload ohne Überschreiben; bestätigtes Löschen; bestätigte öffentliche Read-only-Links; kein persistenter Cache |
 
-Kein Hintergrund-Polling bei vollständig geschlossener App und kein Backend-Cron. Mail hält nur im
+Der periodische Hintergrund-Abgleich (ADR-0002, etwa alle 10 bis 15 Minuten, abschaltbar) läuft ausschließlich auf dem Gerät; es gibt kein Backend-Cron. Mail hält nur im
 Vordergrund eine abbrechbare IMAP-IDLE-Verbindung; beim Pausieren wird sie geschlossen. Beim Moodle-Login wird das Passwort sofort
 nach dem Tokenerwerb verworfen und nie gespeichert. HTML-Mails werden zu **reinem Text** reduziert;
 es gibt kein WebView, kein JavaScript und keine automatische Nachladung entfernter Bilder.

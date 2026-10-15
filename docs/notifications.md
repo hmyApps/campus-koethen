@@ -10,7 +10,7 @@ Plattformen konfiguriert sind und was auf echten Geräten geprüft werden muss.
 Der Kern in einem Satz: Datierte Hinweise meldet die App **im Voraus beim Betriebssystem des
 eigenen Geräts** an; eine im Vordergrund per IMAP bestätigte neue E-Mail kann sie zusätzlich sofort
 lokal anzeigen. Es gibt keinen Push-Dienst, kein Gerätetoken, keinen Registrierungsendpunkt,
-keinen serverseitigen Datensatz und keinen Code, der bei geschlossener App läuft.
+keinen serverseitigen Datensatz. Seit ADR-0002 läuft zusätzlich ein periodischer, rein geräteseitiger Abgleich auch bei geschlossener App (§ 6).
 
 ## 1. Aufbau
 
@@ -284,7 +284,7 @@ und dieser Preis steht in keinem Verhältnis.
 
 | Punkt                | Wert                                                                                                                                                     |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capabilities         | **keine.** Kein Push-Entitlement, kein `aps-environment`, keine Background Modes                                                                         |
+| Capabilities         | Kein Push-Entitlement, kein `aps-environment`. Background Modes nur `fetch` und `processing` (ADR-0002)                                                  |
 | `AppDelegate.swift`  | setzt `UNUserNotificationCenter.current().delegate` und den `setPluginRegistrantCallback` in `didInitializeImplicitFlutterEngine` (UIScene-Lebenszyklus) |
 | Berechtigung         | wird **nie** beim Start angefragt: `DarwinInitializationSettings` fordert Alert, Badge und Sound ausdrücklich nicht an                                   |
 | Systemdialog         | erscheint genau einmal pro Installation. Danach führt der Weg nur noch über die Systemeinstellungen                                                      |
@@ -302,21 +302,21 @@ Aufgabentitel. Fremdtexte (Gerichtsname, Fachtitel, Eventtitel) werden nicht üb
 
 `apps/mobile/test/features/notifications/`:
 
-| Datei                                        | Deckt ab                                                                                                                                                                                                                  |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `notification_planner_test.dart`             | 24-Stunden-Regel, beide Verschiebungsrichtungen, einschließende Grenzwerte 07:00/20:00, Zeitzonen, Sommerzeit, Vergangenheitsfilter, doppelte Schlüssel, Budget mit deterministischer Sortierung, Opt-in und Berechtigung |
-| `notification_payload_test.dart`             | Round-Trip, unbekannte Version, entfallene Kategorie, jede Fehlform, keine personenbezogene Kennung                                                                                                                       |
-| `notification_scheduler_test.dart`           | `cancelAllPending` vor dem Einplanen, zugestellte bleiben erhalten, keine Duplikate bei doppeltem Lauf, zwei gleichzeitige Läufe → genau ein Endzustand, Teilfehler                                                       |
-| `notification_settings_test.dart`            | Standardzustand, alle Kategorien an nach dem Opt-in, Persistenz über den Neustart, defekte und unbekannte gespeicherte Werte                                                                                              |
-| `notification_tap_router_test.dart`          | Ziel je Kategorie, optionales Gerichtsziel (auch mit Doppelpunkt im Namen), Fallback mit Hinweis, alte oder kaputte Payloads navigieren nirgendwohin                                                                      |
-| `canteen_favourite_candidates_test.dart`     | N3 rein: Abgleich nach Gerichtsnamen, leere Favoriten, leerer und abgelaufener Cache, doppelte Namen, mehrere Treffer als ein Hinweis, Preis, Kürzung langer Namen, DE/EN, Schlüssel gegen Payload                        |
-| `canteen_favourite_plan_test.dart`           | N3 über die Provider: Favorit gesetzt/entfernt, Menüwechsel, andere Mensa, Kategorie abgeschaltet, ohne Opt-in — jedes Mal als vollständiger neuer Sollzustand                                                            |
-| `notification_settings_screen_test.dart`     | Berechtigungsbanner, deaktivierte Kategorien, Abschalten trotz Sperre, stummgeschalteter Kanal, Persistenz eines Schalters                                                                                                |
-| `notification_scope_test.dart`               | Geltungsbereich (keine Kalender-Anzeigeschalter), kein Push-/Netz-/Hintergrundcode, ein einziger Plugin-Importeur, kein Gruppenschlüssel, Manifest- und Gradle-Zusicherungen                                              |
-| `daily_summary_test.dart`                    | leerer, normaler und überfüllter Tag, abgesagte Lehrveranstaltung, Speiseplan ohne Favorit, mehrtägige Einträge, Horizont, Sommerzeit im Tagesraster                                                                      |
-| `daily_summary_content_test.dart`            | DE-/EN-Text Wort für Wort, Moodle ohne Kurs- und Aufgabentitel, Sichtbarkeitsstufe, Kürzungsregeln, Ziel und Auslöser                                                                                                     |
-| `daily_summary_candidates_test.dart`         | die vier Quellen einzeln, Dedup gemerkter Events, Gating über Opt-in/Kategorie/Berechtigung, ein Kandidat je nicht leerem Tag, Sprachwechsel, 08:00 Ortszeit über die Sommerzeitumstellung und in einer anderen Zone      |
-| `notification_opt_in_entry_points_test.dart` | Einstiegspunkte C (Stundenplangruppe) und D (Moodle-Verbindung), einschließlich „schon abgelehnt" und fehlgeschlagener Verbindung                                                                                         |
+| Datei                                        | Deckt ab                                                                                                                                                                                                                                |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notification_planner_test.dart`             | 24-Stunden-Regel, beide Verschiebungsrichtungen, einschließende Grenzwerte 07:00/20:00, Zeitzonen, Sommerzeit, Vergangenheitsfilter, doppelte Schlüssel, Budget mit deterministischer Sortierung, Opt-in und Berechtigung               |
+| `notification_payload_test.dart`             | Round-Trip, unbekannte Version, entfallene Kategorie, jede Fehlform, keine personenbezogene Kennung                                                                                                                                     |
+| `notification_scheduler_test.dart`           | `cancelAllPending` vor dem Einplanen, zugestellte bleiben erhalten, keine Duplikate bei doppeltem Lauf, zwei gleichzeitige Läufe → genau ein Endzustand, Teilfehler                                                                     |
+| `notification_settings_test.dart`            | Standardzustand, alle Kategorien an nach dem Opt-in, Persistenz über den Neustart, defekte und unbekannte gespeicherte Werte                                                                                                            |
+| `notification_tap_router_test.dart`          | Ziel je Kategorie, optionales Gerichtsziel (auch mit Doppelpunkt im Namen), Fallback mit Hinweis, alte oder kaputte Payloads navigieren nirgendwohin                                                                                    |
+| `canteen_favourite_candidates_test.dart`     | N3 rein: Abgleich nach Gerichtsnamen, leere Favoriten, leerer und abgelaufener Cache, doppelte Namen, mehrere Treffer als ein Hinweis, Preis, Kürzung langer Namen, DE/EN, Schlüssel gegen Payload                                      |
+| `canteen_favourite_plan_test.dart`           | N3 über die Provider: Favorit gesetzt/entfernt, Menüwechsel, andere Mensa, Kategorie abgeschaltet, ohne Opt-in — jedes Mal als vollständiger neuer Sollzustand                                                                          |
+| `notification_settings_screen_test.dart`     | Berechtigungsbanner, deaktivierte Kategorien, Abschalten trotz Sperre, stummgeschalteter Kanal, Persistenz eines Schalters                                                                                                              |
+| `notification_scope_test.dart`               | Geltungsbereich (keine Kalender-Anzeigeschalter), kein Push-/Netzcode in der Funktion (der Hintergrund-Abgleich liegt bewusst außerhalb, § 6), ein einziger Plugin-Importeur, kein Gruppenschlüssel, Manifest- und Gradle-Zusicherungen |
+| `daily_summary_test.dart`                    | leerer, normaler und überfüllter Tag, abgesagte Lehrveranstaltung, Speiseplan ohne Favorit, mehrtägige Einträge, Horizont, Sommerzeit im Tagesraster                                                                                    |
+| `daily_summary_content_test.dart`            | DE-/EN-Text Wort für Wort, Moodle ohne Kurs- und Aufgabentitel, Sichtbarkeitsstufe, Kürzungsregeln, Ziel und Auslöser                                                                                                                   |
+| `daily_summary_candidates_test.dart`         | die vier Quellen einzeln, Dedup gemerkter Events, Gating über Opt-in/Kategorie/Berechtigung, ein Kandidat je nicht leerem Tag, Sprachwechsel, 08:00 Ortszeit über die Sommerzeitumstellung und in einer anderen Zone                    |
+| `notification_opt_in_entry_points_test.dart` | Einstiegspunkte C (Stundenplangruppe) und D (Moodle-Verbindung), einschließlich „schon abgelehnt" und fehlgeschlagener Verbindung                                                                                                       |
 
 ## 4. Manuelle Gerätematrix
 
@@ -353,7 +353,7 @@ ohne Gerät prüfbar ist (§ 3); die Matrix unten steht weiterhin offen.
 
 ## 5. Grenzen, die bleiben
 
-1. **Die App muss gelegentlich geöffnet werden.** Neu geplant wird nur, wenn die App läuft.
+1. **Ohne Hintergrund-Abgleich muss die App gelegentlich geöffnet werden.** Neu geplant wird dann nur, wenn die App läuft. Mit dem Abgleich (§ 6) geschieht das etwa alle 10 bis 15 Minuten, sofern das Betriebssystem den Lauf zulässt.
 2. **Änderungen nach der Planung schlagen erst mit dem nächsten Abruf durch.** Keine Echtzeitgarantie.
 3. **Eine bereits zugestellte Benachrichtigung ist nicht zurückholbar.**
 4. **Verpasste Zeitpunkte werden nicht nachgeholt.** Eine Erinnerung an gestern ist Lärm.
@@ -367,3 +367,32 @@ ohne Gerät prüfbar ist (§ 3); die Matrix unten steht weiterhin offen.
 10. **Der Abgleich läuft über den Gerichtsnamen**, nicht über `Meal.id` (ADR-0001 § 4.1, Befund 5).
     Ein auf Deutsch favorisiertes Gericht passt deshalb nicht auf den englischen Speiseplan;
     Gerichtsnamen werden nicht maschinell übersetzt (AGENTS.md § 6).
+
+## 6. Hintergrund-Abgleich (ADR-0002)
+
+Seit [ADR-0002](adr/0002-hintergrund-abgleich.md) ruft die App periodisch im Hintergrund E-Mail,
+Moodle und öffentliche Quellen ab und plant alle lokalen Erinnerungen neu. Es gibt weiterhin keinen
+Push-Server.
+
+| Punkt         | Wert                                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Takt          | Android WorkManager, Periode 15 Minuten mit 5 Minuten Flex-Fenster: Beginn 10 bis 15 Minuten nach dem vorigen Lauf. iOS: `BGAppRefreshTask`, frühester Beginn 10 Minuten, im Alltag deutlich seltener |
+| Schalter      | „Im Hintergrund aktualisieren“ in den Benachrichtigungseinstellungen, standardmäßig an. Der Job ist nur registriert, wenn E-Mail oder Moodle verbunden oder Benachrichtigungen eingeschaltet sind     |
+| Schritte      | `mail` → `moodle` → `public` (höchstens etwa stündlich) → `plan`. Ein fehlgeschlagener Schritt stoppt die anderen nicht; nach 8 Minuten endet der Lauf                                                |
+| E-Mail        | eine neue Nachricht: Absender und Betreff nur lokal, gekürzt, Android-Sichtbarkeit „private“; mehrere: nur die Anzahl. Ein abgelehntes Passwort sperrt weitere Anmeldungen, bis neu angemeldet wird   |
+| Zwei Prozesse | Lebt die App im selben Prozess, führt **sie** den Lauf aus (`ForegroundBridge`). Sonst öffnet der Lauf die verschlüsselten Caches selbst und schließt sie wieder                                      |
+| Nicht erlaubt | Exchange-Termine in Benachrichtigungen oder Widget, Nachrichtentext, Logs mit Inhalten                                                                                                                |
+
+### Manuelle Geräteabnahme
+
+Die Automatiktests prüfen die Logik. Das Verhalten des Betriebssystems prüft nur ein Gerät:
+
+1. `flutter test integration_test/background_sync_device_check_test.dart -d DEVICE` — der komplette
+   Lauf ohne Fenster läuft durch (Stand 16. Oktober 2026: auf dem Android-Emulator, API 36, grün).
+2. Android: Mail verbinden, App aus der Übersicht wischen, eine Testmail an das Konto senden. Innerhalb
+   von etwa 15 Minuten erscheint der Hinweis; mit Energiesparmodus später.
+3. iOS: dasselbe, mit Geduld. Ein Lauf kann Stunden dauern; Xcode „Simulate Background Fetch“ löst
+   ihn sofort aus.
+4. Schalter ausschalten: kein weiterer Lauf (Android: `adb shell dumpsys jobscheduler` zeigt keinen
+   Job `dev.erikengler.campuskoethen.background-sync`).
+5. Falsches Mailpasswort: nach der ersten Ablehnung keine weitere Anmeldung durch Hintergrundläufe.

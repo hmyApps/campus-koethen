@@ -164,16 +164,17 @@ zur Laufzeit über den `showLicensePage`-Dialog im About-Screen an.
 
 Die **lokalen Benachrichtigungen** nutzen zusätzlich:
 
-| Paket (pub.dev)                                           | Zweck                                                             | Lizenz         |
-| --------------------------------------------------------- | ----------------------------------------------------------------- | -------------- |
-| `flutter_local_notifications`                             | Vorausplanung lokaler Benachrichtigungen (Android/iOS)            | `BSD-3-Clause` |
-| `flutter_local_notifications_platform_interface`          | Plattform-Schnittstelle (transitiv)                               | `BSD-3-Clause` |
-| `flutter_local_notifications_linux` / `_web` / `_windows` | Plattform-Implementierungen (transitiv, ungenutzt)                | `BSD-3-Clause` |
-| `timezone`                                                | IANA-Zeitzonendatenbank für zonenrichtige Zeitpunkte              | `BSD-2-Clause` |
-| `flutter_timezone`                                        | Ermittlung der Gerätezeitzone                                     | `Apache-2.0`   |
-| `app_settings`                                            | Öffnen der Systemeinstellungen bei entzogener Berechtigung        | `MIT`          |
-| `equatable`                                               | Wertgleichheit (transitiv)                                        | `MIT`          |
-| `dbus`                                                    | Linux-Desktop-Transport (transitiv, in der mobilen App ungenutzt) | `MPL-2.0`      |
+| Paket (pub.dev)                                           | Zweck                                                                                                                  | Lizenz         |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `flutter_local_notifications`                             | Vorausplanung lokaler Benachrichtigungen (Android/iOS)                                                                 | `BSD-3-Clause` |
+| `flutter_local_notifications_platform_interface`          | Plattform-Schnittstelle (transitiv)                                                                                    | `BSD-3-Clause` |
+| `flutter_local_notifications_linux` / `_web` / `_windows` | Plattform-Implementierungen (transitiv, ungenutzt)                                                                     | `BSD-3-Clause` |
+| `timezone`                                                | IANA-Zeitzonendatenbank für zonenrichtige Zeitpunkte                                                                   | `BSD-2-Clause` |
+| `flutter_timezone`                                        | Ermittlung der Gerätezeitzone                                                                                          | `Apache-2.0`   |
+| `app_settings`                                            | Öffnen der Systemeinstellungen bei entzogener Berechtigung                                                             | `MIT`          |
+| `equatable`                                               | Wertgleichheit (transitiv)                                                                                             | `MIT`          |
+| `dbus`                                                    | Linux-Desktop-Transport (transitiv, in der mobilen App ungenutzt)                                                      | `MPL-2.0`      |
+| `workmanager` und seine Plattformpakete                   | Periodischer Hintergrund-Abgleich (ADR-0002); nutzt Android-Jetpack WorkManager (`Apache-2.0`) und iOS BGTaskScheduler | `MIT`          |
 
 Kein Push-Dienst, kein Gerätetoken, kein Drittanbieter-SDK: Es werden ausschließlich Termine beim
 Betriebssystem des eigenen Geräts vorgemerkt. `dbus` ist eine transitive Abhängigkeit der
