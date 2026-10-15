@@ -4,6 +4,7 @@
 import '../../../core/content/content_block.dart';
 import '../../../core/links/safe_link_launcher.dart';
 import '../../../core/network/json.dart';
+import '../../../core/site/campus_site.dart';
 
 /// A compact reference to a room of the campus map.
 ///
@@ -101,6 +102,7 @@ class ContactArea {
     required this.slug,
     required this.name,
     required this.sortOrder,
+    this.site = CampusSite.koethen,
     this.shortDescription,
     this.iconKey,
     this.imageUrl,
@@ -120,6 +122,10 @@ class ContactArea {
   final String name;
   final String? shortDescription;
   final String? iconKey;
+
+  /// The campus site the area belongs to. An API that says nothing, or names
+  /// a site this app does not know, means Köthen, where every area began.
+  final CampusSite site;
 
   /// Media path published by the Campus API, or `null` when the area has no
   /// picture. The icon carries the area perfectly well on its own, so this is
@@ -171,6 +177,7 @@ class ContactArea {
       name: asString(map['name']) ?? slug,
       shortDescription: asString(map['shortDescription']),
       iconKey: asString(map['iconKey']),
+      site: CampusSite.fromStorage(asString(map['site'])) ?? CampusSite.koethen,
       imageUrl: asString(map['image']),
       sortOrder: asInt(map['sortOrder']) ?? 0,
       generalEmail: asString(map['generalEmail']),

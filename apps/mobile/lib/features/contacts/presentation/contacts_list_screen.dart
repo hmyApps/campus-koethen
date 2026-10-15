@@ -8,6 +8,8 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../app/app_routes.dart';
 import '../../../core/network/loaded.dart';
+import '../../../core/prefs/settings_controller.dart';
+import '../../../core/site/campus_site.dart';
 import '../../../core/theme/app_metrics.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/icon_keys.dart';
@@ -19,6 +21,7 @@ import '../application/contacts_providers.dart';
 import '../data/contact_models.dart';
 import '../data/contact_search_models.dart';
 import '../domain/contact_search.dart';
+import '../domain/contact_sites.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../app/app_modules.dart';
 
@@ -299,13 +302,13 @@ class _HitCard extends StatelessWidget {
   }
 }
 
-class _AreaList extends StatelessWidget {
+class _AreaList extends ConsumerWidget {
   const _AreaList({required this.loaded});
 
   final Loaded<List<ContactArea>> loaded;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = context.l10n;
     final List<ContactArea> areas = loaded.value;
 
@@ -317,31 +320,58 @@ class _AreaList extends StatelessWidget {
       );
     }
 
+    // Split by site, the reader's own first. Headings only when more than one
+    // site has areas: a single-site list looks as it always did.
+    final List<ContactSiteGroup> groups = groupContactAreasBySite(
+      areas,
+      ref.watch(settingsProvider.select((AppSettings s) => s.campusSite)),
+    );
+    final List<Object> entries = <Object>[
+      if (loaded.fromCache) _CacheNotice.instance,
+      if (loaded.meta.translationFallback) _FallbackNotice.instance,
+      for (final ContactSiteGroup group in groups) ...<Object>[
+        if (groups.length > 1) group.site,
+        ...group.areas,
+      ],
+    ];
+
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.all(context.metrics.screenPadding),
-      itemCount:
-          areas.length +
-          (loaded.fromCache ? 1 : 0) +
-          (loaded.meta.translationFallback ? 1 : 0),
-      separatorBuilder: (BuildContext _, int _) =>
-          const SizedBox(height: AppSpacing.md),
-      itemBuilder: (BuildContext context, int index) {
-        if (loaded.fromCache && index == 0) {
-          return OfflineNotice(cachedAt: loaded.cachedAt);
-        }
-        if (loaded.meta.translationFallback &&
-            index == (loaded.fromCache ? 1 : 0)) {
-          return const TranslationFallbackNotice();
-        }
-        final int leading =
-            (loaded.fromCache ? 1 : 0) +
-            (loaded.meta.translationFallback ? 1 : 0);
-        final ContactArea area = areas[index - leading];
-        return _AreaCard(area: area);
-      },
+      itemCount: entries.length,
+      separatorBuilder: (BuildContext _, int index) => SizedBox(
+        height: entries[index + 1] is CampusSite
+            ? AppSpacing.lg
+            : AppSpacing.md,
+      ),
+      itemBuilder: (BuildContext context, int index) =>
+          switch (entries[index]) {
+            _CacheNotice() => OfflineNotice(cachedAt: loaded.cachedAt),
+            _FallbackNotice() => const TranslationFallbackNotice(),
+            final CampusSite site => Semantics(
+              header: true,
+              child: Text(
+                site.label(l10n),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+            final ContactArea area => _AreaCard(area: area),
+            _ => const SizedBox.shrink(),
+          },
     );
   }
+}
+
+class _CacheNotice {
+  const _CacheNotice._();
+  static const _CacheNotice instance = _CacheNotice._();
+}
+
+class _FallbackNotice {
+  const _FallbackNotice._();
+  static const _FallbackNotice instance = _FallbackNotice._();
 }
 
 class _AreaCard extends StatelessWidget {
