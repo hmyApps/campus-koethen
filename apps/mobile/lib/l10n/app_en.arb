@@ -1033,6 +1033,9 @@
   "@campusMapTitle": {
     "description": "Titel des Lageplan-Bildschirms."
   },
+  "campusSiteKoethen": "Köthen",
+  "campusSiteBernburg": "Bernburg",
+  "campusSiteDessau": "Dessau",
   "campusMapSearchLabel": "Search rooms",
   "@campusMapSearchLabel": {
     "description": "Label des Suchfelds."

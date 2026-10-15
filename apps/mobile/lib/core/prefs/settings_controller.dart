@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_modules.dart';
 import '../../app/navigation_config.dart';
 import '../locale/locale_mode.dart';
+import '../site/campus_site.dart';
 import '../theme/appearance_preferences.dart';
 import 'key_value_store.dart';
 import 'preference_keys.dart';
@@ -65,6 +66,7 @@ class AppSettings {
     this.reducedMotion = false,
     this.navigation = NavigationConfig.defaults,
     this.preferredCanteenSlug,
+    this.campusSite,
     this.timetableGroupId,
     this.timetableAdditionalGroupIds = const <String>[],
     this.timetableAdditionalModules = const <TimetableModuleSubscription>[],
@@ -91,6 +93,9 @@ class AppSettings {
 
   /// Slug of the canteen the user prefers, or `null` for "not chosen yet".
   final String? preferredCanteenSlug;
+
+  /// The campus site the reader studies at, or `null` for "not chosen yet".
+  final CampusSite? campusSite;
 
   /// **Campus** UUID of the chosen timetable group, or `null` for "not chosen
   /// yet". The app never stores an upstream identifier.
@@ -129,6 +134,8 @@ class AppSettings {
     NavigationConfig? navigation,
     String? preferredCanteenSlug,
     bool clearPreferredCanteen = false,
+    CampusSite? campusSite,
+    bool clearCampusSite = false,
     String? timetableGroupId,
     bool clearTimetableGroup = false,
     List<String>? timetableAdditionalGroupIds,
@@ -154,6 +161,7 @@ class AppSettings {
       preferredCanteenSlug: clearPreferredCanteen
           ? null
           : (preferredCanteenSlug ?? this.preferredCanteenSlug),
+      campusSite: clearCampusSite ? null : (campusSite ?? this.campusSite),
       timetableGroupId: clearTimetableGroup
           ? null
           : (timetableGroupId ?? this.timetableGroupId),
@@ -251,6 +259,9 @@ class SettingsController extends Notifier<AppSettings> {
         store.getStringList(PreferenceKeys.navigationTabs),
       ),
       preferredCanteenSlug: store.getString(PreferenceKeys.preferredCanteen),
+      campusSite: CampusSite.fromStorage(
+        store.getString(PreferenceKeys.campusSite),
+      ),
       timetableGroupId: primary,
       timetableAdditionalGroupIds: List<String>.unmodifiable(additionalGroups),
       timetableAdditionalModules:
@@ -297,6 +308,16 @@ class SettingsController extends Notifier<AppSettings> {
     }
     state = state.copyWith(preferredCanteenSlug: slug);
     await _store.setString(PreferenceKeys.preferredCanteen, slug);
+  }
+
+  Future<void> setCampusSite(CampusSite? site) async {
+    if (site == null) {
+      state = state.copyWith(clearCampusSite: true);
+      await _store.remove(PreferenceKeys.campusSite);
+      return;
+    }
+    state = state.copyWith(campusSite: site);
+    await _store.setString(PreferenceKeys.campusSite, site.storageValue);
   }
 
   /// Stores the **Campus** UUID of the chosen timetable group.

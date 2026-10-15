@@ -1892,6 +1892,12 @@
   "@campusMapTitle": {
     "description": "Titel des Lageplan-Bildschirms."
   },
+  "campusSiteKoethen": "Köthen",
+  "@campusSiteKoethen": {},
+  "campusSiteBernburg": "Bernburg",
+  "@campusSiteBernburg": {},
+  "campusSiteDessau": "Dessau",
+  "@campusSiteDessau": {},
   "campusMapSearchLabel": "Raum suchen",
   "@campusMapSearchLabel": {
     "description": "Label des Suchfelds."

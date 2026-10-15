@@ -256,6 +256,11 @@ abstract final class PreferenceKeys {
   static const String notificationsSystemPromptRequested =
       'notifications.systemPrompt.requested.v1';
 
+  /// The campus site (`koethen`, `bernburg`, `dessau`) the reader studies at.
+  /// Decides what the canteen, map and contacts show first; absent means "not
+  /// chosen yet".
+  static const String campusSite = 'site.preferred.v1';
+
   // --- Background sync ------------------------------------------------------
 
   /// `0` when the reader switched the periodic background sync off. Absent
