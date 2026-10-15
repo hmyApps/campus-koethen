@@ -1,3 +1,4 @@
+import { CAMPUS_SITES, CampusSite } from './canteens.config';
 import { Inject, Injectable } from '@nestjs/common';
 import { TtlCache } from '../../common/cache/ttl-cache';
 import { ApiError } from '../../common/errors/api-error';
@@ -81,6 +82,11 @@ function codesKey(codes: readonly string[]): string {
  * this stays a pure performance measure.
  */
 const MENU_CACHE_TTL_MS = 30_000;
+
+/** A stored site key as a known site; anything unexpected reads as Köthen. */
+function toSite(value: string): CampusSite {
+  return (CAMPUS_SITES as readonly string[]).includes(value) ? (value as CampusSite) : 'koethen';
+}
 
 @Injectable()
 export class CanteenService {
@@ -185,6 +191,7 @@ export class CanteenService {
         displayNameEn: true,
         campusLabelDe: true,
         campusLabelEn: true,
+        siteKey: true,
       },
     });
 
@@ -196,6 +203,7 @@ export class CanteenService {
         slug: canteen.slug,
         displayName: locale.resolvedLocale === 'en' ? canteen.displayNameEn : canteen.displayNameDe,
         campusLabel: locale.resolvedLocale === 'en' ? canteen.campusLabelEn : canteen.campusLabelDe,
+        site: toSite(canteen.siteKey),
         lastSuccessfulSyncAt: syncedAt ? syncedAt.toISOString() : null,
         dataStale: this.isStale(syncedAt),
       };
@@ -220,6 +228,7 @@ export class CanteenService {
         displayNameEn: true,
         campusLabelDe: true,
         campusLabelEn: true,
+        siteKey: true,
       },
     });
     if (!canteen) {
@@ -246,6 +255,7 @@ export class CanteenService {
             locale.resolvedLocale === 'en' ? canteen.displayNameEn : canteen.displayNameDe,
           campusLabel:
             locale.resolvedLocale === 'en' ? canteen.campusLabelEn : canteen.campusLabelDe,
+          site: toSite(canteen.siteKey),
         },
         days,
       },

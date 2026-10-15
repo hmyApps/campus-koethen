@@ -31,6 +31,8 @@ model Canteen {
   displayNameEn    String
   campusLabelDe    String
   campusLabelEn    String
+  /// Campus site (koethen, bernburg, dessau); the app lists its own site first.
+  siteKey          String  @default("koethen")
   active           Boolean @default(true)
   sortOrder        Int     @default(0)
 

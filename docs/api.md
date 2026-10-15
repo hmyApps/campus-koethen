@@ -515,6 +515,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
       "slug": "koethen-fasanerieallee",
       "displayName": "Mensa Köthen",
       "campusLabel": "Fasanerieallee",
+      "site": "koethen",
       "lastSuccessfulSyncAt": "2026-07-22T12:00:04.000Z",
       "dataStale": false,
     },
@@ -523,7 +524,8 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 }
 ```
 
-`displayName` und `campusLabel` sind API-eigene, zweisprachige Texte.
+`displayName` und `campusLabel` sind API-eigene, zweisprachige Texte. `site` ist der Campus-Standort
+(`koethen`, `bernburg` oder `dessau`); die App zeigt den eigenen Standort zuerst.
 
 ### `GET /v1/canteens/:slug/menu`
 
@@ -536,7 +538,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
 ```jsonc
 {
   "data": {
-    "canteen": { "slug": "…", "displayName": "…", "campusLabel": "…" },
+    "canteen": { "slug": "…", "displayName": "…", "campusLabel": "…", "site": "koethen" },
     "days": [
       {
         "date": "2026-07-20",

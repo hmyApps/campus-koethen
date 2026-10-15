@@ -2143,6 +2143,16 @@
             "type": "string",
             "example": "Fasanerieallee"
           },
+          "site": {
+            "type": "string",
+            "enum": [
+              "koethen",
+              "bernburg",
+              "dessau"
+            ],
+            "example": "koethen",
+            "description": "Campus site of the canteen. The app lists the reader's own site first."
+          },
           "lastSuccessfulSyncAt": {
             "type": "string",
             "nullable": true,
@@ -2158,6 +2168,7 @@
           "slug",
           "displayName",
           "campusLabel",
+          "site",
           "lastSuccessfulSyncAt",
           "dataStale"
         ]
@@ -2195,12 +2206,23 @@
           "campusLabel": {
             "type": "string",
             "example": "Fasanerieallee"
+          },
+          "site": {
+            "type": "string",
+            "enum": [
+              "koethen",
+              "bernburg",
+              "dessau"
+            ],
+            "example": "koethen",
+            "description": "Campus site of the canteen. The app lists the reader's own site first."
           }
         },
         "required": [
           "slug",
           "displayName",
-          "campusLabel"
+          "campusLabel",
+          "site"
         ]
       },
       "MealMarkerDto": {

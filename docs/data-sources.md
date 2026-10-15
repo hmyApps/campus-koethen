@@ -97,12 +97,12 @@ Betreiber: Studentenwerk Halle. Kein Token erforderlich. Antwort ist `applicatio
 
 ### 3.2 Verifizierte Standorte
 
-| `location_id` | Slug                     | Anzeigename         | Campus-Label   |
-| ------------- | ------------------------ | ------------------- | -------------- |
-| `7`           | `koethen-fasanerieallee` | Mensa Köthen        | Fasanerieallee |
-| `22`          | `koethen-lohmannstrasse` | Mensa Lohmannstraße | Lohmannstraße  |
-| `13`          | `dessau`                 | Mensa Dessau        | Dessau         |
-| `8`           | `bernburg`               | Mensa Bernburg      | Bernburg       |
+| `location_id` | Slug                     | Anzeigename         | Campus-Label   | `site`     |
+| ------------- | ------------------------ | ------------------- | -------------- | ---------- |
+| `7`           | `koethen-fasanerieallee` | Mensa Köthen        | Fasanerieallee | `koethen`  |
+| `22`          | `koethen-lohmannstrasse` | Mensa Lohmannstraße | Lohmannstraße  | `koethen`  |
+| `13`          | `dessau`                 | Mensa Dessau        | Dessau         | `dessau`   |
+| `8`           | `bernburg`               | Mensa Bernburg      | Bernburg       | `bernburg` |
 
 Diese Zuordnung ist **Backend-Konfiguration** (`apps/backend/src/modules/canteen/canteens.config.ts`).
 Flutter kennt keine Location-IDs. Eine weitere Mensa erfordert kein App-Release.

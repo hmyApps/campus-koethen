@@ -18,6 +18,13 @@ export class CanteenRefDto {
   displayName!: string;
 
   @ApiProperty({ example: 'Fasanerieallee' }) campusLabel!: string;
+
+  @ApiProperty({
+    enum: ['koethen', 'bernburg', 'dessau'],
+    example: 'koethen',
+    description: "Campus site of the canteen. The app lists the reader's own site first.",
+  })
+  site!: 'koethen' | 'bernburg' | 'dessau';
 }
 
 export class CanteenListItemDto extends CanteenRefDto {
