@@ -255,4 +255,22 @@ abstract final class PreferenceKeys {
   /// from a real refusal without storing an identifier or permission result.
   static const String notificationsSystemPromptRequested =
       'notifications.systemPrompt.requested.v1';
+
+  // --- Background sync ------------------------------------------------------
+
+  /// `0` when the reader switched the periodic background sync off. Absent
+  /// means on: the run only does anything for a source the reader connected
+  /// and for a notification category they opted into.
+  static const String backgroundSyncEnabled = 'background.sync.enabled.v1';
+
+  /// `1` after a background run saw the mail server reject the stored
+  /// password. Background runs then stop logging in until the mail account is
+  /// signed in again or a sync succeeds: every refused login counts against
+  /// the central university account and can lock it.
+  static const String backgroundMailRejected = 'background.mail.rejected.v1';
+
+  /// Milliseconds since the epoch of the last background refresh of the public
+  /// sources (news, calendars, timetable); throttles them to about hourly.
+  static const String backgroundPublicRefreshedAt =
+      'background.publicRefresh.at.v1';
 }

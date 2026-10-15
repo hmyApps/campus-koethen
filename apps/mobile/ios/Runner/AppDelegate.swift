@@ -5,6 +5,8 @@ import UserNotifications
 // Nur fuer setPluginRegistrantCallback noetig — das Plugin registriert damit
 // die Plugins im eigenen Isolate, wenn eine Benachrichtigung die App startet.
 import flutter_local_notifications
+// Periodischer Hintergrund-Abgleich (BGTaskScheduler), siehe ADR-0002.
+import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -17,6 +19,17 @@ import flutter_local_notifications
     // Ohne diese Zeile liefert iOS den Tap auf eine Benachrichtigung nicht an
     // die App aus; das Ziel-Routing bliebe still wirkungslos.
     UNUserNotificationCenter.current().delegate = self
+    // Der Hintergrund-Lauf startet eine eigene Engine; sie braucht die Plugins.
+    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
+      GeneratedPluginRegistrant.register(with: registry)
+    }
+    // Nur der Handler wird hier angemeldet; geplant wird aus Dart, und nur,
+    // solange der Hintergrund-Abgleich gewuenscht ist. iOS entscheidet selbst,
+    // wann ein Lauf stattfindet; 10 Minuten sind der fruehestmoegliche Beginn.
+    WorkmanagerPlugin.registerPeriodicTask(
+      withIdentifier: "dev.erikengler.campuskoethen.background-sync",
+      earliestBeginInSeconds: NSNumber(value: 10 * 60)
+    )
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

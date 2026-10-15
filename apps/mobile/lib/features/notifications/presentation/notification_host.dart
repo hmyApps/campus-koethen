@@ -24,6 +24,7 @@ import '../application/daily_summary_providers.dart';
 import '../application/event_reminder_candidates.dart';
 import '../application/moodle_deadline_candidates.dart';
 import '../application/new_mail_notification.dart';
+import '../application/notification_channels.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_settings_controller.dart';
 import '../application/notification_tap_router.dart';
@@ -363,38 +364,9 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
     // so they follow the app language. Re-registering a channel under the same
     // id is how Android takes over a new name; the reader's own sound and
     // importance choices survive it.
-    final List<NotificationChannelSpec> channels = <NotificationChannelSpec>[
-      NotificationChannelSpec(
-        category: NotificationCategory.dailySummary,
-        name: l10n.notificationChannelDailySummaryName,
-        description: l10n.notificationChannelDailySummaryDescription,
-      ),
-      NotificationChannelSpec(
-        category: NotificationCategory.eventReminder,
-        name: l10n.notificationChannelEventsName,
-        description: l10n.notificationChannelEventsDescription,
-      ),
-      NotificationChannelSpec(
-        category: NotificationCategory.canteenFavourite,
-        name: l10n.notificationChannelCanteenName,
-        description: l10n.notificationChannelCanteenDescription,
-      ),
-      NotificationChannelSpec(
-        category: NotificationCategory.moodleDeadline,
-        name: l10n.notificationChannelMoodleDeadlineName,
-        description: l10n.notificationChannelMoodleDeadlineDescription,
-      ),
-      NotificationChannelSpec(
-        category: NotificationCategory.gradeChange,
-        name: l10n.notificationChannelGradeChangeName,
-        description: l10n.notificationChannelGradeChangeDescription,
-      ),
-      NotificationChannelSpec(
-        category: NotificationCategory.newMail,
-        name: l10n.notificationChannelMailName,
-        description: l10n.notificationChannelMailDescription,
-      ),
-    ];
+    final List<NotificationChannelSpec> channels = notificationChannelSpecs(
+      l10n,
+    );
     final String signature = channels
         .map((NotificationChannelSpec c) => '${c.category.channelId}:${c.name}')
         .join('|');

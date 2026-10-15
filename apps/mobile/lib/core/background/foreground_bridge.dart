@@ -50,6 +50,9 @@ abstract final class ForegroundBridge {
     _port = port;
   }
 
+  /// Whether this isolate currently serves background runs.
+  static bool get isRegistered => _port != null;
+
   static void unregister() {
     final ReceivePort? port = _port;
     if (port == null) return;

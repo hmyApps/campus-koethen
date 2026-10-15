@@ -164,6 +164,34 @@ void main() {
     expect(find.textContaining(de.notificationsCategoryMuted), findsOneWidget);
   });
 
+  testWidgets('the background sync switch is on by default and is persisted '
+      'when switched off', (WidgetTester tester) async {
+    final KeyValueStore store = InMemoryKeyValueStore();
+    await pumpSettings(tester, store: store);
+    await tester.scrollUntilVisible(
+      find.text(de.notificationsBackgroundSyncTitle),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      tester
+          .widget<Switch>(switchFor(de.notificationsBackgroundSyncTitle))
+          .value,
+      isTrue,
+    );
+    await tester.tap(switchFor(de.notificationsBackgroundSyncTitle));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Switch>(switchFor(de.notificationsBackgroundSyncTitle))
+          .value,
+      isFalse,
+    );
+    expect(store.getInt(PreferenceKeys.backgroundSyncEnabled), 0);
+  });
+
   testWidgets('the timeliness limit is stated on the screen, not buried', (
     WidgetTester tester,
   ) async {

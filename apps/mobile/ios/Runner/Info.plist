@@ -44,6 +44,15 @@
 	<true/>
 	<key>NFCReaderUsageDescription</key>
 	<string>Campus Köthen reads the current canteen-card balance after you start a scan. No card identifier or balance is stored.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.erikengler.campuskoethen.background-sync</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

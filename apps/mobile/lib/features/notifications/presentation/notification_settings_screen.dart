@@ -10,6 +10,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_banner.dart';
+import '../../../app/background_sync_providers.dart';
 import '../../../l10n/l10n.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_settings_controller.dart';
@@ -134,6 +135,7 @@ class _NotificationSettingsScreenState
               icon: AppIcons.school_outlined,
             ),
           ),
+          const _BackgroundSyncTile(),
           SectionHeader(label: l10n.notificationsSectionStatus),
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -388,6 +390,24 @@ class _SemanticSwitchTile extends StatelessWidget {
         value: value,
         onChanged: onChanged,
       ),
+    );
+  }
+}
+
+/// The switch for the periodic background sync (ADR-0002).
+class _BackgroundSyncTile extends ConsumerWidget {
+  const _BackgroundSyncTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = context.l10n;
+    return _SemanticSwitchTile(
+      icon: AppIcons.sync,
+      title: l10n.notificationsBackgroundSyncTitle,
+      subtitle: l10n.notificationsBackgroundSyncSubtitle,
+      value: ref.watch(backgroundSyncEnabledProvider),
+      onChanged: (bool value) =>
+          ref.read(backgroundSyncEnabledProvider.notifier).set(value),
     );
   }
 }

@@ -5,6 +5,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/background/background_sync_settings.dart';
+import '../../../core/prefs/settings_controller.dart';
+
 import '../domain/mail_credentials.dart';
 import '../domain/mail_failure.dart';
 import '../domain/mail_gateway.dart';
@@ -143,6 +146,8 @@ class MailAccountController extends AsyncNotifier<MailAccountState> {
 
   void _invalidateMailSession() {
     _removing = true;
+    // A new or removed account is a fresh start for the background sync too.
+    unawaited(BackgroundMailGuard(ref.read(keyValueStoreProvider)).release());
     _sessionGeneration++;
     ref.read(mailSessionGenerationProvider.notifier).advance();
   }

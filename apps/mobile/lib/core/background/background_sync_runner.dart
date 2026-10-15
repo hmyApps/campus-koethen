@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:meta/meta.dart';
 
 /// One independent part of a background run.
@@ -78,7 +79,16 @@ class BackgroundSyncRunner {
           try {
             await step.run();
             return true;
-          } catch (_) {
+          } catch (error) {
+            // The type only, and only in debug builds: a message could quote
+            // a subject or an address.
+            assert(() {
+              debugPrint(
+                'background sync: step ${step.name} failed '
+                '(${error.runtimeType})',
+              );
+              return true;
+            }());
             return false;
           }
         }();

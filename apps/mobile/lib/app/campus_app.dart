@@ -16,6 +16,7 @@ import '../features/notifications/presentation/notification_host.dart';
 import '../l10n/l10n.dart';
 import 'app_router.dart';
 import 'app_sync_host.dart';
+import 'background_sync_host.dart';
 
 /// Root widget of the app.
 ///
@@ -61,9 +62,11 @@ class CampusApp extends ConsumerWidget {
       builder: (BuildContext context, Widget? child) => CalendarHomeWidgetHost(
         child: CanteenBalanceLaunchHost(
           child: NotificationHost(
-            child: AppSyncHost(
-              child: RoomCatalogRefreshHost(
-                child: child ?? const SizedBox.shrink(),
+            child: BackgroundSyncHost(
+              child: AppSyncHost(
+                child: RoomCatalogRefreshHost(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),

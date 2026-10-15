@@ -203,10 +203,17 @@ void main() {
       },
     );
 
-    test('the iOS project has no push entitlement and no background mode', () {
+    test('the iOS project has no push entitlement and only the local '
+        'background modes of ADR-0002', () {
       final String plist = _sourceOf('ios/Runner/Info.plist');
       expect(plist, isNot(contains('aps-environment')));
-      expect(plist, isNot(contains('UIBackgroundModes')));
+      // `remote-notification` would be a push; `fetch` and `processing` are
+      // the BGTaskScheduler modes of the periodic background sync.
+      expect(plist, isNot(contains('remote-notification')));
+      expect(plist, contains('UIBackgroundModes'));
+      expect(plist, contains('<string>fetch</string>'));
+      expect(plist, contains('<string>processing</string>'));
+      expect(plist, contains('dev.erikengler.campuskoethen.background-sync'));
     });
   });
 }

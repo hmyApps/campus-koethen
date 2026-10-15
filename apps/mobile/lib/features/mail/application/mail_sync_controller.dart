@@ -5,6 +5,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/background/background_sync_settings.dart';
+
 import '../../../core/prefs/settings_controller.dart';
 import '../domain/mail_folder.dart';
 import '../domain/mail_cache_store.dart';
@@ -368,6 +370,9 @@ class MailSyncController extends Notifier<MailSyncStatus> {
 
       if (accountController.isSessionCurrent(generation)) {
         ref.read(mailCredentialsRejectionProvider.notifier).clear();
+        unawaited(
+          BackgroundMailGuard(ref.read(keyValueStoreProvider)).release(),
+        );
         state = MailSyncStatus(isSyncing: false, lastSyncedAt: DateTime.now());
       }
     } catch (error) {
