@@ -195,7 +195,7 @@ void main() {
     expect(find.byType(OnboardingScreen), findsOneWidget);
     expect(find.byType(NewsListScreen), findsNothing);
     expect(find.text('Sprache auswählen'), findsOneWidget);
-    expect(find.text('Schritt 1 von 8'), findsOneWidget);
+    expect(find.text('Schritt 1 von 9'), findsOneWidget);
   });
 
   testWidgets(
@@ -209,7 +209,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Choose your language'), findsOneWidget);
-      expect(find.text('Step 1 of 8'), findsOneWidget);
+      expect(find.text('Step 1 of 9'), findsOneWidget);
       expect(find.text('Skip all'), findsOneWidget);
       expect(container.read(settingsProvider).localeMode, LocaleMode.english);
       expect(
@@ -283,16 +283,55 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    expect(find.text('Schritt 1 von 8'), findsOneWidget);
+    expect(find.text('Schritt 1 von 9'), findsOneWidget);
 
     await tester.tap(find.text('Überspringen'));
     await tester.pumpAndSettle();
-    expect(find.text('Schritt 2 von 8'), findsOneWidget);
+    expect(find.text('Schritt 2 von 9'), findsOneWidget);
     expect(find.text('Willkommen'), findsOneWidget);
 
     await tester.tap(find.text('Zurück'));
     await tester.pumpAndSettle();
-    expect(find.text('Schritt 1 von 8'), findsOneWidget);
+    expect(find.text('Schritt 1 von 9'), findsOneWidget);
+  });
+
+  testWidgets('the site is asked right after the welcome, before anything it '
+      'pre-selects', (WidgetTester tester) async {
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+    await pumpApp(tester, store: store);
+
+    for (int i = 0; i < 2; i++) {
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Schritt 3 von 9'), findsOneWidget);
+    expect(find.text('Dein Standort'), findsOneWidget);
+    expect(find.text('Dessau'), findsOneWidget);
+    await tester.tap(find.text('Dessau'));
+    await tester.pumpAndSettle();
+    expect(store.getString(PreferenceKeys.campusSite), 'dessau');
+
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dein Campus'), findsOneWidget);
+  });
+
+  testWidgets('the site step can be passed without an answer', (
+    WidgetTester tester,
+  ) async {
+    final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+    await pumpApp(tester, store: store);
+    for (int i = 0; i < 2; i++) {
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dein Campus'), findsOneWidget);
+    expect(store.getString(PreferenceKeys.campusSite), isNull);
   });
 
   testWidgets('asks only for what the app actually needs', (
@@ -302,7 +341,7 @@ void main() {
     // app needs before it is usable. They live in the settings.
     await pumpApp(tester);
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
@@ -317,9 +356,11 @@ void main() {
     final InMemoryKeyValueStore store = InMemoryKeyValueStore();
     final ProviderContainer container = await pumpApp(tester, store: store);
 
-    // Step 3 is the campus step. What is asserted here is that a choice made
+    // Step 4 is the campus step. What is asserted here is that a choice made
     // during setup is persisted — the controller is the thing under test, not
     // whether a bundled asset happened to load within this frame budget.
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Weiter'));
@@ -355,16 +396,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
 
     expect(
-      find.text('Schritt 4 von 8'),
+      find.text('Schritt 5 von 9'),
       findsOneWidget,
       reason: 'the content step',
     );
     // The pickers are here, in the step — not behind a route that the
     // redirect would bounce straight back to step one.
     expect(find.text('News-Kanäle wählen'), findsOneWidget);
-    expect(find.text('Schritt 1 von 8'), findsNothing);
+    expect(find.text('Schritt 1 von 9'), findsNothing);
   });
 
   testWidgets('an unavailable source is stated instead of blocking', (
@@ -378,26 +421,28 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Dein Campus'), findsOneWidget);
     expect(find.text('Es sind noch keine Mensen hinterlegt.'), findsOneWidget);
     // …and moving on still works.
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
-    expect(find.text('Schritt 4 von 8'), findsOneWidget);
+    expect(find.text('Schritt 5 von 9'), findsOneWidget);
   });
 
-  testWidgets('calendar sources are configured in their own fifth step', (
+  testWidgets('calendar sources are configured in their own sixth step', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('Schritt 5 von 8'), findsOneWidget);
+    expect(find.text('Schritt 6 von 9'), findsOneWidget);
     expect(find.text('Dein Kalender'), findsOneWidget);
     expect(find.text('Stundenplan'), findsOneWidget);
     expect(find.text('Exchange-Termine'), findsOneWidget);
@@ -421,11 +466,11 @@ void main() {
         },
       );
 
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 6; i++) {
         await tester.tap(find.text('Weiter'));
         await tester.pumpAndSettle();
       }
-      expect(find.text('Schritt 6 von 8'), findsOneWidget);
+      expect(find.text('Schritt 7 von 9'), findsOneWidget);
       expect(find.text('Hochschulzugang'), findsOneWidget);
 
       await tester.enterText(
@@ -442,7 +487,7 @@ void main() {
 
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
-      expect(find.text('Schritt 7 von 8'), findsOneWidget);
+      expect(find.text('Schritt 8 von 9'), findsOneWidget);
       expect(find.text('Dienste verknüpfen'), findsOneWidget);
 
       await tester.tap(find.text('Studentische E-Mail'));
@@ -479,7 +524,7 @@ void main() {
         ],
       );
 
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 6; i++) {
         await tester.tap(find.text('Weiter'));
         await tester.pumpAndSettle();
       }
@@ -537,7 +582,7 @@ void main() {
     (WidgetTester tester) async {
       await pumpApp(tester);
 
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 6; i++) {
         await tester.tap(find.text('Weiter'));
         await tester.pumpAndSettle();
       }
@@ -573,14 +618,14 @@ void main() {
         ],
       );
 
-      for (var index = 0; index < 5; index++) {
+      for (var index = 0; index < 6; index++) {
         await tester.tap(find.text('Weiter'));
         await tester.pumpAndSettle();
       }
       await tester.tap(find.widgetWithText(TextButton, 'Überspringen'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Schritt 7 von 8'), findsOneWidget);
+      expect(find.text('Schritt 8 von 9'), findsOneWidget);
       final CheckboxListTile nextcloud = tester.widget<CheckboxListTile>(
         find.widgetWithText(CheckboxListTile, 'Nextcloud'),
       );
@@ -612,7 +657,7 @@ void main() {
       },
     );
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
@@ -668,7 +713,7 @@ void main() {
         },
       );
 
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 6; i++) {
         await tester.tap(find.text('Weiter'));
         await tester.pumpAndSettle();
       }
@@ -752,17 +797,17 @@ void main() {
     expect(en, contains('per service'));
   });
 
-  testWidgets('the notification step is eighth and enabled by default', (
+  testWidgets('the notification step is ninth and enabled by default', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('Schritt 8 von 8'), findsOneWidget);
+    expect(find.text('Schritt 9 von 9'), findsOneWidget);
     expect(find.text('Benachrichtigungen'), findsOneWidget);
     expect(
       tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
@@ -782,11 +827,11 @@ void main() {
       notificationGateway: gateway,
     );
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
-    expect(find.text('Schritt 8 von 8'), findsOneWidget);
+    expect(find.text('Schritt 9 von 9'), findsOneWidget);
 
     await tester.tap(find.text('Weiter'));
     await tester.pumpAndSettle();
@@ -809,7 +854,7 @@ void main() {
       notificationGateway: gateway,
     );
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
@@ -828,7 +873,7 @@ void main() {
     await pumpApp(tester, locale: AppLocales.english);
     expect(find.text('Choose your language'), findsOneWidget);
     expect(find.text('Skip all'), findsOneWidget);
-    expect(find.text('Step 1 of 8'), findsOneWidget);
+    expect(find.text('Step 1 of 9'), findsOneWidget);
   });
 
   testWidgets('survives a small phone with doubled text', (
@@ -890,12 +935,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
       await tester.tap(find.text('Weiter'));
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('Schritt 8 von 8'), findsOneWidget);
+    expect(find.text('Schritt 9 von 9'), findsOneWidget);
     expect(find.text('Benachrichtigungen'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -53,6 +53,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const List<OnboardingStep> _steps = <OnboardingStep>[
     OnboardingStep.language,
     OnboardingStep.welcome,
+    OnboardingStep.site,
     OnboardingStep.campus,
     OnboardingStep.content,
     OnboardingStep.calendar,

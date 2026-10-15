@@ -8,6 +8,7 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../core/locale/locale_mode.dart';
 import '../../../core/network/loaded.dart';
 import '../../../core/prefs/settings_controller.dart';
+import '../../../core/site/campus_site.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/brand_mark.dart';
@@ -22,7 +23,9 @@ import '../../campusmap/domain/map_catalog.dart';
 import '../../campusmap/presentation/default_building_picker.dart';
 import '../../canteen/application/canteen_providers.dart';
 import '../../canteen/data/canteen_models.dart';
+import '../../canteen/domain/canteen_sites.dart';
 import '../../news/presentation/channel_picker_sheet.dart';
+import '../../settings/presentation/campus_site_picker.dart';
 import '../../notifications/presentation/daily_summary_time_tile.dart';
 import '../../timetable/presentation/timetable_group_picker_sheet.dart';
 import '../../university_account/domain/university_identity.dart';
@@ -39,6 +42,7 @@ import 'onboarding_university_steps.dart';
 enum OnboardingStep {
   language,
   welcome,
+  site,
   campus,
   content,
   calendar,
@@ -98,6 +102,23 @@ class OnboardingStepView extends StatelessWidget {
           Panel(
             child: Text(
               l10n.aboutIndependenceNotice,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+      // Asked before everything it pre-selects: the canteen, the building and
+      // the contacts that come next all start from this answer.
+      OnboardingStep.site => _StepScaffold(
+        title: l10n.onboardingSiteTitle,
+        body: l10n.onboardingSiteBody,
+        icon: AppIcons.place_outlined,
+        children: <Widget>[
+          const CampusSiteOptions(),
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.md),
+            child: Text(
+              l10n.onboardingSiteHint,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -300,7 +321,12 @@ class _CanteenStep extends ConsumerWidget {
                   ref.read(settingsProvider.notifier).setPreferredCanteen(slug),
               child: Column(
                 children: <Widget>[
-                  for (final Canteen canteen in value.value)
+                  for (final Canteen canteen in orderCanteensForSite(
+                    value.value,
+                    ref.watch(
+                      settingsProvider.select((AppSettings s) => s.campusSite),
+                    ),
+                  ))
                     RadioListTile<String>.adaptive(
                       value: canteen.slug,
                       title: Text(canteen.displayName),
@@ -337,12 +363,23 @@ class _DefaultBuildingStep extends ConsumerWidget {
         onRetry: () => ref.invalidate(mapCatalogProvider),
       );
     }
+    final CampusSite site =
+        ref.watch(settingsProvider.select((AppSettings s) => s.campusSite)) ??
+        CampusSite.koethen;
+    final List<MapBuilding> siteBuildings = map.buildingsOf(site);
+    if (siteBuildings.isEmpty) {
+      // Not a failure: the site has no plans yet, and the map says so too.
+      return _Unavailable(
+        label: l10n.settingsDefaultBuilding,
+        message: l10n.onboardingNoPlansForSite,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _StepLabel(l10n.settingsDefaultBuilding),
         DefaultBuildingOptions(
-          buildings: map.buildings,
+          buildings: siteBuildings,
           chosen: chosen,
           onChanged: (String? key) =>
               ref.read(settingsProvider.notifier).setDefaultBuilding(key),

@@ -142,3 +142,19 @@ nur mit ihrer eigenen Datenbank.
 - nginx: Laufzeitverhalten des Medien-Caches (Syntax ist geprüft).
 
 Unabhängige, inoffizielle App — keine offizielle Anwendung der Hochschule Anhalt.
+
+## Nachtrag 16. Oktober 2026 — Standorte und Mensen (Backend und CMS)
+
+Diese Änderungen sind **additiv**; eine ältere App läuft weiter. Die neue App läuft auch gegen das alte
+Backend, zeigt dann aber weder Dessau noch Bernburg noch die Standortgruppen.
+
+1. **Datenbank:** `20261016120000_add_canteen_site` fügt `canteens.siteKey` (Standard `koethen`) hinzu.
+   Erst migrieren, dann API und Worker starten.
+2. **Mensen anlegen:** nach dem Deployment `seed:canteens` ausführen (legt Dessau und Bernburg an und
+   setzt den Standort aller Mensen), danach `sync:canteens` oder den nächsten Worker-Lauf abwarten.
+   Lokal geprüft: Dessau 29, Bernburg 18 Gerichte, keine abgelehnten Einträge.
+3. **Preisgruppe:** Die Bezeichnung „Bedienstete“ heißt jetzt „Mitarbeiter“. Das ist ein API-eigener Text.
+4. **CMS:** Das Schema von „Contact Area“ erhält das Pflichtfeld `site` (Köthen, Bernburg, Dessau;
+   Standard Köthen). Nach dem Deployment des CMS-Images bestehende Bereiche prüfen; ohne Angabe gelten sie
+   als Köthen. Bereiche für Bernburg und Dessau legt die Redaktion an.
+5. **OpenAPI:** `packages/openapi/openapi.json` ist neu erzeugt (`site` an Mensen und Kontaktbereichen).

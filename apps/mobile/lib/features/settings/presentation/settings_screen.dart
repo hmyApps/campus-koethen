@@ -23,6 +23,7 @@ import '../../requests/application/requests_local_data_wiper.dart';
 import '../../canteen/data/canteen_models.dart';
 import '../../canteen/presentation/canteen_picker_sheet.dart';
 import '../../campusmap/presentation/default_building_picker.dart';
+import 'campus_site_picker.dart';
 import '../../news/application/channel_subscriptions.dart';
 import '../../mail/application/mail_providers.dart';
 import '../../mail/domain/mail_cache_store.dart';
@@ -110,6 +111,15 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: Text(l10n.newsChannelCountLabel(selectedChannels)),
             trailing: const Icon(AppIcons.chevron_right),
             onTap: () => context.push(AppRoutes.channels),
+          ),
+          ListTile(
+            leading: const Icon(AppIcons.place_outlined),
+            title: Text(l10n.settingsCampusSite),
+            subtitle: Text(
+              settings.campusSite?.label(l10n) ?? l10n.settingsCampusSiteNone,
+            ),
+            trailing: const Icon(AppIcons.chevron_right),
+            onTap: () => showCampusSitePickerSheet(context),
           ),
           ListTile(
             leading: const Icon(AppIcons.restaurant_outlined),

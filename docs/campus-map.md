@@ -34,6 +34,9 @@ Die Einordnung bleibt als `planKind` (`schematic`) **im Katalog**. Die App legt 
 zusätzliches anklickbares Badge; Hinweise innerhalb der kanonischen SVG-Pläne bleiben davon
 unberührt.
 
+> **Standorte:** Jedes Gebäude trägt einen `siteKey` (`koethen`, `bernburg`, `dessau`); alle bisherigen
+> Pläne gehören zu Köthen. Die Karte gruppiert nach Standort, Details in [sites.md](sites.md).
+
 ## 1. Datenfluss
 
 ```
