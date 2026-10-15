@@ -23,6 +23,7 @@ import '../../mail/domain/mail_folder.dart';
 import '../application/daily_summary_providers.dart';
 import '../application/event_reminder_candidates.dart';
 import '../application/moodle_deadline_candidates.dart';
+import '../application/new_mail_notification.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_settings_controller.dart';
 import '../application/notification_tap_router.dart';
@@ -32,7 +33,6 @@ import '../domain/notification_gateway.dart';
 import '../domain/notification_payload.dart';
 import '../domain/notification_plan.dart';
 import '../domain/notification_permission.dart';
-import '../domain/notification_request.dart';
 
 /// Keeps the operating system's pending notifications equal to the current
 /// plan, and turns a tap on one of them into navigation.
@@ -187,33 +187,20 @@ class _NotificationHostState extends ConsumerState<NotificationHost>
         !permission.allowsDelivery) {
       return;
     }
-    if (!RegExp(r'^\d{1,20}$').hasMatch(event.newestMessageId)) return;
     await _channelSetup;
     // Channel creation crosses an asynchronous platform boundary. The mail
     // account may have been signed out or replaced while it was pending, so
-    // fence the event once more before exposing even a generic notification.
+    // fence the event once more before exposing anything.
     if (!mounted ||
         event.sessionGeneration != ref.read(mailSessionGenerationProvider)) {
       return;
     }
-    final AppLocalizations l10n = context.l10n;
-    await ref
-        .read(notificationGatewayProvider)
-        .showNow(
-          ImmediateNotification(
-            key:
-                '${NotificationCategory.newMail.keyPrefix}:'
-                '${event.newestMessageId}',
-            category: NotificationCategory.newMail,
-            title: l10n.mailNewNotificationTitle,
-            body: l10n.mailNewNotificationBody(event.count),
-            payload: NotificationPayload(
-              category: NotificationCategory.newMail,
-              target: event.newestMessageId,
-            ),
-            visibility: NotificationVisibility.neutral,
-          ),
-        );
+    final ImmediateNotification? notification = buildNewMailNotification(
+      l10n: context.l10n,
+      event: event,
+    );
+    if (notification == null) return;
+    await ref.read(notificationGatewayProvider).showNow(notification);
   }
 
   /// Re-plans when the calendar day has moved on.

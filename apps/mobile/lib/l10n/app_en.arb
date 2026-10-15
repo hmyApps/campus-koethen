@@ -1882,6 +1882,7 @@
   "@mailNewNotificationTitle": {},
   "mailNewNotificationBody": "{count, plural, =1{A new message has arrived.} other{{count} new messages have arrived.}}",
   "@mailNewNotificationBody": {"placeholders": {"count": {"type": "int"}}},
+  "mailNewNotificationNoSubject": "(No subject)",
   "notificationsTimetableMoodleNoticeTitle": "Timetable and Moodle",
   "@notificationsTimetableMoodleNoticeTitle": {},
   "notificationsTimetableMoodleNotice": "Timetable changes are shown in the timetable after a successful refresh. Moodle deadline reminders use the lead time selected above.",

@@ -49,28 +49,29 @@ Future<(ProviderContainer, FakeNotificationGateway)> _pumpHost(
 }
 
 void main() {
-  testWidgets('confirmed new mail is shown with neutral content after opt-in', (
-    WidgetTester tester,
-  ) async {
-    final (ProviderContainer container, FakeNotificationGateway gateway) =
-        await _pumpHost(tester);
-    await container
-        .read(notificationSettingsProvider.notifier)
-        .setOptedIn(true);
+  testWidgets(
+    'confirmed new mail is shown with sender and subject after opt-in',
+    (WidgetTester tester) async {
+      final (ProviderContainer container, FakeNotificationGateway gateway) =
+          await _pumpHost(tester);
+      await container
+          .read(notificationSettingsProvider.notifier)
+          .setOptedIn(true);
 
-    container.read(mailNewMessageEventProvider.notifier).publish(
-      const <MailMessageHeader>[_newMessage],
-    );
-    await tester.pumpAndSettle();
+      container.read(mailNewMessageEventProvider.notifier).publish(
+        const <MailMessageHeader>[_newMessage],
+      );
+      await tester.pumpAndSettle();
 
-    expect(gateway.shown, hasLength(1));
-    final notification = gateway.shown.single;
-    expect(notification.category, NotificationCategory.newMail);
-    expect(notification.visibility, NotificationVisibility.neutral);
-    expect(notification.payload.target, '4711');
-    expect(notification.title, isNot(contains(_newMessage.subject)));
-    expect(notification.body, isNot(contains(_newMessage.from.email)));
-  });
+      expect(gateway.shown, hasLength(1));
+      final notification = gateway.shown.single;
+      expect(notification.category, NotificationCategory.newMail);
+      expect(notification.visibility, NotificationVisibility.neutral);
+      expect(notification.payload.target, '4711');
+      expect(notification.title, _newMessage.from.display);
+      expect(notification.body, _newMessage.subject);
+    },
+  );
 
   testWidgets('new mail stays silent without the global opt-in', (
     WidgetTester tester,

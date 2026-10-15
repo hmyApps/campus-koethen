@@ -113,12 +113,19 @@ class MailNewMessageEvent {
     required this.sessionGeneration,
     required this.newestMessageId,
     required this.count,
+    this.newestSender,
+    this.newestSubject,
   });
 
   final int serial;
   final int sessionGeneration;
   final String newestMessageId;
   final int count;
+
+  /// What the newest message's header says, for the local notification only.
+  /// Never logged and never leaves the device.
+  final String? newestSender;
+  final String? newestSubject;
 }
 
 class MailNewMessageEvents extends Notifier<MailNewMessageEvent?> {
@@ -137,6 +144,8 @@ class MailNewMessageEvents extends Notifier<MailNewMessageEvent?> {
       sessionGeneration: ref.read(mailSessionGenerationProvider),
       newestMessageId: messages.first.id,
       count: messages.length,
+      newestSender: messages.first.from.display,
+      newestSubject: messages.first.subject,
     );
   }
 }

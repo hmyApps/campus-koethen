@@ -89,6 +89,7 @@ dependencies:
   # see lib/features/hsa_ki/crypto/. Must stay byte-compatible with HAWKI's own
   # WebCrypto-based frontend, never a "close enough" substitute.
   pointycastle: ^4.0.0
+  workmanager: ^0.10.10
 
 dev_dependencies:
   flutter_test:

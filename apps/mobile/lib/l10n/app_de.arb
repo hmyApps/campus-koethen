@@ -2924,6 +2924,8 @@
   "@mailNewNotificationTitle": {},
   "mailNewNotificationBody": "{count, plural, =1{Eine neue Nachricht ist eingegangen.} other{{count} neue Nachrichten sind eingegangen.}}",
   "@mailNewNotificationBody": {"placeholders": {"count": {"type": "int"}}},
+  "mailNewNotificationNoSubject": "(Kein Betreff)",
+  "@mailNewNotificationNoSubject": {},
   "notificationsTimetableMoodleNoticeTitle": "Stundenplan und Moodle",
   "@notificationsTimetableMoodleNoticeTitle": {},
   "notificationsTimetableMoodleNotice": "Stundenplanänderungen erscheinen nach einer erfolgreichen Aktualisierung im Stundenplan. Moodle-Fristerinnerungen verwenden den oben gewählten Vorlauf.",
