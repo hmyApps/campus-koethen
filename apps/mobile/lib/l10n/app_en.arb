@@ -1216,6 +1216,27 @@
   "@campusMapUnavailable": {
     "description": "Fehlerzustand des Kartenassets."
   },
+  "campusMapNoPlansForSite": "There are no site plans for {site} yet. Choose another site above.",
+  "@campusMapNoPlansForSite": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "campusMapSiteAndBuildingSemantic": "Choose site and building, currently {site}, {building}",
+  "@campusMapSiteAndBuildingSemantic": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "building": {
+        "type": "String"
+      }
+    }
+  },
+  "campusMapNoBuilding": "no building",
+  "campusMapSiteNoPlansEntry": "No site plans yet",
   "campusMapEmpty": "No rooms have been published yet.",
   "@campusMapEmpty": {
     "description": "Leerzustand, wenn die API keine Räume liefert."

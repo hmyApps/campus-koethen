@@ -3,6 +3,7 @@
 
 import 'package:campus_koethen/features/campusmap/data/map_asset_loader.dart';
 import 'package:campus_koethen/features/campusmap/domain/map_catalog.dart';
+import 'package:campus_koethen/core/site/campus_site.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -24,6 +25,46 @@ void main() {
         'koethen-03',
       ]);
       expect(catalog.hasSeveralBuildings, isTrue);
+    });
+
+    test(
+      'every current plan belongs to Köthen, the other sites have none',
+      () async {
+        final MapCatalog catalog = await const MapAssetLoader().load();
+
+        for (final MapBuilding building in catalog.buildings) {
+          expect(
+            building.site,
+            CampusSite.koethen,
+            reason: building.buildingKey,
+          );
+        }
+        expect(catalog.buildingsOf(CampusSite.koethen), hasLength(4));
+        expect(catalog.buildingsOf(CampusSite.bernburg), isEmpty);
+        expect(catalog.buildingsOf(CampusSite.dessau), isEmpty);
+      },
+    );
+
+    test('a building without a (or with an unknown) site is a Köthen one', () {
+      // A catalogue generated before sites existed, or by a newer generator.
+      expect(
+        MapBuilding.fromJson(<String, Object?>{'buildingKey': 'a'})!.site,
+        CampusSite.koethen,
+      );
+      expect(
+        MapBuilding.fromJson(<String, Object?>{
+          'buildingKey': 'a',
+          'siteKey': 'atlantis',
+        })!.site,
+        CampusSite.koethen,
+      );
+      expect(
+        MapBuilding.fromJson(<String, Object?>{
+          'buildingKey': 'a',
+          'siteKey': 'dessau',
+        })!.site,
+        CampusSite.dessau,
+      );
     });
 
     test('carries building and floor names in both languages', () async {

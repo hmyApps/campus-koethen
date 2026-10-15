@@ -2078,6 +2078,29 @@
   "@campusMapUnavailable": {
     "description": "Fehlerzustand des Kartenassets."
   },
+  "campusMapNoPlansForSite": "Für {site} liegen noch keine Lagepläne vor. Wähle oben einen anderen Standort.",
+  "@campusMapNoPlansForSite": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "campusMapSiteAndBuildingSemantic": "Standort und Gebäude auswählen, aktuell {site}, {building}",
+  "@campusMapSiteAndBuildingSemantic": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "building": {
+        "type": "String"
+      }
+    }
+  },
+  "campusMapNoBuilding": "kein Gebäude",
+  "@campusMapNoBuilding": {},
+  "campusMapSiteNoPlansEntry": "Noch keine Lagepläne",
+  "@campusMapSiteNoPlansEntry": {},
   "campusMapEmpty": "Es sind noch keine Räume veröffentlicht.",
   "@campusMapEmpty": {
     "description": "Leerzustand, wenn die API keine Räume liefert."

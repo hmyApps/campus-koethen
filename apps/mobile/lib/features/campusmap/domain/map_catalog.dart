@@ -4,6 +4,7 @@
 import 'dart:ui' show Offset, Rect;
 
 import '../../../core/network/json.dart';
+import '../../../core/site/campus_site.dart';
 
 /// The bundled, generated map catalogue.
 ///
@@ -58,6 +59,7 @@ class MapBuilding {
     required this.planKind,
     required this.sourceAttribution,
     required this.sortOrder,
+    this.site = CampusSite.koethen,
   });
 
   final String buildingKey;
@@ -66,6 +68,11 @@ class MapBuilding {
   final PlanKind planKind;
   final LocalisedName? sourceAttribution;
   final int sortOrder;
+
+  /// The campus site the building stands on. A catalogue that predates sites
+  /// (or names one this app does not know) means Köthen: every plan the
+  /// project has ever shipped is a Köthen one.
+  final CampusSite site;
 
   String? resolvedSourceAttribution(String localeCode) =>
       sourceAttribution?.resolve(localeCode);
@@ -87,6 +94,9 @@ class MapBuilding {
               en: asString(map?['sourceAttributionEn']) ?? sourceDe,
             ),
       sortOrder: asInt(map?['sortOrder']) ?? 0,
+      site:
+          CampusSite.fromStorage(asString(map?['siteKey'])) ??
+          CampusSite.koethen,
     );
   }
 }
@@ -272,6 +282,12 @@ class MapCatalog {
   /// The building picker only appears once this is true, so a single-building
   /// bundle looks exactly as it did before.
   bool get hasSeveralBuildings => buildings.length > 1;
+
+  /// The buildings of one campus site, in display order.
+  List<MapBuilding> buildingsOf(CampusSite site) => <MapBuilding>[
+    for (final MapBuilding building in buildings)
+      if (building.site == site) building,
+  ];
 
   /// The building a floor belongs to, or `null` for an unknown floor.
   String? buildingOfFloor(String? floorKey) =>

@@ -3,6 +3,8 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/site/campus_site.dart';
+
 import '../../../core/locale/locale_providers.dart';
 import '../../../core/network/loaded.dart';
 import '../../contacts/application/contacts_providers.dart';
@@ -118,6 +120,13 @@ class VisibleBuildingController extends Notifier<String?> {
   @override
   String? build() => null;
 
+  /// Forgets the explicit building and floor, so the map falls back to what
+  /// the shown site and the settings say.
+  void reset() {
+    state = null;
+    ref.read(visibleFloorProvider.notifier).show(null);
+  }
+
   /// Switches the building and leaves the rest of the map consistent with it.
   ///
   /// A floor of the previous building must not stay active, and neither must a
@@ -141,6 +150,27 @@ class VisibleBuildingController extends Notifier<String?> {
     if (map?.geometryFor(selected)?.buildingKey != buildingKey) {
       ref.read(selectedRoomProvider.notifier).clear();
     }
+  }
+}
+
+/// The campus site the reader picked on the map, or `null` while they have
+/// not. Without a pick the map follows the preferred site of the settings.
+final NotifierProvider<VisibleSiteController, CampusSite?> visibleSiteProvider =
+    NotifierProvider<VisibleSiteController, CampusSite?>(
+      VisibleSiteController.new,
+    );
+
+class VisibleSiteController extends Notifier<CampusSite?> {
+  @override
+  CampusSite? build() => null;
+
+  /// Switches to [site] and drops what belonged to the previous one: the
+  /// building, the floor and a selected room would otherwise keep the old
+  /// site's plan on screen.
+  void show(CampusSite site) {
+    state = site;
+    ref.read(selectedRoomProvider.notifier).clear();
+    ref.read(visibleBuildingProvider.notifier).reset();
   }
 }
 
