@@ -8,6 +8,7 @@ import '../../../core/network/loaded.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../data/canteen_models.dart';
 import '../data/canteen_repository.dart';
+import '../domain/canteen_sites.dart';
 import '../domain/meal_highlight.dart';
 
 /// The canteen list. Comes exclusively from the API.
@@ -33,7 +34,12 @@ final Provider<String?> selectedCanteenSlugProvider = Provider<String?>((
   final bool preferredExists = canteens.any(
     (Canteen canteen) => canteen.slug == preferred,
   );
-  return preferredExists ? preferred : canteens.first.slug;
+  if (preferredExists) return preferred;
+  // Nothing chosen by hand: the first canteen of the reader's own site.
+  return orderCanteensForSite(
+    canteens,
+    ref.watch(settingsProvider.select((AppSettings s) => s.campusSite)),
+  ).first.slug;
 });
 
 /// The menu of one canteen for the cached two-week window.

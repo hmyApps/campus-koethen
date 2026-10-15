@@ -7,11 +7,13 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 
 import '../../../core/network/loaded.dart';
 import '../../../core/prefs/settings_controller.dart';
+import '../../../core/site/campus_site.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../l10n/l10n.dart';
 import '../application/canteen_providers.dart';
 import '../data/canteen_models.dart';
+import '../domain/canteen_sites.dart';
 
 /// Opens the canteen picker as a modal bottom sheet.
 Future<void> showCanteenPickerSheet(BuildContext context) {
@@ -82,6 +84,18 @@ class CanteenPickerList extends ConsumerWidget {
       );
     }
 
+    final List<Canteen> ordered = orderCanteensForSite(
+      canteens,
+      ref.watch(settingsProvider.select((AppSettings s) => s.campusSite)),
+    );
+    final bool several =
+        ordered
+            .map((Canteen c) => c.site)
+            .whereType<CampusSite>()
+            .toSet()
+            .length >
+        1;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +127,13 @@ class CanteenPickerList extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              for (final Canteen canteen in canteens)
+              for (final Canteen canteen in ordered) ...<Widget>[
+                // Headings only when there is more than one site to tell
+                // apart, so a single-site list looks as it always did.
+                if (several &&
+                    canteen.site != null &&
+                    _startsGroup(ordered, canteen))
+                  _SiteHeading(label: canteen.site!.label(l10n)),
                 RadioListTile<String>.adaptive(
                   value: canteen.slug,
                   title: Text(canteen.displayName),
@@ -121,10 +141,44 @@ class CanteenPickerList extends ConsumerWidget {
                       ? null
                       : Text(canteen.campusLabel!),
                 ),
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Whether [canteen] is the first of its site in [ordered].
+bool _startsGroup(List<Canteen> ordered, Canteen canteen) {
+  final int index = ordered.indexOf(canteen);
+  return index == 0 || ordered[index - 1].site != canteen.site;
+}
+
+class _SiteHeading extends StatelessWidget {
+  const _SiteHeading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
+      child: Semantics(
+        header: true,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
     );
   }
 }

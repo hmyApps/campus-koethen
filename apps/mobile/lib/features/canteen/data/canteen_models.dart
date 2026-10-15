@@ -2,6 +2,7 @@
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
 import '../../../core/network/json.dart';
+import '../../../core/site/campus_site.dart';
 import '../domain/meal_taxonomy.dart';
 
 /// A canteen as delivered by `GET /v1/canteens`.
@@ -13,6 +14,7 @@ class Canteen {
     required this.slug,
     required this.displayName,
     this.campusLabel,
+    this.site,
     this.lastSuccessfulSyncAt,
     this.dataStale = false,
   });
@@ -20,6 +22,10 @@ class Canteen {
   final String slug;
   final String displayName;
   final String? campusLabel;
+
+  /// The campus site the canteen belongs to, or `null` for an API that does
+  /// not say (or names a site this app does not know).
+  final CampusSite? site;
 
   /// `null` means: never successfully synchronised.
   final DateTime? lastSuccessfulSyncAt;
@@ -35,6 +41,7 @@ class Canteen {
       slug: slug,
       displayName: asString(map['displayName']) ?? slug,
       campusLabel: asString(map['campusLabel']),
+      site: CampusSite.fromStorage(asString(map['site'])),
       lastSuccessfulSyncAt: asDateTime(map['lastSuccessfulSyncAt']),
       dataStale: asBool(map['dataStale']) ?? false,
     );
