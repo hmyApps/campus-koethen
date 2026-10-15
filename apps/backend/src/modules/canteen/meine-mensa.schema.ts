@@ -89,7 +89,7 @@ export const PRICE_FIELD_TO_GROUP: Record<string, PriceGroup> = {
 
 export const PRICE_GROUP_LABELS: Record<PriceGroup, { de: string; en: string }> = {
   student: { de: 'Studierende', en: 'Students' },
-  employee: { de: 'Bedienstete', en: 'Employees' },
+  employee: { de: 'Mitarbeiter', en: 'Employees' },
   guest: { de: 'Gäste', en: 'Guests' },
 };
 

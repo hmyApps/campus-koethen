@@ -131,7 +131,7 @@ Map<String, dynamic> menuFixture(DateTime date) => <String, dynamic>{
             },
             <String, dynamic>{
               'group': 'employee',
-              'label': 'Bedienstete',
+              'label': 'Mitarbeiter',
               'amount': '4.95',
               'currency': 'EUR',
             },

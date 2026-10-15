@@ -101,6 +101,8 @@ Betreiber: Studentenwerk Halle. Kein Token erforderlich. Antwort ist `applicatio
 | ------------- | ------------------------ | ------------------- | -------------- |
 | `7`           | `koethen-fasanerieallee` | Mensa Köthen        | Fasanerieallee |
 | `22`          | `koethen-lohmannstrasse` | Mensa Lohmannstraße | Lohmannstraße  |
+| `13`          | `dessau`                 | Mensa Dessau        | Dessau         |
+| `8`           | `bernburg`               | Mensa Bernburg      | Bernburg       |
 
 Diese Zuordnung ist **Backend-Konfiguration** (`apps/backend/src/modules/canteen/canteens.config.ts`).
 Flutter kennt keine Location-IDs. Eine weitere Mensa erfordert kein App-Release.
@@ -124,7 +126,7 @@ Am 22.07.2026 real gegen beide Standorte geprüft (HTTP 200):
         "name_2": "mit Kichererbsen, Wirsing und Kräuterdip",
         "ingredients": ["2", "52", "53", "A1", "A3", "G2"],
         "price_1": 1.95, // Studierende
-        "price_2": 4.95, // Bedienstete
+        "price_2": 4.95, // Mitarbeiter
         "price_3": 7, // Gäste  ← kann Integer sein, nicht nur Dezimal
         "extra_1": "",
         "extra_2": "",
@@ -199,7 +201,7 @@ Bewusst **nicht** zugeordnet ist `48` „Fisch": das ist die Fleischart, nicht d
 | Feld      | Slug       | Label DE    | Label EN  |
 | --------- | ---------- | ----------- | --------- |
 | `price_1` | `student`  | Studierende | Students  |
-| `price_2` | `employee` | Bedienstete | Employees |
+| `price_2` | `employee` | Mitarbeiter | Employees |
 | `price_3` | `guest`    | Gäste       | Guests    |
 
 **Alle** verfügbaren Preisgruppen werden gespeichert und ausgeliefert. Die Zuordnung

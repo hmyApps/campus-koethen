@@ -416,7 +416,7 @@ describe('CanteenService menu derivation', () => {
 
     expect(menu.days[0]!.meals[0]!.prices).toEqual([
       { group: 'student', label: 'Studierende', amount: '3.50', currency: 'EUR' },
-      { group: 'employee', label: 'Bedienstete', amount: '5.05', currency: 'EUR' },
+      { group: 'employee', label: 'Mitarbeiter', amount: '5.05', currency: 'EUR' },
       { group: 'guest', label: 'Gäste', amount: '7.00', currency: 'EUR' },
     ]);
   });

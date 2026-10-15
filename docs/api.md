@@ -558,7 +558,7 @@ Ausschließlich aus Backend-Daten. Der Client kennt **keine** `location_id`.
             "allergens": ["gluten", "gluten_wheat"],
             "prices": [
               { "group": "student", "label": "Studierende", "amount": "1.95", "currency": "EUR" },
-              { "group": "employee", "label": "Bedienstete", "amount": "4.95", "currency": "EUR" },
+              { "group": "employee", "label": "Mitarbeiter", "amount": "4.95", "currency": "EUR" },
               { "group": "guest", "label": "Gäste", "amount": "7.00", "currency": "EUR" },
             ],
           },
