@@ -4,6 +4,8 @@
 import 'dart:async';
 
 import 'package:campus_koethen/core/locale/locale_mode.dart';
+import 'package:campus_koethen/features/document_wallet/application/document_wallet_controller.dart';
+import 'package:campus_koethen/features/document_wallet/domain/wallet_document.dart';
 import 'package:campus_koethen/features/grades/application/grade_account_controller.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_credentials.dart';
@@ -133,6 +135,7 @@ class _Fixtures {
   final InMemoryGradeCacheStore gradeCache = InMemoryGradeCacheStore();
   final InMemoryGradePortalStore gradePortalStore = InMemoryGradePortalStore();
   final InMemoryMoodleCacheStore moodleCache = InMemoryMoodleCacheStore();
+  final _MemoryWalletStore walletStore = _MemoryWalletStore();
 
   List<Override> get overrides => <Override>[
     mailCredentialStoreProvider.overrideWithValue(mailStore),
@@ -154,6 +157,7 @@ class _Fixtures {
     nextcloudFavouriteStoreProvider.overrideWithValue(nextcloudFavouriteStore),
     nextcloudGatewayProvider.overrideWithValue(nextcloudGateway),
     hsaKiCredentialStoreProvider.overrideWithValue(hsaKiStore),
+    documentWalletStoreProvider.overrideWithValue(walletStore),
   ];
 
   Future<void> signInAll() async {
@@ -474,4 +478,67 @@ void main() {
       expect(await fixtures.identityStore.read(), isNull);
     },
   );
+
+  for (final bool failing in <bool>[false, true]) {
+    test(
+      failing
+          ? 'a wallet that cannot be wiped keeps the identity for the retry'
+          : 'complete deletion also wipes user-saved wallet files',
+      () async {
+        final _Fixtures fixtures = _Fixtures(mailGateway: FakeMailGateway());
+        fixtures.walletStore.failClear = failing;
+        await fixtures.identityStore.write(_identity);
+        final ProviderContainer container = ProviderContainer(
+          overrides: <Override>[
+            ...fixtures.overrides,
+            universityIdentityStoreProvider.overrideWithValue(
+              fixtures.identityStore,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final SignOutEverywhereResult result = await container
+            .read(signOutEverywhereServiceProvider)
+            .signOutAll();
+
+        expect(result.isFullSuccess, !failing);
+        expect(fixtures.walletStore.fullClears, failing ? 0 : 1);
+        expect(
+          await fixtures.identityStore.read(),
+          failing ? isNotNull : isNull,
+        );
+      },
+    );
+  }
+}
+
+class _MemoryWalletStore implements DocumentWalletStore {
+  int fullClears = 0;
+  bool failClear = false;
+
+  @override
+  Future<List<WalletDocument>> readAll() async => const <WalletDocument>[];
+
+  @override
+  Future<void> save(WalletDocument document) async {}
+
+  @override
+  Future<void> delete(WalletDocumentKind kind) async {}
+
+  @override
+  Future<void> deleteCustom(String id) async {}
+
+  @override
+  Future<void> clearGradeLinked() async {}
+
+  @override
+  Future<void> clear() async {
+    if (failClear) {
+      throw const DocumentWalletFailure(
+        DocumentWalletFailureKind.storageUnavailable,
+      );
+    }
+    fullClears++;
+  }
 }

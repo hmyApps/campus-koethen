@@ -87,7 +87,7 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
     }
     final String payload = jsonEncode(<String, Object>{
       'kind': document.kind.storageValue,
-      if (customId != null) 'id': customId,
+      'id': ?customId,
       'filename': document.filename,
       'mediaType': custom ? document.mediaType : 'application/pdf',
       'savedAt': document.savedAt.toUtc().toIso8601String(),

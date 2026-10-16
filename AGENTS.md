@@ -101,7 +101,8 @@ Diese Datei ist für automatisierte und menschliche Beiträge gleichermaßen ver
      SharedPreferences oder einem Campus-Backend gespeichert. Erlaubt sind nur Login Flow v2,
      die OCS-Abfrage des eigenen Benutzerprofils, der Widerruf des eigenen App-Passworts sowie
      WebDAV-Aufrufe unter `/remote.php/dav/files/{eigene Nutzer-ID}`. Schreibzugriffe sind eng
-     begrenzt auf bewusst ausgelöste Uploads ohne stilles Überschreiben und bestätigtes Löschen;
+     begrenzt auf bewusst ausgelöste Uploads (Dateipicker oder der bestätigte, unverschlüsselte
+     Export einer Datei aus der Offline-Dokumentenablage) ohne stilles Überschreiben und bestätigtes Löschen;
      ein Ordner-DELETE muss ausdrücklich auf die rekursive Wirkung hinweisen. Nach separater
      Bestätigung darf die OCS-Share-API einen nur lesbaren öffentlichen Link (`shareType=3`,
      `permissions=1`) erzeugen. Der Link bleibt flüchtig, wird nie geloggt oder persistiert und

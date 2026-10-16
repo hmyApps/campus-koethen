@@ -93,7 +93,10 @@ zugehörige Navigationsvorgang lebt. Eine Weitergabe erfolgt ausschließlich nac
 Teilen-/Speichern-Aktion der nutzenden Person.
 
 Der System-Dateipicker liefert für einen Upload nur Name, MIME-Typ, Größe und einen lesenden
-Stream. Campus Köthen kopiert die Datei nicht in einen eigenen persistenten Cache. Öffentliche
+Stream. Campus Köthen kopiert die Datei nicht in einen eigenen persistenten Cache. Eine zweite,
+ebenfalls bewusst ausgelöste Uploadquelle ist die Offline-Dokumentenablage: „In Nextcloud
+exportieren“ fragt zuerst, ob die Datei unverschlüsselt die Ablage verlassen darf, lässt dann einen
+Zielordner wählen und lädt ohne Überschreiben hoch. Es gibt keinen automatischen Export. Öffentliche
 Links werden nach der Bestätigung unmittelbar an das OS-Share-Sheet übergeben. Das Erzeugen eines
 Links macht die ausgewählte Ressource für jede Person mit dem Link lesbar; die App weist darauf vor
 dem Netzwerkaufruf ausdrücklich hin. Die Freigabe bleibt serverseitig aktiv, bis sie in Nextcloud

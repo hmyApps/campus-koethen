@@ -15,6 +15,7 @@ import '../../../core/widgets/status_banner.dart';
 import '../../../l10n/l10n.dart';
 import '../application/document_wallet_controller.dart';
 import '../domain/wallet_document.dart';
+import 'wallet_nextcloud_export.dart';
 
 class DocumentWalletScreen extends ConsumerWidget {
   const DocumentWalletScreen({super.key});
@@ -94,41 +95,55 @@ class _WalletDocumentTile extends ConsumerWidget {
                 DocumentViewerScreen(document: document.toAppDocument()),
           ),
         ),
-        trailing: IconButton(
-          tooltip: l10n.documentWalletDelete,
-          icon: const Icon(AppIcons.delete_outline),
-          onPressed: () async {
-            final bool confirmed =
-                await showDialog<bool>(
-                  context: context,
-                  builder: (BuildContext context) => AlertDialog(
-                    title: Text(l10n.documentWalletDeleteTitle),
-                    content: Text(l10n.documentWalletDeleteMessage(title)),
-                    actions: <Widget>[
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: Text(l10n.documentWalletCancel),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            IconButton(
+              tooltip: l10n.documentWalletExportAction,
+              icon: const Icon(AppIcons.upload_file_outlined),
+              onPressed: () => exportWalletDocumentToNextcloud(
+                context,
+                ref,
+                document.toAppDocument(),
+              ),
+            ),
+            IconButton(
+              tooltip: l10n.documentWalletDelete,
+              icon: const Icon(AppIcons.delete_outline),
+              onPressed: () async {
+                final bool confirmed =
+                    await showDialog<bool>(
+                      context: context,
+                      builder: (BuildContext context) => AlertDialog(
+                        title: Text(l10n.documentWalletDeleteTitle),
+                        content: Text(l10n.documentWalletDeleteMessage(title)),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: Text(l10n.documentWalletCancel),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: Text(l10n.documentWalletDelete),
+                          ),
+                        ],
                       ),
-                      FilledButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: Text(l10n.documentWalletDelete),
-                      ),
-                    ],
-                  ),
-                ) ??
-                false;
-            if (!confirmed) return;
-            try {
-              await ref
-                  .read(documentWalletControllerProvider.notifier)
-                  .delete(document);
-            } catch (_) {
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.documentWalletDeleteFailed)),
-              );
-            }
-          },
+                    ) ??
+                    false;
+                if (!confirmed) return;
+                try {
+                  await ref
+                      .read(documentWalletControllerProvider.notifier)
+                      .delete(document);
+                } catch (_) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n.documentWalletDeleteFailed)),
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ),
     );

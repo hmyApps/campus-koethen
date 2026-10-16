@@ -53,6 +53,17 @@ Diese Erweiterung umfasst vier voneinander getrennte Funktionen:
 | Dokumenten-Wallet     | `campus_document_wallet_v1`              | neueste PDF je Art, maximal 25 MiB je PDF       | einzeln oder zusammen mit Konto-/Portalwechsel und Noten-Komplettlöschung |
 | Moodle-Fristen        | bestehender verschlüsselter Moodle-Cache | bestehende Moodle-Regeln                        | bestehende Moodle-Komplettlöschung                                        |
 
+## Eigene Dokumente und Export
+
+- Anhänge heruntergeladener Mails lassen sich über „Verschlüsselt offline speichern“ in die Ablage
+  legen. Beliebige Dateitypen sind erlaubt (bis 25 MiB), jede Datei hat eine zufällige Kennung. Dafür
+  ist keine Anmeldung im Studienservice nötig.
+- Sie bleiben beim Trennen des Notenkontos erhalten (das entfernt nur die Studienservice-Bescheinigungen)
+  und werden von „Hochschulzugang vollständig löschen“ mitgelöscht; scheitert das, bleibt die zentrale
+  Identität für den Retry erhalten.
+- „In Nextcloud exportieren“ legt eine Datei unverschlüsselt im gewählten Ordner der eigenen Nextcloud
+  ab, nach ausdrücklicher Warnung und ohne Überschreiben.
+
 ## Bedienung und Barrierefreiheit
 
 - Neue Kategorien besitzen getrennte Schalter und Android-Kanäle.

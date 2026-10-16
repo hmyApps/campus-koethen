@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:campus_koethen/features/settings/application/sign_out_everywhere_controller.dart';
 import 'package:campus_koethen/features/settings/domain/direct_service.dart';
+import 'package:campus_koethen/features/document_wallet/application/document_wallet_controller.dart';
 import 'package:campus_koethen/features/grades/application/grades_providers.dart';
 import 'package:campus_koethen/features/grades/domain/grade_portal.dart';
 import 'package:campus_koethen/features/hsa_ki/application/hsa_ki_consent.dart';
@@ -23,6 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fake_wallet_store.dart';
 import '../../support/fake_grades.dart' as grades;
 import '../../support/fake_mail.dart';
 import '../../support/fake_moodle.dart' as moodle;
@@ -165,6 +167,7 @@ ProviderContainer _container(
 }) => ProviderContainer(
   overrides: <Override>[
     ...extraOverrides,
+    documentWalletStoreProvider.overrideWithValue(NoopWalletStore()),
     universityIdentityStoreProvider.overrideWithValue(store),
     if (snapshot != null)
       universityServiceConnectionSnapshotProvider.overrideWithValue(snapshot),
