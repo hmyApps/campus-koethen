@@ -617,6 +617,20 @@ class EnoughMailGateway implements MailGateway {
     });
   }
 
+  /// Folder names that mean "trash" on servers that flag no special use,
+  /// compared case-insensitively. Exchange localises them.
+  static const Set<String> _trashFolderNames = <String>{
+    'trash',
+    'deleted items',
+    'deleted messages',
+    'gelöschte elemente',
+    'gelöschte objekte',
+    'gelöschte nachrichten',
+    'papierkorb',
+  };
+
+  static String _folderKey(Mailbox box) => box.name.trim().toLowerCase();
+
   @override
   Future<void> deleteMessage(
     domain.MailCredentials credentials, {
@@ -631,15 +645,10 @@ class EnoughMailGateway implements MailGateway {
           throw const MailFailure(MailFailureKind.protocol);
         }
         final List<Mailbox> boxes = await client.listMailboxes(recursive: true);
+        // Exchange marks no special-use folder and names its trash by locale.
         Mailbox? trash = boxes.where((Mailbox box) => box.isTrash).firstOrNull;
         trash ??= boxes
-            .where(
-              (Mailbox box) =>
-                  box.name == 'Trash' ||
-                  box.name == 'Deleted Items' ||
-                  box.name == 'Gelöschte Elemente' ||
-                  box.name == 'Papierkorb',
-            )
+            .where((Mailbox box) => _trashFolderNames.contains(_folderKey(box)))
             .firstOrNull;
         await _select(
           client,
@@ -656,10 +665,17 @@ class EnoughMailGateway implements MailGateway {
           // enough_mail sets no response timeout for MOVE/COPY. On timeout
           // [_withImap] closes the socket instead of sending LOGOUT.
           if (client.serverInfo.supportsMove) {
-            await client
-                .uidMove(sequence, targetMailbox: trash)
-                .timeout(_commandTimeout);
-            return;
+            try {
+              await client
+                  .uidMove(sequence, targetMailbox: trash)
+                  .timeout(_commandTimeout);
+              return;
+            } on ImapException {
+              // Some servers advertise MOVE and still refuse it for a folder
+              // (permissions, a virtual trash). Copy-and-delete does the same
+              // job; a timeout or a dropped connection is not retried.
+              if (!client.serverInfo.supportsUidPlus) rethrow;
+            }
           }
           if (!client.serverInfo.supportsUidPlus) {
             // A broad EXPUNGE could irreversibly remove unrelated messages

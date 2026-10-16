@@ -286,6 +286,79 @@ void main() {
       expect(find.text('Hallo Welt'), findsOneWidget);
     });
 
+    testWidgets('a message can be deleted from the list with a long press, '
+        'after a confirmation', (WidgetTester tester) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_header()]);
+      final FakeMailGateway gateway = FakeMailGateway();
+      await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(gateway, store, cache: cache),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Hallo Welt'));
+      await tester.pumpAndSettle();
+      expect(find.text('E-Mail löschen?'), findsOneWidget);
+      expect(gateway.deletedMessages, isEmpty, reason: 'not before confirming');
+
+      await tester.tap(find.text('Löschen'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.deletedMessages, hasLength(1));
+      expect(find.text('Hallo Welt'), findsNothing);
+      expect(find.text('E-Mail gelöscht.'), findsOneWidget);
+    });
+
+    testWidgets('cancelling the confirmation deletes nothing', (
+      WidgetTester tester,
+    ) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_header()]);
+      final FakeMailGateway gateway = FakeMailGateway();
+      await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(gateway, store, cache: cache),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Hallo Welt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.deletedMessages, isEmpty);
+      expect(find.text('Hallo Welt'), findsOneWidget);
+    });
+
+    testWidgets('a failed server delete keeps the message and says why', (
+      WidgetTester tester,
+    ) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_header()]);
+      final FakeMailGateway gateway = FakeMailGateway()
+        ..deleteError = const MailFailure(MailFailureKind.timeout);
+      await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(gateway, store, cache: cache),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Hallo Welt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Löschen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hallo Welt'), findsOneWidget);
+      expect(find.text('E-Mail gelöscht.'), findsNothing);
+    });
+
     testWidgets('offers loading 100 older messages at the end of the inbox', (
       WidgetTester tester,
     ) async {

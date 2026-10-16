@@ -84,6 +84,9 @@ class FakeMailGateway implements MailGateway {
   MailFailure? verifyError;
   MailFailure? fetchInboxError;
   MailFailure? sendError;
+
+  /// Makes every `deleteMessage` fail, as a refusing server does.
+  MailFailure? deleteError;
   List<MailMessageHeader> inbox;
   List<MailMessageHeader> olderInbox;
   MailMessageDetail? detail;
@@ -265,6 +268,7 @@ class FakeMailGateway implements MailGateway {
     int? expectedUidValidity,
   }) async {
     lastExpectedUidValidity = expectedUidValidity;
+    if (deleteError != null) throw deleteError!;
     deletedMessages.add((mailboxPath: mailboxPath, id: id));
   }
 
