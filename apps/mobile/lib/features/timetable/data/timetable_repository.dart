@@ -8,6 +8,7 @@ import '../../../core/cache/cache_providers.dart';
 import '../../../core/cache/content_cache.dart';
 import '../../../core/locale/formatters.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_meta.dart';
 import '../../../core/network/cached_endpoint.dart';
 import '../../../core/network/loaded.dart';
@@ -103,13 +104,73 @@ class TimetableRepository {
   Future<Loaded<List<TimetableModule>>> fetchModules({
     required String locale,
     required String groupId,
-  }) => _endpoint.load<List<TimetableModule>>(
-    path: '/timetable/modules',
-    cacheKey: CacheKeys.timetableModules(locale, groupId),
-    locale: locale,
-    query: <String, Object?>{'groupId': groupId},
-    parse: TimetableModule.listFromJson,
-  );
+  }) async {
+    try {
+      return await _endpoint.load<List<TimetableModule>>(
+        path: '/timetable/modules',
+        cacheKey: CacheKeys.timetableModules(locale, groupId),
+        locale: locale,
+        query: <String, Object?>{'groupId': groupId},
+        parse: TimetableModule.listFromJson,
+      );
+    } on ApiFailure catch (failure) {
+      // A deployment older than the module catalogue answers the unknown
+      // route with a plain NOT_FOUND. The reader would then never see a
+      // single module of another course, so they are read from that group's
+      // own lessons instead. An unknown *group* has its own error code and
+      // stays an error.
+      if (failure.kind != ApiFailureKind.notFound ||
+          failure.code != 'NOT_FOUND') {
+        rethrow;
+      }
+      return _modulesFromLessons(locale: locale, groupId: groupId);
+    }
+  }
+
+  /// The modules a group's lessons of the next six weeks name, once each.
+  Future<Loaded<List<TimetableModule>>> _modulesFromLessons({
+    required String locale,
+    required String groupId,
+  }) async {
+    final DateTime now = DateTime.now();
+    final DateTime from = DateTime(now.year, now.month, now.day);
+    // The endpoint caps a range at 42 days.
+    final DateTime to = DateTime(from.year, from.month, from.day + 41);
+    final Loaded<Timetable> lessons = await fetchEntries(
+      locale: locale,
+      groupId: groupId,
+      from: from,
+      to: to,
+    );
+    final Map<String, TimetableModule> modules = <String, TimetableModule>{};
+    for (final TimetableDay day in lessons.value.days) {
+      for (final TimetableEntry entry in day.entries) {
+        final String? key = entry.moduleKey;
+        final String title = entry.title?.trim() ?? '';
+        if (key == null || title.isEmpty) continue;
+        modules.putIfAbsent(
+          key,
+          () => TimetableModule(
+            title: title,
+            subjectCode: entry.subjectCode?.trim().isEmpty ?? true
+                ? null
+                : entry.subjectCode!.trim(),
+            moduleKey: key,
+          ),
+        );
+      }
+    }
+    final List<TimetableModule> sorted = modules.values.toList()
+      ..sort(
+        (TimetableModule a, TimetableModule b) => a.title.compareTo(b.title),
+      );
+    return Loaded<List<TimetableModule>>(
+      value: List<TimetableModule>.unmodifiable(sorted),
+      meta: lessons.meta,
+      fromCache: lessons.fromCache,
+      cachedAt: lessons.cachedAt,
+    );
+  }
 
   Future<Loaded<TimetableLessonInfoOptions>> fetchLessonInfo({
     required String locale,

@@ -162,6 +162,75 @@ void main() {
     });
   });
 
+  group('fetchModules against a backend without the catalogue', () {
+    // A deployment older than the module catalogue answers the unknown route
+    // with a plain NOT_FOUND. The single-module choice must still work, so
+    // the modules are read from the group's own lessons.
+    FakeHttpAdapter oldBackend({String code = 'NOT_FOUND'}) =>
+        FakeHttpAdapter((RequestOptions options) {
+          if (options.path.endsWith('/timetable/modules')) {
+            return FakeHttpResponse(<String, dynamic>{
+              'error': <String, dynamic>{
+                'status': 404,
+                'code': code,
+                'message': 'nicht gefunden',
+              },
+            }, statusCode: 404);
+          }
+          return FakeHttpResponse(
+            envelope(timetableWeekFixture(_monday), meta: timetableMeta()),
+          );
+        });
+
+    test('derives the modules from the lessons of the group', () async {
+      final FakeHttpAdapter adapter = oldBackend();
+
+      final Loaded<List<TimetableModule>> loaded = await buildRepository(
+        adapter,
+      ).fetchModules(locale: 'de', groupId: timetableGroupIdFixture);
+
+      expect(loaded.value, isNotEmpty);
+      expect(
+        loaded.value.map((TimetableModule m) => m.moduleKey).toSet(),
+        hasLength(loaded.value.length),
+        reason: 'every module once',
+      );
+      final Iterable<RequestOptions> lessons = adapter.requests.where(
+        (RequestOptions r) => r.path.endsWith('/timetable/entries'),
+      );
+      expect(lessons, isNotEmpty);
+      expect(
+        lessons.first.uri.query,
+        contains('groupId=$timetableGroupIdFixture'),
+      );
+    });
+
+    test('the keys match the ones the lessons themselves carry', () async {
+      final Loaded<List<TimetableModule>> loaded = await buildRepository(
+        oldBackend(),
+      ).fetchModules(locale: 'de', groupId: timetableGroupIdFixture);
+      final Timetable week = Timetable.fromJson(timetableWeekFixture(_monday))!;
+      final Set<String> lessonKeys = <String>{
+        for (final TimetableDay day in week.days)
+          for (final TimetableEntry entry in day.entries) ?entry.moduleKey,
+      };
+
+      expect(
+        loaded.value.map((TimetableModule m) => m.moduleKey).toSet(),
+        lessonKeys,
+      );
+    });
+
+    test('an unknown group is still an error, not an empty list', () async {
+      await expectLater(
+        buildRepository(
+          oldBackend(code: 'TIMETABLE_GROUP_NOT_FOUND'),
+        ).fetchModules(locale: 'de', groupId: timetableGroupIdFixture),
+        throwsA(isA<ApiFailure>()),
+      );
+    });
+  });
+
   group('fetchEntries', () {
     test(
       'sends groupId, from and to exactly as the contract requires',
