@@ -48,6 +48,7 @@ abstract final class AppIcons {
   static const IconData circle_outlined = TablerIcons.circle;
   static const IconData clear = TablerIcons.x;
   static const IconData close = TablerIcons.x;
+  static const IconData cloud_upload_outlined = TablerIcons.cloud_upload;
   static const IconData cloud_off_outlined = TablerIcons.cloud_off;
   static const IconData cloud_outlined = TablerIcons.cloud;
   static const IconData construction_outlined = TablerIcons.tools;
@@ -101,6 +102,7 @@ abstract final class AppIcons {
   static const IconData language_outlined = TablerIcons.language;
   static const IconData layers_clear_outlined = TablerIcons.layers_off;
   static const IconData layers_outlined = TablerIcons.layers_intersect;
+  static const IconData library_outlined = TablerIcons.books;
   static const IconData link = TablerIcons.link;
   static const IconData link_off = TablerIcons.link_off;
   static const IconData link_outlined = TablerIcons.link;

@@ -31,6 +31,7 @@ import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/news/presentation/news_channel_screen.dart';
 import '../features/events/presentation/event_overview_screen.dart';
 import '../features/news/presentation/news_list_screen.dart';
+import '../features/library/presentation/library_screen.dart';
 import '../features/requests/presentation/application_form_screen.dart';
 import '../features/requests/presentation/feedback_form_screen.dart';
 import '../features/requests/presentation/requests_screen.dart';
@@ -360,6 +361,16 @@ GoRouter createAppRouter({
                         ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          // AppModule.library
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.library,
+                builder: (BuildContext _, GoRouterState _) =>
+                    const LibraryScreen(),
               ),
             ],
           ),

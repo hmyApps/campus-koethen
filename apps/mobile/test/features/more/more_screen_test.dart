@@ -73,6 +73,7 @@ void main() {
       AppModule.campusMap,
       AppModule.contacts,
       AppModule.requests,
+      AppModule.library,
       AppModule.settings,
       AppModule.about,
     ]) {

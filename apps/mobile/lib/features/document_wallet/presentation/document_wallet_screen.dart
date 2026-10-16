@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_modules.dart';
+import '../../../core/documents/document_share_service.dart';
 import '../../../core/documents/document_viewer_screen.dart';
 import '../../../core/locale/formatters.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -99,8 +100,14 @@ class _WalletDocumentTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             IconButton(
+              tooltip: l10n.documentWalletShareAction,
+              icon: const Icon(AppIcons.ios_share),
+              onPressed: () =>
+                  const DocumentShareService().share(document.toAppDocument()),
+            ),
+            IconButton(
               tooltip: l10n.documentWalletExportAction,
-              icon: const Icon(AppIcons.upload_file_outlined),
+              icon: const Icon(AppIcons.cloud_upload_outlined),
               onPressed: () => exportWalletDocumentToNextcloud(
                 context,
                 ref,

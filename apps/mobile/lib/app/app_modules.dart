@@ -161,6 +161,14 @@ enum AppModule {
     icon: AppIcons.file_pencil,
     selectedIcon: AppIcons.file_pencil,
   ),
+  library(
+    storageValue: 'library',
+    route: AppRoutes.library,
+    category: ModuleCategory.campus,
+    sortOrder: 6,
+    icon: AppIcons.library_outlined,
+    selectedIcon: AppIcons.library_outlined,
+  ),
 
   // --- App -----------------------------------------------------------------
   // Neither of these can be pinned: they are how the app is configured and
@@ -226,6 +234,7 @@ enum AppModule {
     AppModule.campusMap => l10n.moduleCampusMapTitle,
     AppModule.contacts => l10n.moduleContactsTitle,
     AppModule.requests => l10n.requestsTitle,
+    AppModule.library => l10n.libraryTitle,
     AppModule.settings => l10n.moreSettings,
     AppModule.about => l10n.aboutTitle,
   };
@@ -255,6 +264,7 @@ enum AppModule {
     AppModule.campusMap => l10n.moreCampusMapSubtitle,
     AppModule.contacts => l10n.moreContactsSubtitle,
     AppModule.requests => l10n.requestsSubtitle,
+    AppModule.library => l10n.librarySubtitle,
     _ => null,
   };
 

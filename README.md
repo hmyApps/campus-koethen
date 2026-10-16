@@ -156,23 +156,24 @@ docs/                          Produkt-, Architektur- und Betriebsdokumentation
 
 ## Dokumentation
 
-| Dokument                                                          | Inhalt                                                         |
-| ----------------------------------------------------------------- | -------------------------------------------------------------- |
-| [product/mvp.md](docs/product/mvp.md)                             | Umfang, fachliche Anforderungen, Akzeptanzkriterien            |
-| [architecture.md](docs/architecture.md)                           | Komponenten, Systemgrenzen, Datenhaltung, Betrieb              |
-| [api.md](docs/api.md)                                             | Verbindlicher Vertrag der Campus API                           |
-| [data-sources.md](docs/data-sources.md)                           | Alle Fremdquellen mit verifizierten Eigenheiten                |
-| [public-calendars.md](docs/public-calendars.md)                   | Öffentliche Google-Kalender über den öffentlichen ICS-Feed     |
-| [sites.md](docs/sites.md)                                         | Campus-Standorte Köthen, Bernburg und Dessau: Wahl und Wirkung |
-| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail und optionaler Exchange-Kalender              |
-| [grades.md](docs/grades.md)                                       | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät)       |
-| [moodle.md](docs/moodle.md)                                       | Moodle-Integration und quellenübergreifender Kalender          |
-| [nextcloud.md](docs/nextcloud.md)                                 | Nextcloud Login Flow v2 und lesender WebDAV-Dateiexplorer      |
-| [requests.md](docs/requests.md)                                   | Anträge und Feedback ans Gremiensystem (direkt vom Gerät)      |
-| [local-development.md](docs/local-development.md)                 | Lokaler Stack, Schritt für Schritt                             |
-| [content-editor-guide.md](docs/content-editor-guide.md)           | Handbuch für die Redaktion in Strapi                           |
-| [legal/dependency-licenses.md](docs/legal/dependency-licenses.md) | Lizenzbewertung der Abhängigkeiten                             |
-| [adr/](docs/adr/)                                                 | Langlebige Architekturentscheidungen                           |
+| Dokument                                                          | Inhalt                                                          |
+| ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| [product/mvp.md](docs/product/mvp.md)                             | Umfang, fachliche Anforderungen, Akzeptanzkriterien             |
+| [architecture.md](docs/architecture.md)                           | Komponenten, Systemgrenzen, Datenhaltung, Betrieb               |
+| [api.md](docs/api.md)                                             | Verbindlicher Vertrag der Campus API                            |
+| [data-sources.md](docs/data-sources.md)                           | Alle Fremdquellen mit verifizierten Eigenheiten                 |
+| [public-calendars.md](docs/public-calendars.md)                   | Öffentliche Google-Kalender über den öffentlichen ICS-Feed      |
+| [sites.md](docs/sites.md)                                         | Campus-Standorte Köthen, Bernburg und Dessau: Wahl und Wirkung  |
+| [library.md](docs/library.md)                                     | Bibliothek: Linkliste zu Katalogen, Erweiterungsvoraussetzungen |
+| [student-mail.md](docs/student-mail.md)                           | Studenten-E-Mail und optionaler Exchange-Kalender               |
+| [grades.md](docs/grades.md)                                       | Notenspiegel HIS-QIS **und** HISinOne (direkt vom Gerät)        |
+| [moodle.md](docs/moodle.md)                                       | Moodle-Integration und quellenübergreifender Kalender           |
+| [nextcloud.md](docs/nextcloud.md)                                 | Nextcloud Login Flow v2 und lesender WebDAV-Dateiexplorer       |
+| [requests.md](docs/requests.md)                                   | Anträge und Feedback ans Gremiensystem (direkt vom Gerät)       |
+| [local-development.md](docs/local-development.md)                 | Lokaler Stack, Schritt für Schritt                              |
+| [content-editor-guide.md](docs/content-editor-guide.md)           | Handbuch für die Redaktion in Strapi                            |
+| [legal/dependency-licenses.md](docs/legal/dependency-licenses.md) | Lizenzbewertung der Abhängigkeiten                              |
+| [adr/](docs/adr/)                                                 | Langlebige Architekturentscheidungen                            |
 
 ## Voraussetzungen
 

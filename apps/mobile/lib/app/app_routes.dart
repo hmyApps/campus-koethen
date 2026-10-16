@@ -105,6 +105,9 @@ abstract final class AppRoutes {
   static String campusMapForRoom(String roomKey) =>
       '$campusMap?$campusMapRoomParam=${Uri.encodeQueryComponent(roomKey)}';
 
+  // The library's catalogues, nested under More.
+  static const String library = '/more/library';
+
   // Applications and feedback, nested under More.
   static const String requestsPath = 'requests';
   static const String requests = '/more/requests';
