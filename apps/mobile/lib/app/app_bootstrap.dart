@@ -74,7 +74,7 @@ Future<List<Override>> createAppOverrides() async {
           await ref
               .read(documentWalletSessionGuardProvider)
               .invalidateAndWait();
-          await ref.read(documentWalletStoreProvider).clear();
+          await ref.read(documentWalletStoreProvider).clearGradeLinked();
         },
       ];
     }),

@@ -51,6 +51,85 @@ void main() {
   });
 
   test(
+    'keeps user-saved files of any type apart from the grade slots',
+    () async {
+      final _MemoryBox box = _MemoryBox();
+      final EncryptedDocumentWalletStore store = EncryptedDocumentWalletStore(
+        box,
+      );
+      const String id = '0123456789abcdef0123456789abcdef';
+      await store.save(
+        WalletDocument.custom(
+          document: AppDocument(
+            filename: '../Skript.docx',
+            mediaType: 'application/vnd.openxmlformats',
+            bytes: Uint8List.fromList(<int>[9, 8, 7]),
+          ),
+          savedAt: DateTime.utc(2026, 10, 16),
+          id: id,
+        ),
+      );
+      await store.save(
+        WalletDocument(
+          kind: WalletDocumentKind.transcript,
+          filename: 'L.pdf',
+          mediaType: 'application/pdf',
+          bytes: pdf('t'),
+          savedAt: DateTime.utc(2026, 10, 15),
+        ),
+      );
+
+      final List<WalletDocument> all = await store.readAll();
+      expect(all, hasLength(2));
+      final WalletDocument custom = all.firstWhere(
+        (WalletDocument d) => d.customId == id,
+      );
+      expect(custom.filename, 'Skript.docx');
+      expect(custom.bytes, <int>[9, 8, 7]);
+
+      await store.clearGradeLinked();
+      expect((await store.readAll()).single.customId, id);
+
+      await store.deleteCustom(id);
+      expect(await store.readAll(), isEmpty);
+    },
+  );
+
+  test('clear removes user-saved files too and a bad id is refused', () async {
+    final _MemoryBox box = _MemoryBox();
+    final EncryptedDocumentWalletStore store = EncryptedDocumentWalletStore(
+      box,
+    );
+    final WalletDocument ok = WalletDocument.custom(
+      document: AppDocument(
+        filename: 'a.txt',
+        mediaType: 'text/plain',
+        bytes: Uint8List.fromList(<int>[1]),
+      ),
+      savedAt: DateTime.utc(2026),
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    await store.save(ok);
+    await store.clear();
+    expect(box.values, isEmpty);
+
+    expect(
+      () => store.save(
+        WalletDocument.custom(
+          document: AppDocument(
+            filename: 'a.txt',
+            mediaType: 'text/plain',
+            bytes: Uint8List.fromList(<int>[1]),
+          ),
+          savedAt: DateTime.utc(2026),
+          id: '../evil',
+        ),
+      ),
+      throwsA(isA<DocumentWalletFailure>()),
+    );
+  });
+
+  test(
     'rejects non-PDF content and oversized documents before writing',
     () async {
       final _MemoryBox box = _MemoryBox();
@@ -155,6 +234,10 @@ class _MemoryBox extends EncryptedBox {
     values[key] = value;
     return true;
   }
+
+  @override
+  Future<Iterable<String>> keys() async =>
+      unavailable ? const <String>[] : values.keys.toList();
 
   @override
   Future<void> delete(String key) async {

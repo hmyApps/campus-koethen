@@ -23,13 +23,21 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
 
   final EncryptedBox _box;
 
+  static const String _customPrefix = 'document.custom.';
+
   static String _key(WalletDocumentKind kind) =>
       'document.${kind.storageValue}';
+
+  static String _customKey(String id) => '$_customPrefix$id';
+
+  /// Ids come from this app (random hex); anything else never reaches a key.
+  static final RegExp _customId = RegExp(r'^[0-9a-f]{16,64}$');
 
   @override
   Future<List<WalletDocument>> readAll() async {
     final List<WalletDocument> documents = <WalletDocument>[];
     for (final WalletDocumentKind kind in WalletDocumentKind.values) {
+      if (kind == WalletDocumentKind.custom) continue;
       // Checked: a box that cannot be opened is a storage failure the screen
       // reports, not an empty wallet.
       final String? raw = await _readChecked(_key(kind));
@@ -43,6 +51,21 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
         // One corrupt slot must not hide the other offline document.
       }
     }
+    for (final String key in await _box.keys()) {
+      if (!key.startsWith(_customPrefix)) continue;
+      final String id = key.substring(_customPrefix.length);
+      if (!_customId.hasMatch(id)) continue;
+      final String? raw = await _readChecked(key);
+      if (raw == null) continue;
+      try {
+        final WalletDocument? document = _decode(jsonDecode(raw));
+        if (document != null && document.customId == id) {
+          documents.add(document);
+        }
+      } catch (_) {
+        // One corrupt file must not hide the others.
+      }
+    }
     documents.sort(
       (WalletDocument a, WalletDocument b) => b.savedAt.compareTo(a.savedAt),
     );
@@ -51,19 +74,29 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
 
   @override
   Future<void> save(WalletDocument document) async {
-    if (!_isValidPdf(document)) {
+    final bool custom = document.kind == WalletDocumentKind.custom;
+    final String? customId = document.customId;
+    if (custom
+        ? !_isValidCustom(document) ||
+              customId == null ||
+              !_customId.hasMatch(customId)
+        : !_isValidPdf(document)) {
       throw const DocumentWalletFailure(
         DocumentWalletFailureKind.invalidDocument,
       );
     }
     final String payload = jsonEncode(<String, Object>{
       'kind': document.kind.storageValue,
+      if (customId != null) 'id': customId,
       'filename': document.filename,
-      'mediaType': 'application/pdf',
+      'mediaType': custom ? document.mediaType : 'application/pdf',
       'savedAt': document.savedAt.toUtc().toIso8601String(),
       'bytes': base64Encode(document.bytes),
     });
-    if (!await _box.writeChecked(_key(document.kind), payload)) {
+    final String key = customId != null
+        ? _customKey(customId)
+        : _key(document.kind);
+    if (!await _box.writeChecked(key, payload)) {
       throw const DocumentWalletFailure(
         DocumentWalletFailureKind.storageUnavailable,
       );
@@ -71,8 +104,23 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
   }
 
   @override
-  Future<void> delete(WalletDocumentKind kind) async {
-    final String key = _key(kind);
+  Future<void> delete(WalletDocumentKind kind) => _deleteKey(_key(kind));
+
+  @override
+  Future<void> deleteCustom(String id) async {
+    if (!_customId.hasMatch(id)) return;
+    await _deleteKey(_customKey(id));
+  }
+
+  @override
+  Future<void> clearGradeLinked() async {
+    for (final WalletDocumentKind kind in WalletDocumentKind.values) {
+      if (kind == WalletDocumentKind.custom) continue;
+      await _deleteKey(_key(kind));
+    }
+  }
+
+  Future<void> _deleteKey(String key) async {
     await _box.delete(key);
     // Confirmed only by a read that can tell "gone" from "unreadable".
     if (await _readChecked(key) != null) {
@@ -108,6 +156,7 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
     final WalletDocumentKind? kind = WalletDocumentKind.fromStorage(
       map['kind'] as String?,
     );
+    final String? customId = map['id'] as String?;
     final String? filename = map['filename'] as String?;
     final String? savedAtRaw = map['savedAt'] as String?;
     final String? encodedBytes = map['bytes'] as String?;
@@ -115,6 +164,7 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
         ? null
         : DateTime.tryParse(savedAtRaw);
     if (kind == null ||
+        (kind == WalletDocumentKind.custom) != (customId != null) ||
         filename == null ||
         savedAt == null ||
         encodedBytes == null) {
@@ -129,12 +179,23 @@ class EncryptedDocumentWalletStore implements DocumentWalletStore {
     final WalletDocument document = WalletDocument(
       kind: kind,
       filename: filename,
-      mediaType: 'application/pdf',
+      mediaType: kind == WalletDocumentKind.custom
+          ? (map['mediaType'] as String? ?? 'application/octet-stream')
+          : 'application/pdf',
       bytes: bytes,
       savedAt: savedAt,
+      customId: customId,
     );
-    return _isValidPdf(document) ? document : null;
+    return (kind == WalletDocumentKind.custom
+            ? _isValidCustom(document)
+            : _isValidPdf(document))
+        ? document
+        : null;
   }
+
+  static bool _isValidCustom(WalletDocument document) =>
+      document.bytes.isNotEmpty &&
+      document.bytes.length <= kMaxDocumentWalletBytes;
 
   static bool _isValidPdf(WalletDocument document) {
     if (document.bytes.isEmpty ||

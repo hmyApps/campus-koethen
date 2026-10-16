@@ -22,18 +22,26 @@ class _WalletController extends DocumentWalletController {
   _WalletController(this.documents);
 
   final List<WalletDocument> documents;
-  WalletDocumentKind? deleted;
+  String? deleted;
   WalletDocumentKind? saved;
+  AppDocument? savedCustom;
 
   @override
   Future<List<WalletDocument>> build() async => documents;
 
   @override
-  Future<void> delete(WalletDocumentKind kind) async {
-    deleted = kind;
+  Future<void> delete(WalletDocument document) async {
+    deleted = document.id;
     state = AsyncData<List<WalletDocument>>(
-      documents.where((WalletDocument value) => value.kind != kind).toList(),
+      documents
+          .where((WalletDocument value) => value.id != document.id)
+          .toList(),
     );
+  }
+
+  @override
+  Future<void> saveCustom(AppDocument document) async {
+    savedCustom = document;
   }
 
   @override
@@ -135,5 +143,74 @@ void main() {
     expect(controller.saved, WalletDocumentKind.enrollmentCertificate);
     expect(find.text(l10n.documentWalletSaved), findsOneWidget);
     expect(find.byTooltip(l10n.documentWalletSaved), findsOneWidget);
+  });
+
+  testWidgets('a user-saved file shows under its own name and can be removed', (
+    WidgetTester tester,
+  ) async {
+    final _WalletController controller = _WalletController(<WalletDocument>[
+      WalletDocument.custom(
+        document: AppDocument(
+          filename: 'Skript.pdf',
+          mediaType: 'application/pdf',
+          bytes: _pdf(),
+        ),
+        savedAt: DateTime(2026, 10, 16, 10),
+        id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ),
+    ]);
+    await pumpScreen(
+      tester,
+      const DocumentWalletScreen(),
+      overrides: [
+        documentWalletControllerProvider.overrideWith(() => controller),
+      ],
+    );
+    await tester.pumpAndSettle();
+    final AppLocalizations l10n = await AppLocalizations.delegate.load(
+      AppLocales.german,
+    );
+
+    expect(find.text('Skript.pdf'), findsWidgets);
+    await tester.tap(find.byTooltip(l10n.documentWalletDelete).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.documentWalletDelete));
+    await tester.pumpAndSettle();
+
+    expect(controller.deleted, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  });
+
+  testWidgets('the save action without a slot keeps the file as an extra', (
+    WidgetTester tester,
+  ) async {
+    final _WalletController controller = _WalletController(
+      const <WalletDocument>[],
+    );
+    await pumpScreen(
+      tester,
+      Scaffold(
+        body: WalletSaveAction(
+          document: AppDocument(
+            filename: 'Anhang.png',
+            mediaType: 'image/png',
+            bytes: Uint8List.fromList(<int>[1]),
+            sizeBytes: 1,
+          ),
+        ),
+      ),
+      overrides: [
+        documentWalletControllerProvider.overrideWith(() => controller),
+      ],
+    );
+    await tester.pumpAndSettle();
+    final AppLocalizations l10n = await AppLocalizations.delegate.load(
+      AppLocales.german,
+    );
+
+    await tester.tap(find.byTooltip(l10n.documentWalletSaveAction));
+    await tester.pumpAndSettle();
+
+    expect(controller.savedCustom?.filename, 'Anhang.png');
+    expect(controller.saved, isNull);
   });
 }

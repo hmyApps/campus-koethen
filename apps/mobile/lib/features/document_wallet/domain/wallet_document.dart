@@ -11,7 +11,11 @@ enum WalletDocumentKind {
   enrollmentCertificate('enrollment-certificate'),
   transcript('transcript'),
   feeCertificate('fee-certificate'),
-  studyProgressCertificate('study-progress-certificate');
+  studyProgressCertificate('study-progress-certificate'),
+
+  /// A file the user saved on purpose, e.g. a mail attachment. Not a fixed
+  /// slot: every one has its own [WalletDocument.id].
+  custom('custom');
 
   const WalletDocumentKind(this.storageValue);
 
@@ -33,8 +37,28 @@ class WalletDocument {
     required this.mediaType,
     required Uint8List bytes,
     required this.savedAt,
-  }) : filename = safeDocumentFilename(filename),
+    String? customId,
+  }) : assert(
+         (kind == WalletDocumentKind.custom) == (customId != null),
+         'only custom documents carry an id',
+       ),
+       customId = customId,
+       filename = safeDocumentFilename(filename),
        bytes = Uint8List.fromList(bytes);
+
+  /// A user-saved file of any type, stored under a fresh random [id].
+  factory WalletDocument.custom({
+    required AppDocument document,
+    required DateTime savedAt,
+    required String id,
+  }) => WalletDocument(
+    kind: WalletDocumentKind.custom,
+    filename: document.filename,
+    mediaType: document.mediaType,
+    bytes: document.bytes,
+    savedAt: savedAt,
+    customId: id,
+  );
 
   factory WalletDocument.fromAppDocument({
     required WalletDocumentKind kind,
@@ -49,10 +73,14 @@ class WalletDocument {
   );
 
   final WalletDocumentKind kind;
+  final String? customId;
   final String filename;
   final String mediaType;
   final Uint8List bytes;
   final DateTime savedAt;
+
+  /// Stable identity: the slot name, or the random id of a custom document.
+  String get id => customId ?? kind.storageValue;
 
   AppDocument toAppDocument() => AppDocument(
     filename: filename,
@@ -74,6 +102,12 @@ abstract interface class DocumentWalletStore {
   Future<List<WalletDocument>> readAll();
   Future<void> save(WalletDocument document);
   Future<void> delete(WalletDocumentKind kind);
+  Future<void> deleteCustom(String id);
+
+  /// Wipes the Studienservice slots only; user-saved files stay.
+  Future<void> clearGradeLinked();
+
+  /// Wipes everything, user-saved files included.
   Future<void> clear();
 }
 

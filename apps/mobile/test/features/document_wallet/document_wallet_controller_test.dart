@@ -37,18 +37,31 @@ class _InMemoryWalletStore implements DocumentWalletStore {
 
   @override
   Future<List<WalletDocument>> readAll() async =>
-      List<WalletDocument>.unmodifiable(documents.values);
+      List<WalletDocument>.unmodifiable(<WalletDocument>[
+        ...documents.values,
+        ...customs.values,
+      ]);
 
   @override
-  Future<void> save(WalletDocument document) async =>
-      documents[document.kind] = document;
+  Future<void> save(WalletDocument document) async => document.customId != null
+      ? customs[document.customId!] = document
+      : documents[document.kind] = document;
 
   @override
   Future<void> delete(WalletDocumentKind kind) async => documents.remove(kind);
 
+  final Map<String, WalletDocument> customs = <String, WalletDocument>{};
+
+  @override
+  Future<void> deleteCustom(String id) async => customs.remove(id);
+
+  @override
+  Future<void> clearGradeLinked() async => documents.clear();
+
   @override
   Future<void> clear() async {
     clears++;
+    customs.clear();
     documents.clear();
   }
 }
@@ -122,6 +135,36 @@ void main() {
       expect(c.read(documentWalletControllerProvider).value, hasLength(1));
     },
   );
+
+  test('a mail attachment is kept without any Studienservice login', () async {
+    final _InMemoryWalletStore wallet = _InMemoryWalletStore();
+    final ProviderContainer c = ProviderContainer(
+      overrides: <Override>[
+        documentWalletStoreProvider.overrideWithValue(wallet),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(documentWalletControllerProvider, (_, _) {});
+
+    final Uint8List bytes = Uint8List.fromList(<int>[1, 2, 3]);
+    await c
+        .read(documentWalletControllerProvider.notifier)
+        .saveCustom(
+          AppDocument(
+            filename: 'Skript.docx',
+            mediaType: 'application/vnd.openxmlformats',
+            bytes: bytes,
+            sizeBytes: bytes.length,
+          ),
+        );
+
+    final WalletDocument saved = wallet.customs.values.single;
+    expect(saved.kind, WalletDocumentKind.custom);
+    expect(saved.id, hasLength(32));
+
+    await c.read(documentWalletControllerProvider.notifier).delete(saved);
+    expect(wallet.customs, isEmpty);
+  });
 
   test('a save right after a portal switch works', () async {
     final _InMemoryWalletStore wallet = _InMemoryWalletStore();

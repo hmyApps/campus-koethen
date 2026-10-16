@@ -70,6 +70,7 @@ class _WalletDocumentTile extends ConsumerWidget {
     final AppLocalizations l10n = context.l10n;
     final String locale = Localizations.localeOf(context).languageCode;
     final String title = switch (document.kind) {
+      WalletDocumentKind.custom => document.filename,
       WalletDocumentKind.enrollmentCertificate =>
         l10n.documentWalletEnrollmentCertificate,
       WalletDocumentKind.transcript => l10n.documentWalletTranscript,
@@ -120,7 +121,7 @@ class _WalletDocumentTile extends ConsumerWidget {
             try {
               await ref
                   .read(documentWalletControllerProvider.notifier)
-                  .delete(document.kind);
+                  .delete(document);
             } catch (_) {
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(

@@ -12,13 +12,11 @@ import '../application/document_wallet_controller.dart';
 import '../domain/wallet_document.dart';
 
 class WalletSaveAction extends ConsumerStatefulWidget {
-  const WalletSaveAction({
-    required this.kind,
-    required this.document,
-    super.key,
-  });
+  const WalletSaveAction({required this.document, this.kind, super.key});
 
-  final WalletDocumentKind kind;
+  /// The Studienservice slot to fill, or `null` for a file the user keeps as
+  /// an extra document (e.g. a mail attachment).
+  final WalletDocumentKind? kind;
   final AppDocument document;
 
   @override
@@ -32,9 +30,15 @@ class _WalletSaveActionState extends ConsumerState<WalletSaveAction> {
   Future<void> _save() async {
     setState(() => _busy = true);
     try {
-      await ref
-          .read(documentWalletControllerProvider.notifier)
-          .save(kind: widget.kind, document: widget.document);
+      final DocumentWalletController wallet = ref.read(
+        documentWalletControllerProvider.notifier,
+      );
+      final WalletDocumentKind? kind = widget.kind;
+      if (kind == null) {
+        await wallet.saveCustom(widget.document);
+      } else {
+        await wallet.save(kind: kind, document: widget.document);
+      }
       if (!mounted) return;
       setState(() => _saved = true);
       ScaffoldMessenger.of(
@@ -61,6 +65,12 @@ class _WalletSaveActionState extends ConsumerState<WalletSaveAction> {
             dimension: AppSizes.icon,
             child: CircularProgressIndicator(strokeWidth: AppSizes.rule),
           )
-        : Icon(_saved ? AppIcons.check : AppIcons.download_outlined),
+        : Icon(
+            _saved
+                ? AppIcons.check
+                : widget.kind == null
+                ? AppIcons.lock_outline
+                : AppIcons.download_outlined,
+          ),
   );
 }

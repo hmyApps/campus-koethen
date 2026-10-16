@@ -11,6 +11,7 @@ import '../../../core/documents/document_share_service.dart';
 import '../../../core/documents/document_viewer_screen.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
+import '../../document_wallet/presentation/wallet_save_action.dart';
 import '../domain/mail_failure.dart';
 import '../domain/mail_message.dart';
 import 'mail_error_messages.dart';
@@ -134,10 +135,17 @@ class _MailAttachmentViewState extends State<MailAttachmentView> {
                     tooltip: l10n.mailAttachmentDownload,
                     icon: const Icon(AppIcons.download_outlined),
                   )
-          : IconButton(
-              onPressed: () => _shareService.share(_asDocument(_attachment)),
-              tooltip: l10n.mailAttachmentShare,
-              icon: const Icon(AppIcons.ios_share),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                WalletSaveAction(document: _asDocument(_attachment)),
+                IconButton(
+                  onPressed: () =>
+                      _shareService.share(_asDocument(_attachment)),
+                  tooltip: l10n.mailAttachmentShare,
+                  icon: const Icon(AppIcons.ios_share),
+                ),
+              ],
             ),
     );
 

@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/documents/app_document.dart';
@@ -78,9 +80,35 @@ class DocumentWalletController extends AsyncNotifier<List<WalletDocument>> {
     });
   }
 
-  Future<void> delete(WalletDocumentKind kind) async {
-    await _store.delete(kind);
+  /// Saves a file the user chose to keep, e.g. a mail attachment. Needs no
+  /// Studienservice login: the wallet is the user's own encrypted storage.
+  Future<void> saveCustom(AppDocument document) async {
+    await _store.save(
+      WalletDocument.custom(
+        document: document,
+        savedAt: DateTime.now(),
+        id: _randomId(),
+      ),
+    );
     state = AsyncData<List<WalletDocument>>(await _store.readAll());
+  }
+
+  Future<void> delete(WalletDocument document) async {
+    final String? customId = document.customId;
+    if (customId != null) {
+      await _store.deleteCustom(customId);
+    } else {
+      await _store.delete(document.kind);
+    }
+    state = AsyncData<List<WalletDocument>>(await _store.readAll());
+  }
+
+  static String _randomId() {
+    final Random random = Random.secure();
+    return List<String>.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   bool _isCurrent(SessionLease<String> lease) =>
