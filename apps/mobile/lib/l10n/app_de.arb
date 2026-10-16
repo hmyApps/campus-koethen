@@ -930,6 +930,8 @@
   "@moreTitle": {},
   "moreModuleTemporarilyUnavailable": "Vorübergehend nicht verfügbar",
   "@moreModuleTemporarilyUnavailable": {},
+  "moreDeveloperOptionUnlocked": "Entwickleroption aktiviert: HSA-GPT ist auf diesem Gerät freigeschaltet.",
+  "@moreDeveloperOptionUnlocked": {},
   "moreMail": "Studentische E-Mail",
   "@moreMail": {},
   "moreMailSubtitle": "Postfach der Hochschule Anhalt",

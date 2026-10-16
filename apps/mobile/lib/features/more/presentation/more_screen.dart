@@ -1,6 +1,8 @@
 // Campus Köthen App · AGPL-3.0-only
 // Copyright © 2026 Leviora Studio and Jona Loreen Sommer
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +11,7 @@ import "package:campus_koethen/core/theme/app_icons.dart";
 import '../../../app/app_modules.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/navigation_config.dart';
+import '../../../core/dev/tap_streak.dart';
 import '../../../core/prefs/settings_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -16,6 +19,7 @@ import '../../../core/theme/app_metrics.dart';
 import '../../../core/widgets/screen_scaffold.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../l10n/l10n.dart';
+import '../../hsa_ki/application/hsa_ki_providers.dart';
 
 /// The "Mehr" hub: everything the bottom bar has no room for.
 ///
@@ -62,18 +66,38 @@ class MoreScreen extends ConsumerWidget {
 ///
 /// The box around the glyph is the same hairline the cards use, so a list of
 /// modules reads as a set of things rather than as a column of loose icons.
-class _ModuleRow extends StatelessWidget {
+class _ModuleRow extends ConsumerStatefulWidget {
   const _ModuleRow({required this.module, required this.l10n});
 
   final AppModule module;
   final AppLocalizations l10n;
 
   @override
+  ConsumerState<_ModuleRow> createState() => _ModuleRowState();
+}
+
+class _ModuleRowState extends ConsumerState<_ModuleRow> {
+  /// Ten quick taps on the disabled HSA-GPT entry unlock it (developer option).
+  final TapStreak _unlockTaps = TapStreak();
+
+  void _countUnlockTap() {
+    if (!_unlockTaps.tap()) return;
+    unawaited(ref.read(hsaKiDeveloperUnlockProvider.notifier).unlock());
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(widget.l10n.moreDeveloperOptionUnlocked)),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final AppModule module = widget.module;
+    final AppLocalizations l10n = widget.l10n;
     final AppColors colors = context.colors;
     final AppMetrics metrics = context.metrics;
     final TextTheme text = Theme.of(context).textTheme;
-    final bool disabled = module.isTemporarilyUnavailable;
+    final bool unlocked =
+        module == AppModule.hsaKi && ref.watch(hsaKiDeveloperUnlockProvider);
+    final bool disabled = module.isTemporarilyUnavailable && !unlocked;
     final String? subtitle = disabled
         ? l10n.moreModuleTemporarilyUnavailable
         : module.subtitle(l10n);
@@ -83,6 +107,10 @@ class _ModuleRow extends StatelessWidget {
     final VoidCallback? open = disabled
         ? null
         : () => GoRouter.of(context).push(module.route);
+    // The disabled entry itself counts the taps; it has no other action.
+    final VoidCallback? onTap = disabled && module == AppModule.hsaKi
+        ? _countUnlockTap
+        : open;
 
     return Semantics(
       button: true,
@@ -95,7 +123,7 @@ class _ModuleRow extends StatelessWidget {
       onTap: open,
       excludeSemantics: true,
       child: InkWell(
-        onTap: open,
+        onTap: onTap,
         child: Opacity(
           opacity: contentOpacity,
           child: Padding(

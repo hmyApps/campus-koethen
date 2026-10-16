@@ -571,6 +571,7 @@
   "privacyChangesBody": "This policy will be updated if features, recipients or legal requirements change. The version displayed in the app applies to the processing described there.",
   "moreTitle": "More",
   "moreModuleTemporarilyUnavailable": "Temporarily unavailable",
+  "moreDeveloperOptionUnlocked": "Developer option enabled: HSA-GPT is unlocked on this device.",
   "moreMail": "Student email",
   "moreMailSubtitle": "Hochschule Anhalt mailbox",
   "moreTimetableSubtitle": "Classes for your selected course group",

@@ -21,6 +21,7 @@ Future<AppLocalizations> pumpMore(
   ThemeMode themeMode = ThemeMode.light,
   TextScaler textScaler = TextScaler.noScaling,
   Size surface = const Size(390, 2000),
+  InMemoryKeyValueStore? keyValueStore,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1;
@@ -29,7 +30,7 @@ Future<AppLocalizations> pumpMore(
     tester.view.resetDevicePixelRatio();
   });
 
-  final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+  final InMemoryKeyValueStore store = keyValueStore ?? InMemoryKeyValueStore();
   if (bar != null) {
     await store.setStringList(
       PreferenceKeys.navigationTabs,
@@ -166,6 +167,62 @@ void main() {
     );
     expect(find.text(l10n.moreSettings), findsOneWidget);
     expect(find.text(l10n.aboutTitle), findsOneWidget);
+  });
+
+  group('developer option: HSA-GPT', () {
+    Future<void> tapEntry(
+      WidgetTester tester,
+      AppLocalizations l10n,
+      int n,
+    ) async {
+      for (int i = 0; i < n; i++) {
+        await tester.tap(find.text(l10n.hsaKiTitle));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('is off by default and says it is unavailable', (
+      WidgetTester tester,
+    ) async {
+      final AppLocalizations l10n = await pumpMore(tester);
+
+      expect(find.text(l10n.moreModuleTemporarilyUnavailable), findsOneWidget);
+    });
+
+    testWidgets('nine taps do nothing, the tenth unlocks and remembers it', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore();
+      final AppLocalizations l10n = await pumpMore(
+        tester,
+        keyValueStore: store,
+      );
+
+      await tapEntry(tester, l10n, 9);
+      expect(find.text(l10n.moreModuleTemporarilyUnavailable), findsOneWidget);
+      expect(store.getInt(PreferenceKeys.hsaKiDeveloperUnlock), isNull);
+
+      await tapEntry(tester, l10n, 1);
+
+      expect(find.text(l10n.moreDeveloperOptionUnlocked), findsOneWidget);
+      expect(find.text(l10n.moreModuleTemporarilyUnavailable), findsNothing);
+      expect(store.getInt(PreferenceKeys.hsaKiDeveloperUnlock), 1);
+    });
+
+    testWidgets('an unlocked installation starts with the entry open', (
+      WidgetTester tester,
+    ) async {
+      final InMemoryKeyValueStore store = InMemoryKeyValueStore()
+        ..setInt(PreferenceKeys.hsaKiDeveloperUnlock, 1);
+      final AppLocalizations l10n = await pumpMore(
+        tester,
+        keyValueStore: store,
+      );
+
+      expect(find.text(l10n.moreModuleTemporarilyUnavailable), findsNothing);
+      expect(find.text(l10n.hsaKiSubtitle), findsOneWidget);
+    });
   });
 
   testWidgets('there is no Today entry any more', (WidgetTester tester) async {

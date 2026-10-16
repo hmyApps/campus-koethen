@@ -261,6 +261,11 @@ abstract final class PreferenceKeys {
   /// chosen yet".
   static const String campusSite = 'site.preferred.v1';
 
+  /// `1` after the developer option on the disabled HSA-GPT entry (ten quick
+  /// taps) switched the module on for this installation. A tester's own
+  /// switch, never set by the app.
+  static const String hsaKiDeveloperUnlock = 'dev.hsaKi.unlocked.v1';
+
   // --- Background sync ------------------------------------------------------
 
   /// `0` when the reader switched the periodic background sync off. Absent

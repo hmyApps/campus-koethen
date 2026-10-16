@@ -4,6 +4,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_modules.dart';
+import '../../../core/prefs/preference_keys.dart';
+import '../../../core/prefs/settings_controller.dart';
 import '../data/hawki_gateway.dart';
 import '../data/secure_hsa_ki_credential_store.dart';
 import '../domain/hsa_ki_account.dart';
@@ -22,7 +24,33 @@ final Provider<HsaKiGateway> hsaKiGatewayProvider = Provider<HsaKiGateway>(
 /// connection keeps its `−`. A provider only so widget tests can exercise the
 /// consent flow as it behaves once the service is available again.
 final Provider<bool> hsaKiTemporarilyUnavailableProvider = Provider<bool>(
-  (Ref ref) => AppModule.hsaKi.isTemporarilyUnavailable,
+  (Ref ref) =>
+      AppModule.hsaKi.isTemporarilyUnavailable &&
+      !ref.watch(hsaKiDeveloperUnlockProvider),
+);
+
+/// The developer option that switches the disabled HSA-GPT module on for one
+/// installation (ten quick taps on its entry in More), so it can be validated
+/// without enabling it for every tester.
+class HsaKiDeveloperUnlock extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref
+          .watch(keyValueStoreProvider)
+          .getInt(PreferenceKeys.hsaKiDeveloperUnlock) ==
+      1;
+
+  Future<void> unlock() async {
+    state = true;
+    await ref
+        .read(keyValueStoreProvider)
+        .setInt(PreferenceKeys.hsaKiDeveloperUnlock, 1);
+  }
+}
+
+final NotifierProvider<HsaKiDeveloperUnlock, bool>
+hsaKiDeveloperUnlockProvider = NotifierProvider<HsaKiDeveloperUnlock, bool>(
+  HsaKiDeveloperUnlock.new,
 );
 
 /// Advances whenever the connection is created or torn down, so an operation
