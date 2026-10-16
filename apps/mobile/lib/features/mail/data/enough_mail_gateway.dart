@@ -703,6 +703,16 @@ class EnoughMailGateway implements MailGateway {
     });
   }
 
+  /// The decoded path of [box], for COPY, MOVE and APPEND.
+  ///
+  /// enough_mail encodes the path of those commands (modified UTF-7) itself.
+  /// Handing it a `Mailbox` passes the already-encoded path, which gets
+  /// encoded a second time: "Gel&APY-schte Elemente" becomes
+  /// "Gel&-APY-schte Elemente", a folder that does not exist
+  /// (`[TRYCREATE]`). Folders with an umlaut, such as the German Exchange
+  /// trash and sent folders, failed that way.
+  static String _plainPath(Mailbox box) => box.path;
+
   static int _uidOf(String id) {
     final int? uid = int.tryParse(id);
     if (uid == null || uid <= 0) {
@@ -729,7 +739,7 @@ class EnoughMailGateway implements MailGateway {
           await _step(
             'move',
             () => client
-                .uidMove(sequence, targetMailbox: target)
+                .uidMove(sequence, targetMailboxPath: _plainPath(target))
                 .timeout(_commandTimeout),
           );
           return;
@@ -743,7 +753,7 @@ class EnoughMailGateway implements MailGateway {
       await _step(
         'copy',
         () => client
-            .uidCopy(sequence, targetMailbox: target)
+            .uidCopy(sequence, targetMailboxPath: _plainPath(target))
             .timeout(_commandTimeout),
       );
     }
@@ -1055,7 +1065,7 @@ class EnoughMailGateway implements MailGateway {
       await client
           .appendMessageText(
             text,
-            targetMailbox: sent,
+            targetMailboxPath: _plainPath(sent),
             flags: <String>[MessageFlags.seen],
           )
           .timeout(_transferTimeout(utf8.encode(text).length));

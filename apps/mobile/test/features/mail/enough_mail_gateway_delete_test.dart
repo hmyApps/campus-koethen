@@ -264,4 +264,34 @@ void main() {
     );
     expect(_sent(server, 'UID MOVE'), isFalse);
   });
+
+  // enough_mail encodes a COPY/MOVE target path a second time when it is
+  // handed the already-encoded form, which turns "&APY-" into "&-APY-" and
+  // makes the server answer [TRYCREATE]. Real German servers name the trash
+  // "Gelöschte Elemente", sent as modified UTF-7.
+  const String encodedTrash = 'Gel&APY-schte Elemente';
+
+  for (final String? moveAnswer in <String?>[null, 'NO not allowed']) {
+    test('a UTF-7 trash name is sent once-encoded '
+        '(${moveAnswer == null ? 'MOVE' : 'COPY'})', () async {
+      server = await FakeImapServer.start(
+        _exchange(trashName: encodedTrash, moveAnswer: moveAnswer),
+        greeting: capabilities,
+      );
+
+      await _gateway(server).deleteMessage(_credentials, id: '7');
+
+      final String command = server.receivedCommands.firstWhere(
+        (String c) => c.contains(' UID MOVE') || c.contains(' UID COPY'),
+        orElse: () => '',
+      );
+      final String relocate = moveAnswer == null
+          ? command
+          : server.receivedCommands.firstWhere(
+              (String c) => c.contains(' UID COPY'),
+            );
+      expect(relocate, contains('"$encodedTrash"'));
+      expect(relocate, isNot(contains('&-')));
+    });
+  }
 }
