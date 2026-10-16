@@ -60,6 +60,17 @@ void main() {
             'executor after onDestroy instead of crashing',
       );
       expect(activity, contains('catch (_: RejectedExecutionException)'));
+      // A card removed before the read finished: the stale tag throws
+      // SecurityException/IllegalStateException on the I/O thread, where an
+      // uncaught exception ends the process. connect, transceive and close
+      // must each treat it like a lost tag.
+      expect(
+        RegExp(r'catch \(_: RuntimeException\)').allMatches(activity).length,
+        greaterThanOrEqualTo(5),
+        reason:
+            'IsoDep.get, connect, transceive and close must survive a '
+            'stale tag (plus readTag/captureExternalTag)',
+      );
       expect(manifest, isNot(contains('<service')));
       expect(activity, isNot(contains('Log.')));
       expect(activity, isNot(contains('tag.id')));
