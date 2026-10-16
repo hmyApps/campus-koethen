@@ -301,6 +301,8 @@ void main() {
 
       await tester.longPress(find.text('Hallo Welt'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('E-Mail löschen'));
+      await tester.pumpAndSettle();
       expect(find.text('E-Mail löschen?'), findsOneWidget);
       expect(gateway.deletedMessages, isEmpty, reason: 'not before confirming');
 
@@ -328,6 +330,8 @@ void main() {
 
       await tester.longPress(find.text('Hallo Welt'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('E-Mail löschen'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Abbrechen'));
       await tester.pumpAndSettle();
 
@@ -352,11 +356,81 @@ void main() {
 
       await tester.longPress(find.text('Hallo Welt'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('E-Mail löschen'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Löschen'));
       await tester.pumpAndSettle();
 
       expect(find.text('Hallo Welt'), findsOneWidget);
       expect(find.text('E-Mail gelöscht.'), findsNothing);
+    });
+
+    testWidgets('a long press offers moving a message into another folder', (
+      WidgetTester tester,
+    ) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_header()]);
+      final FakeMailGateway gateway = FakeMailGateway()
+        ..folders = const <MailFolder>[
+          MailFolder.inbox(),
+          MailFolder(path: 'Archiv', name: 'Archiv'),
+        ];
+      await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(gateway, store, cache: cache),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Hallo Welt'));
+      await tester.pumpAndSettle();
+      expect(find.text('Verschieben'), findsOneWidget);
+      expect(find.text('E-Mail löschen'), findsOneWidget);
+      await tester.tap(find.text('Verschieben'));
+      await tester.pumpAndSettle();
+      expect(find.text('Verschieben nach'), findsOneWidget);
+      await tester.tap(find.text('Archiv'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.movedMessages.single.targetPath, 'Archiv');
+      expect(find.text('Hallo Welt'), findsNothing);
+      expect(find.text('E-Mail verschoben.'), findsOneWidget);
+    });
+
+    testWidgets('a refused delete names the failing step', (
+      WidgetTester tester,
+    ) async {
+      final store = InMemoryMailCredentialStore()..write(_creds);
+      final MemoryMailCache cache = MemoryMailCache(now: _testClock);
+      await cache.saveHeaders(<MailMessageHeader>[_header()]);
+      final FakeMailGateway gateway = FakeMailGateway()
+        ..deleteError = const MailFailure(
+          MailFailureKind.protocol,
+          step: 'copy',
+          detail: 'copy refused',
+        );
+      await pumpScreen(
+        tester,
+        const MailScreen(),
+        overrides: _mail(gateway, store, cache: cache),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Hallo Welt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('E-Mail löschen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Löschen'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Unerwartete Antwort vom Mailserver (Schritt: copy, copy refused).',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Hallo Welt'), findsOneWidget);
     });
 
     testWidgets('offers loading 100 older messages at the end of the inbox', (

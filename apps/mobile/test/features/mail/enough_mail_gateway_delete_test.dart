@@ -4,6 +4,7 @@
 import 'package:campus_koethen/features/mail/data/enough_mail_gateway.dart';
 import 'package:campus_koethen/features/mail/domain/hsa_mail_profile.dart';
 import 'package:campus_koethen/features/mail/domain/mail_credentials.dart';
+import 'package:campus_koethen/features/mail/domain/mail_failure.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_imap_server.dart';
@@ -33,6 +34,8 @@ const MailCredentials _credentials = MailCredentials(
 List<String> Function(String, String) _exchange({
   required String trashName,
   String? moveAnswer,
+  String? copyAnswer,
+  String searchAnswer = '7',
 }) {
   return (String tag, String command) {
     if (command.startsWith('LOGIN ')) return <String>['$tag OK LOGIN done'];
@@ -41,6 +44,7 @@ List<String> Function(String, String) _exchange({
         '* LIST (\\HasNoChildren) "/" "INBOX"',
         '* LIST (\\HasNoChildren) "/" "$trashName"',
         '* LIST (\\HasNoChildren) "/" "Sent Items"',
+        '* LIST (\\HasNoChildren) "/" "Archiv"',
         '$tag OK LIST completed',
       ];
     }
@@ -51,6 +55,12 @@ List<String> Function(String, String) _exchange({
         '* FLAGS (\\Deleted \\Seen)',
         '$tag OK [READ-WRITE] SELECT completed',
       ];
+    }
+    if (command.startsWith('UID SEARCH')) {
+      return <String>['* SEARCH $searchAnswer', '$tag OK SEARCH completed'];
+    }
+    if (command.startsWith('UID COPY') && copyAnswer != null) {
+      return <String>['$tag $copyAnswer'];
     }
     if (command.startsWith('UID MOVE') && moveAnswer != null) {
       return <String>['$tag $moveAnswer'];
@@ -145,5 +155,113 @@ void main() {
     expect(_sent(server, 'UID MOVE'), isFalse);
     expect(_sent(server, 'UID STORE'), isTrue);
     expect(_sent(server, 'UID EXPUNGE'), isTrue);
+  });
+
+  const String plainCapabilities = '* OK [CAPABILITY IMAP4rev1] ready';
+
+  bool plainExpungeSent() => server.receivedCommands.any(
+    (String c) => RegExp(r'^\w+ EXPUNGE$').hasMatch(c.trim()),
+  );
+
+  test('without UIDPLUS a lone flagged message is expunged plainly', () async {
+    server = await FakeImapServer.start(
+      _exchange(trashName: 'Deleted Items'),
+      greeting: plainCapabilities,
+    );
+
+    await _gateway(server).deleteMessage(_credentials, id: '7');
+
+    expect(_sent(server, 'UID COPY'), isTrue);
+    expect(_sent(server, 'UID SEARCH'), isTrue);
+    expect(plainExpungeSent(), isTrue);
+    expect(_sent(server, 'UID EXPUNGE'), isFalse);
+  });
+
+  test('without UIDPLUS another flagged message blocks the expunge', () async {
+    server = await FakeImapServer.start(
+      _exchange(trashName: 'Deleted Items', searchAnswer: '7 9'),
+      greeting: plainCapabilities,
+    );
+
+    await expectLater(
+      _gateway(server).deleteMessage(_credentials, id: '7'),
+      throwsA(
+        isA<MailFailure>().having(
+          (MailFailure f) => f.step,
+          'step',
+          'expunge-unsafe',
+        ),
+      ),
+    );
+    expect(plainExpungeSent(), isFalse);
+  });
+
+  test('a refused COPY names the step and the server reason', () async {
+    server = await FakeImapServer.start(
+      _exchange(
+        trashName: 'Deleted Items',
+        copyAnswer: 'NO [CANNOT] copy refused',
+      ),
+      greeting: '* OK [CAPABILITY IMAP4rev1 UIDPLUS] ready',
+    );
+
+    await expectLater(
+      _gateway(server).deleteMessage(_credentials, id: '7'),
+      throwsA(
+        isA<MailFailure>()
+            .having((MailFailure f) => f.kind, 'kind', MailFailureKind.protocol)
+            .having((MailFailure f) => f.step, 'step', 'copy')
+            .having(
+              (MailFailure f) => f.detail,
+              'detail',
+              contains('copy refused'),
+            ),
+      ),
+    );
+  });
+
+  test('moves a message into a chosen folder', () async {
+    server = await FakeImapServer.start(
+      _exchange(trashName: 'Deleted Items'),
+      greeting: capabilities,
+    );
+
+    await _gateway(
+      server,
+    ).moveMessage(_credentials, id: '7', targetPath: 'Archiv');
+
+    expect(
+      server.receivedCommands.any(
+        (String c) => c.contains(' UID MOVE') && c.contains('Archiv'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('a refused MOVE into a folder falls back to copy and expunge', () async {
+    server = await FakeImapServer.start(
+      _exchange(trashName: 'Deleted Items', moveAnswer: 'NO not allowed'),
+      greeting: capabilities,
+    );
+
+    await _gateway(
+      server,
+    ).moveMessage(_credentials, id: '7', targetPath: 'Archiv');
+
+    expect(_sent(server, 'UID COPY'), isTrue);
+    expect(_sent(server, 'UID EXPUNGE'), isTrue);
+  });
+
+  test('moving into the folder it is already in is refused', () async {
+    server = await FakeImapServer.start(
+      _exchange(trashName: 'Deleted Items'),
+      greeting: capabilities,
+    );
+
+    await expectLater(
+      _gateway(server).moveMessage(_credentials, id: '7', targetPath: 'INBOX'),
+      throwsA(isA<MailFailure>()),
+    );
+    expect(_sent(server, 'UID MOVE'), isFalse);
   });
 }

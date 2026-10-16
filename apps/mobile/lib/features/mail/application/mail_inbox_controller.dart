@@ -349,6 +349,36 @@ class MailInboxController extends AsyncNotifier<List<MailMessageHeader>> {
           id: message.id,
           expectedUidValidity: await _cachedUidValidity(ref, message),
         );
+    await _forgetLocally(message, accountController, generation);
+  }
+
+  /// Moves a message into another folder. Like [deleteMessage], the list and
+  /// the offline copy change only after the server confirmed.
+  Future<void> moveMessage(MailMessageRef message, String targetPath) async {
+    final MailCredentials credentials = await ref
+        .read(mailAccountControllerProvider.notifier)
+        .requireCredentials();
+    final MailAccountController accountController = ref.read(
+      mailAccountControllerProvider.notifier,
+    );
+    final int generation = accountController.sessionGeneration;
+    await ref
+        .read(mailGatewayProvider)
+        .moveMessage(
+          credentials,
+          mailboxPath: message.mailboxPath,
+          id: message.id,
+          targetPath: targetPath,
+          expectedUidValidity: await _cachedUidValidity(ref, message),
+        );
+    await _forgetLocally(message, accountController, generation);
+  }
+
+  Future<void> _forgetLocally(
+    MailMessageRef message,
+    MailAccountController accountController,
+    int generation,
+  ) async {
     if (!accountController.isSessionCurrent(generation)) {
       throw const MailFailure(MailFailureKind.sessionClosed);
     }

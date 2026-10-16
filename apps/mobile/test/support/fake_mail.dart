@@ -87,6 +87,11 @@ class FakeMailGateway implements MailGateway {
 
   /// Makes every `deleteMessage` fail, as a refusing server does.
   MailFailure? deleteError;
+
+  /// Makes every `moveMessage` fail.
+  MailFailure? moveError;
+  final List<({String mailboxPath, String id, String targetPath})>
+  movedMessages = <({String mailboxPath, String id, String targetPath})>[];
   List<MailMessageHeader> inbox;
   List<MailMessageHeader> olderInbox;
   MailMessageDetail? detail;
@@ -270,6 +275,23 @@ class FakeMailGateway implements MailGateway {
     lastExpectedUidValidity = expectedUidValidity;
     if (deleteError != null) throw deleteError!;
     deletedMessages.add((mailboxPath: mailboxPath, id: id));
+  }
+
+  @override
+  Future<void> moveMessage(
+    MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+    required String targetPath,
+    int? expectedUidValidity,
+  }) async {
+    lastExpectedUidValidity = expectedUidValidity;
+    if (moveError != null) throw moveError!;
+    movedMessages.add((
+      mailboxPath: mailboxPath,
+      id: id,
+      targetPath: targetPath,
+    ));
   }
 
   @override

@@ -129,6 +129,17 @@ abstract interface class MailGateway {
     int? expectedUidValidity,
   });
 
+  /// Moves one message into the folder at [targetPath] (an IMAP path from the
+  /// folder list). Addressed by UID like [deleteMessage]; throws when the
+  /// target is the folder the message is already in.
+  Future<void> moveMessage(
+    MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+    required String targetPath,
+    int? expectedUidValidity,
+  });
+
   /// Watches INBOX changes using IMAP IDLE, with a bounded NOOP polling
   /// fallback when the server does not advertise IDLE. Cancelling the stream
   /// must close the authenticated connection.

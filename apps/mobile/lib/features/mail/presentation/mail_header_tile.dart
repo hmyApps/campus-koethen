@@ -13,6 +13,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../l10n/l10n.dart';
 import '../domain/mail_message.dart';
 import 'mail_delete_flow.dart';
+import 'mail_message_actions.dart';
 
 /// One row in a message list (inbox or search results): sender, subject, date
 /// and an attachment marker. Tapping opens the message in the selected mailbox.
@@ -51,6 +52,8 @@ class MailHeaderTile extends ConsumerWidget {
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: deleteLabel): () =>
             confirmAndDeleteMail(context, ref, header),
+        CustomSemanticsAction(label: l10n.mailMove): () =>
+            chooseFolderAndMoveMail(context, ref, header),
       },
       child: ListTile(
         leading: Semantics(
@@ -93,7 +96,7 @@ class MailHeaderTile extends ConsumerWidget {
           AppRoutes.mailMessageName,
           pathParameters: <String, String>{'id': header.id},
         ),
-        onLongPress: () => confirmAndDeleteMail(context, ref, header),
+        onLongPress: () => showMailMessageActions(context, ref, header),
       ),
     );
   }

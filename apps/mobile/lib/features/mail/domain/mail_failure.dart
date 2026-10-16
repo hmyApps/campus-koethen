@@ -46,9 +46,18 @@ enum MailFailureKind {
 
 /// A gateway/controller error carrying only a classification.
 class MailFailure implements Exception {
-  const MailFailure(this.kind);
+  const MailFailure(this.kind, {this.step, this.detail});
 
   final MailFailureKind kind;
+
+  /// Which step of a multi-step server action failed (e.g. `copy`), for the
+  /// few actions where "unexpected response" alone cannot be diagnosed. A
+  /// fixed label, never user content.
+  final String? step;
+
+  /// The server's own short reason for refusing [step], shortened. Shown on
+  /// screen only; never logged or reported.
+  final String? detail;
 
   @override
   String toString() => 'MailFailure(${kind.name})';

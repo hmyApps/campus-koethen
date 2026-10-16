@@ -8,7 +8,9 @@ import '../domain/mail_failure.dart';
 ///
 /// Deliberately switches only on the typed [MailFailureKind]: raw server text,
 /// exception messages and stack traces never reach the UI, so no credential or
-/// protocol detail can leak into a snackbar.
+/// protocol detail can leak into a snackbar. The one exception is a failed
+/// multi-step server action (delete, move): it names the step and the
+/// server's shortened reason, on screen only, so a refusal can be diagnosed.
 String mailFailureMessage(AppLocalizations l10n, Object? error) {
   if (error is MailFailure) {
     return switch (error.kind) {
@@ -18,7 +20,13 @@ String mailFailureMessage(AppLocalizations l10n, Object? error) {
       MailFailureKind.timeout => l10n.mailErrorTimeout,
       MailFailureKind.tls => l10n.mailErrorTls,
       MailFailureKind.serverUnreachable => l10n.mailErrorServerUnreachable,
-      MailFailureKind.protocol => l10n.mailErrorProtocol,
+      MailFailureKind.protocol =>
+        error.step == null
+            ? l10n.mailErrorProtocol
+            : l10n.mailErrorProtocolStep(
+                error.step!,
+                error.detail == null ? '' : ', ${error.detail}',
+              ),
       MailFailureKind.secureStorageUnavailable => l10n.mailErrorSecureStorage,
       MailFailureKind.localDataWipeIncomplete =>
         l10n.mailAccountRemoveIncomplete,

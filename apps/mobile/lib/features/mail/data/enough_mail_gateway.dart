@@ -640,64 +640,166 @@ class EnoughMailGateway implements MailGateway {
   }) async {
     await _guard(() async {
       await _withImap(credentials, (ImapClient client) async {
-        final int? uid = int.tryParse(id);
-        if (uid == null || uid <= 0) {
-          throw const MailFailure(MailFailureKind.protocol);
-        }
-        final List<Mailbox> boxes = await client.listMailboxes(recursive: true);
+        final int uid = _uidOf(id);
+        final List<Mailbox> boxes = await _step(
+          'list',
+          () => client.listMailboxes(recursive: true),
+        );
         // Exchange marks no special-use folder and names its trash by locale.
         Mailbox? trash = boxes.where((Mailbox box) => box.isTrash).firstOrNull;
         trash ??= boxes
             .where((Mailbox box) => _trashFolderNames.contains(_folderKey(box)))
             .firstOrNull;
-        await _select(
-          client,
-          mailboxPath,
-          expectedUidValidity: expectedUidValidity,
+        await _step(
+          'select',
+          () => _select(
+            client,
+            mailboxPath,
+            expectedUidValidity: expectedUidValidity,
+          ),
         );
-        final MessageSequence sequence = MessageSequence.fromRange(
-          uid,
-          uid,
-          isUidSequence: true,
-        );
-
-        if (trash != null && trash.encodedPath != mailboxPath) {
-          // enough_mail sets no response timeout for MOVE/COPY. On timeout
-          // [_withImap] closes the socket instead of sending LOGOUT.
-          if (client.serverInfo.supportsMove) {
-            try {
-              await client
-                  .uidMove(sequence, targetMailbox: trash)
-                  .timeout(_commandTimeout);
-              return;
-            } on ImapException {
-              // Some servers advertise MOVE and still refuse it for a folder
-              // (permissions, a virtual trash). Copy-and-delete does the same
-              // job; a timeout or a dropped connection is not retried.
-              if (!client.serverInfo.supportsUidPlus) rethrow;
-            }
-          }
-          if (!client.serverInfo.supportsUidPlus) {
-            // A broad EXPUNGE could irreversibly remove unrelated messages
-            // another client marked. Fail closed when UID-scoped cleanup is
-            // unavailable.
-            throw const MailFailure(MailFailureKind.protocol);
-          }
-          await client
-              .uidCopy(sequence, targetMailbox: trash)
-              .timeout(_commandTimeout);
-          await client.uidMarkDeleted(sequence, silent: true);
-          await client.uidExpunge(sequence);
-          return;
-        }
-
-        if (!client.serverInfo.supportsUidPlus) {
-          throw const MailFailure(MailFailureKind.protocol);
-        }
-        await client.uidMarkDeleted(sequence, silent: true);
-        await client.uidExpunge(sequence);
+        // A message already in the trash is removed for good.
+        final Mailbox? target =
+            trash != null && trash.encodedPath != mailboxPath ? trash : null;
+        await _relocate(client, uid, target);
       });
     });
+  }
+
+  @override
+  Future<void> moveMessage(
+    domain.MailCredentials credentials, {
+    String mailboxPath = kInboxPath,
+    required String id,
+    required String targetPath,
+    int? expectedUidValidity,
+  }) async {
+    await _guard(() async {
+      await _withImap(credentials, (ImapClient client) async {
+        final int uid = _uidOf(id);
+        if (targetPath == mailboxPath) {
+          throw const MailFailure(MailFailureKind.protocol, step: 'target');
+        }
+        final List<Mailbox> boxes = await _step(
+          'list',
+          () => client.listMailboxes(recursive: true),
+        );
+        final Mailbox? target = boxes
+            .where((Mailbox box) => box.encodedPath == targetPath)
+            .firstOrNull;
+        if (target == null || target.isNotSelectable) {
+          throw const MailFailure(MailFailureKind.protocol, step: 'target');
+        }
+        await _step(
+          'select',
+          () => _select(
+            client,
+            mailboxPath,
+            expectedUidValidity: expectedUidValidity,
+          ),
+        );
+        await _relocate(client, uid, target);
+      });
+    });
+  }
+
+  static int _uidOf(String id) {
+    final int? uid = int.tryParse(id);
+    if (uid == null || uid <= 0) {
+      throw const MailFailure(MailFailureKind.protocol, step: 'id');
+    }
+    return uid;
+  }
+
+  /// Moves the selected mailbox's message [uid] to [target], or removes it for
+  /// good when [target] is `null`. Every server step is named, so a refusal
+  /// says which one it was.
+  ///
+  /// enough_mail sets no response timeout for MOVE/COPY, hence the explicit
+  /// ones; on timeout [_withImap] closes the socket instead of sending LOGOUT.
+  Future<void> _relocate(ImapClient client, int uid, Mailbox? target) async {
+    final MessageSequence sequence = MessageSequence.fromRange(
+      uid,
+      uid,
+      isUidSequence: true,
+    );
+    if (target != null) {
+      if (client.serverInfo.supportsMove) {
+        try {
+          await _step(
+            'move',
+            () => client
+                .uidMove(sequence, targetMailbox: target)
+                .timeout(_commandTimeout),
+          );
+          return;
+        } on MailFailure catch (e) {
+          // Some servers advertise MOVE and still refuse it for a folder
+          // (permissions, a virtual trash). Copy-and-delete does the same job;
+          // a timeout, a dropped connection or a rejected login is not retried.
+          if (e.kind != MailFailureKind.protocol) rethrow;
+        }
+      }
+      await _step(
+        'copy',
+        () => client
+            .uidCopy(sequence, targetMailbox: target)
+            .timeout(_commandTimeout),
+      );
+    }
+    await _step('flag', () => client.uidMarkDeleted(sequence, silent: true));
+    if (client.serverInfo.supportsUidPlus) {
+      await _step('expunge', () => client.uidExpunge(sequence));
+      return;
+    }
+    // Without UIDPLUS only a plain EXPUNGE exists, and it removes every
+    // message flagged \Deleted — also ones another client flagged. It runs
+    // only when this message is the single one flagged.
+    final SearchImapResult flagged = await _step(
+      'search',
+      () => client.uidSearchMessages(
+        searchCriteria: 'DELETED',
+        responseTimeout: _commandTimeout,
+      ),
+    );
+    final List<int> ids = flagged.matchingSequence?.toList() ?? <int>[];
+    if (ids.length != 1 || ids.single != uid) {
+      throw const MailFailure(MailFailureKind.protocol, step: 'expunge-unsafe');
+    }
+    await _step('expunge', () => client.expunge());
+  }
+
+  /// Runs one server step. A refusal or an unparseable answer becomes a
+  /// [MailFailure] that names the step and carries the server's short reason;
+  /// timeouts and connection errors pass through for [_guard] to classify.
+  Future<T> _step<T>(String step, Future<T> Function() run) async {
+    try {
+      return await run();
+    } on MailFailure {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } on HandshakeException {
+      rethrow;
+    } on TlsException {
+      rethrow;
+    } on SocketException {
+      rethrow;
+    } on ImapException catch (e) {
+      throw MailFailure(
+        _classifyImap(e),
+        step: step,
+        detail: _shortReason(e.message),
+      );
+    } catch (_) {
+      throw MailFailure(MailFailureKind.protocol, step: step);
+    }
+  }
+
+  static String? _shortReason(String? message) {
+    final String text = (message ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) return null;
+    return text.length <= 80 ? text : '${text.substring(0, 80)}…';
   }
 
   @override
